@@ -1,0 +1,1102 @@
+'use client';
+
+import { useState } from 'react';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements } from '@stripe/react-stripe-js';
+import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  Smartphone,
+  Shield,
+  MessageSquare,
+  AlertCircle,
+  ArrowLeft,
+  ShieldIcon,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+import Cookies from 'js-cookie';
+import Image from 'next/image';
+import {
+  useLoginMutation,
+  useSignupMutation,
+  useVerifyTotpMutation,
+  useGenerateMfaMutation,
+  useSendEmailOtpMutation,
+  useVerifyEmailCodeMutation,
+  useLinkAuthenticatorMutation,
+} from '@/services/authApi';
+import { Card, CardContent } from '@/components/common/ui/card';
+import { Input } from '@/components/common/ui/input';
+import { Label } from '@/components/common/ui/label';
+import { Button } from '@/components/common/ui/button';
+import { Alert, AlertDescription } from '@/components/common/ui/alert';
+import { Badge } from '@/components/common/ui/badge';
+import {
+  useCreateCustomerMutation,
+  useConfirmCardMutation,
+  useSetupIntentMutation,
+  useStartSubscriptionMutation,
+} from '@/services/billingApi';
+
+type MFAMethod = 'authenticator' | 'email' | 'sms';
+
+type MFAStep =
+  | 'credentials'
+  | 'mfa_method_selection'
+  | 'setupMfa'
+  | 'verifyMfa'
+  | 'verifyEmail';
+
+type OnboardingStep = MFAStep | 'plan_selection' | 'payment';
+
+// ------------------------------
+// Validation helpers
+// ------------------------------
+const isValidEmail = (email: string) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+const verifyTOTPCode = (code: string) => /^\d{6}$/.test(code);
+function PaymentForm({
+  isTrial,
+  selectedPlan,
+  router,
+}: {
+  isTrial: boolean;
+  selectedPlan: 'monthly' | 'yearly';
+  router: any;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+
+  const [createCustomer] = useCreateCustomerMutation();
+  const [setupIntent] = useSetupIntentMutation();
+  const [confirmCard] = useConfirmCardMutation();
+  const [startSubscription] = useStartSubscriptionMutation();
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    setError(null);
+    setLoading(true);
+
+    try {
+      // 1️⃣ Ensure Stripe customer exists
+      await createCustomer().unwrap();
+
+      // 2️⃣ If NOT trial → collect & save card
+      if (!isTrial) {
+        if (!stripe || !elements) {
+          throw new Error('Stripe not ready');
+        }
+
+        const { client_secret } = await setupIntent().unwrap();
+
+        const card = elements.getElement(CardElement);
+        if (!card) {
+          throw new Error('Card element not found');
+        }
+
+        const result = await stripe.confirmCardSetup(client_secret, {
+          payment_method: { card },
+        });
+
+        if (result.error) {
+          throw new Error(result.error.message);
+        }
+
+        if (!result.setupIntent?.payment_method) {
+          throw new Error('Payment method not created');
+        }
+
+        // ✅ SEND PAYMENT METHOD ID
+        await confirmCard({
+          payment_method_id: result.setupIntent.payment_method as string,
+        }).unwrap();
+
+      }
+
+      // 3️⃣ Start subscription (trial or paid)
+      await startSubscription({
+        plan: selectedPlan,
+        is_trial: isTrial,
+      }).unwrap();
+
+      // 4️⃣ Success → dashboard
+      router.push('/dashboard');
+    } catch (err: any) {
+  const detail = err?.data?.detail;
+
+  if (Array.isArray(detail)) {
+    setError(detail.map(d => d.msg).join(', '));
+  } else if (typeof detail === 'string') {
+    setError(detail);
+  } else {
+    setError(err?.message || 'Payment failed. Please try again.');
+  }
+} finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {!isTrial && (
+        <div className="border rounded-md p-4">
+          <CardElement
+            options={{
+              hidePostalCode: true,
+              style: {
+                base: {
+                  fontSize: '16px',
+                  color: '#0f172a',
+                  '::placeholder': {
+                    color: '#94a3b8',
+                  },
+                },
+              },
+            }}
+          />
+        </div>
+      )}
+
+      {isTrial && (
+        <Alert>
+          <Shield className="h-4 w-4" />
+          <AlertDescription>
+            You’re starting a <strong>15-day free trial</strong>. No payment
+            method required today.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Button
+        className="w-full btn-primary"
+        onClick={handleSubmit}
+        disabled={loading || (!isTrial && !stripe)}
+      >
+        {loading
+          ? 'Processing…'
+          : isTrial
+            ? 'Activate Free Trial'
+            : 'Confirm & Pay'}
+      </Button>
+
+      <p className="text-xs text-muted-foreground text-center">
+        Secure payment powered by Stripe. You can cancel anytime.
+      </p>
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  const router = useRouter();
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
+);
+
+  // 🔗 API hooks
+  const [login] = useLoginMutation();
+  const [signup] = useSignupMutation();
+  const [verifyTotp] = useVerifyTotpMutation();
+  const [generateMfa] = useGenerateMfaMutation();
+  const [linkAuthenticator] = useLinkAuthenticatorMutation();
+  const [sendEmailOtp] = useSendEmailOtpMutation();
+  const [verifyEmailCode] = useVerifyEmailCodeMutation();
+
+  // 🔧 UI States
+const [step, setStep] = useState<OnboardingStep>('credentials');
+const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>(
+  'yearly',
+);
+
+const [isTrial, setIsTrial] = useState(false);
+
+  const [isNewUser, setIsNewUser] = useState(false);
+  const [selectedMFAMethod, setSelectedMFAMethod] =
+    useState<MFAMethod>('authenticator');
+  const [hasLinkedAuthenticator, setHasLinkedAuthenticator] = useState(false);
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [mfaSecret, setMfaSecret] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [emailCode, setEmailCode] = useState('');
+  const [verificationSent, setVerificationSent] = useState(false);
+
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // ------------------------------
+  // Password Strength
+  // ------------------------------
+  const [passwordStrength, setPasswordStrength] = useState({
+    length: false,
+    uppercase: false,
+    lowercase: false,
+    number: false,
+    special: false,
+    score: 0,
+  });
+
+  const evaluatePasswordStrength = (pwd: string) => {
+    const length = pwd.length >= 12;
+    const uppercase = /[A-Z]/.test(pwd);
+    const lowercase = /[a-z]/.test(pwd);
+    const number = /\d/.test(pwd);
+    const special = /[!@#$%^&*(),.?":{}|<>]/.test(pwd);
+    const score = [length, uppercase, lowercase, number, special].filter(
+      Boolean
+    ).length;
+    setPasswordStrength({
+      length,
+      uppercase,
+      lowercase,
+      number,
+      special,
+      score,
+    });
+  };
+
+  const getPasswordStrengthInfo = () => {
+    switch (passwordStrength.score) {
+      case 5:
+        return {
+          text: 'Very strong',
+          color: 'text-green-600',
+          bg: 'bg-green-600',
+        };
+      case 4:
+        return { text: 'Strong', color: 'text-green-500', bg: 'bg-green-500' };
+      case 3:
+        return {
+          text: 'Moderate',
+          color: 'text-yellow-500',
+          bg: 'bg-yellow-500',
+        };
+      case 2:
+        return { text: 'Weak', color: 'text-orange-500', bg: 'bg-orange-500' };
+      default:
+        return { text: 'Very weak', color: 'text-red-500', bg: 'bg-red-500' };
+    }
+  };
+
+  // -----------------------------------------------------------
+  // HANDLERS
+  // -----------------------------------------------------------
+
+  // STEP 1 — Credentials
+  const handleCredentialsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      if (!isValidEmail(email)) throw new Error('Enter valid email');
+      if (password.length < 8)
+        throw new Error('Password must be at least 8 chars');
+
+      if (isNewUser) {
+        if (password !== confirmPassword)
+          throw new Error('Passwords do not match');
+        if (passwordStrength.score < 4)
+          throw new Error(
+            'Use a stronger password (at least 4 of 5 strength metrics)',
+          );
+
+        await signup({ email, password }).unwrap();
+        setStep('mfa_method_selection');
+      } else {
+        const res = await login({ email, password }).unwrap();
+
+        if (!res.mfa_enabled) {
+          // new user, force setup
+          setStep('mfa_method_selection');
+          return;
+        }
+
+        // 🔐 MFA routing (source of truth = backend)
+        const primaryMfa = res.primary_mfa;
+        const mfaMethods = res.mfa_methods || {};
+
+        if (!primaryMfa) {
+          // No MFA configured → force setup
+          setStep('mfa_method_selection');
+          return;
+        }
+
+        if (primaryMfa === 'authenticator') {
+          setHasLinkedAuthenticator(!!mfaMethods.authenticator);
+          setStep('verifyMfa');
+          return;
+        }
+
+        if (primaryMfa === 'email') {
+          setVerificationSent(false);
+          setStep('verifyEmail');
+          return;
+        }
+
+        // fallback safety
+        setStep('mfa_method_selection');
+      }
+    } catch (err: any) {
+      setError(err?.data?.detail || err.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // STEP 2 — Select MFA Method
+  const handleMFAMethodSelection = async () => {
+    setError('');
+    try {
+      if (!selectedMFAMethod) throw new Error('Select a verification method');
+
+      if (selectedMFAMethod === 'authenticator') {
+        const qr = await generateMfa({ email }).unwrap();
+        setQrCodeUrl(qr.qrCodeUrl);
+        setMfaSecret(qr.secret);
+        setStep('setupMfa');
+      } else if (selectedMFAMethod === 'email') {
+        setVerificationSent(false);
+        setStep('verifyEmail');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to continue MFA setup');
+    }
+  };
+
+  // STEP 3a — Authenticator Verify / Link
+  const handleVerifyMfa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      if (!verifyTOTPCode(mfaCode)) throw new Error('Enter valid 6-digit code');
+
+      let res;
+      if (hasLinkedAuthenticator)
+        res = await verifyTotp({ email, code: mfaCode }).unwrap();
+      else
+        res = await linkAuthenticator({
+          email,
+          code: mfaCode,
+          secret: mfaSecret,
+        }).unwrap();
+
+      Cookies.set('auth_token', res.access_token, {
+        secure: true,
+        sameSite: 'strict',
+        path: '/',
+      });
+      if (isNewUser) {
+        setStep('plan_selection');
+      } else {
+        router.push('/dashboard');
+      }
+
+    } catch (err: any) {
+      setError(err?.data?.detail || err.message || 'Invalid verification code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // STEP 3b — Email Verify
+  const handleSendEmailCode = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await sendEmailOtp({ email }).unwrap();
+      setVerificationSent(true);
+    } catch (err: any) {
+      setError(err?.data?.detail || 'Failed to send email code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const code = parseInt(emailCode);
+      if (isNaN(code)) throw new Error('Enter valid code');
+
+      const res = await verifyEmailCode({ email, code }).unwrap();
+      Cookies.set('auth_token', res.access_token, {
+        secure: true,
+        sameSite: 'strict',
+        path: '/',
+      });
+      if (isNewUser) {
+        setStep('plan_selection');
+      } else {
+        router.push('/dashboard');
+      }
+
+    } catch (err: any) {
+      setError(err?.data?.detail || err.message || 'Verification failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Animation
+  const stepVariants = {
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -20 },
+  };
+const handleBack = () => {
+  switch (step) {
+    case 'payment':
+      setStep('plan_selection');
+      break;
+
+    case 'plan_selection':
+      setStep('mfa_method_selection');
+      break;
+
+    case 'verifyMfa':
+    case 'setupMfa':
+    case 'verifyEmail':
+      setStep('mfa_method_selection');
+      break;
+
+    case 'mfa_method_selection':
+      setStep('credentials');
+      break;
+
+    default:
+      setStep('credentials');
+  }
+};
+
+
+
+
+  // -----------------------------------------------------------
+  // RENDER
+  // -----------------------------------------------------------
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center space-y-3">
+          <Image
+            src="/images/brand-logo.png"
+            alt="Orderly Logo"
+            width={120}
+            height={60}
+            className="mx-auto"
+          />
+          <h1 className="text-2xl font-bold">
+            {step === 'plan_selection'
+              ? 'Choose Your Plan'
+              : step === 'payment'
+                ? 'Secure Checkout'
+                : step === 'credentials'
+                  ? isNewUser
+                    ? 'Create Your Account'
+                    : 'Welcome Back'
+                  : step === 'mfa_method_selection'
+                    ? 'Choose Security Method'
+                    : step === 'setupMfa'
+                      ? 'Set Up Two-Factor Authentication'
+                      : 'Enter Verification Code'}
+          </h1>
+
+          <p className="text-muted-foreground mt-2">
+            {step === 'plan_selection'
+              ? 'Select the subscription that works best for you'
+              : step === 'payment'
+                ? 'Complete your secure payment'
+                : step === 'credentials'
+                  ? isNewUser
+                    ? 'Set up your secure Orderly Affairs account'
+                    : 'Sign in to your Orderly Affairs account'
+                  : step === 'mfa_method_selection'
+                    ? 'Select your preferred two-factor authentication method'
+                    : step === 'setupMfa'
+                      ? 'Complete your security setup'
+                      : 'Enter the code to verify your identity'}
+          </p>
+        </div>
+        <Card className="glass-card shadow-[0_40px_80px_-20px_rgba(30,41,59,0.12)] border border-slate-100">
+          <CardContent className="px-6 pt-6 md:pt-9">
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            {step !== 'credentials' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleBack}
+                className="mb-4 flex items-center gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+            )}
+
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={step}
+                variants={stepVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.35 }}
+              >
+                {/* STEP 1: Credentials */}
+                {step === 'credentials' && (
+                  <form
+                    onSubmit={handleCredentialsSubmit}
+                    className="space-y-4"
+                  >
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email Address</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="email"
+                          type="email"
+                          value={email}
+                          onChange={e => setEmail(e.target.value)}
+                          placeholder="Enter your email"
+                          className="pl-9 enhanced-field-frame"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Password</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="password"
+                          type={showPassword ? 'text' : 'password'}
+                          value={password}
+                          onChange={e => {
+                            setPassword(e.target.value);
+                            evaluatePasswordStrength(e.target.value);
+                          }}
+                          placeholder="Enter your password"
+                          className="pl-9 enhanced-field-frame"
+                          required
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {isNewUser && (
+                      <>
+                        {password && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">
+                                Password Strength
+                              </span>
+                              <span
+                                className={`text-sm ${
+                                  getPasswordStrengthInfo().color
+                                }`}
+                              >
+                                {getPasswordStrengthInfo().text}
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className={`h-1.5 rounded-full transition-all duration-300 ${
+                                  getPasswordStrengthInfo().bg
+                                }`}
+                                style={{
+                                  width: `${
+                                    (passwordStrength.score / 5) * 100
+                                  }%`,
+                                }}
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-1 text-xs">
+                              <div
+                                className={
+                                  passwordStrength.length
+                                    ? 'text-green-600'
+                                    : 'text-gray-400'
+                                }
+                              >
+                                ✓ 12+ characters
+                              </div>
+                              <div
+                                className={
+                                  passwordStrength.uppercase
+                                    ? 'text-green-600'
+                                    : 'text-gray-400'
+                                }
+                              >
+                                ✓ Uppercase letter
+                              </div>
+                              <div
+                                className={
+                                  passwordStrength.lowercase
+                                    ? 'text-green-600'
+                                    : 'text-gray-400'
+                                }
+                              >
+                                ✓ Lowercase letter
+                              </div>
+                              <div
+                                className={
+                                  passwordStrength.number
+                                    ? 'text-green-600'
+                                    : 'text-gray-400'
+                                }
+                              >
+                                ✓ Number
+                              </div>
+                              <div
+                                className={
+                                  passwordStrength.special
+                                    ? 'text-green-600'
+                                    : 'text-gray-400'
+                                }
+                              >
+                                ✓ Special character
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        <div className="space-y-2">
+                          <Label htmlFor="confirmPassword">
+                            Confirm Password
+                          </Label>
+                          <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              id="confirmPassword"
+                              type={showConfirmPassword ? 'text' : 'password'}
+                              value={confirmPassword}
+                              onChange={e => setConfirmPassword(e.target.value)}
+                              placeholder="Confirm your password"
+                              className="pl-9 enhanced-field-frame"
+                              required
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setShowConfirmPassword(!showConfirmPassword)
+                              }
+                              className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
+                            >
+                              {showConfirmPassword ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    <Button className="w-full btn-primary" disabled={loading}>
+                      {loading
+                        ? 'Please wait…'
+                        : isNewUser
+                          ? 'Create Account'
+                          : 'Sign In'}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="link"
+                      onClick={() => setIsNewUser(!isNewUser)}
+                      className="w-full text-sm cursor-pointer"
+                    >
+                      {isNewUser
+                        ? 'Already have an account? Sign in'
+                        : 'Need an account? Create one'}
+                    </Button>
+                  </form>
+                )}
+
+                {/* STEP 2: Choose MFA Method */}
+                {step === 'mfa_method_selection' && (
+                  <div className="space-y-4">
+                    {/* <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setStep('credentials')}
+                      className="flex items-center gap-1 mb-1"
+                    >
+                      <ArrowLeft className="h-4 w-4" /> Back
+                    </Button> */}
+
+                    <p className="text-sm text-muted-foreground">
+                      Choose how you'd like to receive verification codes for
+                      two-factor authentication:
+                    </p>
+
+                    <div className="space-y-3">
+                      {/* Authenticator */}
+                      <label className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+                        <input
+                          type="radio"
+                          name="mfaMethod"
+                          value="authenticator"
+                          checked={selectedMFAMethod === 'authenticator'}
+                          onChange={e =>
+                            setSelectedMFAMethod(e.target.value as MFAMethod)
+                          }
+                          className="mt-1"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Smartphone className="h-4 w-4 text-primary" />
+                            <span className="font-medium">
+                              Authenticator App
+                            </span>
+                            <Badge variant="secondary" className="text-xs">
+                              Most Secure
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            Use Google Authenticator, Authy, or similar apps.
+                          </p>
+                        </div>
+                      </label>
+
+                      {/* Email */}
+                      <label className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+                        <input
+                          type="radio"
+                          name="mfaMethod"
+                          value="email"
+                          checked={selectedMFAMethod === 'email'}
+                          onChange={e =>
+                            setSelectedMFAMethod(e.target.value as MFAMethod)
+                          }
+                          className="mt-1"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Mail className="h-4 w-4 text-blue-500" />
+                            <span className="font-medium">
+                              Email Verification
+                            </span>
+                            <Badge variant="outline" className="text-xs">
+                              Convenient
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            Receive codes via email.
+                          </p>
+                        </div>
+                      </label>
+                      {/* SMS disabled */}
+                      <label className="flex items-start gap-3 p-4 border rounded-lg opacity-50 cursor-not-allowed bg-muted/30">
+                        <input
+                          type="radio"
+                          name="mfaMethod"
+                          value="sms"
+                          disabled
+                          className="mt-1"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <MessageSquare className="h-4 w-4 text-gray-400" />
+                            <span className="font-medium">
+                              SMS / Text Message
+                            </span>
+                            <Badge variant="outline" className="text-xs">
+                              Coming Soon
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            SMS option will be available soon.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+
+                    <Button
+                      onClick={handleMFAMethodSelection}
+                      className="w-full btn-primary"
+                      disabled={loading}
+                    >
+                      {loading ? 'Setting up…' : 'Continue'}
+                    </Button>
+                  </div>
+                )}
+
+                {/* STEP 3: Authenticator Setup/Verify */}
+                {(step === 'setupMfa' || step === 'verifyMfa') && (
+                  <div className="space-y-4 text-center">
+                    {!hasLinkedAuthenticator && qrCodeUrl ? (
+                      <>
+                        {/* <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setStep('mfa_method_selection')}
+                          className="flex items-center gap-1 mb-2"
+                        >
+                          <ArrowLeft className="h-4 w-4" /> Back
+                        </Button> */}
+
+                        <Alert>
+                          <Smartphone className="h-4 w-4" />
+                          <AlertDescription>
+                            Scan this QR code with your authenticator app.
+                          </AlertDescription>
+                        </Alert>
+                        <Image
+                          src={qrCodeUrl}
+                          alt="QR"
+                          width={192}
+                          height={192}
+                          className="mx-auto"
+                        />
+                        <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                          {mfaSecret}
+                        </code>
+                        <form onSubmit={handleVerifyMfa} className="space-y-3">
+                          <Input
+                            type="text"
+                            value={mfaCode}
+                            onChange={e =>
+                              setMfaCode(
+                                e.target.value.replace(/\D/g, '').slice(0, 6),
+                              )
+                            }
+                            placeholder="Enter 6-digit code"
+                            className="text-center tracking-widest text-lg"
+                            required
+                            maxLength={6}
+                          />
+                          <Button
+                            type="submit"
+                            className="w-full btn-primary"
+                            disabled={loading || mfaCode.length !== 6}
+                          >
+                            {loading
+                              ? 'Verifying...'
+                              : 'Verify & Complete Setup'}
+                          </Button>
+                        </form>
+                      </>
+                    ) : (
+                      <>
+                       
+                        <Alert>
+                          <Smartphone className="h-4 w-4" />
+                          <AlertDescription>
+                            Open your authenticator app and enter the 6-digit
+                            code for Orderly Affairs.
+                          </AlertDescription>
+                        </Alert>
+                        <form onSubmit={handleVerifyMfa} className="space-y-3">
+                          <Input
+                            type="text"
+                            value={mfaCode}
+                            onChange={e =>
+                              setMfaCode(
+                                e.target.value.replace(/\D/g, '').slice(0, 6),
+                              )
+                            }
+                            placeholder="Enter 6-digit code"
+                            className="text-center tracking-widest text-lg"
+                            required
+                            maxLength={6}
+                          />
+                          <Button
+                            type="submit"
+                            className="w-full btn-primary"
+                            disabled={loading || mfaCode.length !== 6}
+                          >
+                            {loading
+                              ? 'Verifying...'
+                              : 'Verify & Complete Setup'}
+                          </Button>
+                        </form>
+                      </>
+                    )}
+
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="cursor-pointer"
+                      onClick={() => setStep('verifyEmail')}
+                    >
+                      Try email verification instead
+                    </Button>
+                  </div>
+                )}
+
+                {/* STEP 4: Email Verification */}
+                {step === 'verifyEmail' && (
+                  <div className="space-y-4 text-center">
+                  
+                    <Alert>
+                      <Mail className="h-4 w-4" />
+                      <AlertDescription>
+                        {verificationSent
+                          ? `A verification code has been sent to ${email}.`
+                          : `We'll send a 6-digit verification code to ${email}.`}
+                      </AlertDescription>
+                    </Alert>
+
+                    {!verificationSent ? (
+                      <Button
+                        onClick={handleSendEmailCode}
+                        className="w-full btn-primary"
+                        disabled={loading}
+                      >
+                        Send Verification Code
+                      </Button>
+                    ) : (
+                      <form onSubmit={handleVerifyEmail} className="space-y-3">
+                        <Input
+                          type="text"
+                          value={emailCode}
+                          onChange={e =>
+                            setEmailCode(
+                              e.target.value.replace(/\D/g, '').slice(0, 6),
+                            )
+                          }
+                          placeholder="Enter 6-digit code"
+                          className="text-center tracking-widest text-lg"
+                          required
+                          maxLength={6}
+                        />
+                        <Button
+                          type="submit"
+                          className="w-full btn-primary"
+                          disabled={loading || emailCode.length !== 6}
+                        >
+                          {loading ? 'Verifying…' : 'Verify & Continue'}
+                        </Button>
+                      </form>
+                    )}
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="cursor-pointer"
+                      onClick={() => setStep('setupMfa')}
+                    >
+                      Try authenticator app instead
+                    </Button>
+                  </div>
+                )}
+                {step === 'plan_selection' && (
+                  <div className="space-y-4 text-center">
+                    <h2 className="text-xl font-bold">Choose Your Plan</h2>
+
+                    <Button
+                      variant={
+                        selectedPlan === 'monthly' ? 'default' : 'outline'
+                      }
+                      className="w-full"
+                      onClick={() => setSelectedPlan('monthly')}
+                    >
+                      Monthly — $19.99
+                    </Button>
+
+                    <Button
+                      variant={
+                        selectedPlan === 'yearly' ? 'default' : 'outline'
+                      }
+                      className="w-full"
+                      onClick={() => setSelectedPlan('yearly')}
+                    >
+                      Yearly — $199
+                    </Button>
+
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        setIsTrial(false);
+                        setStep('payment');
+                      }}
+                    >
+                      Continue to Payment
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        setIsTrial(true);
+                        setStep('payment');
+                      }}
+                    >
+                      Start 15-Day Free Trial
+                    </Button>
+                  </div>
+                )}
+                
+                {step === 'payment' && (
+  <Elements stripe={stripePromise}>
+    <PaymentForm
+      isTrial={isTrial}
+      selectedPlan={selectedPlan}
+      router={router}
+    />
+  </Elements>
+)}
+
+              </motion.div>
+            </AnimatePresence>
+          </CardContent>
+        </Card>
+        {/* Footer Notice */}
+        <div className="mt-12 w-full bg-slate-100/40 rounded-2xl p-4 md:p-6 flex items-start gap-5 border border-slate-200/40 shadow-[0_40px_80px_-20px_rgba(30,41,59,0.12)]">
+          <div className="shrink-0 w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm">
+            <ShieldIcon />
+          </div>
+          <p className="text-[9px] md:text-[10px] font-bold text-slate-500 leading-relaxed uppercase tracking-widest">
+            Secured by{' '}
+            <span className="text-[#1e293b]">Bank-Level AES-256</span>{' '}
+            encryption. Your data is decrypted locally on your device only
+            during active vault sessions.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
