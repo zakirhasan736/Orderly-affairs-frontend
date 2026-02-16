@@ -518,7 +518,7 @@ const canChangePlan =
 
   /* ---------------- UI ---------------- */
   return (
-    <div className="space-y-12 pb-32">
+    <div className="space-y-12 pb-32 vault-settings-section">
       {/* PLAN CARD */}
       <div className="bg-white p-10 rounded-3xl border shadow-sm">
         <h2 className="text-xl font-black uppercase">

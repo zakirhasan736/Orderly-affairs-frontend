@@ -263,7 +263,7 @@ const pendingMessages = useMemo(() => {
         </div>
 
         <div className="lg:max-w-90 w-full grid grid-cols-2 lg:grid-cols-1 gap-4">
-          <div className="bg-[#1e293b] p-6 rounded-2xl text-white  flex flex-col justify-between">
+          <div className="bg-[#1e293b] dashboard-next-task p-6 rounded-2xl text-white  flex flex-col justify-between">
             <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">
               Next Task
             </h3>
@@ -292,7 +292,7 @@ const pendingMessages = useMemo(() => {
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card
-          className="glass-card cursor-pointer hover:bg-muted/50 transition-colors"
+          className="glass-card dashboard-instructions-card cursor-pointer hover:bg-muted/50 transition-colors"
           onClick={() => onNavigateToSection('0')}
         >
           <CardContent className="pt-6">
@@ -313,7 +313,7 @@ const pendingMessages = useMemo(() => {
         </Card>
 
         <Card
-          className="glass-card cursor-pointer hover:bg-muted/50 transition-colors"
+          className="glass-card dashboard-access-card cursor-pointer hover:bg-muted/50 transition-colors"
           onClick={() => onNavigateToSection('2')}
         >
           <CardContent className="pt-6">
@@ -335,7 +335,7 @@ const pendingMessages = useMemo(() => {
         </Card>
 
         <Card
-          className="glass-card cursor-pointer hover:bg-muted/50 transition-colors"
+          className="glass-card dashboard-nok-card cursor-pointer hover:bg-muted/50 transition-colors"
           onClick={() => onNavigateToSection('3')}
         >
           <CardContent className="pt-6">
@@ -355,7 +355,7 @@ const pendingMessages = useMemo(() => {
           </CardContent>
         </Card>
         <Card
-          className="glass-card cursor-pointer hover:bg-muted/50 transition-colors"
+          className="glass-card dashboard-messages-card cursor-pointer hover:bg-muted/50 transition-colors"
           onClick={() => onNavigateToSection('4')}
         >
           <CardContent className="pt-6">
@@ -376,7 +376,7 @@ const pendingMessages = useMemo(() => {
       </div>
 
       {/* Search and Filter */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 justify-between shadow-sm flex flex-col md:flex-row items-center gap-8">
+      <div className="bg-white dashboard-filter-and-search p-4 rounded-2xl border border-slate-200 justify-between shadow-sm flex flex-col md:flex-row items-center gap-8">
         <div className="flex-1 relative max-w-full w-full">
           <svg
             className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-300"
@@ -434,7 +434,7 @@ const pendingMessages = useMemo(() => {
         </div>
       </div>
       {/* Data Sections */}
-      <Tabs defaultValue="access" className="w-full">
+      <Tabs defaultValue="access" className="w-full dashboard-tabs-section">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="access" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />

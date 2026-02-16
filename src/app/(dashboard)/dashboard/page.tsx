@@ -1423,7 +1423,7 @@ function renderSection() {
               </div>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 md:gap-4">
-                  <div className="hidden md:flex items-center gap-3 px-4 py-1.5 bg-slate-50/50 rounded-xl border border-slate-100/50">
+                  <div className="hidden md:flex header-progress-indicator items-center gap-3 px-4 py-1.5 bg-slate-50/50 rounded-xl border border-slate-100/50">
                     <div className="flex items-center gap-2">
                       <div className="w-16 lg:w-24 h-1 bg-slate-200 rounded-full overflow-hidden">
                         <Progress value={progress} className="w-40" />
@@ -1520,7 +1520,7 @@ function renderSection() {
         <div className="flex">
           {/* Sidebar */}
           <div
-            className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 shadow-lg transform transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+            className={`fixed inset-y-0 sidebar-navigation left-0 z-50 w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 shadow-lg transform transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
               sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             }`}
           >
@@ -1537,7 +1537,7 @@ function renderSection() {
                       setActiveSubsection(null);
                       setSidebarOpen(false);
                     }}
-                    className={`w-full owner-dashboard-overview-area text-left p-3 rounded-lg transition-colors ${
+                    className={`w-full owner-dashboard-item text-left p-3 rounded-lg transition-colors ${
                       activeSection === 'dashboard'
                         ? 'bg-primary text-primary-foreground'
                         : 'hover:bg-muted'
@@ -1561,7 +1561,7 @@ function renderSection() {
                           setActiveSubsection(null);
                           setSidebarOpen(false);
                         }}
-                        className={`w-full text-left p-3 rounded-lg transition-colors ${
+                        className={`w-full text-left p-3 rounded-lg transition-colors section-${section.id}-nav ${
                           activeSection === section.id && !activeSubsection
                             ? 'bg-primary text-primary-foreground'
                             : 'hover:bg-muted'
@@ -1695,7 +1695,7 @@ function renderSection() {
             <div className="container mx-auto px-4 py-6">
               {/* Dashboard View */}
               {activeSection === 'dashboard' ? (
-                <div className="space-y-6">
+                <div className="space-y-6 owner-dashboard-overview-area">
                   <div className="hidden">
                     <h1>Dashboard Overview</h1>
                     <p className="text-text-secondary mt-1">
