@@ -7,10 +7,15 @@ import React, {
   useRef,
 } from 'react';
 import { GuidedTour } from '@/onboarding/components/GuidedTour';
-import { ownerTour } from '@/onboarding/config/ownerTour';
+// import { ownerTour } from '@/onboarding/config/ownerTour';
 import { TOUR_VERSION } from '@/onboarding/utils/tourVersion';
-import { nextKinTour } from '@/onboarding/config/nextKinTour';
+// import { nextKinTour } from '@/onboarding/config/nextKinTour';
+// import { useOnboarding } from '@/hooks/useOnboarding';
 import { shouldTriggerContextualTour } from '@/onboarding/utils/contextualTrigger';
+// import { useOnboardingContext } from '@/onboarding/components/OnboardingProvider';
+import { useOnboarding } from '@/onboarding/components/OnboardingProvider';
+import { useTour } from '@/onboarding/useTour';
+
 
 import { deleteUpload } from '@/libs/api/upload';
 import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
@@ -91,6 +96,7 @@ import {
 } from '@/libs/mappers/section1Mapper';
 import { useGetNokLetterQuery } from '@/services/nokLetterApi';
 import { WelcomeModal } from '@/onboarding/components/WelcomeModal';
+import { useGetTourStatusQuery, useUpdateTourStatusMutation } from '@/services/onboardingApi';
 
 type AppMode = 'owner_login' | 'owner' | 'nok_login' | 'nok_pending_approval' | 'nok_dashboard' | 'nok_section_view' | 'test_access_management' | 'test_mfa';
 // Suppress Iterable SDK errors from browser extensions
@@ -120,12 +126,20 @@ export default function DashboardPage() {
   const [showMessagesDelivery, setShowMessagesDelivery] = useState(false);
 const [showWelcome, setShowWelcome] = useState(false);
 const [tourStarted, setTourStarted] = useState(false);
-const activeRole = useMemo(() => {
+const derivedRole = useMemo(() => {
   if (appMode === 'owner') return 'owner';
   if (appMode === 'nok_dashboard' || appMode === 'nok_section_view')
     return 'nextkin';
   return null;
 }, [appMode]);
+
+const { startTour, activeRole } = useOnboarding();
+
+const { data: status, isLoading: loading } = useGetTourStatusQuery();
+const [updateStatus] = useUpdateTourStatusMutation();
+
+
+
 
   // backed next kin handler
   const [nextkinLogin] = useNextkinLoginMutation();
@@ -136,15 +150,14 @@ const { data: myNextKin, refetch: refetchNextKin } = useGetMyNextKinQuery(
     skip: appMode !== 'owner',
   },
 );
-
 const firstNokId = myNextKin?.[0]?.id;
 
-useEffect(() => {
-  const completed = localStorage.getItem('onboarding_completed');
-  if (!completed && appMode === 'owner') {
-    setShowWelcome(true);
-  }
-}, [appMode]);
+// useEffect(() => {
+//   const completed = localStorage.getItem('onboarding_completed');
+//   if (!completed && appMode === 'owner') {
+//     setShowWelcome(true);
+//   }
+// }, [appMode]);
 
 
   const [approveNextKinAccess] = useApproveNextKinAccessMutation();
@@ -156,6 +169,10 @@ useEffect(() => {
   type DashboardFormData = Record<string, any>;
 
   const [formData, setFormData] = useState<DashboardFormData>({});
+const contextualStep = useMemo(() => {
+  if (appMode !== 'owner') return null;
+  return shouldTriggerContextualTour(formData, myNextKin || []);
+}, [formData, myNextKin, appMode]);
 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
@@ -410,16 +427,13 @@ if (
     appMode,
   ]);
 
-
 useEffect(() => {
-  if (appMode !== 'owner') return;
-
-  const completedVersion = localStorage.getItem('onboarding_completed');
-
-  if (completedVersion !== TOUR_VERSION) {
+  if (!loading && status && !status.has_completed && !tourStarted) {
     setShowWelcome(true);
   }
-}, [appMode]);
+}, [loading, status, tourStarted]);
+
+
 
 
   // Debounced auto-save with cleanup - only trigger on actual data changes
@@ -443,6 +457,7 @@ useEffect(() => {
     collapsedSubsections,
     appMode,
   ]);
+
 
   // Cleanup all timers on unmount
   useEffect(() => {
@@ -745,14 +760,7 @@ const currentSectionLabel = useMemo(() => {
   return `${section.id}. ${section.title}`;
 }, [activeSection, activeSubsection, allSections]);
 useEffect(() => {
-  if (appMode !== 'owner') return;
-
-  const contextualStep = shouldTriggerContextualTour(formData, myNextKin ?? []);
-
-
   if (!contextualStep) return;
-
-  setTourStarted(true);
 
   if (contextualStep === 'assign_nok') {
     setActiveSection('2');
@@ -761,8 +769,7 @@ useEffect(() => {
   if (contextualStep === 'create_messages') {
     setActiveSection('4');
   }
-}, [formData, myNextKin, appMode]);
-
+}, [contextualStep]);
 
 
 useEffect(() => {
@@ -1428,6 +1435,23 @@ function renderSection() {
                   </div>
 
                   <div className="flex items-center gap-1 bg-slate-50/80 p-1 rounded-xl border border-slate-100">
+                    {/* {status?.has_completed && (
+                      <span className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded-full">
+                        Tour Completed ✔
+                      </span>
+                    )} */}
+
+                    <button
+                      onClick={async () => {
+                        await updateStatus({ manually_started: true });
+                        startTour(derivedRole ?? 'owner');
+                        setTourStarted(true);
+                      }}
+                      className="text-sm px-4 py-2 bg-neutral-800 text-white rounded-md"
+                    >
+                      Run Tour
+                    </button>
+
                     <button
                       onClick={manualSave}
                       className={`flex cursor-pointer owners-states-save items-center gap-2 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#1e293b] hover:bg-white rounded-lg transition-all active:scale-95`}
@@ -1887,13 +1911,15 @@ function renderSection() {
         </div>
         {showWelcome && (
           <WelcomeModal
-            role="owner"
-            onStart={() => {
+            role={derivedRole ?? 'owner'}
+            onStart={async () => {
               setShowWelcome(false);
+              await updateStatus({ manually_started: true });
+              startTour(derivedRole ?? 'owner');
               setTourStarted(true);
             }}
-            onSkip={() => {
-              localStorage.setItem('onboarding_completed', TOUR_VERSION);
+            onSkip={async () => {
+              await updateStatus({ has_completed: true });
               setShowWelcome(false);
             }}
           />
@@ -1901,27 +1927,17 @@ function renderSection() {
 
         {tourStarted && activeRole === 'owner' && (
           <GuidedTour
-            steps={ownerTour}
+            role="owner"
             activeSection={activeSection}
             setActiveSection={setActiveSection}
-            onFinish={() => {
-              localStorage.setItem('onboarding_completed', TOUR_VERSION);
-              setTourStarted(false);
-            }}
           />
         )}
 
         {tourStarted && activeRole === 'nextkin' && (
           <GuidedTour
-            steps={nextKinTour}
-            activeSection={appMode}
-            setActiveSection={(section: string) =>
-              setAppMode(section as AppMode)
-            }
-            onFinish={() => {
-              localStorage.setItem('onboarding_completed', TOUR_VERSION);
-              setTourStarted(false);
-            }}
+            role="nextkin"
+            activeSection={activeSection}
+            setActiveSection={setActiveSection}
           />
         )}
 

@@ -4,13 +4,13 @@ import React, { createContext, useContext, useState } from 'react';
 
 type Role = 'owner' | 'nextkin';
 
-interface OnboardingContextType {
+interface ContextType {
+  activeRole: Role | null;
   startTour: (role: Role) => void;
   stopTour: () => void;
-  activeRole: Role | null;
 }
 
-const OnboardingContext = createContext<OnboardingContextType | null>(null);
+const Context = createContext<ContextType | null>(null);
 
 export const OnboardingProvider = ({
   children,
@@ -19,24 +19,18 @@ export const OnboardingProvider = ({
 }) => {
   const [activeRole, setActiveRole] = useState<Role | null>(null);
 
-  const startTour = (role: Role) => {
-    setActiveRole(role);
-  };
-
-  const stopTour = () => {
-    setActiveRole(null);
-    localStorage.setItem('onboarding_completed', 'true');
-  };
+  const startTour = (role: Role) => setActiveRole(role);
+  const stopTour = () => setActiveRole(null);
 
   return (
-    <OnboardingContext.Provider value={{ startTour, stopTour, activeRole }}>
+    <Context.Provider value={{ activeRole, startTour, stopTour }}>
       {children}
-    </OnboardingContext.Provider>
+    </Context.Provider>
   );
 };
 
 export const useOnboarding = () => {
-  const ctx = useContext(OnboardingContext);
-  if (!ctx) throw new Error('useOnboarding must be inside OnboardingProvider');
+  const ctx = useContext(Context);
+  if (!ctx) throw new Error('Must wrap in OnboardingProvider');
   return ctx;
 };

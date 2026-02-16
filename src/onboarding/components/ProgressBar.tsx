@@ -8,12 +8,12 @@ export const ProgressBar = ({ current, total }: Props) => {
 
   return (
     <div className="mb-4">
-      <div className="text-xs text-muted-foreground mb-2">
+      <div className="text-xs mb-2">
         Step {current + 1} of {total}
       </div>
-      <div className="h-[2px] bg-slate-200 rounded">
+      <div className="h-[3px] bg-gray-200 rounded">
         <div
-          className="h-[2px] bg-amber-400 transition-all duration-500"
+          className="h-[3px] bg-amber-400 transition-all duration-300"
           style={{ width: `${percent}%` }}
         />
       </div>
