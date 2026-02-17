@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
 export async function saveSection7(token: string, payload: any) {
   const res = await fetch(`${API_BASE}/sections/section7-insurance-policies`, {

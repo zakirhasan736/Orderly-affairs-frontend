@@ -7,14 +7,8 @@ import React, {
   useRef,
 } from 'react';
 import { GuidedTour } from '@/onboarding/components/GuidedTour';
-// import { ownerTour } from '@/onboarding/config/ownerTour';
-import { TOUR_VERSION } from '@/onboarding/utils/tourVersion';
-// import { nextKinTour } from '@/onboarding/config/nextKinTour';
-// import { useOnboarding } from '@/hooks/useOnboarding';
 import { shouldTriggerContextualTour } from '@/onboarding/utils/contextualTrigger';
-// import { useOnboardingContext } from '@/onboarding/components/OnboardingProvider';
 import { useOnboarding } from '@/onboarding/components/OnboardingProvider';
-import { useTour } from '@/onboarding/useTour';
 
 
 import { deleteUpload } from '@/libs/api/upload';
