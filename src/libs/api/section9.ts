@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export async function saveSection9(token: string, payload: any) {
   const res = await fetch(`${API_BASE}/sections/section9-charitable-giving`, {
