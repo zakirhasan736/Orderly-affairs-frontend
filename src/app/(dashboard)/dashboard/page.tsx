@@ -146,12 +146,41 @@ const { data: myNextKin, refetch: refetchNextKin } = useGetMyNextKinQuery(
 );
 const firstNokId = myNextKin?.[0]?.id;
 
-// useEffect(() => {
-//   const completed = localStorage.getItem('onboarding_completed');
-//   if (!completed && appMode === 'owner') {
-//     setShowWelcome(true);
-//   }
-// }, [appMode]);
+const sectionSaveMap: Record<string, (token: string, data: any) => Promise<any>> = {
+  '1': async (token, data) =>
+    saveSection1(token, mapUIToSection1Payload(data)),
+
+  '5': saveSection5,
+  '6': async (token, data) => saveSection6(token, { '6A': data?.['6A'] }),
+  '7': async (token, data) => saveSection7(token, { '7A': data?.['7A'] }),
+  '8': async (token, data) => saveSection8(token, { '8A': data?.['8A'] }),
+  '9': async (token, data) => saveSection9(token, { '9A': data?.['9A'] }),
+  '10': async (token, data) => saveSection10(token, { '10A': data?.['10A'] }),
+  '11': async (token, data) => saveSection11(token, { '11A': data?.['11A'] }),
+  '12': async (token, data) =>
+    saveSection12(token, {
+      ...(data?.['12A'] && { '12A': data['12A'] }),
+      ...(data?.['12B'] && { '12B': data['12B'] }),
+    }),
+  '13': async (token, data) => saveSection13(token, { '13A': data?.['13A'] }),
+  '14': async (token, data) => saveSection14(token, { '14A': data?.['14A'] }),
+  '15': async (token, data) =>
+    saveSection15(token, {
+      ...(data?.['15A'] && { '15A': data['15A'] }),
+      ...(data?.['15B'] && { '15B': data['15B'] }),
+    }),
+  '16': async (token, data) =>
+    saveSection16(token, {
+      ...(data?.['16A'] && { '16A': data['16A'] }),
+      ...(data?.['16B'] && { '16B': data['16B'] }),
+    }),
+  '17': saveSection17,
+  '18': saveSection18,
+  '19': saveSection19,
+  '20': saveSection20,
+  '21': saveSection21,
+};
+
 
 
   const [approveNextKinAccess] = useApproveNextKinAccessMutation();
@@ -431,26 +460,61 @@ useEffect(() => {
 
 
   // Debounced auto-save with cleanup - only trigger on actual data changes
-  useEffect(() => {
-    if (appMode !== 'owner') return; // Only auto-save for owner mode
+  // useEffect(() => {
+  //   if (appMode !== 'owner') return; // Only auto-save for owner mode
 
+  //   if (autoSaveRef.current) {
+  //     clearTimeout(autoSaveRef.current);
+  //   }
+  //   autoSaveRef.current = setTimeout(autoSave, 2000);
+
+  //   return () => {
+  //     if (autoSaveRef.current) {
+  //       clearTimeout(autoSaveRef.current);
+  //     }
+  //   };
+  // }, [
+  //   formData,
+  //   disabledSections,
+  //   disabledSubsections,
+  //   collapsedSubsections,
+  //   appMode,
+  // ]);
+useEffect(() => {
+  if (appMode !== 'owner') return;
+  if (!activeSection || activeSection === 'dashboard') return;
+  if (!sectionSaveMap[activeSection]) return;
+
+  const token = Cookies.get('auth_token');
+  if (!token) return;
+
+  if (autoSaveRef.current) {
+    clearTimeout(autoSaveRef.current);
+  }
+
+  autoSaveRef.current = setTimeout(async () => {
+    try {
+      setAutoSaving(true);
+
+      const sectionData = formData[activeSection];
+      if (!sectionData) return;
+
+      await sectionSaveMap[activeSection](token, sectionData);
+
+      setLastSaved(new Date());
+    } catch (err) {
+      console.error('Auto-save failed:', err);
+    } finally {
+      setAutoSaving(false);
+    }
+  }, 2000);
+
+  return () => {
     if (autoSaveRef.current) {
       clearTimeout(autoSaveRef.current);
     }
-    autoSaveRef.current = setTimeout(autoSave, 2000);
-
-    return () => {
-      if (autoSaveRef.current) {
-        clearTimeout(autoSaveRef.current);
-      }
-    };
-  }, [
-    formData,
-    disabledSections,
-    disabledSubsections,
-    collapsedSubsections,
-    appMode,
-  ]);
+  };
+}, [formData[activeSection], activeSection]);
 
 
   // Cleanup all timers on unmount
@@ -1492,7 +1556,13 @@ const nextTask = useMemo(() => {
                       className={`flex cursor-pointer owners-states-save items-center gap-2 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#1e293b] hover:bg-white rounded-lg transition-all active:scale-95`}
                     >
                       <Save className="h-4 w-4 mr-1" />
-                      <span className="hidden xl:inline">Save</span>
+                      {autoSaving ? (
+                        <span className="text-xs text-gray-500 ml-2">
+                          Saving...
+                        </span>
+                      ) : (
+                        <span className="hidden xl:inline">Save</span>
+                      )}
                     </button>
                     <button
                       onClick={exportData}
