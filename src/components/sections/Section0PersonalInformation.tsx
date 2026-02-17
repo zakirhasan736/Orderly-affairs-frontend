@@ -1,6 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+
+
 import { Card, CardHeader, CardTitle, CardContent } from '@common/ui/card';
 import { DynamicFormField } from '@/components/DynamicFormField';
 
@@ -11,15 +13,52 @@ import { DynamicFormField } from '@/components/DynamicFormField';
  * This section is intentionally static.
  * No form state, no saving, no repeatables.
  */
+interface Props {
+  onFullyRead?: () => void;
+}
+const Section0PersonalInformation = ({ onFullyRead }: Props) => {
+   const containerRef = useRef<HTMLDivElement | null>(null);
 
-const Section0PersonalInformation = () => {
+   useEffect(() => {
+     const el = containerRef.current;
+     if (!el) return;
+
+     const handleScroll = () => {
+       const scrollTop = el.scrollTop;
+       const scrollHeight = el.scrollHeight;
+       const clientHeight = el.clientHeight;
+
+       const scrolledPercent = (scrollTop + clientHeight) / scrollHeight;
+
+       if (scrolledPercent >= 0.95) {
+         onFullyRead?.();
+       }
+     };
+
+     el.addEventListener('scroll', handleScroll);
+
+     return () => {
+       el.removeEventListener('scroll', handleScroll);
+     };
+   }, [onFullyRead]);
   return (
-    <div className="space-y-6">
+    <div
+      ref={containerRef}
+      className="space-y-6 pr-2"
+    >
       {/* 1. We’re honored you’re here */}
+
+
       <Card className="gap-0!">
-        <div >
-          <CardHeader>
+        <div>
+          <CardHeader className="flex pb-4 items-center justify-between">
             <CardTitle>We’re honored you’re here</CardTitle>
+          <button
+          onClick={() => onFullyRead?.()}
+          className="cursor-pointer text-sm underline"
+        >
+          Mark as Read
+        </button>
           </CardHeader>
           <CardContent className="pb-0! pt-4">
             <DynamicFormField
@@ -37,7 +76,7 @@ This isn't just about paperwork; it's about peace of mind and making things easi
           </CardContent>
         </div>
         {/* 2. Go at your own pace */}
-        <div >
+        <div>
           <CardHeader>
             <CardTitle>Go at your own pace</CardTitle>
           </CardHeader>
@@ -105,7 +144,7 @@ We guide you through labeling and storing your home and personal keys. For your 
           </CardContent>
         </div>
         {/* 5. Copyright */}
-        <div >
+        <div>
           <CardHeader>
             <CardTitle>Copyright & legal notice</CardTitle>
           </CardHeader>

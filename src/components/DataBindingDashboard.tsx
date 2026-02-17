@@ -28,6 +28,7 @@ interface DataBindingDashboardProps {
   nextKinList: any[];
   nokLetter: any;
   isNextOfKin?: boolean;
+  nextTask: { id: string; title: string } | null;
   onNavigateToSection: (sectionId: string) => void;
 }
 interface ApiMessage {
@@ -52,6 +53,7 @@ export function DataBindingDashboard({
   nokLetter,
   onNavigateToSection,
   isNextOfKin = false,
+  nextTask,
 }: DataBindingDashboardProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [messageFilter, setMessageFilter] = useState<
@@ -62,25 +64,24 @@ export function DataBindingDashboard({
   const token = isNextOfKin
     ? Cookies.get('nok_auth_token')
     : Cookies.get('auth_token');
-useEffect(() => {
-  const fetchMessages = async () => {
-    if (!token) return;
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (!token) return;
 
-    try {
-      setLoadingMessages(true);
-      const response = await getMessages(token);
-      console.log('FULL API RESPONSE:', response);
-      setMessages(response || []);
-    } catch (error) {
-      console.error('Failed to fetch messages:', error);
-    } finally {
-      setLoadingMessages(false);
-    }
-  };
+      try {
+        setLoadingMessages(true);
+        const response = await getMessages(token);
+        console.log('FULL API RESPONSE:', response);
+        setMessages(response || []);
+      } catch (error) {
+        console.error('Failed to fetch messages:', error);
+      } finally {
+        setLoadingMessages(false);
+      }
+    };
 
-  fetchMessages();
-}, [token]);
-
+    fetchMessages();
+  }, [token]);
 
   // Computed progress function from JSON spec
   const computedProgress = useMemo(() => {
@@ -124,50 +125,48 @@ useEffect(() => {
   const nextOfKinLetterData = nokLetter;
   console.log('Next of Kin Letter Data:', nextOfKinLetterData);
 
+  const pendingMessages = useMemo(() => {
+    return messages
+      .map((item: ApiMessage) => ({
+        id: item._id,
+        title: item.title,
+        recipient: item.recipient,
+        recipientEmail: item.recipient_email,
+        content: item.content || '', // ✅ REQUIRED
+        lastModified: item.updated_at,
+        messageType: item.message_type as 'letter' | 'video' | 'audio',
+        deliveryTrigger: item.delivery_trigger,
+        isDelivered: item.status === 'sent', // ✅ REQUIRED
+        deliveryDate: item.delivery_date,
+        deliveryOccasion: item.delivery_occasion,
+        subject: item.subject,
 
-const pendingMessages = useMemo(() => {
-  return messages
-    .map((item: ApiMessage) => ({
-      id: item._id,
-      title: item.title,
-      recipient: item.recipient,
-      recipientEmail: item.recipient_email,
-      content: item.content || '', // ✅ REQUIRED
-      lastModified: item.updated_at,
-      messageType: item.message_type as 'letter' | 'video' | 'audio',
-      deliveryTrigger: item.delivery_trigger,
-      isDelivered: item.status === 'sent', // ✅ REQUIRED
-      deliveryDate: item.delivery_date,
-      deliveryOccasion: item.delivery_occasion,
-      subject: item.subject,
+        // Optional media mapping
+        audioFile:
+          item.message_type === 'audio' && item.media
+            ? { name: 'Audio Message', type: 'audio' }
+            : undefined,
 
-      // Optional media mapping
-      audioFile:
-        item.message_type === 'audio' && item.media
-          ? { name: 'Audio Message', type: 'audio' }
-          : undefined,
+        videoFile:
+          item.message_type === 'video' && item.media
+            ? { name: 'Video Message', type: 'video' }
+            : undefined,
+      }))
+      .filter(msg => !msg.isDelivered) // ✅ ONLY PENDING
+      .filter(msg =>
+        messageFilter === 'all' ? true : msg.messageType === messageFilter,
+      ) // ✅ TYPE FILTER
+      .filter(msg => {
+        if (!searchTerm) return true;
 
-      videoFile:
-        item.message_type === 'video' && item.media
-          ? { name: 'Video Message', type: 'video' }
-          : undefined,
-    }))
-    .filter(msg => !msg.isDelivered) // ✅ ONLY PENDING
-    .filter(msg =>
-      messageFilter === 'all' ? true : msg.messageType === messageFilter,
-    ) // ✅ TYPE FILTER
-    .filter(msg => {
-      if (!searchTerm) return true;
-
-      const search = searchTerm.toLowerCase();
-      return (
-        msg.title.toLowerCase().includes(search) ||
-        msg.recipient.toLowerCase().includes(search) ||
-        msg.content.toLowerCase().includes(search)
-      );
-    }); // ✅ SEARCH FILTER
-}, [messages, messageFilter, searchTerm]);
-
+        const search = searchTerm.toLowerCase();
+        return (
+          msg.title.toLowerCase().includes(search) ||
+          msg.recipient.toLowerCase().includes(search) ||
+          msg.content.toLowerCase().includes(search)
+        );
+      }); // ✅ SEARCH FILTER
+  }, [messages, messageFilter, searchTerm]);
 
   // Filter access management data based on search
   const filteredAccessData = useMemo(() => {
@@ -182,7 +181,8 @@ const pendingMessages = useMemo(() => {
   }, [accessManagementData, searchTerm]);
 
   const getMessageTypeCount = (type: string) => {
-    return pendingMessages.filter((item: any) => item.messageType === type).length;
+    return pendingMessages.filter((item: any) => item.messageType === type)
+      .length;
   };
 
   return (
@@ -267,10 +267,29 @@ const pendingMessages = useMemo(() => {
             <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">
               Next Task
             </h3>
-            <p className="font-bold text-sm mt-2">Upload Will & Testament</p>
-            <button className="text-[10px] font-bold text-indigo-400 mt-4 hover:text-indigo-300">
-              Go to Residence →
-            </button>
+            {nextTask ? (
+              <>
+                <p className="font-bold text-sm mt-2">
+                  Complete {nextTask.title}
+                </p>
+
+                <button
+                  onClick={() => onNavigateToSection(nextTask.id)}
+                  className="text-[10px] font-bold text-indigo-400 mt-4 hover:text-indigo-300"
+                >
+                  Go to Section →
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="font-bold text-sm mt-2">
+                  🎉 All Sections Completed!
+                </p>
+                <p className="text-[10px] text-slate-400 mt-4">
+                  Your vault is fully organized.
+                </p>
+              </>
+            )}
           </div>
           <div className="bg-white p-6 rounded-2xl border border-slate-200  flex flex-col justify-between">
             <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">

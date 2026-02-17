@@ -704,23 +704,42 @@ await approveNextKinAccess(pendingNOK.id).unwrap();
     setNokActiveSection(null);
     setAppMode('nok_dashboard');
   }, []);
+const [instructionRead, setInstructionRead] = useState(false);
+useEffect(() => {
+  const stored = localStorage.getItem('instruction_read');
+  if (stored === 'true') {
+    setInstructionRead(true);
+  }
+}, []);
+
+useEffect(() => {
+  if (instructionRead) {
+    localStorage.setItem('instruction_read', 'true');
+  }
+}, [instructionRead]);
 
   // Simplified section completion status function
-  const getSectionCompletionStatus = useCallback(
-    (sectionId: string) => {
-      if (disabledSections[sectionId]) return true;
-      //  SPECIAL CASE: Access Management
-      if (sectionId === '2') {
-        return Array.isArray(myNextKin) && myNextKin.length > 0;
-      }
-      const sectionData = formData[sectionId];
-      if (!sectionData) return false;
+const getSectionCompletionStatus = useCallback(
+  (sectionId: string) => {
+    if (disabledSections[sectionId]) return true;
 
-      // Simple check - if section has any data, consider it started
-      return Object.keys(sectionData).length > 0;
-    },
-    [formData, disabledSections, myNextKin],
-  );
+    // 🔥 SPECIAL CASE: INSTRUCTIONS
+    if (sectionId === '0') {
+      return instructionRead;
+    }
+
+    if (sectionId === '2') {
+      return Array.isArray(myNextKin) && myNextKin.length > 0;
+    }
+
+    const sectionData = formData[sectionId];
+    if (!sectionData) return false;
+
+    return Object.keys(sectionData).length > 0;
+  },
+  [formData, disabledSections, myNextKin, instructionRead],
+);
+
 
   // Simplified progress calculation to avoid performance issues
   const progress = useMemo(() => {
@@ -1186,7 +1205,11 @@ const ExportIcon = () => (
 function renderSection() {
   switch (activeSection) {
     case '0':
-      return <Section0PersonalInformation />;
+      return (
+        <Section0PersonalInformation
+          onFullyRead={() => setInstructionRead(true)}
+        />
+      );
     case '1':
       return (
         <Section1VitalInformation
@@ -1373,6 +1396,24 @@ function renderSection() {
       );
   }
 }
+
+const nextTask = useMemo(() => {
+  if (!allSections?.length) return null;
+
+  for (const section of allSections) {
+    const isComplete = getSectionCompletionStatus(section.id);
+
+    if (!isComplete) {
+      return {
+        id: section.id,
+        title: `${section.id}. ${section.title}`,
+      };
+    }
+  }
+
+  return null; // everything complete
+}, [allSections, getSectionCompletionStatus]);
+
 
   return (
     <>
@@ -1709,6 +1750,7 @@ function renderSection() {
                     formData={formData}
                     nextKinList={myNextKin || []}
                     nokLetter={dashboardNokLetter || null}
+                    nextTask={nextTask}
                     onNavigateToSection={sectionId => {
                       setActiveSection(sectionId);
                       setActiveSubsection(null);
