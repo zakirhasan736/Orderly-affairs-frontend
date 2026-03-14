@@ -97,6 +97,7 @@ const SECTION_12A = {
       key: 'online_banking_password',
       label: 'Online Banking Password',
       type: 'TextInput',
+        inputType: 'password',
       helperText: 'Password for online banking',
     },
     {
@@ -175,6 +176,7 @@ const SECTION_12B = {
       key: 'password',
       label: 'Password',
       type: 'TextInput',
+      inputType: 'password',
       helperText: 'Password for the account',
     },
     {
@@ -266,7 +268,7 @@ export default function Section12BankingFinancialAccounts({
         className={show('12A') ? 'border border-primary rounded-3xl' : ''}
       >
         <Card>
-          <CardHeader className="flex-row justify-between items-center">
+          <CardHeader className="flex flex-row justify-between items-center">
             <CardTitle>12A. {SECTION_12A.title}</CardTitle>
             <Button
               size="sm"
@@ -302,7 +304,7 @@ export default function Section12BankingFinancialAccounts({
                   </Button>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid  grid-cols-1 md:grid-cols-2 gap-4">
                   {SECTION_12A.fields.map(field => (
                     <DynamicFormField
                       key={field.key}
@@ -329,7 +331,7 @@ export default function Section12BankingFinancialAccounts({
         className={show('12B') ? 'border border-primary rounded-3xl' : ''}
       >
         <Card>
-          <CardHeader className="flex-row justify-between items-center">
+          <CardHeader className="flex flex-row  justify-between items-center">
             <CardTitle>12B. {SECTION_12B.title}</CardTitle>
             <Button
               size="sm"
@@ -365,7 +367,7 @@ export default function Section12BankingFinancialAccounts({
                   </Button>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {SECTION_12B.fields.map(field => (
                     <DynamicFormField
                       key={`${field.key}-${item.__rowId}`}

@@ -104,6 +104,7 @@ const SECTION_16A = {
       key: 'online_account',
       label: 'Online Account Access',
       type: 'TextArea',
+      inputType: 'password',
       helperText: 'Username and password for online account management',
     },
     {

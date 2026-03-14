@@ -63,6 +63,7 @@ const SECTION_13A = {
       key: 'account_password',
       label: 'Password',
       type: 'TextInput',
+      inputType: 'password',
       helperText: 'Password for this account',
     },
     {

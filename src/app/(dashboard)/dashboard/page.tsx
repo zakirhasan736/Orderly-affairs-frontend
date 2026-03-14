@@ -1598,7 +1598,7 @@ const nextTask = useMemo(() => {
                           }}
                           className="w-full cursor-pointer text-left px-4 py-2.5 text-[10px] font-black text-slate-600 hover:text-[#1e293b] hover:bg-slate-50 rounded-lg transition-all uppercase tracking-widest"
                         >
-                          Vault Settings
+                          Account info
                         </button>
 
                         <button

@@ -1,147 +1,7 @@
-// import React, { useRef } from 'react';
-// import { Input } from '@common/ui/input';
-// import { Button } from '@common/ui/button';
-// import { Label } from '@common/ui/label';
-// import { Upload, Camera } from 'lucide-react';
 
-// interface TextInputWithUploadProps {
-//   label: string;
-//   value: any;
-//   onChange: (value: any) => void;
-//   placeholder?: string;
-//   required?: boolean;
-//   helperText?: string;
-// }
-
-// export function TextInputWithUpload({ 
-//   label, 
-//   value, 
-//   onChange, 
-//   placeholder, 
-//   required, 
-//   helperText 
-// }: TextInputWithUploadProps) {
-//   const fileInputRef = useRef<HTMLInputElement>(null);
-
-//   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-//     const newValue = { ...value };
-//     newValue.text = e.target.value;
-//     onChange(newValue);
-//   };
-
-//   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-//     const file = e.target.files?.[0];
-//     if (file) {
-//       const newValue = { ...value };
-//       if (!newValue.files) newValue.files = [];
-//       newValue.files.push({
-//         name: file.name,
-//         size: file.size,
-//         type: file.type,
-//         uploadedAt: new Date().toISOString()
-//       });
-//       onChange(newValue);
-//     }
-//   };
-
-//   const handleCameraCapture = () => {
-//     const newValue = { ...value };
-//     if (!newValue.files) newValue.files = [];
-//     newValue.files.push({
-//       name: `Camera_${new Date().toISOString()}.jpg`,
-//       type: 'camera-capture',
-//       capturedAt: new Date().toISOString()
-//     });
-//     onChange(newValue);
-//   };
-
-//   const removeFile = (index: number) => {
-//     const newValue = { ...value };
-//     if (newValue.files) {
-//       newValue.files.splice(index, 1);
-//       onChange(newValue);
-//     }
-//   };
-
-//   return (
-//     <div className="space-y-2">
-//       <Label className="flex items-center gap-1">
-//         {label}
-//         {required && <span className="text-destructive">*</span>}
-//       </Label>
-      
-//       {helperText && (
-//         helperText === "Your living will, advance directives, or DNR orders" || helperText === "Your medical records and health documents location" ? (
-//           <Label className="text-foreground">{helperText}</Label>
-//         ) : (
-//           <p className="text-xs text-muted-foreground text-[12px]">{helperText}</p>
-//         )
-//       )}
-      
-//       <div className="space-y-2">
-//         <Input
-//           value={value?.text || ''}
-//           onChange={handleTextChange}
-//           placeholder={placeholder}
-//           className="w-full"
-//         />
-        
-//         <div className="flex gap-2">
-//           <Button
-//             type="button"
-//             variant="outline"
-//             size="sm"
-//             onClick={() => fileInputRef.current?.click()}
-//             className="flex-1"
-//           >
-//             <Upload className="h-3 w-3 mr-1" />
-//             Upload File
-//           </Button>
-//           <Button
-//             type="button"
-//             variant="outline"
-//             size="sm"
-//             onClick={handleCameraCapture}
-//             className="flex-1"
-//           >
-//             <Camera className="h-3 w-3 mr-1" />
-//             Take Photo
-//           </Button>
-//         </div>
-//       </div>
-      
-//       <input
-//         ref={fileInputRef}
-//         type="file"
-//         onChange={handleFileUpload}
-//         className="hidden"
-//         accept="image/*,application/pdf"
-//         multiple
-//       />
-      
-//       {value?.files && value.files.length > 0 && (
-//         <div className="space-y-1">
-//           {value.files.map((file: any, index: number) => (
-//             <div key={index} className="flex items-center justify-between bg-muted p-2 rounded text-xs">
-//               <span>{file.name}</span>
-//               <Button
-//                 type="button"
-//                 variant="ghost"
-//                 size="sm"
-//                 onClick={() => removeFile(index)}
-//                 className="h-6 w-6 p-0"
-//               >
-//                 ×
-//               </Button>
-//             </div>
-//           ))}
-//         </div>
-//       )}
-//     </div>
-//   );
-// }
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo,useEffect } from 'react';
 import { Button } from '@common/ui/button';
+import { Input } from '@common/ui/input';
 import { Label } from '@common/ui/label';
 import { Upload, Camera, X } from 'lucide-react';
 import Cookies from 'js-cookie';
@@ -160,6 +20,7 @@ export function TextInputWithUpload({
   value = {},
   onChange,
   helperText,
+  placeholder,
 }: any) {
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -168,13 +29,81 @@ export function TextInputWithUpload({
 
   const files = value.files || [];
   const deleted = value._deleted_files || [];
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  const [cameraOpen, setCameraOpen] = React.useState(false);
+  const [stream, setStream] = React.useState<MediaStream | null>(null);
+  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = { ...value };
+    newValue.text = e.target.value;
+    onChange(newValue);
+  };
   // ✅ Detect camera support
   const cameraSupported = useMemo(() => {
     if (typeof navigator === 'undefined') return false;
+
     return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   }, []);
+const startCamera = async () => {
+  try {
+    const mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' },
+    });
 
+    setStream(mediaStream);
+    setCameraOpen(true);
+  } catch (err) {
+    console.error('Camera not available, fallback to mobile capture', err);
+    cameraRef.current?.click();
+  }
+};
+useEffect(() => {
+  if (cameraOpen && stream && videoRef.current) {
+    videoRef.current.srcObject = stream;
+  }
+}, [cameraOpen, stream]);
+function stopCamera() {
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+  }
+
+  setStream(null);
+  setCameraOpen(false);
+}
+function capturePhoto() {
+  if (!videoRef.current || !canvasRef.current) return;
+
+  const video = videoRef.current;
+  const canvas = canvasRef.current;
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  canvas.toBlob(async blob => {
+    if (!blob) return;
+
+    const file = new File([blob], `capture_${Date.now()}.png`, {
+      type: 'image/png',
+    });
+
+    await handleUpload(file);
+
+    stopCamera();
+  }, 'image/png');
+}
+useEffect(() => {
+  return () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+  };
+}, [stream]);
   function validateFile(file: File): string | null {
     if (!ALLOWED_TYPES.includes(file.type)) {
       return 'Unsupported file type. Only images and PDFs are allowed.';
@@ -187,29 +116,53 @@ export function TextInputWithUpload({
     return null;
   }
 
+  // async function handleUpload(file: File) {
+  //   if (!token) return;
+
+  //   const error = validateFile(file);
+  //   if (error) {
+  //     alert(error);
+  //     return;
+  //   }
+
+  //   const uploaded = await uploadFile(token, file);
+
+  //   onChange({
+  //     ...value,
+  //     files: [
+  //       ...files,
+  //       {
+  //         ...uploaded,
+  //         version: 1,
+  //         scan_status: 'pending', // 🔐 backend will update
+  //       },
+  //     ],
+  //   });
+  // }
   async function handleUpload(file: File) {
-    if (!token) return;
+  if (!token) return;
 
-    const error = validateFile(file);
-    if (error) {
-      alert(error);
-      return;
-    }
-
-    const uploaded = await uploadFile(token, file);
-
-    onChange({
-      ...value,
-      files: [
-        ...files,
-        {
-          ...uploaded,
-          version: 1,
-          scan_status: 'pending', // 🔐 backend will update
-        },
-      ],
-    });
+  const error = validateFile(file);
+  if (error) {
+    alert(error);
+    return;
   }
+
+  const uploaded = await uploadFile(token, file);
+
+  // Replace current file instead of adding to the array
+  onChange({
+    ...value,
+    files: [
+      {
+        ...uploaded,
+        version: 1,
+        scan_status: 'pending', // backend will update
+      },
+    ],
+    _deleted_files: files.length && files[0].public_id ? [files[0].public_id] : [],
+  });
+}
 
   function removeFile(file: any, index: number) {
     onChange({
@@ -226,6 +179,12 @@ export function TextInputWithUpload({
         <p className="text-xs text-muted-foreground">{helperText}</p>
       )}
 
+      <Input
+        value={value?.text || ''}
+        onChange={handleTextChange}
+        placeholder={placeholder}
+        className="w-full"
+      />
       <div className="flex gap-2">
         <Button
           size="sm"
@@ -235,18 +194,8 @@ export function TextInputWithUpload({
           <Upload className="h-4 w-4 mr-1" /> Upload
         </Button>
 
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!cameraSupported}
-          onClick={() => cameraRef.current?.click()}
-          title={
-            cameraSupported
-              ? 'Open camera'
-              : 'Camera not supported on this device'
-          }
-        >
-          <Camera className="h-4 w-4 mr-1" /> Camera
+        <Button size="sm" variant="outline" onClick={startCamera}>
+          <Camera className="h-4 w-4 mr-1" /> Take Photo
         </Button>
       </div>
 
@@ -266,7 +215,12 @@ export function TextInputWithUpload({
         className="hidden"
         accept="image/*"
         capture="environment"
-        onChange={e => e.target.files && handleUpload(e.target.files[0])}
+        onChange={e => {
+          if (e.target.files && e.target.files[0]) {
+            handleUpload(e.target.files[0]);
+            e.target.value = '';
+          }
+        }}
       />
 
       {files.map((f: any, i: number) => (
@@ -284,6 +238,25 @@ export function TextInputWithUpload({
           </button>
         </div>
       ))}
+      {cameraOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-black rounded-xl overflow-hidden max-w-xl w-full">
+            <video ref={videoRef} autoPlay playsInline className="w-full" />
+
+            <canvas ref={canvasRef} className="hidden" />
+
+            <div className="flex justify-between p-4 bg-gray-900">
+              <Button variant="outline" onClick={stopCamera}>
+                Cancel
+              </Button>
+
+              <Button onClick={capturePhoto} disabled={!stream}>
+                Capture
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

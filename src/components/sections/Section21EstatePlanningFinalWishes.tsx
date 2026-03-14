@@ -679,7 +679,7 @@ export default function Section21EstatePlanningFinalWishes({
             </CardTitle>
           </CardHeader>
 
-          <CardContent className="grid md:grid-cols-2 gap-4">
+          <CardContent className="grid grid-cols-1 md:grid-cols-1 gap-4"> 
             {fields.map(field => (
               <DynamicFormField
                 key={field.key}

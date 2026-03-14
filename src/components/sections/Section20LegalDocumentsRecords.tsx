@@ -288,7 +288,7 @@ export default function Section20LegalDocumentsRecords({
               {id}. {title}
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid md:grid-cols-2 gap-4">
+          <CardContent className="grid  grid-cols-1 md:grid-cols-1 gap-4">
             {fields.map(field => (
               <DynamicFormField
                 key={field.key}
@@ -360,7 +360,7 @@ export default function Section20LegalDocumentsRecords({
                   </Button>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid  grid-cols-1 md:grid-cols-2 gap-4">
                   {SECTION_20C.fields.map(field => (
                     <DynamicFormField
                       key={field.key}

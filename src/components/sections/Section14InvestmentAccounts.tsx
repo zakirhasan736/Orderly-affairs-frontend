@@ -90,6 +90,7 @@ const SECTION_14A = {
       key: 'login_credentials',
       label: 'Online Account Access',
       type: 'TextArea',
+      inputType: 'password',
       helperText: 'Username and password for online account access',
     },
     {

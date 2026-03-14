@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect} from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -29,6 +29,8 @@ import {
   useSendEmailOtpMutation,
   useVerifyEmailCodeMutation,
   useLinkAuthenticatorMutation,
+  useRequestPasswordResetMutation,
+  useResetPasswordMutation,
 } from '@/services/authApi';
 import { Card, CardContent } from '@/components/common/ui/card';
 import { Input } from '@/components/common/ui/input';
@@ -50,7 +52,9 @@ type MFAStep =
   | 'mfa_method_selection'
   | 'setupMfa'
   | 'verifyMfa'
-  | 'verifyEmail';
+  | 'verifyEmail'
+  | 'forgot_password'
+  | 'reset_password';
 
 type OnboardingStep = MFAStep | 'plan_selection' | 'payment';
 
@@ -203,9 +207,9 @@ function PaymentForm({
 
 export default function LoginPage() {
   const router = useRouter();
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
-);
+  const stripePromise = loadStripe(
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
+  );
 
   // 🔗 API hooks
   const [login] = useLoginMutation();
@@ -215,14 +219,65 @@ const stripePromise = loadStripe(
   const [linkAuthenticator] = useLinkAuthenticatorMutation();
   const [sendEmailOtp] = useSendEmailOtpMutation();
   const [verifyEmailCode] = useVerifyEmailCodeMutation();
-
+  const [requestPasswordReset] = useRequestPasswordResetMutation();
+  const [resetPassword] = useResetPasswordMutation();
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [resetOtp, setResetOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  
   // 🔧 UI States
-const [step, setStep] = useState<OnboardingStep>('credentials');
-const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>(
-  'yearly',
-);
+  const [step, setStep] = useState<OnboardingStep>('credentials');
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>(
+    'yearly',
+  );
+useEffect(() => {
+  const autoSendEmailOtp = async () => {
+    if (step === 'verifyEmail' && !verificationSent) {
+      try {
+        setLoading(true);
 
-const [isTrial, setIsTrial] = useState(false);
+        await sendEmailOtp({ email }).unwrap();
+
+        setVerificationSent(true);
+      } catch (err: any) {
+        setError(err?.data?.detail || 'Failed to send verification code');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  autoSendEmailOtp();
+}, [step]);
+  // Inside LoginPage component
+const handleForgotPasswordClick = async () => {
+  setError('');
+
+  // If email already entered → send OTP immediately
+  if (email && isValidEmail(email)) {
+    setLoading(true);
+
+    try {
+      await requestPasswordReset({ email }).unwrap();
+
+      setResetEmail(email);
+
+      alert('Reset code sent. Check your email.');
+
+      setStep('reset_password');
+    } catch (err: any) {
+      setError(err?.data?.detail || 'Failed to send reset code');
+    } finally {
+      setLoading(false);
+    }
+  } else {
+    // No email → go to forgot screen
+    setStep('forgot_password');
+  }
+};
+
+  const [isTrial, setIsTrial] = useState(false);
 
   const [isNewUser, setIsNewUser] = useState(false);
   const [selectedMFAMethod, setSelectedMFAMethod] =
@@ -243,7 +298,59 @@ const [isTrial, setIsTrial] = useState(false);
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // const handleRequestReset = async () => {
+  //   setError('');
+  //   setLoading(true);
 
+  //   try {
+  //     await requestPasswordReset({ email: resetEmail }).unwrap();
+  //     setStep('reset_password');
+  //   } catch (err: any) {
+  //     setError(err?.data?.detail || 'Failed to send reset code');
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+ const handleRequestReset = async () => {
+   setError('');
+   setLoading(true);
+
+   try {
+     await requestPasswordReset({ email: resetEmail }).unwrap();
+
+     alert('Reset code sent. Check your email.');
+
+     setStep('reset_password');
+   } catch (err: any) {
+     setError(err?.data?.detail || 'Failed to send reset code');
+   } finally {
+     setLoading(false);
+   }
+ };
+const handleResetPassword = async () => {
+  if (newPassword !== confirmPassword) {
+    setError('Passwords do not match');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    await resetPassword({
+      email: resetEmail,
+      otp: resetOtp,
+      new_password: newPassword,
+    }).unwrap();
+
+    alert('Password reset successfully!');
+
+    setStep('credentials');
+  } catch (err: any) {
+    setError(err?.data?.detail || 'Reset failed');
+  } finally {
+    setLoading(false);
+  }
+};
   // ------------------------------
   // Password Strength
   // ------------------------------
@@ -263,7 +370,7 @@ const [isTrial, setIsTrial] = useState(false);
     const number = /\d/.test(pwd);
     const special = /[!@#$%^&*(),.?":{}|<>]/.test(pwd);
     const score = [length, uppercase, lowercase, number, special].filter(
-      Boolean
+      Boolean,
     ).length;
     setPasswordStrength({
       length,
@@ -411,7 +518,6 @@ const [isTrial, setIsTrial] = useState(false);
       } else {
         router.push('/dashboard');
       }
-
     } catch (err: any) {
       setError(err?.data?.detail || err.message || 'Invalid verification code');
     } finally {
@@ -452,7 +558,6 @@ const [isTrial, setIsTrial] = useState(false);
       } else {
         router.push('/dashboard');
       }
-
     } catch (err: any) {
       setError(err?.data?.detail || err.message || 'Verification failed');
     } finally {
@@ -466,33 +571,30 @@ const [isTrial, setIsTrial] = useState(false);
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: -20 },
   };
-const handleBack = () => {
-  switch (step) {
-    case 'payment':
-      setStep('plan_selection');
-      break;
+  const handleBack = () => {
+    switch (step) {
+      case 'payment':
+        setStep('plan_selection');
+        break;
 
-    case 'plan_selection':
-      setStep('mfa_method_selection');
-      break;
+      case 'plan_selection':
+        setStep('mfa_method_selection');
+        break;
 
-    case 'verifyMfa':
-    case 'setupMfa':
-    case 'verifyEmail':
-      setStep('mfa_method_selection');
-      break;
+      case 'verifyMfa':
+      case 'setupMfa':
+      case 'verifyEmail':
+        setStep('mfa_method_selection');
+        break;
 
-    case 'mfa_method_selection':
-      setStep('credentials');
-      break;
+      case 'mfa_method_selection':
+        setStep('credentials');
+        break;
 
-    default:
-      setStep('credentials');
-  }
-};
-
-
-
+      default:
+        setStep('credentials');
+    }
+  };
 
   // -----------------------------------------------------------
   // RENDER
@@ -621,6 +723,20 @@ const handleBack = () => {
                           )}
                         </Button>
                       </div>
+                      {!isNewUser && (
+                        <Button 
+                          type="button"
+                          variant="link"
+                          className="text-xs cursor-pointer flex items-center gap-2"
+                          onClick={handleForgotPasswordClick}
+                          disabled={loading}
+                        >
+                          {loading && (
+                            <span className="h-3 w-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></span>
+                          )}
+                          Forgot password?
+                        </Button>
+                      )}
                     </div>
 
                     {isNewUser && (
@@ -922,7 +1038,6 @@ const handleBack = () => {
                       </>
                     ) : (
                       <>
-                       
                         <Alert>
                           <Smartphone className="h-4 w-4" />
                           <AlertDescription>
@@ -971,7 +1086,6 @@ const handleBack = () => {
                 {/* STEP 4: Email Verification */}
                 {step === 'verifyEmail' && (
                   <div className="space-y-4 text-center">
-                  
                     <Alert>
                       <Mail className="h-4 w-4" />
                       <AlertDescription>
@@ -982,13 +1096,19 @@ const handleBack = () => {
                     </Alert>
 
                     {!verificationSent ? (
-                      <Button
-                        onClick={handleSendEmailCode}
-                        className="w-full btn-primary"
-                        disabled={loading}
-                      >
-                        Send Verification Code
-                      </Button>
+                      // <Button
+                      //   onClick={handleSendEmailCode}
+                      //   className="w-full btn-primary"
+                      //   disabled={loading}
+                      // >
+                      //   Send Verification Code
+                      // </Button>
+                      <div className="flex items-center justify-center py-4">
+                        <span className="h-5 w-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></span>
+                        <span className="ml-2 text-sm text-muted-foreground">
+                          Sending verification code...
+                        </span>
+                      </div>
                     ) : (
                       <form onSubmit={handleVerifyEmail} className="space-y-3">
                         <Input
@@ -1023,6 +1143,146 @@ const handleBack = () => {
                     </Button>
                   </div>
                 )}
+
+                {/* {step === 'forgot_password' && (
+                  <div className="space-y-4">
+                    <Label>Email</Label>
+
+                    <Input
+                      type="email"
+                      value={email} // use the login email directly
+                      disabled // optional: prevent editing
+                      placeholder="Your account email"
+                    />
+
+                    <Button
+                      className="w-full btn-primary"
+                      onClick={handleRequestReset}
+                      disabled={loading}
+                    >
+                      {loading ? 'Sending...' : 'Send Reset Code'}
+                    </Button>
+                  </div>
+                )} */}
+                {step === 'forgot_password' && (
+                  <div className="space-y-4">
+                    <Input
+                      type="email"
+                      value={resetEmail || email}
+                      onChange={e => {
+                        setResetEmail(e.target.value);
+                        setResetEmailSent(false);
+                      }}
+                      placeholder="Enter your email"
+                    />
+
+                    <Button
+                      className="w-full btn-primary flex items-center justify-center"
+                      onClick={handleRequestReset}
+                      disabled={loading || !resetEmail}
+                    >
+                      {loading && (
+                        <span className="mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      )}
+
+                      {resetEmailSent ? 'Code Sent' : 'Sending Reset Code...'}
+                    </Button>
+
+                    {resetEmailSent && (
+                      <div className="bg-green-50 text-green-700 text-sm p-3 rounded-md">
+                        ✅ Reset code sent! Check your email.
+                      </div>
+                    )}
+
+                    {error && (
+                      <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md">
+                        {error}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {step === 'reset_password' && (
+                  <div className="space-y-4">
+                    {/* OTP */}
+                    <Input
+                      type="text"
+                      placeholder="Enter OTP"
+                      value={resetOtp}
+                      onChange={e =>
+                        setResetOtp(
+                          e.target.value.replace(/\D/g, '').slice(0, 6),
+                        )
+                      }
+                    />
+
+                    {/* New Password */}
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="New Password"
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                      />
+
+                      <button
+                        type="button"
+                        className="absolute right-3 top-2.5 text-gray-500"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? (
+                          <EyeOff size={18} />
+                        ) : (
+                          <Eye size={18} />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Confirm Password */}
+                    <div className="relative">
+                      <Input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="Confirm Password"
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                      />
+
+                      <button
+                        type="button"
+                        className="absolute right-3 top-2.5 text-gray-500"
+                        onClick={() =>
+                          setShowConfirmPassword(!showConfirmPassword)
+                        }
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff size={18} />
+                        ) : (
+                          <Eye size={18} />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Password mismatch warning */}
+                    {confirmPassword && newPassword !== confirmPassword && (
+                      <p className="text-red-500 text-xs">
+                        Passwords do not match
+                      </p>
+                    )}
+
+                    {/* Reset Button */}
+                    <Button
+                      className="w-full btn-primary"
+                      onClick={handleResetPassword}
+                      disabled={
+                        loading ||
+                        !resetOtp || !newPassword ||
+                        newPassword !== confirmPassword
+                      }
+                    >
+                      {loading ? 'Resetting...' : 'Reset Password'}
+                    </Button>
+                  </div>
+                )}
                 {step === 'plan_selection' && (
                   <div className="space-y-4 text-center">
                     <h2 className="text-xl font-bold">Choose Your Plan</h2>
@@ -1034,7 +1294,7 @@ const handleBack = () => {
                       className="w-full"
                       onClick={() => setSelectedPlan('monthly')}
                     >
-                      Monthly — $19.99
+                      Monthly — $9.95
                     </Button>
 
                     <Button
@@ -1044,7 +1304,7 @@ const handleBack = () => {
                       className="w-full"
                       onClick={() => setSelectedPlan('yearly')}
                     >
-                      Yearly — $199
+                      Yearly — $94.95 (Save 20%)
                     </Button>
 
                     <Button
@@ -1069,17 +1329,16 @@ const handleBack = () => {
                     </Button>
                   </div>
                 )}
-                
-                {step === 'payment' && (
-  <Elements stripe={stripePromise}>
-    <PaymentForm
-      isTrial={isTrial}
-      selectedPlan={selectedPlan}
-      router={router}
-    />
-  </Elements>
-)}
 
+                {step === 'payment' && (
+                  <Elements stripe={stripePromise}>
+                    <PaymentForm
+                      isTrial={isTrial}
+                      selectedPlan={selectedPlan}
+                      router={router}
+                    />
+                  </Elements>
+                )}
               </motion.div>
             </AnimatePresence>
           </CardContent>

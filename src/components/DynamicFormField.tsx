@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Input } from '@common/ui/input';
 import { Textarea } from '@common/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@common/ui/select';
@@ -28,7 +28,8 @@ interface DynamicFormFieldProps {
 export function DynamicFormField({ field, value, onChange, formData, rowId, isVisible = true, className }: DynamicFormFieldProps) {
   // Initialize value with default if no value is set
   const currentValue = value !== undefined && value !== null ? value : (field.defaultValue || '');
-  
+  const isPassword = field.inputType === 'password';
+  const [showPassword, setShowPassword] = useState(false);
   // If there's a default value and no current value, set it
   React.useEffect(() => {
     if (field.defaultValue && (value === undefined || value === null || value === '')) {
@@ -88,15 +89,71 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
   }
   const renderField = () => {
     switch (field.type) {
-      case 'TextInput':
+      case 'TextInput': {
+        
         return (
-          <Input
-            value={currentValue}
-            onChange={e => onChange(e.target.value)}
-            placeholder={field.placeholder}
-            className={className || 'w-full'}
-          />
+          <div className="relative w-full">
+            <Input
+              value={currentValue}
+              onChange={e => onChange(e.target.value)}
+              placeholder={field.placeholder}
+              type={
+                isPassword
+                  ? showPassword
+                    ? 'text'
+                    : 'password'
+                  : field.inputType || 'text'
+              }
+              className={className || 'w-full'}
+            />
+            {isPassword && (
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+              >
+                {showPassword ? (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-4.477-10-10a9.967 9.967 0 012.163-6.125m4.687 4.687A3 3 0 1112 15a3 3 0 01-1.313-5.438M15 12a3 3 0 01-3 3m0-6a3 3 0 013 3m6.627 6.627L3.373 3.373"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                    />
+                  </svg>
+                )}
+              </button>
+            )}
+          </div>
         );
+      };
 
       case 'TextArea':
         return (

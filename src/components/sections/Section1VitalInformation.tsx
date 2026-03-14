@@ -75,6 +75,7 @@ const SECTION_1 = {
       key: 'phone_password',
       label: 'Phone Password or PIN',
       type: 'TextInput',
+      inputType: 'password',
       helperText: 'Password or PIN to unlock your phone',
     },
     {
@@ -87,6 +88,7 @@ const SECTION_1 = {
       key: 'computer_password',
       label: 'Computer or Laptop Password',
       type: 'TextInput',
+      inputType: 'password',
       helperText: 'Password to access your computer or laptop',
     },
 
@@ -106,6 +108,7 @@ const SECTION_1 = {
       key: 'primary_email_password',
       label: 'Primary Email Password',
       type: 'TextInput',
+      inputType: 'password',
       helperText: 'Password for your main email account',
     },
     {
@@ -118,6 +121,7 @@ const SECTION_1 = {
       key: 'secondary_email_password',
       label: 'Secondary Email Password',
       type: 'TextInput',
+      inputType: 'password',
       helperText: 'Password for secondary email account (if applicable)',
     },
 
@@ -162,6 +166,7 @@ const SECTION_1 = {
       key: 'google_id_password',
       label: 'Google ID Password',
       type: 'TextInput',
+      inputType: 'password',
       helperText: 'Password for your Google account',
     },
     {
@@ -174,6 +179,7 @@ const SECTION_1 = {
       key: 'apple_id_password',
       label: 'Apple ID Password',
       type: 'TextInput',
+      inputType: 'password',
       helperText: 'Password for your Apple ID account',
     },
 

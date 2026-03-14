@@ -8,7 +8,7 @@ export interface FieldDefinition {
   placeholder?: string;
   multiple?: boolean;
   defaultValue?: string;
-
+  inputType?: 'text' | 'password' | 'email' | 'number';
   conditionalOn?: string;
   conditionalValue?: string | string[] | boolean;
 

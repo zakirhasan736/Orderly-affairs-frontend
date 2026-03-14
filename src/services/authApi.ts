@@ -106,7 +106,28 @@ export const authApi = createApi({
     ownerLogout: builder.mutation({
       query: () => ({ url: '/owner-logout', method: 'POST' }),
     }),
+    // Password reset
+    requestPasswordReset: builder.mutation<
+      { message: string },
+      { email: string }
+    >({
+      query: body => ({
+        url: '/request-password-reset',
+        method: 'POST',
+        body,
+      }),
+    }),
 
+    resetPassword: builder.mutation<
+      { message: string },
+      { email: string; otp: string; new_password: string }
+    >({
+      query: body => ({
+        url: '/reset-password',
+        method: 'POST',
+        body,
+      }),
+    }),
     // NOK auth
     nextkinLogin: builder.mutation({
       query: b => ({ url: '/nextkin-login', method: 'POST', body: b }),
@@ -224,4 +245,6 @@ export const {
   useRevokeAllNextKinAccessMutation,
   useApproveAllNextKinAccessMutation,
   useGetMyNextKinAccessQuery,
+  useRequestPasswordResetMutation,
+  useResetPasswordMutation,
 } = authApi;
