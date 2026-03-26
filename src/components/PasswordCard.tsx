@@ -12,6 +12,7 @@ interface PasswordCardProps {
   accessLevel: string;
   authorizedSections?: string[];
   immediateAccess?: boolean;
+  card_storage_location?: string;
   onDownload?: () => void;
   onPrint?: () => void;
 }
@@ -21,6 +22,7 @@ export function PasswordCard({
   relationship,
   email,
   phone,
+  card_storage_location,
   masterPassword,
   accessLevel,
   authorizedSections,
@@ -127,7 +129,10 @@ export function PasswordCard({
       <div class="label">Relationship</div>
       <div class="value">${relationship}</div>
     </div>
-    
+    <div class="section">
+      <div class="label">Card Location</div>
+      <div class="value">${card_storage_location}</div>
+    </div>
     <div class="section">
       <div class="label">Contact Information</div>
       <div class="value">
@@ -135,7 +140,10 @@ export function PasswordCard({
         Phone: ${phone}
       </div>
     </div>
-    
+    <div class="section">
+      <div class="label">Username:</div>
+      <div class="value password">${email}</div>
+    </div>
     <div class="section">
       <div class="label">Master Access Password</div>
       <div class="value password">${masterPassword}</div>
@@ -144,12 +152,16 @@ export function PasswordCard({
     <div class="section">
       <div class="label">Access Level</div>
       <div class="value">${accessLevel}</div>
-      ${accessLevel === 'Section-Specific Access' && authorizedSections ? `
+      ${
+        accessLevel === 'Section-Specific Access' && authorizedSections
+          ? `
       <div class="access-sections">
         <strong>Authorized Sections:</strong><br>
         ${authorizedSections.join(', ')}
       </div>
-      ` : ''}
+      `
+          : ''
+      }
     </div>
     
     <div class="instructions">
@@ -203,7 +215,8 @@ export function PasswordCard({
       <CardContent className="space-y-4">
         <div className="bg-muted p-4 rounded-lg space-y-3">
           <div>
-            <span className="font-semibold">Authorized Person:</span> {personName}
+            <span className="font-semibold">Authorized Person:</span>{' '}
+            {personName}
           </div>
           <div>
             <span className="font-semibold">Relationship:</span> {relationship}
@@ -212,8 +225,17 @@ export function PasswordCard({
             <span className="font-semibold">Contact:</span> {email} | {phone}
           </div>
           <div>
-            <span className="font-semibold">Master Password:</span> 
-            <code className="bg-yellow-200 px-2 py-1 ml-2 rounded border">{masterPassword}</code>
+            <span className="font-semibold">Card Location:</span>{' '}
+            {card_storage_location}
+          </div>
+          <div>
+            <span className="font-semibold">Username:</span> {email}
+          </div>
+          <div>
+            <span className="font-semibold">Master Password:</span>
+            <code className="bg-yellow-200 px-2 py-1 ml-2 rounded border">
+              {masterPassword}
+            </code>
           </div>
           <div>
             <span className="font-semibold">Access Level:</span> {accessLevel}
@@ -221,7 +243,9 @@ export function PasswordCard({
           {accessLevel === 'Section-Specific Access' && authorizedSections && (
             <div className="bg-blue-50 p-3 rounded border">
               <span className="font-semibold">Authorized Sections:</span>
-              <div className="text-sm mt-1">{authorizedSections.join(', ')}</div>
+              <div className="text-sm mt-1">
+                {authorizedSections.join(', ')}
+              </div>
             </div>
           )}
           {immediateAccess && (
@@ -231,7 +255,8 @@ export function PasswordCard({
                 Immediate Access Granted
               </div>
               <div className="text-sm mt-1 text-purple-700">
-                This person can log in and access the kit NOW, even before passing.
+                This person can log in and access the kit NOW, even before
+                passing.
               </div>
             </div>
           )}
@@ -242,16 +267,20 @@ export function PasswordCard({
             <Download className="h-4 w-4" />
             Download Card
           </Button>
-          <Button onClick={handlePrint} variant="outline" className="flex items-center gap-2">
+          <Button
+            onClick={handlePrint}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
             <Printer className="h-4 w-4" />
             Print Card
           </Button>
         </div>
 
         <div className="text-sm text-muted-foreground bg-orange-50 p-3 rounded border">
-          <strong>⚠️ Important:</strong> After generating this card, store it in a secure location 
-          (like your Fireproof Document Bag) and only tell this person where to find it. 
-          Do not give them the password directly.
+          <strong>⚠️ Important:</strong> After generating this card, store it in
+          a secure location (like your Fireproof Document Bag) and only tell
+          this person where to find it. Do not give them the password directly.
         </div>
       </CardContent>
     </Card>

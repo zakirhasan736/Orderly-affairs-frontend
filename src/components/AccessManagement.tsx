@@ -57,7 +57,7 @@ interface AuthorizedPerson {
 
 const SECTION_PRESETS: Record<string, string[] | 'all'> = {
   'Full Access': 'all',
-  'Financial & Tax': ['7', '12', '14', '16', '18', '19', '20'],
+  'Financial & Tax': ['7', '12', '14', '16', '19', '20'],
   'Healthcare & Medical': ['15'],
   'Legal & Estate': ['20', '21'],
   'Personal & Family': ['1', '2', '17'],
@@ -98,20 +98,21 @@ export function AccessManagement() {
         _id: nk.id,
         full_name: nk.full_name || '',
         relationship: nk.relationship || '',
-        email: nk.email,
+        email: nk.email,   
         phone_number: nk.phone_number || '',
         access_level: nk.access_level || 'Full Kit Access',
         authorized_sections: nk.authorized_sections || [],
-        immediate_access: !!nk.immediate_access,
+        immediate_access: !!nk.immediate_access, 
       // KEEP backend values
-        master_password: '', // never returned by backend (correct)
+        master_password: nk.master_password || '************', // never returned by backend (correct)
         password_card_generated: !!nk.password_card_generated,
         card_storage_location: nk.card_storage_location || '',
         special_instructions: nk.special_instructions || '',
       }));
+      console.log('Fetched next of kin from API:', fromApi);
       return [...fromApi, ...unsaved];
     });
-  }, [data]);
+  }, [data]); 
 
   const generatePassword = () =>
     Array.from({ length: 12 }, () =>
@@ -164,11 +165,34 @@ export function AccessManagement() {
       updatePerson(i, 'authorized_sections', []);
     } else {
       updatePerson(i, 'access_level', 'Section-Specific Access');
-      updatePerson(
-        i,
-        'authorized_sections',
-        SECTION_PRESETS[preset] as string[],
+    const presetSections = SECTION_PRESETS[preset];
+
+    if (presetSections === 'all') {
+      updatePerson(i, 'access_level', 'Full Kit Access');
+      updatePerson(i, 'authorized_sections', []);
+      return;
+    }
+
+    const expandedSections: string[] = [];
+
+    presetSections.forEach(sectionId => {
+      expandedSections.push(sectionId);
+
+      const section = sectionOptions.find(
+        s => s.id === sectionId && !s.isSubsection,
       );
+
+      if (section) {
+        const subs = sectionOptions
+          .filter(s => s.isSubsection && s.id.startsWith(sectionId))
+          .map(s => s.id);
+
+        expandedSections.push(...subs);
+      }
+    });
+
+    updatePerson(i, 'access_level', 'Section-Specific Access');
+    updatePerson(i, 'authorized_sections', expandedSections);
     }
     toast.success(`Applied preset: ${preset}`);
   };
@@ -289,7 +313,10 @@ export function AccessManagement() {
       {authorizedPeople.map((p, i) => {
         const collapsed = collapsedItems[i] ?? true;
         const showCard = showPasswordCards[i] ?? false;
-        const showSectionPicker = expandedSectionPicker[i] ?? false;
+        // const showSectionPicker = expandedSectionPicker[i] ?? false;
+        const showSectionPicker =
+          expandedSectionPicker[i] ??
+          (p.authorized_sections && p.authorized_sections.length > 0);
         const summary = getAccessSummary(p);
 
         return (
@@ -318,11 +345,14 @@ export function AccessManagement() {
                             {summary.icon}
                             {summary.text}
                           </Badge>
-                          {p.immediate_access && (
-                            <Badge variant="outline" className="text-xs">
-                              <Clock className="h-3 w-3" /> Immediate
-                            </Badge>
-                          )}
+                          {/* {p.immediate_access && ( */}
+                          <Badge variant="outline" className="text-xs">
+                            <Clock className="h-3 w-3" />{' '}
+                            {p.immediate_access
+                              ? 'Immediate Access'
+                              : ' Upon Death'}
+                          </Badge>
+                          {/* // )} */}
                         </div>
                         {p.relationship && (
                           <p className="text-sm text-muted-foreground">
@@ -337,7 +367,7 @@ export function AccessManagement() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-destructive"
+                            className="text-destructive cursor-pointer"
                             onClick={e => {
                               e.stopPropagation();
                               revokeOne(i);
@@ -350,6 +380,7 @@ export function AccessManagement() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            className="cursor-pointer"
                             onClick={e => {
                               e.stopPropagation();
                               approveOne(i);
@@ -361,6 +392,7 @@ export function AccessManagement() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="cursor-pointer"
                         onClick={e => {
                           e.stopPropagation();
                           savePerson(i);
@@ -371,7 +403,7 @@ export function AccessManagement() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-destructive"
+                        className="text-destructive cursor-pointer"
                         onClick={e => {
                           e.stopPropagation();
                           deletePerson(i);
@@ -455,16 +487,31 @@ export function AccessManagement() {
                         Select Sections ({p.authorized_sections.length})
                       </label>
                       <div className="flex flex-wrap gap-2 mb-2">
-                        {Object.keys(SECTION_PRESETS).map(preset => (
-                          <Button
-                            key={preset}
-                            size="sm"
-                            variant="outline"
-                            onClick={() => applyPreset(i, preset)}
-                          >
-                            {preset}
-                          </Button>
-                        ))}
+                        {Object.keys(SECTION_PRESETS).map(preset => {
+                          const presetSections = SECTION_PRESETS[preset];
+
+                          const isActive =
+                            preset === 'Full Access'
+                              ? p.access_level === 'Full Kit Access'
+                              : Array.isArray(presetSections) &&
+                                presetSections.every(s =>
+                                  p.authorized_sections.includes(s),
+                                );
+
+                          return (
+                            <Button
+                              key={preset}
+                              size="sm"
+                              variant={isActive ? 'default' : 'outline'}
+                              className={
+                                isActive ? 'bg-blue-600 text-white' : ''
+                              }
+                              onClick={() => applyPreset(i, preset)}
+                            >
+                              {preset}
+                            </Button>
+                          );
+                        })}
                       </div>
                       <Button
                         variant="ghost"
@@ -525,6 +572,7 @@ export function AccessManagement() {
                         />
                         <Button
                           size="sm"
+                          className="cursor-pointer"
                           onClick={() =>
                             updatePerson(
                               i,
@@ -560,25 +608,42 @@ export function AccessManagement() {
                     onChange={v => updatePerson(i, 'special_instructions', v)}
                   />
 
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      setShowPasswordCards(prev => ({ ...prev, [i]: !prev[i] }))
-                    }
-                  >
-                    {showCard ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}{' '}
-                    {showCard ? 'Hide' : 'Show'} Password Card
-                  </Button>
+                  <div className="flex items-center justify-between gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        setShowPasswordCards(prev => ({
+                          ...prev,
+                          [i]: !prev[i],
+                        }))
+                      }
+                    >
+                      {showCard ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}{' '}
+                      {showCard ? 'Hide' : 'Show'} Password Card
+                    </Button>
 
+                    <Button
+                      // variant="ghost"
+                      size="sm"
+                      className="px-6 cursor-pointer"
+                      onClick={e => {
+                        e.stopPropagation();
+                        savePerson(i);
+                      }}
+                    >
+                      Save
+                    </Button>
+                  </div>
                   {showCard && (
                     <PasswordCard
                       personName={p.full_name}
                       masterPassword={p.master_password}
                       email={p.email}
+                      card_storage_location={p.card_storage_location}
                       phone={p.phone_number}
                       relationship={p.relationship}
                       accessLevel={p.access_level}
