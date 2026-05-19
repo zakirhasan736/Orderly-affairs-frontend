@@ -1574,7 +1574,7 @@ export default function DashboardPage() {
         </header>
 
         {/* Desktop header */}
-        <header className="hidden border-b border-slate-200/80 bg-white/95 backdrop-blur-xl md:block">
+        <header className="hidden border-b border-slate-200/80 bg-white/95 backdrop-blur-xl relative z-9999 md:block">
           <div className="flex h-[76px] items-center justify-between pl-[304px] pr-6 xl:pr-10">
             <div className="flex min-w-0 items-center gap-4">
               <div className="hidden items-center gap-3 xl:flex">
