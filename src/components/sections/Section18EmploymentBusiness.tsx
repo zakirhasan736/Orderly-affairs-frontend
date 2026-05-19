@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -8,16 +8,33 @@ import {
   CardContent,
 } from '@/components/common/ui/card';
 import { Button } from '@/components/common/ui/button';
-import { Plus, Minus } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/common/ui/alert';
 import { DynamicFormField } from '@/components/DynamicFormField';
+import {
+  Briefcase,
+  Building2,
+  CheckCircle2,
+  FileText,
+  History,
+  Loader2,
+  Minus,
+  Plus,
+  Sparkles,
+  UploadCloud,
+  Wallet,
+} from 'lucide-react';
+
+import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { uploadAIDocument } from '@/services/aiDocumentUpload';
 
 /* ============================================================
-   SECTION 18A — CURRENT EMPLOYMENT (NON-REPEATABLE)
+   SECTION 18A — CURRENT EMPLOYMENT
 ============================================================ */
 
 const SECTION_18A = {
   subsectionId: '18A',
   title: 'Current Employment',
+  itemLabel: 'Current Employment',
   fields: [
     {
       key: 'employment_status',
@@ -118,22 +135,21 @@ const SECTION_18A = {
 };
 
 /* ============================================================
-   REPEATABLE SECTION FACTORY
+   SECTIONS 18B–18D
 ============================================================ */
 
 const createRepeatableSection = (
-  subsectionId: string,
+  subsectionId: '18B' | '18C' | '18D',
   title: string,
   itemLabel: string,
   fields: any[],
 ) => ({ subsectionId, title, itemLabel, fields });
 
-/* ============================================================
-   SECTIONS 18B–18D
-============================================================ */
-
-const SECTIONS = [
-  createRepeatableSection('18B', 'Business Ownership', 'Business', [
+const SECTION_18B = createRepeatableSection(
+  '18B',
+  'Business Ownership',
+  'Business',
+  [
     {
       key: 'business_name',
       label: 'Business Name',
@@ -232,9 +248,14 @@ const SECTIONS = [
       helperText:
         'Upload business formation documents, partnerships agreements, or important contracts',
     },
-  ]),
+  ],
+);
 
-  createRepeatableSection('18C', 'Past Employment', 'Previous Job', [
+const SECTION_18C = createRepeatableSection(
+  '18C',
+  'Past Employment',
+  'Previous Job',
+  [
     {
       key: 'employer_name',
       label: 'Employer Name',
@@ -290,9 +311,14 @@ const SECTIONS = [
       helperText:
         'Upload employment letters, performance reviews, or other relevant documents',
     },
-  ]),
+  ],
+);
 
-  createRepeatableSection('18D', 'Income Sources', 'Income Source', [
+const SECTION_18D = createRepeatableSection(
+  '18D',
+  'Income Sources',
+  'Income Source',
+  [
     {
       key: 'income_type',
       label: 'Type of Income',
@@ -357,11 +383,13 @@ const SECTIONS = [
       helperText:
         'Upload pay stubs, 1099s, benefit statements, or other income documentation',
     },
-  ]),
-];
+  ],
+);
+
+const REPEATABLE_SECTIONS = [SECTION_18B, SECTION_18C, SECTION_18D];
 
 /* ============================================================
-   COMPONENT
+   TYPES / CONFIG
 ============================================================ */
 
 interface Props {
@@ -370,86 +398,722 @@ interface Props {
   activeSubsection?: string | null;
 }
 
+type SubsectionId = '18A' | '18B' | '18C' | '18D';
+
+type UploadedAIFile = {
+  file_id: string;
+  mime_type: string;
+  expires_at?: string;
+};
+
+const ALLOWED_UPLOAD_TYPES = [
+  'application/pdf',
+  'text/plain',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+];
+
+const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
+
+const SUBSECTION_UI: Record<
+  SubsectionId,
+  {
+    title: string;
+    icon: React.ElementType;
+    tone: {
+      wrapper: string;
+      icon: string;
+      uploadBox: string;
+      glowOne: string;
+      glowTwo: string;
+      header: string;
+    };
+    uploadTitle: string;
+    uploadDescription: string;
+    buttonLabel: string;
+    emptyError: string;
+    successMessage: string;
+  }
+> = {
+  '18A': {
+    title: 'Current Employment',
+    icon: Briefcase,
+    tone: {
+      wrapper:
+        'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-blue-50/60 hover:border-blue-300',
+      icon: 'text-blue-600',
+      uploadBox: 'hover:border-blue-300 hover:bg-blue-50/50',
+      glowOne: 'bg-blue-100/70',
+      glowTwo: 'bg-sky-100/70',
+      header: 'from-slate-50 to-blue-50/70',
+    },
+    uploadTitle: 'Upload current employment document',
+    uploadDescription:
+      'Upload an employment contract, offer letter, pay stub, employee handbook, benefits statement, or HR document. AI will fill current employment fields.',
+    buttonLabel: 'Auto-fill Current Employment',
+    emptyError:
+      'AI could not find current employment information in this file.',
+    successMessage:
+      'AI filled current employment fields. Please review the results.',
+  },
+  '18B': {
+    title: 'Business Ownership',
+    icon: Building2,
+    tone: {
+      wrapper:
+        'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-emerald-50/60 hover:border-emerald-300',
+      icon: 'text-emerald-600',
+      uploadBox: 'hover:border-emerald-300 hover:bg-emerald-50/50',
+      glowOne: 'bg-emerald-100/70',
+      glowTwo: 'bg-green-100/70',
+      header: 'from-slate-50 to-emerald-50/70',
+    },
+    uploadTitle: 'Upload business document for this card',
+    uploadDescription:
+      'Upload formation documents, operating agreements, business licenses, tax documents, contracts, or business account documents. AI will fill only this business card.',
+    buttonLabel: 'Auto-fill This Business',
+    emptyError:
+      'AI could not find business ownership information in this file.',
+    successMessage: 'AI filled this business card. Please review the results.',
+  },
+  '18C': {
+    title: 'Past Employment',
+    icon: History,
+    tone: {
+      wrapper:
+        'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-violet-50/60 hover:border-violet-300',
+      icon: 'text-violet-600',
+      uploadBox: 'hover:border-violet-300 hover:bg-violet-50/50',
+      glowOne: 'bg-violet-100/70',
+      glowTwo: 'bg-purple-100/70',
+      header: 'from-slate-50 to-violet-50/70',
+    },
+    uploadTitle: 'Upload past employment document for this card',
+    uploadDescription:
+      'Upload a resume, previous employment letter, performance review, contract, reference letter, W-2, or HR document. AI will fill only this previous job card.',
+    buttonLabel: 'Auto-fill This Job',
+    emptyError: 'AI could not find past employment information in this file.',
+    successMessage:
+      'AI filled this previous job card. Please review the results.',
+  },
+  '18D': {
+    title: 'Income Sources',
+    icon: Wallet,
+    tone: {
+      wrapper:
+        'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-amber-50/60 hover:border-amber-300',
+      icon: 'text-amber-600',
+      uploadBox: 'hover:border-amber-300 hover:bg-amber-50/50',
+      glowOne: 'bg-amber-100/70',
+      glowTwo: 'bg-orange-100/70',
+      header: 'from-slate-50 to-amber-50/70',
+    },
+    uploadTitle: 'Upload income document for this card',
+    uploadDescription:
+      'Upload pay stubs, 1099s, W-2s, benefit statements, pension statements, Social Security letters, rental records, or invoices. AI will fill only this income source card.',
+    buttonLabel: 'Auto-fill This Income',
+    emptyError: 'AI could not find income source information in this file.',
+    successMessage:
+      'AI filled this income source card. Please review the results.',
+  },
+};
+
+/* ============================================================
+   HELPERS
+============================================================ */
+
+const createRowId = () => {
+  if (
+    typeof crypto !== 'undefined' &&
+    typeof crypto.randomUUID === 'function'
+  ) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const getReadableFileType = (mimeType?: string) => {
+  if (!mimeType) return 'Document';
+  if (mimeType === 'application/pdf') return 'PDF';
+  if (mimeType === 'text/plain') return 'Text';
+  if (mimeType.includes('image')) return 'Image';
+  return mimeType;
+};
+
+const getSafeObject = (value: any) => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  return {};
+};
+
+const cleanPatchObject = (patch: any) => {
+  if (!patch || typeof patch !== 'object') return {};
+
+  return Object.fromEntries(
+    Object.entries(patch).filter(([key, value]) => {
+      if (key === '__rowId') return false;
+      if (key.endsWith('_instructions')) return false;
+      if (key.endsWith('_header')) return false;
+      if (value === null || value === undefined || value === '') return false;
+      if (Array.isArray(value) && value.length === 0) return false;
+      return true;
+    }),
+  );
+};
+
+const extractObjectFromPatch = (subsection: SubsectionId, patch: any) => {
+  const raw = patch?.[subsection];
+
+  if (Array.isArray(raw)) {
+    return cleanPatchObject(raw[0] || {});
+  }
+
+  if (raw && typeof raw === 'object') {
+    return cleanPatchObject(raw);
+  }
+
+  return {};
+};
+
+/* ============================================================
+   COMPONENT
+============================================================ */
+
 export default function Section18EmploymentBusiness({
   data = {},
   onChange = () => {},
   activeSubsection,
 }: Props) {
-  const update = (key: string, value: any) =>
-    onChange({ ...data, [key]: value });
+  const [aiNotice, setAiNotice] = useState('');
+  const [aiError, setAiError] = useState('');
 
-  const show18A = !activeSubsection || activeSubsection === '18A';
+  const [uploadingScope, setUploadingScope] = useState<string | null>(null);
+  const [aiLoadingScope, setAiLoadingScope] = useState<string | null>(null);
 
-  const renderRepeatable = (section: any) => {
-    const show = !activeSubsection || activeSubsection === section.subsectionId;
+  const [uploadedFiles, setUploadedFiles] = useState<
+    Record<string, UploadedAIFile | null>
+  >({});
 
-    const items = Array.isArray(data[section.subsectionId])
-      ? data[section.subsectionId]
-      : [];
+  const isAnyAIActionRunning =
+    uploadingScope !== null || aiLoadingScope !== null;
 
-    const addItem = () =>
-      update(section.subsectionId, [
-        ...items,
-        Object.fromEntries(section.fields.map((f: any) => [f.key, ''])),
-      ]);
+  useEffect(() => {
+    const next = { ...data };
+    let changed = false;
 
-    const updateItem = (i: number, key: string, val: any) => {
-      const next = [...items];
-      next[i] = { ...next[i], [key]: val };
-      update(section.subsectionId, next);
+    if (
+      !next['18A'] ||
+      typeof next['18A'] !== 'object' ||
+      Array.isArray(next['18A'])
+    ) {
+      next['18A'] = {};
+      changed = true;
+    }
+
+    (['18B', '18C', '18D'] as SubsectionId[]).forEach(id => {
+      if (id === '18A') return;
+
+      if (!Array.isArray(next[id])) {
+        next[id] = [];
+        changed = true;
+        return;
+      }
+
+      const withRowIds = next[id].map((item: any) => {
+        if (item?.__rowId) return item;
+        changed = true;
+        return {
+          __rowId: createRowId(),
+          ...(item || {}),
+        };
+      });
+
+      next[id] = withRowIds;
+    });
+
+    if (changed) {
+      onChange(next);
+    }
+
+    // Initialize once only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const updateSubsection = (key: SubsectionId, value: any) => {
+    onChange({
+      ...data,
+      [key]: value,
+    });
+  };
+
+  const updateObjectField = (
+    subsection: SubsectionId,
+    key: string,
+    value: any,
+  ) => {
+    const current = getSafeObject(data[subsection]);
+
+    updateSubsection(subsection, {
+      ...current,
+      [key]: value,
+    });
+  };
+
+  const updateObjectWithPatch = (subsection: SubsectionId, patch: any) => {
+    const current = getSafeObject(data[subsection]);
+
+    updateSubsection(subsection, {
+      ...current,
+      ...patch,
+    });
+  };
+
+  const getItems = (subsection: SubsectionId) => {
+    return Array.isArray(data[subsection]) ? data[subsection] : [];
+  };
+
+  const makeEmptyItem = (fields: any[]) => ({
+    __rowId: createRowId(),
+    ...Object.fromEntries(fields.map(field => [field.key, ''])),
+  });
+
+  const addItem = (section: any) => {
+    const items = getItems(section.subsectionId);
+
+    updateSubsection(section.subsectionId, [
+      ...items,
+      makeEmptyItem(section.fields),
+    ]);
+  };
+
+  const updateItem = (
+    subsection: SubsectionId,
+    index: number,
+    key: string,
+    value: any,
+  ) => {
+    const items = getItems(subsection);
+    const next = [...items];
+
+    next[index] = {
+      ...next[index],
+      [key]: value,
     };
 
-    const removeItem = (i: number) =>
-      update(
-        section.subsectionId,
-        items.filter((_: any, idx: number) => idx !== i),
-      );
+    updateSubsection(subsection, next);
+  };
+
+  const updateItemWithPatch = (
+    subsection: SubsectionId,
+    index: number,
+    patch: any,
+  ) => {
+    const items = getItems(subsection);
+    const next = [...items];
+
+    next[index] = {
+      ...next[index],
+      ...patch,
+    };
+
+    updateSubsection(subsection, next);
+  };
+
+  const removeItem = (subsection: SubsectionId, index: number) => {
+    const items = getItems(subsection);
+    updateSubsection(
+      subsection,
+      items.filter((_: any, i: number) => i !== index),
+    );
+  };
+
+  const getUploadedFileForScope = (scope: string) => {
+    return uploadedFiles[scope] || null;
+  };
+
+  const handleDocumentUpload = async (file?: File | null, scope?: string) => {
+    try {
+      if (!file || !scope) return;
+
+      setAiError('');
+      setAiNotice('');
+
+      if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
+        setAiError('Upload PDF, TXT, PNG, JPG, JPEG, or WEBP only.');
+        return;
+      }
+
+      if (file.size > MAX_UPLOAD_SIZE) {
+        setAiError('File too large. Max 15MB.');
+        return;
+      }
+
+      setUploadingScope(scope);
+
+      const uploaded = await uploadAIDocument(file);
+
+      setUploadedFiles(prev => ({
+        ...prev,
+ [scope]: {
+    file_id: uploaded.file_id,
+    mime_type: uploaded.mime_type,
+    expires_at: uploaded.expires_at,
+  },
+      }));
+
+      setAiNotice('Document uploaded. You can now use AI autofill.');
+    } catch (err: any) {
+      setAiError(err?.message || 'Document upload failed');
+    } finally {
+      setUploadingScope(null);
+    }
+  };
+
+  const handleAutofill = async ({
+    subsection,
+    scope,
+    itemIndex,
+  }: {
+    subsection: SubsectionId;
+    scope: string;
+    itemIndex?: number;
+  }) => {
+    const config = SUBSECTION_UI[subsection];
+
+    try {
+      const uploadedFile = getUploadedFileForScope(scope);
+
+      if (!uploadedFile) {
+        setAiError('Please upload a document first.');
+        return;
+      }
+
+      setAiError('');
+      setAiNotice('');
+      setAiLoadingScope(scope);
+
+      const json = await autofillSectionFromDocument({
+        section: 'employment_business',
+        file_id: uploadedFile.file_id,
+        subsection,
+      });
+
+      const patch = json?.result?.patch ?? {};
+      const extracted = extractObjectFromPatch(subsection, patch);
+
+      if (Object.keys(extracted).length === 0) {
+        setAiError(config.emptyError);
+        return;
+      }
+
+      if (subsection === '18A') {
+        updateObjectWithPatch('18A', extracted);
+      } else {
+        if (typeof itemIndex !== 'number') {
+          setAiError('Please select a card to autofill.');
+          return;
+        }
+
+        updateItemWithPatch(subsection, itemIndex, extracted);
+      }
+
+      setAiNotice(config.successMessage);
+    } catch (err: any) {
+      setAiError(err?.message || 'AI autofill failed');
+    } finally {
+      setAiLoadingScope(null);
+    }
+  };
+
+  const renderUploader = ({
+    subsection,
+    scope,
+    itemIndex,
+  }: {
+    subsection: SubsectionId;
+    scope: string;
+    itemIndex?: number;
+  }) => {
+    const config = SUBSECTION_UI[subsection];
+    const uploadedFile = getUploadedFileForScope(scope);
+    const isUploading = uploadingScope === scope;
+    const isReading = aiLoadingScope === scope;
+    const tone = config.tone;
 
     return (
       <div
-        key={section.subsectionId}
-        id={`subsection-${section.subsectionId}`}
-        className={`rounded-3xl ${show ? 'border border-primary' : ''}`}
+        className={[
+          'relative overflow-hidden rounded-2xl border border-dashed p-4 shadow-sm transition-all duration-200 hover:shadow-md',
+          tone.wrapper,
+          'space-y-4',
+        ].join(' ')}
       >
-        <Card>
-          <CardHeader className="flex justify-between items-center">
-            <CardTitle>
-              {section.subsectionId}. {section.title}
+        <div
+          className={[
+            'pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full blur-2xl',
+            tone.glowOne,
+          ].join(' ')}
+        />
+
+        <div
+          className={[
+            'pointer-events-none absolute -bottom-10 -left-10 h-24 w-24 rounded-full blur-2xl',
+            tone.glowTwo,
+          ].join(' ')}
+        />
+
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+              {isUploading ? (
+                <Loader2 className={`h-5 w-5 animate-spin ${tone.icon}`} />
+              ) : uploadedFile ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              ) : (
+                <UploadCloud className={`h-5 w-5 ${tone.icon}`} />
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <p className="font-semibold text-slate-900">
+                {config.uploadTitle}
+              </p>
+
+              <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
+                {config.uploadDescription}
+              </p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => handleAutofill({ subsection, scope, itemIndex })}
+            disabled={isAnyAIActionRunning || !uploadedFile}
+            className="shrink-0 rounded-xl"
+          >
+            {isReading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="mr-2 h-4 w-4" />
+            )}
+
+            {isReading ? 'Reading…' : config.buttonLabel}
+          </Button>
+        </div>
+
+        <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <label
+            className={[
+              'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center transition',
+              tone.uploadBox,
+              isAnyAIActionRunning ? 'pointer-events-none opacity-60' : '',
+            ].join(' ')}
+          >
+            <input
+              type="file"
+              className="sr-only"
+              accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp"
+              disabled={isAnyAIActionRunning}
+              onChange={event => {
+                const file = event.currentTarget.files?.[0] || null;
+                void handleDocumentUpload(file, scope);
+                event.currentTarget.value = '';
+              }}
+            />
+
+            <UploadCloud className={`h-5 w-5 ${tone.icon}`} />
+
+            <div>
+              <p className="text-sm font-medium text-slate-800">
+                Click to upload document
+              </p>
+
+              <p className="text-xs text-slate-500">
+                PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB
+              </p>
+            </div>
+          </label>
+
+          {uploadedFile && (
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              <FileText className="h-4 w-4" />
+              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
+            </div>
+          )}
+        </div>
+
+        {isUploading && (
+          <div className="relative flex items-center gap-2 text-xs text-slate-500">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Uploading document…
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const render18A = () => {
+    const show = !activeSubsection || activeSubsection === '18A';
+    const sectionData = getSafeObject(data['18A']);
+    const config = SUBSECTION_UI['18A'];
+    const Icon = config.icon;
+
+    return (
+      <div
+        id="subsection-18A"
+        className={`rounded-3xl ${show ? 'border border-primary p-1' : ''}`}
+      >
+        <Card className="overflow-hidden border-slate-200 shadow-sm">
+          <CardHeader
+            className={`border-b bg-gradient-to-r ${config.tone.header}`}
+          >
+            <CardTitle className="flex items-center gap-2">
+              <Icon className={`h-5 w-5 ${config.tone.icon}`} />
+              18A. {SECTION_18A.title}
             </CardTitle>
-            <Button size="sm" onClick={addItem}>
-              <Plus className="h-4 w-4 mr-1" /> Add {section.itemLabel}
-            </Button>
           </CardHeader>
 
-          <CardContent className="space-y-6">
-            {items.map((item: any, i: number) => (
-              <Card key={i} className="p-6">
-                <div className="flex justify-between mb-4">
-                  <strong>
-                    {section.itemLabel} #{i + 1}
-                  </strong>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => removeItem(i)}
-                  >
-                    <Minus className="h-4 w-4 mr-1" /> Remove
-                  </Button>
-                </div>
+          <CardContent className="space-y-6 p-5">
+            {renderUploader({
+              subsection: '18A',
+              scope: '18A-full',
+            })}
 
-                <div className="grid md:grid-cols-2 gap-4">
-                  {section.fields.map((field: any) => (
-                    <DynamicFormField
-                      key={field.key}
-                      field={field}
-                      value={item[field.key]}
-                      formData={item}
-                      onChange={(v: any) => updateItem(i, field.key, v)}
-                    />
-                  ))}
-                </div>
-              </Card>
-            ))}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {SECTION_18A.fields.map(field => (
+                <DynamicFormField
+                  key={field.key}
+                  field={field}
+                  value={sectionData?.[field.key]}
+                  formData={sectionData}
+                  onChange={value => updateObjectField('18A', field.key, value)}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  const renderRepeatable = (section: any) => {
+    const subsection = section.subsectionId as SubsectionId;
+    const show = !activeSubsection || activeSubsection === subsection;
+    const items = getItems(subsection);
+    const config = SUBSECTION_UI[subsection];
+    const Icon = config.icon;
+
+    return (
+      <div
+        key={subsection}
+        id={`subsection-${subsection}`}
+        className={`rounded-3xl ${show ? 'border border-primary p-1' : ''}`}
+      >
+        <Card className="overflow-hidden border-slate-200 shadow-sm">
+          <CardHeader
+            className={`border-b bg-gradient-to-r ${config.tone.header}`}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Icon className={`h-5 w-5 ${config.tone.icon}`} />
+                {subsection}. {section.title}
+              </CardTitle>
+
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => addItem(section)}
+                className="w-full rounded-xl sm:w-auto"
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Add {section.itemLabel}
+              </Button>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-6 p-5">
+            {items.length === 0 && (
+              <div className="rounded-2xl border border-dashed bg-slate-50 px-4 py-8 text-center">
+                <p className="text-sm font-medium text-slate-700">
+                  No {section.itemLabel.toLowerCase()} added yet.
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Add a card first, then upload a document to autofill that
+                  specific card.
+                </p>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => addItem(section)}
+                  className="mt-4 rounded-xl"
+                >
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add {section.itemLabel}
+                </Button>
+              </div>
+            )}
+
+            {items.map((item: any, index: number) => {
+              const rowId = item?.__rowId || `${subsection}-${index}`;
+              const scope = `${subsection}-${rowId}`;
+
+              return (
+                <Card
+                  key={rowId}
+                  className="overflow-hidden border-slate-200 shadow-sm"
+                >
+                  <CardHeader className="border-b bg-slate-50/70">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-semibold text-slate-900">
+                          {section.itemLabel} #{index + 1}
+                        </p>
+                        <p className="text-sm text-slate-500">
+                          Upload a document here to autofill only this card.
+                        </p>
+                      </div>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => removeItem(subsection, index)}
+                        className="w-full rounded-xl sm:w-auto"
+                      >
+                        <Minus className="mr-1 h-4 w-4" />
+                        Remove
+                      </Button>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="space-y-6 p-5">
+                    {renderUploader({
+                      subsection,
+                      scope,
+                      itemIndex: index,
+                    })}
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      {section.fields.map((field: any) => (
+                        <DynamicFormField
+                          key={`${field.key}-${rowId}`}
+                          field={field}
+                          value={item?.[field.key]}
+                          formData={item}
+                          rowId={rowId}
+                          onChange={(value: any) =>
+                            updateItem(subsection, index, field.key, value)
+                          }
+                        />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </CardContent>
         </Card>
       </div>
@@ -458,32 +1122,26 @@ export default function Section18EmploymentBusiness({
 
   return (
     <div className="space-y-10">
-      {/* ====================== 18A ====================== */}
-      <div
-        id="subsection-18A"
-        className={`rounded-3xl ${show18A ? 'border border-primary' : ''}`}
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle>18A. {SECTION_18A.title}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid md:grid-cols-2 gap-4">
-            {SECTION_18A.fields.map(field => (
-              <DynamicFormField
-                key={field.key}
-                field={field}
-                value={data['18A']?.[field.key]}
-                formData={data['18A']}
-                onChange={v =>
-                  update('18A', { ...data['18A'], [field.key]: v })
-                }
-              />
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+      {(aiNotice || aiError) && (
+        <div className="space-y-3">
+          {aiNotice && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>{aiNotice}</AlertDescription>
+            </Alert>
+          )}
 
-      {SECTIONS.map(renderRepeatable)}
+          {aiError && (
+            <Alert variant="destructive">
+              <AlertDescription>{aiError}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
+
+      {render18A()}
+
+      {REPEATABLE_SECTIONS.map(renderRepeatable)}
     </div>
   );
 }

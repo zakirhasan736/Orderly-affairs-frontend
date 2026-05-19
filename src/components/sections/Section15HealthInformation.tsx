@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -8,11 +8,25 @@ import {
   CardContent,
 } from '@/components/common/ui/card';
 import { Button } from '@/components/common/ui/button';
-import { Plus, Minus } from 'lucide-react';
+import {
+  Plus,
+  Minus,
+  Sparkles,
+  UploadCloud,
+  FileText,
+  CheckCircle2,
+  Loader2,
+  HeartPulse,
+  Stethoscope,
+} from 'lucide-react';
 import { DynamicFormField } from '@/components/DynamicFormField';
+import { Alert, AlertDescription } from '@/components/common/ui/alert';
+
+import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { uploadAIDocument } from '@/services/aiDocumentUpload';
 
 /* ------------------------------------------------------------------ */
-/* CONFIG — 15A (NON-REPEATABLE)                                       */
+/* CONFIG — 15A                                                        */
 /* ------------------------------------------------------------------ */
 
 const SECTION_15A = {
@@ -97,7 +111,7 @@ const SECTION_15A = {
 };
 
 /* ------------------------------------------------------------------ */
-/* CONFIG — 15B (REPEATABLE)                                           */
+/* CONFIG — 15B                                                        */
 /* ------------------------------------------------------------------ */
 
 const SECTION_15B = {
@@ -180,7 +194,7 @@ const SECTION_15B = {
 };
 
 /* ------------------------------------------------------------------ */
-/* PROPS                                                              */
+/* TYPES                                                              */
 /* ------------------------------------------------------------------ */
 
 interface Props {
@@ -188,6 +202,40 @@ interface Props {
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
 }
+
+type UploadScope = '15A-full' | '15B-full' | `15B:${number}`;
+
+type UploadedAIFile = {
+  file_id: string;
+  mime_type: string;
+  expires_at?: string;
+};
+
+const ALLOWED_UPLOAD_TYPES = [
+  'application/pdf',
+  'text/plain',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+];
+
+const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
+
+const getReadableFileType = (mimeType?: string) => {
+  if (!mimeType) return 'Document';
+  if (mimeType === 'application/pdf') return 'PDF';
+  if (mimeType === 'text/plain') return 'Text';
+  if (mimeType.includes('image')) return 'Image';
+  return mimeType;
+};
+
+const createRowId = () => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `row-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
 
 /* ------------------------------------------------------------------ */
 /* COMPONENT                                                          */
@@ -198,8 +246,28 @@ export default function Section15HealthInformation({
   onChange = () => {},
   activeSubsection,
 }: Props) {
-  /* ---------- 15A DATA ---------- */
+  const [aiNotice, setAiNotice] = useState('');
+  const [aiError, setAiError] = useState('');
+
+  const [uploadingScope, setUploadingScope] = useState<UploadScope | null>(
+    null,
+  );
+  const [aiLoadingScope, setAiLoadingScope] = useState<UploadScope | null>(
+    null,
+  );
+
+  const [uploadedFiles, setUploadedFiles] = useState<
+    Record<string, UploadedAIFile | null>
+  >({});
+
   const section15A = data['15A'] || {};
+  const providers: any[] = Array.isArray(data['15B']) ? data['15B'] : [];
+
+  const show15A = !activeSubsection || activeSubsection === '15A';
+  const show15B = !activeSubsection || activeSubsection === '15B';
+
+  const isAnyAIActionRunning =
+    uploadingScope !== null || aiLoadingScope !== null;
 
   const update15A = (key: string, value: any) => {
     onChange({
@@ -211,8 +279,15 @@ export default function Section15HealthInformation({
     });
   };
 
-  /* ---------- 15B DATA ---------- */
-  const providers: any[] = Array.isArray(data['15B']) ? data['15B'] : [];
+  const update15AWithPatch = (patch: any) => {
+    onChange({
+      ...data,
+      '15A': {
+        ...section15A,
+        ...patch,
+      },
+    });
+  };
 
   const updateProviders = (next: any[]) => {
     onChange({
@@ -221,42 +296,434 @@ export default function Section15HealthInformation({
     });
   };
 
+  const createEmptyProvider = () => {
+    return {
+      ...Object.fromEntries(SECTION_15B.fields.map(field => [field.key, ''])),
+      __rowId: createRowId(),
+    };
+  };
+
   const addProvider = () => {
-    const emptyProvider = Object.fromEntries(
-      SECTION_15B.fields.map(f => [f.key, '']),
-    );
-    updateProviders([...providers, emptyProvider]);
+    updateProviders([...providers, createEmptyProvider()]);
   };
 
   const updateProvider = (index: number, key: string, value: any) => {
     const next = [...providers];
-    next[index] = { ...next[index], [key]: value };
+
+    next[index] = {
+      ...(next[index] || {}),
+      [key]: value,
+      __rowId: next[index]?.__rowId || createRowId(),
+    };
+
     updateProviders(next);
   };
 
   const removeProvider = (index: number) => {
-    updateProviders(providers.filter((_, i) => i !== index));
+    updateProviders(providers.filter((_, itemIndex) => itemIndex !== index));
   };
 
-  const show15A = !activeSubsection || activeSubsection === '15A';
-  const show15B = !activeSubsection || activeSubsection === '15B';
+  const getUploadedFileForScope = (scope: UploadScope) => {
+    return uploadedFiles[scope] || null;
+  };
 
-  /* ------------------------------------------------------------------ */
-  /* RENDER                                                             */
-  /* ------------------------------------------------------------------ */
+  const cleanPatchObject = (patch: any) => {
+    if (!patch || typeof patch !== 'object') return {};
+
+    return Object.fromEntries(
+      Object.entries(patch).filter(([key, value]) => {
+        if (key === '__rowId') return false;
+        if (value === null || value === undefined || value === '') return false;
+        if (Array.isArray(value) && value.length === 0) return false;
+        return true;
+      }),
+    );
+  };
+
+  const extract15AObjectFromPatch = (patch: any) => {
+    const raw = patch?.['15A'];
+
+    if (Array.isArray(raw)) {
+      return cleanPatchObject(raw[0] || {});
+    }
+
+    if (raw && typeof raw === 'object') {
+      return cleanPatchObject(raw);
+    }
+
+    return {};
+  };
+
+  const normalizeProviderPatch = (patch: any) => {
+    return {
+      ...createEmptyProvider(),
+      ...cleanPatchObject(patch),
+    };
+  };
+
+  const extractProviderArrayFromPatch = (patch: any) => {
+    const rawProviders = patch?.['15B'];
+
+    if (Array.isArray(rawProviders)) {
+      return rawProviders
+        .map(provider => normalizeProviderPatch(provider))
+        .filter(provider => {
+          return Object.entries(provider).some(([key, value]) => {
+            return key !== '__rowId' && value !== '';
+          });
+        });
+    }
+
+    if (rawProviders && typeof rawProviders === 'object') {
+      const provider = normalizeProviderPatch(rawProviders);
+
+      const hasValue = Object.entries(provider).some(([key, value]) => {
+        return key !== '__rowId' && value !== '';
+      });
+
+      return hasValue ? [provider] : [];
+    }
+
+    return [];
+  };
+
+  const handleDocumentUpload = async (
+    file?: File | null,
+    scope?: UploadScope,
+  ) => {
+    try {
+      if (!file || !scope) return;
+
+      setAiError('');
+      setAiNotice('');
+
+      if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
+        setAiError('Upload PDF, TXT, PNG, JPG, JPEG, or WEBP only.');
+        return;
+      }
+
+      if (file.size > MAX_UPLOAD_SIZE) {
+        setAiError('File too large. Max 15MB.');
+        return;
+      }
+
+      setUploadingScope(scope);
+
+      const uploaded = await uploadAIDocument(file);
+
+      setUploadedFiles(prev => ({
+        ...prev,
+ [scope]: {
+    file_id: uploaded.file_id,
+    mime_type: uploaded.mime_type,
+    expires_at: uploaded.expires_at,
+  },
+      }));
+
+      setAiNotice('Document uploaded. You can now use AI autofill.');
+    } catch (err: any) {
+      setAiError(err?.message || 'Document upload failed');
+    } finally {
+      setUploadingScope(null);
+    }
+  };
+
+  const handleAutofill15A = async () => {
+    try {
+      const scope: UploadScope = '15A-full';
+      const uploadedFile = getUploadedFileForScope(scope);
+
+      if (!uploadedFile) {
+        setAiError('Please upload a health document first.');
+        return;
+      }
+
+      setAiError('');
+      setAiNotice('');
+      setAiLoadingScope(scope);
+
+      const json = await autofillSectionFromDocument({
+        section: 'health_information',
+        file_id: uploadedFile.file_id,
+        subsection: '15A',
+      });
+
+      const patch = json?.result?.patch ?? {};
+      const extracted15A = extract15AObjectFromPatch(patch);
+
+      if (Object.keys(extracted15A).length === 0) {
+        setAiError(
+          'AI could not find health insurance or medical information in this document.',
+        );
+        return;
+      }
+
+      update15AWithPatch(extracted15A);
+      setAiNotice(
+        'AI filled health insurance and medical information. Please review the fields.',
+      );
+    } catch (err: any) {
+      setAiError(err?.message || 'AI autofill failed');
+    } finally {
+      setAiLoadingScope(null);
+    }
+  };
+
+  const handleAutofill15B = async (
+    scope: UploadScope = '15B-full',
+    providerIndex?: number,
+  ) => {
+    try {
+      const uploadedFile = getUploadedFileForScope(scope);
+
+      if (!uploadedFile) {
+        setAiError('Please upload a healthcare provider document first.');
+        return;
+      }
+
+      setAiError('');
+      setAiNotice('');
+      setAiLoadingScope(scope);
+
+      const json = await autofillSectionFromDocument({
+        section: 'health_information',
+        file_id: uploadedFile.file_id,
+        subsection: '15B',
+      });
+
+      const patch = json?.result?.patch ?? {};
+      const extractedProviders = extractProviderArrayFromPatch(patch);
+
+      if (extractedProviders.length === 0) {
+        setAiError(
+          'AI could not find healthcare provider information in this document.',
+        );
+        return;
+      }
+
+      if (typeof providerIndex === 'number') {
+        const firstProvider = cleanPatchObject(extractedProviders[0]);
+        const next = [...providers];
+
+        next[providerIndex] = {
+          ...(next[providerIndex] || createEmptyProvider()),
+          ...firstProvider,
+          __rowId: next[providerIndex]?.__rowId || createRowId(),
+        };
+
+        updateProviders(next);
+
+        setAiNotice(
+          `AI filled ${SECTION_15B.itemLabel} #${providerIndex + 1}. Please review the fields.`,
+        );
+
+        return;
+      }
+
+      updateProviders([...providers, ...extractedProviders]);
+
+      setAiNotice(
+        extractedProviders.length === 1
+          ? 'AI added 1 healthcare provider. Please review the fields.'
+          : `AI added ${extractedProviders.length} healthcare providers. Please review the fields.`,
+      );
+    } catch (err: any) {
+      setAiError(err?.message || 'AI autofill failed');
+    } finally {
+      setAiLoadingScope(null);
+    }
+  };
+
+  const renderUploader = ({
+    scope,
+    title,
+    description,
+    buttonLabel,
+    compact = false,
+    variant = 'health',
+    onAutofill,
+  }: {
+    scope: UploadScope;
+    title: string;
+    description: string;
+    buttonLabel: string;
+    compact?: boolean;
+    variant?: 'health' | 'provider';
+    onAutofill: () => void;
+  }) => {
+    const uploadedFile = getUploadedFileForScope(scope);
+    const isUploading = uploadingScope === scope;
+    const isReading = aiLoadingScope === scope;
+
+    const isHealth = variant === 'health';
+
+    const wrapperClass = isHealth
+      ? 'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-red-50/50 hover:border-red-300'
+      : 'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-cyan-50/50 hover:border-cyan-300';
+
+    const iconClass = isHealth ? 'text-red-600' : 'text-cyan-600';
+
+    const uploadBoxClass = isHealth
+      ? 'hover:border-red-300 hover:bg-red-50/50'
+      : 'hover:border-cyan-300 hover:bg-cyan-50/50';
+
+    const glowOne = isHealth ? 'bg-red-100/70' : 'bg-cyan-100/70';
+    const glowTwo = isHealth ? 'bg-pink-100/70' : 'bg-blue-100/70';
+
+    return (
+      <div
+        className={[
+          'relative overflow-hidden rounded-2xl border border-dashed p-4 shadow-sm transition-all duration-200 hover:shadow-md',
+          wrapperClass,
+          compact ? 'space-y-3' : 'space-y-4',
+        ].join(' ')}
+      >
+        <div
+          className={[
+            'pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full blur-2xl',
+            glowOne,
+          ].join(' ')}
+        />
+
+        <div
+          className={[
+            'pointer-events-none absolute -bottom-10 -left-10 h-24 w-24 rounded-full blur-2xl',
+            glowTwo,
+          ].join(' ')}
+        />
+
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+              {isUploading ? (
+                <Loader2 className={`h-5 w-5 animate-spin ${iconClass}`} />
+              ) : uploadedFile ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              ) : (
+                <UploadCloud className={`h-5 w-5 ${iconClass}`} />
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <p className="font-semibold text-slate-900">{title}</p>
+              <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
+                {description}
+              </p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            size="sm"
+            onClick={onAutofill}
+            disabled={isAnyAIActionRunning || !uploadedFile}
+            className="shrink-0 rounded-xl"
+          >
+            {isReading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="mr-2 h-4 w-4" />
+            )}
+
+            {isReading ? 'Reading…' : buttonLabel}
+          </Button>
+        </div>
+
+        <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <label
+            className={[
+              'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center transition',
+              uploadBoxClass,
+              compact
+                ? 'md:flex-row md:justify-start md:py-3 md:text-left'
+                : '',
+              isAnyAIActionRunning ? 'pointer-events-none opacity-60' : '',
+            ].join(' ')}
+          >
+            <input
+              type="file"
+              className="sr-only"
+              accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp"
+              disabled={isAnyAIActionRunning}
+              onChange={event => {
+                const file = event.currentTarget.files?.[0] || null;
+                void handleDocumentUpload(file, scope);
+                event.currentTarget.value = '';
+              }}
+            />
+
+            <UploadCloud className={`h-5 w-5 ${iconClass}`} />
+
+            <div>
+              <p className="text-sm font-medium text-slate-800">
+                Click to upload health document
+              </p>
+              <p className="text-xs text-slate-500">
+                PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB
+              </p>
+            </div>
+          </label>
+
+          {uploadedFile && (
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              <FileText className="h-4 w-4" />
+              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
+            </div>
+          )}
+        </div>
+
+        {isUploading && (
+          <div className="relative flex items-center gap-2 text-xs text-slate-500">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Uploading document…
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-10">
-      {/* ====================== 15A ====================== */}
+      {(aiNotice || aiError) && (
+        <div className="space-y-3">
+          {aiNotice && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>{aiNotice}</AlertDescription>
+            </Alert>
+          )}
+
+          {aiError && (
+            <Alert variant="destructive">
+              <AlertDescription>{aiError}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
+
       <div
         id="subsection-15A"
-        className={`rounded-3xl ${show15A ? 'border border-primary' : ''}`}
+        className={`rounded-3xl ${show15A ? 'border border-primary p-1' : ''}`}
       >
-        <Card>
-          <CardHeader>
-            <CardTitle>15A. {SECTION_15A.title}</CardTitle>
+        <Card className="overflow-hidden border-slate-200 shadow-sm">
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-red-50/70">
+            <CardTitle className="flex items-center gap-2">
+              <HeartPulse className="h-5 w-5 text-red-600" />
+              15A. {SECTION_15A.title}
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+
+          <CardContent className="space-y-6 p-5">
+            {/* {renderUploader({
+              scope: '15A-full',
+              title: 'Upload health insurance or medical document',
+              description:
+                'Upload insurance cards, Medicare/Medicaid cards, medication lists, allergy lists, medical history, emergency contact sheets, or medical power of attorney documents. AI will fill this health information section.',
+              buttonLabel: 'Auto-fill Health Info',
+              variant: 'health',
+              onAutofill: handleAutofill15A,
+            })} */}
+
             {SECTION_15A.fields.map(field => (
               <DynamicFormField
                 key={field.key}
@@ -270,60 +737,119 @@ export default function Section15HealthInformation({
         </Card>
       </div>
 
-      {/* ====================== 15B ====================== */}
       <div
         id="subsection-15B"
-        className={`rounded-3xl ${show15B ? 'border border-primary' : ''}`}
+        className={`rounded-3xl ${show15B ? 'border border-primary p-1' : ''}`}
       >
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle>15B. {SECTION_15B.title}</CardTitle>
-              <Button size="sm" onClick={addProvider}>
-                <Plus className="h-4 w-4 mr-1" />
+        <Card className="overflow-hidden border-slate-200 shadow-sm">
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-cyan-50/70">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Stethoscope className="h-5 w-5 text-cyan-600" />
+                15B. {SECTION_15B.title}
+              </CardTitle>
+
+              <Button
+                type="button"
+                size="sm"
+                onClick={addProvider}
+                className="rounded-xl"
+              >
+                <Plus className="mr-1 h-4 w-4" />
                 Add {SECTION_15B.itemLabel}
               </Button>
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-8">
+          <CardContent className="space-y-8 p-5">
+            {renderUploader({
+              scope: '15B-full',
+              title: 'Upload document for multiple healthcare providers',
+              description:
+                'Use this if one document contains one or more doctors, clinics, pharmacies, therapists, dentists, patient portal records, or provider contact details. AI will add extracted providers as new cards.',
+              buttonLabel: 'Extract Providers',
+              variant: 'provider',
+              onAutofill: () => handleAutofill15B('15B-full'),
+            })}
+
             {providers.length === 0 && (
-              <div className="text-center text-muted-foreground py-8">
-                No healthcare providers added yet.
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
+                  <Stethoscope className="h-5 w-5 text-slate-500" />
+                </div>
+
+                <p className="font-medium text-slate-800">
+                  No healthcare providers added yet.
+                </p>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  Click “Add Healthcare Provider” to create a blank card, or
+                  upload a provider document above and let AI create the card.
+                </p>
               </div>
             )}
 
-            {providers.map((provider, index) => (
-              <Card key={index} className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <strong>
-                    {SECTION_15B.itemLabel} #{index + 1}
-                  </strong>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => removeProvider(index)}
-                  >
-                    <Minus className="h-4 w-4 mr-1" />
-                    Remove
-                  </Button>
-                </div>
+            {providers.map((provider, index) => {
+              const itemScope = `15B:${index}` as UploadScope;
+              const itemLabel = `${SECTION_15B.itemLabel} #${index + 1}`;
 
-                <div className="grid md:grid-cols-2 gap-4">
-                  {SECTION_15B.fields.map(field => (
-                    <DynamicFormField
-                      key={field.key}
-                      field={field}
-                      value={provider[field.key]}
-                      formData={provider}
-                      onChange={value =>
-                        updateProvider(index, field.key, value)
-                      }
-                    />
-                  ))}
-                </div>
-              </Card>
-            ))}
+              return (
+                <Card
+                  key={provider.__rowId || `${itemScope}-${index}`}
+                  className="overflow-hidden border-slate-200 shadow-sm"
+                >
+                  <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <strong className="text-slate-900">{itemLabel}</strong>
+
+                      <p className="text-sm text-slate-500">
+                        Upload a doctor contact card, provider record, patient
+                        portal screenshot, appointment note, pharmacy profile,
+                        or medical visit summary to autofill only this provider.
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => removeProvider(index)}
+                      className="rounded-xl"
+                    >
+                      <Minus className="mr-1 h-4 w-4" />
+                      Remove
+                    </Button>
+                  </div>
+
+                  <CardContent className="space-y-6 p-5">
+                    {renderUploader({
+                      scope: itemScope,
+                      title: `Upload document for ${itemLabel}`,
+                      description: `This will autofill only ${itemLabel}. It will not overwrite other healthcare provider cards.`,
+                      buttonLabel: `Auto-fill ${itemLabel}`,
+                      compact: true,
+                      variant: 'provider',
+                      onAutofill: () => handleAutofill15B(itemScope, index),
+                    })}
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {SECTION_15B.fields.map(field => (
+                        <DynamicFormField
+                          key={`${field.key}-${provider.__rowId || index}`}
+                          field={field}
+                          value={provider?.[field.key]}
+                          formData={provider}
+                          rowId={provider.__rowId}
+                          onChange={value =>
+                            updateProvider(index, field.key, value)
+                          }
+                        />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </CardContent>
         </Card>
       </div>

@@ -31,6 +31,8 @@ import {
   useLinkAuthenticatorMutation,
   useRequestPasswordResetMutation,
   useResetPasswordMutation,
+  useVerifySmsOtpMutation,
+  useResumePendingSignupMutation,
 } from '@/services/authApi';
 import { Card, CardContent } from '@/components/common/ui/card';
 import { Input } from '@/components/common/ui/input';
@@ -53,6 +55,7 @@ type MFAStep =
   | 'setupMfa'
   | 'verifyMfa'
   | 'verifyEmail'
+  | 'verifySms'
   | 'forgot_password'
   | 'reset_password';
 
@@ -76,7 +79,6 @@ function PaymentForm({
 }) {
   const stripe = useStripe();
   const elements = useElements();
-
   const [createCustomer] = useCreateCustomerMutation();
   const [setupIntent] = useSetupIntentMutation();
   const [confirmCard] = useConfirmCardMutation();
@@ -210,6 +212,7 @@ export default function LoginPage() {
   const stripePromise = loadStripe(
     process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
   );
+const [resumePendingSignup] = useResumePendingSignupMutation();
 
   // 🔗 API hooks
   const [login] = useLoginMutation();
@@ -221,62 +224,17 @@ export default function LoginPage() {
   const [verifyEmailCode] = useVerifyEmailCodeMutation();
   const [requestPasswordReset] = useRequestPasswordResetMutation();
   const [resetPassword] = useResetPasswordMutation();
+  const [verifySmsOtp] = useVerifySmsOtpMutation();
+
   const [resetEmail, setResetEmail] = useState('');
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [resetOtp, setResetOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  
-  // 🔧 UI States
+
   const [step, setStep] = useState<OnboardingStep>('credentials');
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>(
     'yearly',
   );
-useEffect(() => {
-  const autoSendEmailOtp = async () => {
-    if (step === 'verifyEmail' && !verificationSent) {
-      try {
-        setLoading(true);
-
-        await sendEmailOtp({ email }).unwrap();
-
-        setVerificationSent(true);
-      } catch (err: any) {
-        setError(err?.data?.detail || 'Failed to send verification code');
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  autoSendEmailOtp();
-}, [step]);
-  // Inside LoginPage component
-const handleForgotPasswordClick = async () => {
-  setError('');
-
-  // If email already entered → send OTP immediately
-  if (email && isValidEmail(email)) {
-    setLoading(true);
-
-    try {
-      await requestPasswordReset({ email }).unwrap();
-
-      setResetEmail(email);
-
-      alert('Reset code sent. Check your email.');
-
-      setStep('reset_password');
-    } catch (err: any) {
-      setError(err?.data?.detail || 'Failed to send reset code');
-    } finally {
-      setLoading(false);
-    }
-  } else {
-    // No email → go to forgot screen
-    setStep('forgot_password');
-  }
-};
-
   const [isTrial, setIsTrial] = useState(false);
 
   const [isNewUser, setIsNewUser] = useState(false);
@@ -287,6 +245,8 @@ const handleForgotPasswordClick = async () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -296,30 +256,122 @@ const handleForgotPasswordClick = async () => {
   const [emailCode, setEmailCode] = useState('');
   const [verificationSent, setVerificationSent] = useState(false);
 
+  const [smsSent, setSmsSent] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  // const handleRequestReset = async () => {
-  //   setError('');
-  //   setLoading(true);
 
-  //   try {
-  //     await requestPasswordReset({ email: resetEmail }).unwrap();
-  //     setStep('reset_password');
-  //   } catch (err: any) {
-  //     setError(err?.data?.detail || 'Failed to send reset code');
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
+  // OTP UX
+  const OTP_LENGTH = 6;
+  const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
+  const [cooldown, setCooldown] = useState(0);
+  const [attempts, setAttempts] = useState(0);
+  const MAX_ATTEMPTS = 5;
+
+useEffect(() => {
+  const autoSendEmailOtp = async () => {
+    if (step !== 'verifyEmail') return;
+
+    // Signup/login already sent email OTP from backend.
+    if (verificationSent) return;
+
+    // Only auto-send for existing-user manual email setup.
+    if (isNewUser) return;
+
+    try {
+      setLoading(true);
+      await sendEmailOtp({ email }).unwrap();
+      setVerificationSent(true);
+    } catch (err: any) {
+      setError(err?.data?.detail || 'Failed to send verification code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  autoSendEmailOtp();
+}, [step, verificationSent, email, sendEmailOtp, isNewUser]);
+
+useEffect(() => {
+  if (cooldown <= 0) return;
+
+  const timer = setInterval(() => {
+    setCooldown(prev => prev - 1);
+  }, 1000);
+
+  return () => clearInterval(timer);
+}, [cooldown]);
+
+const handleOtpChange = (value: string, index: number) => {
+  if (!/^\d?$/.test(value)) return;
+
+  const next = [...otp];
+  next[index] = value;
+  setOtp(next);
+
+  if (value && index < OTP_LENGTH - 1) {
+    const nextInput = document.getElementById(`otp-${index + 1}`);
+    nextInput?.focus();
+  }
+};
+
+const handleOtpKeyDown = (
+  e: React.KeyboardEvent<HTMLInputElement>,
+  index: number,
+) => {
+  if (e.key === 'Backspace' && !otp[index] && index > 0) {
+    const prevInput = document.getElementById(`otp-${index - 1}`);
+    prevInput?.focus();
+  }
+};
+
+const handleOtpPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+  const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+
+  if (!pasted) return;
+
+  e.preventDefault();
+
+  const next = Array(OTP_LENGTH).fill('');
+  pasted.split('').forEach((digit, i) => {
+    next[i] = digit;
+  });
+
+  setOtp(next);
+
+  const lastIndex = Math.min(pasted.length - 1, OTP_LENGTH - 1);
+  const lastInput = document.getElementById(`otp-${lastIndex}`);
+  lastInput?.focus();
+};
+  // Inside LoginPage component
+ const handleForgotPasswordClick = async () => {
+   setError('');
+
+   if (email && isValidEmail(email)) {
+     setLoading(true);
+
+     try {
+       await requestPasswordReset({ email }).unwrap();
+       setResetEmail(email);
+       alert('Reset code sent. Check your email.');
+       setStep('reset_password');
+     } catch (err: any) {
+       setError(err?.data?.detail || 'Failed to send reset code');
+     } finally {
+       setLoading(false);
+     }
+   } else {
+     setStep('forgot_password');
+   }
+ };
+
  const handleRequestReset = async () => {
    setError('');
    setLoading(true);
 
    try {
      await requestPasswordReset({ email: resetEmail }).unwrap();
-
+     setResetEmailSent(true);
      alert('Reset code sent. Check your email.');
-
      setStep('reset_password');
    } catch (err: any) {
      setError(err?.data?.detail || 'Failed to send reset code');
@@ -343,7 +395,6 @@ const handleResetPassword = async () => {
     }).unwrap();
 
     alert('Password reset successfully!');
-
     setStep('credentials');
   } catch (err: any) {
     setError(err?.data?.detail || 'Reset failed');
@@ -351,6 +402,7 @@ const handleResetPassword = async () => {
     setLoading(false);
   }
 };
+
   // ------------------------------
   // Password Strength
   // ------------------------------
@@ -409,192 +461,383 @@ const handleResetPassword = async () => {
   // HANDLERS
   // -----------------------------------------------------------
 
-  // STEP 1 — Credentials
-  const handleCredentialsSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      if (!isValidEmail(email)) throw new Error('Enter valid email');
-      if (password.length < 8)
-        throw new Error('Password must be at least 8 chars');
+const handleCredentialsSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError('');
 
-      if (isNewUser) {
-        if (password !== confirmPassword)
-          throw new Error('Passwords do not match');
-        if (passwordStrength.score < 4)
-          throw new Error(
-            'Use a stronger password (at least 4 of 5 strength metrics)',
-          );
-
-        await signup({ email, password }).unwrap();
-        setStep('mfa_method_selection');
-      } else {
-        const res = await login({ email, password }).unwrap();
-
-        if (!res.mfa_enabled) {
-          // new user, force setup
-          setStep('mfa_method_selection');
-          return;
-        }
-
-        // 🔐 MFA routing (source of truth = backend)
-        const primaryMfa = res.primary_mfa;
-        const mfaMethods = res.mfa_methods || {};
-
-        if (!primaryMfa) {
-          // No MFA configured → force setup
-          setStep('mfa_method_selection');
-          return;
-        }
-
-        if (primaryMfa === 'authenticator') {
-          setHasLinkedAuthenticator(!!mfaMethods.authenticator);
-          setStep('verifyMfa');
-          return;
-        }
-
-        if (primaryMfa === 'email') {
-          setVerificationSent(false);
-          setStep('verifyEmail');
-          return;
-        }
-
-        // fallback safety
-        setStep('mfa_method_selection');
-      }
-    } catch (err: any) {
-      setError(err?.data?.detail || err.message || 'Authentication failed');
-    } finally {
-      setLoading(false);
+  try {
+    if (!isValidEmail(email)) throw new Error('Enter a valid email');
+    if (password.length < 8) {
+      throw new Error('Password must be at least 8 characters');
     }
-  };
 
-  // STEP 2 — Select MFA Method
-  const handleMFAMethodSelection = async () => {
-    setError('');
-    try {
-      if (!selectedMFAMethod) throw new Error('Select a verification method');
+    if (isNewUser) {
+      if (password !== confirmPassword) {
+        throw new Error('Passwords do not match');
+      }
 
+      if (passwordStrength.score < 4) {
+        throw new Error('Use a stronger password');
+      }
+
+      setStep('mfa_method_selection');
+      return;
+    }
+
+    setLoading(true);
+
+    const res = await login({ email, password }).unwrap();
+
+    if (res.mfa_required && res.method === 'sms') {
+      setSmsSent(true);
+      setOtp(Array(OTP_LENGTH).fill(''));
+      setAttempts(0);
+      setStep('verifySms');
+      return;
+    }
+
+    if (res.mfa_required && res.method === 'email') {
+      setVerificationSent(false);
+      setStep('verifyEmail');
+      return;
+    }
+
+    if (res.mfa_required && res.method === 'authenticator') {
+      setHasLinkedAuthenticator(true);
+      setStep('verifyMfa');
+      return;
+    }
+
+    Cookies.set('auth_token', res.access_token, {
+      secure: true,
+      sameSite: 'strict',
+      path: '/',
+    });
+
+    router.push('/dashboard');
+  } catch (err: any) {
+    setError(err?.data?.detail || err.message || 'Authentication failed');
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleMFAMethodSelection = async () => {
+  setError('');
+  setLoading(true);
+
+  try {
+    if (!selectedMFAMethod) {
+      throw new Error('Select a verification method');
+    }
+
+    if (isNewUser) {
+      if (selectedMFAMethod === 'sms' && !phoneNumber.trim()) {
+        throw new Error(
+          'Phone number is required for SMS MFA. Use format like +8801XXXXXXXXX',
+        );
+      }
+
+      const signupPayload: {
+        email: string;
+        password: string;
+        mfa_method: MFAMethod;
+        phone_number?: string;
+      } = {
+        email,
+        password,
+        mfa_method: selectedMFAMethod,
+      };
+
+      if (selectedMFAMethod === 'sms') {
+        signupPayload.phone_number = phoneNumber.trim();
+      }
+
+      const signupRes = await signup(signupPayload).unwrap();
+
+      // ✅ NEW USER → AUTHENTICATOR
       if (selectedMFAMethod === 'authenticator') {
-        const qr = await generateMfa({ email }).unwrap();
-        setQrCodeUrl(qr.qrCodeUrl);
-        setMfaSecret(qr.secret);
+        setQrCodeUrl(signupRes.qrCodeUrl || '');
+        setMfaSecret(signupRes.secret || '');
+        setHasLinkedAuthenticator(false);
+        setMfaCode('');
         setStep('setupMfa');
-      } else if (selectedMFAMethod === 'email') {
-        setVerificationSent(false);
+        return;
+      }
+
+      // ✅ NEW USER → EMAIL
+      if (selectedMFAMethod === 'email') {
+        setVerificationSent(true); // backend already sent it during signup
+        setEmailCode('');
         setStep('verifyEmail');
+        return;
       }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to continue MFA setup');
-    }
-  };
 
-  // STEP 3a — Authenticator Verify / Link
-  const handleVerifyMfa = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      if (!verifyTOTPCode(mfaCode)) throw new Error('Enter valid 6-digit code');
-
-      let res;
-      if (hasLinkedAuthenticator)
-        res = await verifyTotp({ email, code: mfaCode }).unwrap();
-      else
-        res = await linkAuthenticator({
-          email,
-          code: mfaCode,
-          secret: mfaSecret,
-        }).unwrap();
-
-      Cookies.set('auth_token', res.access_token, {
-        secure: true,
-        sameSite: 'strict',
-        path: '/',
-      });
-      if (isNewUser) {
-        setStep('plan_selection');
-      } else {
-        router.push('/dashboard');
+      // ✅ NEW USER → SMS
+      if (selectedMFAMethod === 'sms') {
+        setSmsSent(true); // backend already sent it during signup
+        setOtp(Array(OTP_LENGTH).fill(''));
+        setAttempts(0);
+        setCooldown(30);
+        setStep('verifySms');
+        return;
       }
-    } catch (err: any) {
-      setError(err?.data?.detail || err.message || 'Invalid verification code');
-    } finally {
-      setLoading(false);
     }
-  };
 
-  // STEP 3b — Email Verify
-  const handleSendEmailCode = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      await sendEmailOtp({ email }).unwrap();
-      setVerificationSent(true);
-    } catch (err: any) {
-      setError(err?.data?.detail || 'Failed to send email code');
-    } finally {
-      setLoading(false);
+    // =========================
+    // EXISTING USER MFA SETUP
+    // =========================
+    if (selectedMFAMethod === 'authenticator') {
+      const qr = await generateMfa({ email }).unwrap();
+      setQrCodeUrl(qr.qrCodeUrl);
+      setMfaSecret(qr.secret);
+      setHasLinkedAuthenticator(false);
+      setMfaCode('');
+      setStep('setupMfa');
+      return;
     }
-  };
 
-  const handleVerifyEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      const code = parseInt(emailCode);
-      if (isNaN(code)) throw new Error('Enter valid code');
+    if (selectedMFAMethod === 'email') {
+      setVerificationSent(false);
+      setEmailCode('');
+      setStep('verifyEmail');
+      return;
+    }
 
-      const res = await verifyEmailCode({ email, code }).unwrap();
-      Cookies.set('auth_token', res.access_token, {
-        secure: true,
-        sameSite: 'strict',
-        path: '/',
-      });
-      if (isNewUser) {
-        setStep('plan_selection');
-      } else {
-        router.push('/dashboard');
+    if (selectedMFAMethod === 'sms') {
+      throw new Error('SMS setup is currently available during signup only');
+    }
+  } catch (err: any) {
+    const detail = err?.data?.detail || err?.message || 'Failed to continue';
+
+    // ✅ PENDING SIGNUP ALREADY EXISTS → CONTINUE INSTEAD OF FAILING
+    if (
+      isNewUser &&
+      typeof detail === 'string' &&
+      detail.includes('Signup already started')
+    ) {
+    if (selectedMFAMethod === 'authenticator') {
+      try {
+        const resumeRes = await resumePendingSignup({ email }).unwrap();
+
+        setQrCodeUrl(resumeRes.qrCodeUrl || '');
+        setMfaSecret(resumeRes.secret || '');
+        setHasLinkedAuthenticator(false);
+        setMfaCode('');
+        setError('');
+        setStep('setupMfa');
+        return;
+      } catch (resumeErr: any) {
+        setError(
+          resumeErr?.data?.detail ||
+            'Signup already started, but failed to restore QR code.',
+        );
+        return;
       }
-    } catch (err: any) {
-      setError(err?.data?.detail || err.message || 'Verification failed');
-    } finally {
-      setLoading(false);
     }
-  };
 
+      if (selectedMFAMethod === 'email') {
+        setVerificationSent(true);
+        setEmailCode('');
+        setStep('verifyEmail');
+        return;
+      }
+
+      if (selectedMFAMethod === 'sms') {
+        setSmsSent(true);
+        setOtp(Array(OTP_LENGTH).fill(''));
+        setAttempts(0);
+        setStep('verifySms');
+        return;
+      }
+    }
+
+    setError(detail);
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleVerifyMfa = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError('');
+  setLoading(true);
+
+  try {
+    if (!verifyTOTPCode(mfaCode)) {
+      throw new Error('Enter valid 6-digit code');
+    }
+
+    let res;
+
+    if (hasLinkedAuthenticator) {
+      res = await verifyTotp({ email, code: mfaCode }).unwrap();
+    } else {
+      res = await linkAuthenticator({
+        email,
+        code: mfaCode,
+        secret: mfaSecret,
+      }).unwrap();
+    }
+
+    Cookies.set('auth_token', res.access_token, {
+      secure: true,
+      sameSite: 'strict',
+      path: '/',
+    });
+
+    if (isNewUser) {
+      setStep('plan_selection');
+    } else {
+      router.push('/dashboard');
+    }
+  } catch (err: any) {
+    setError(err?.data?.detail || err.message || 'Invalid verification code');
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleVerifyEmail = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError('');
+  setLoading(true);
+
+  try {
+    const code = parseInt(emailCode);
+    if (isNaN(code)) throw new Error('Enter valid code');
+
+    const res = await verifyEmailCode({ email, code }).unwrap();
+
+    Cookies.set('auth_token', res.access_token, {
+      secure: true,
+      sameSite: 'strict',
+      path: '/',
+    });
+
+    if (isNewUser) {
+      setStep('plan_selection');
+    } else {
+      router.push('/dashboard');
+    }
+  } catch (err: any) {
+    setError(err?.data?.detail || err.message || 'Verification failed');
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleVerifySms = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError('');
+
+  const smsCode = otp.join('');
+
+  if (smsCode.length !== 6) {
+    setError('Enter the 6-digit code');
+    return;
+  }
+
+  if (attempts >= MAX_ATTEMPTS) {
+    setError('Too many failed attempts. Try again later.');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+  const res = await verifySmsOtp({
+    email,
+    code: smsCode,
+  }).unwrap();
+
+    setAttempts(0);
+
+    Cookies.set('auth_token', res.access_token, {
+      secure: true,
+      sameSite: 'strict',
+      path: '/',
+    });
+
+    if (isNewUser) {
+      setStep('plan_selection');
+    } else {
+      router.push('/dashboard');
+    }
+  } catch (err: any) {
+    const nextAttempts = attempts + 1;
+    setAttempts(nextAttempts);
+
+    setError(
+      nextAttempts >= MAX_ATTEMPTS
+        ? 'Too many failed attempts. Try again later.'
+        : err?.data?.detail || 'Invalid SMS code',
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleResendSms = async () => {
+  if (cooldown > 0) return;
+
+  try {
+    setError('');
+
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/resend-sms-mfa`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      },
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.detail || 'Failed to resend OTP');
+    }
+
+    setCooldown(30);
+    setOtp(Array(OTP_LENGTH).fill(''));
+  } catch (err: any) {
+    setError(err?.message || 'Failed to resend OTP');
+  }
+};
   // Animation
   const stepVariants = {
     initial: { opacity: 0, y: 20 },
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: -20 },
   };
-  const handleBack = () => {
-    switch (step) {
-      case 'payment':
-        setStep('plan_selection');
-        break;
+const handleBack = () => {
+  switch (step) {
+    case 'payment':
+      setStep('plan_selection');
+      break;
 
-      case 'plan_selection':
-        setStep('mfa_method_selection');
-        break;
+    case 'plan_selection':
+      setStep('mfa_method_selection');
+      break;
 
-      case 'verifyMfa':
-      case 'setupMfa':
-      case 'verifyEmail':
-        setStep('mfa_method_selection');
-        break;
+    case 'verifyMfa':
+    case 'setupMfa':
+    case 'verifyEmail':
+    case 'verifySms':
+      setError('');
+      setStep('mfa_method_selection');
+      break;
 
-      case 'mfa_method_selection':
-        setStep('credentials');
-        break;
+    case 'mfa_method_selection':
+      setError('');
+      setStep('credentials');
+      break;
 
-      default:
-        setStep('credentials');
-    }
-  };
+    default:
+      setStep('credentials');
+  }
+};
 
   // -----------------------------------------------------------
   // RENDER
@@ -724,7 +967,7 @@ const handleResetPassword = async () => {
                         </Button>
                       </div>
                       {!isNewUser && (
-                        <Button 
+                        <Button
                           type="button"
                           variant="link"
                           className="text-xs cursor-pointer flex items-center gap-2"
@@ -871,26 +1114,14 @@ const handleResetPassword = async () => {
                     </Button>
                   </form>
                 )}
-
-                {/* STEP 2: Choose MFA Method */}
                 {step === 'mfa_method_selection' && (
                   <div className="space-y-4">
-                    {/* <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setStep('credentials')}
-                      className="flex items-center gap-1 mb-1"
-                    >
-                      <ArrowLeft className="h-4 w-4" /> Back
-                    </Button> */}
-
                     <p className="text-sm text-muted-foreground">
                       Choose how you'd like to receive verification codes for
                       two-factor authentication:
                     </p>
 
                     <div className="space-y-3">
-                      {/* Authenticator */}
                       <label className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
                         <input
                           type="radio"
@@ -918,7 +1149,6 @@ const handleResetPassword = async () => {
                         </div>
                       </label>
 
-                      {/* Email */}
                       <label className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
                         <input
                           type="radio"
@@ -945,13 +1175,16 @@ const handleResetPassword = async () => {
                           </p>
                         </div>
                       </label>
-                      {/* SMS disabled */}
-                      <label className="flex items-start gap-3 p-4 border rounded-lg opacity-50 cursor-not-allowed bg-muted/30">
+
+                      <label className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
                         <input
                           type="radio"
                           name="mfaMethod"
                           value="sms"
-                          disabled
+                          checked={selectedMFAMethod === 'sms'}
+                          onChange={e =>
+                            setSelectedMFAMethod(e.target.value as MFAMethod)
+                          }
                           className="mt-1"
                         />
                         <div className="flex-1">
@@ -961,26 +1194,45 @@ const handleResetPassword = async () => {
                               SMS / Text Message
                             </span>
                             <Badge variant="outline" className="text-xs">
-                              Coming Soon
+                              Medium
                             </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            SMS option will be available soon.
+                            Receive verification codes via SMS.
                           </p>
                         </div>
                       </label>
                     </div>
+
+                    {selectedMFAMethod === 'sms' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="phoneNumber">Mobile Number</Label>
+                        <Input
+                          id="phoneNumber"
+                          type="tel"
+                          value={phoneNumber}
+                          onChange={e => setPhoneNumber(e.target.value)}
+                          placeholder="+8801XXXXXXXXX"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Use full international format with country code.
+                        </p>
+                      </div>
+                    )}
 
                     <Button
                       onClick={handleMFAMethodSelection}
                       className="w-full btn-primary"
                       disabled={loading}
                     >
-                      {loading ? 'Setting up…' : 'Continue'}
+                      {loading
+                        ? 'Setting up…'
+                        : isNewUser
+                          ? 'Create Account'
+                          : 'Continue'}
                     </Button>
                   </div>
                 )}
-
                 {/* STEP 3: Authenticator Setup/Verify */}
                 {(step === 'setupMfa' || step === 'verifyMfa') && (
                   <div className="space-y-4 text-center">
@@ -1143,27 +1395,69 @@ const handleResetPassword = async () => {
                     </Button>
                   </div>
                 )}
+                {/* STEP: SMS Verification */}
+                {step === 'verifySms' && (
+                  <div className="space-y-4 text-center">
+                    <Alert>
+                      <MessageSquare className="h-4 w-4" />
+                      <AlertDescription>
+                        Enter the 6-digit code sent to your registered phone.
+                      </AlertDescription>
+                    </Alert>
 
-                {/* {step === 'forgot_password' && (
-                  <div className="space-y-4">
-                    <Label>Email</Label>
+                    <form onSubmit={handleVerifySms} className="space-y-4">
+                      <div
+                        className="flex justify-center gap-2"
+                        onPaste={handleOtpPaste}
+                      >
+                        {otp.map((digit, index) => (
+                          <input
+                            key={index}
+                            id={`otp-${index}`}
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            maxLength={1}
+                            value={digit}
+                            onChange={e =>
+                              handleOtpChange(e.target.value, index)
+                            }
+                            onKeyDown={e => handleOtpKeyDown(e, index)}
+                            className="w-10 h-12 text-center text-lg border rounded-md"
+                          />
+                        ))}
+                      </div>
 
-                    <Input
-                      type="email"
-                      value={email} // use the login email directly
-                      disabled // optional: prevent editing
-                      placeholder="Your account email"
-                    />
+                      <Button
+                        type="submit"
+                        className="w-full btn-primary"
+                        disabled={
+                          loading ||
+                          otp.join('').length !== 6 ||
+                          attempts >= MAX_ATTEMPTS
+                        }
+                      >
+                        {loading ? 'Verifying…' : 'Verify & Continue'}
+                      </Button>
+                    </form>
 
                     <Button
-                      className="w-full btn-primary"
-                      onClick={handleRequestReset}
-                      disabled={loading}
+                      variant="link"
+                      disabled={cooldown > 0}
+                      onClick={handleResendSms}
                     >
-                      {loading ? 'Sending...' : 'Send Reset Code'}
+                      {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend Code'}
                     </Button>
+
+                    {attempts > 0 && attempts < MAX_ATTEMPTS && (
+                      <p className="text-xs text-muted-foreground">
+                        Failed attempts: {attempts} / {MAX_ATTEMPTS}
+                      </p>
+                    )}
                   </div>
-                )} */}
+                )}
+
+                
                 {step === 'forgot_password' && (
                   <div className="space-y-4">
                     <Input
@@ -1275,7 +1569,8 @@ const handleResetPassword = async () => {
                       onClick={handleResetPassword}
                       disabled={
                         loading ||
-                        !resetOtp || !newPassword ||
+                        !resetOtp ||
+                        !newPassword ||
                         newPassword !== confirmPassword
                       }
                     >

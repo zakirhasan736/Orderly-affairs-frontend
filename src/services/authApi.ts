@@ -65,7 +65,21 @@ export interface AccessActionResponse {
   emailed?: number;
   owner_id?: string;
 }
+// SMS OTP
+export interface SendSmsOtpRequest {
+  email: string;
+  phone_number?: string; // optional → only required if not saved
+}
 
+export interface VerifySmsOtpRequest {
+  email: string;
+  code: string;
+}
+
+export interface SmsOtpResponse {
+  message: string;
+  phone_number?: string;
+}
 const NOK_SECURED = new Set(['getMyNextKinAccess', 'nextkinLogout']);
 const PUBLIC = new Set([
   'signup',
@@ -76,6 +90,9 @@ const PUBLIC = new Set([
   'generateMfa',
   'linkAuthenticator',
   'verifyTotp',
+  //
+  'sendSmsOtp',
+  'verifySmsOtp',
 ]);
 
 export const authApi = createApi({
@@ -99,6 +116,9 @@ export const authApi = createApi({
     // Owner auth
     signup: builder.mutation({
       query: b => ({ url: '/signup', method: 'POST', body: b }),
+    }),
+    resumePendingSignup: builder.mutation({
+      query: b => ({ url: '/resume-pending-signup', method: 'POST', body: b }),
     }),
     login: builder.mutation({
       query: b => ({ url: '/login', method: 'POST', body: b }),
@@ -124,6 +144,27 @@ export const authApi = createApi({
     >({
       query: body => ({
         url: '/reset-password',
+        method: 'POST',
+        body,
+      }),
+    }),
+    // ==========================
+    // 📱 SMS OTP
+    // ==========================
+    sendSmsOtp: builder.mutation<SmsOtpResponse, SendSmsOtpRequest>({
+      query: body => ({
+        url: '/send-sms-otp',
+        method: 'POST',
+        body,
+      }),
+    }),
+
+    verifySmsOtp: builder.mutation<
+      { access_token: string; message: string },
+      VerifySmsOtpRequest
+    >({
+      query: body => ({
+        url: '/verify-sms-otp',
         method: 'POST',
         body,
       }),
@@ -247,4 +288,7 @@ export const {
   useGetMyNextKinAccessQuery,
   useRequestPasswordResetMutation,
   useResetPasswordMutation,
+  useSendSmsOtpMutation,
+  useVerifySmsOtpMutation,
+  useResumePendingSignupMutation,
 } = authApi;

@@ -1,122 +1,315 @@
-import React, { useState, useRef, useEffect } from 'react';
+'use client';
+
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@common/ui/button';
 import { Card, CardContent } from '@common/ui/card';
-import { Video, Square, Play, Pause, Download } from 'lucide-react';
+import {
+  Video,
+  Square,
+  Play,
+  Pause,
+  Download,
+  RotateCcw,
+  X,
+  AlertTriangle,
+} from 'lucide-react';
 
 interface VideoRecorderProps {
   onVideoRecorded: (blob: Blob) => void;
   onClose: () => void;
 }
 
-export function VideoRecorder({ onVideoRecorded, onClose }: VideoRecorderProps) {
-  const [isRecording, setIsRecording] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
+type RecorderStatus =
+  | 'loading'
+  | 'idle'
+  | 'recording'
+  | 'paused'
+  | 'stopped'
+  | 'error';
+
+function getSupportedVideoMimeType() {
+  if (typeof MediaRecorder === 'undefined') return '';
+
+  const types = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+    'video/mp4',
+  ];
+
+  return types.find(type => MediaRecorder.isTypeSupported(type)) || '';
+}
+
+function formatTime(ms: number) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+
+  return `${mins.toString().padStart(2, '0')}:${secs
+    .toString()
+    .padStart(2, '0')}`;
+}
+
+function formatBytes(bytes: number) {
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+export function VideoRecorder({
+  onVideoRecorded,
+  onClose,
+}: VideoRecorderProps) {
+  const [status, setStatus] = useState<RecorderStatus>('loading');
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [recordingTime, setRecordingTime] = useState(0);
-  
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [error, setError] = useState('');
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+
+  const timerRef = useRef<number | null>(null);
+  const startedAtRef = useRef<number | null>(null);
+  const elapsedBeforePauseRef = useRef(0);
+
+  const clearTimer = () => {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const startTimer = () => {
+    clearTimer();
+
+    startedAtRef.current = Date.now();
+
+    const tick = () => {
+      const startedAt = startedAtRef.current;
+      const running = startedAt ? Date.now() - startedAt : 0;
+      setElapsedMs(elapsedBeforePauseRef.current + running);
+    };
+
+    tick();
+    timerRef.current = window.setInterval(tick, 250);
+  };
+
+  const pauseTimer = () => {
+    if (startedAtRef.current) {
+      elapsedBeforePauseRef.current += Date.now() - startedAtRef.current;
+    }
+
+    startedAtRef.current = null;
+    clearTimer();
+    setElapsedMs(elapsedBeforePauseRef.current);
+  };
+
+  const resetTimer = () => {
+    clearTimer();
+    startedAtRef.current = null;
+    elapsedBeforePauseRef.current = 0;
+    setElapsedMs(0);
+  };
+
+  const stopStream = () => {
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    streamRef.current = null;
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  const revokePreviewUrl = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+  };
+
+  const startCamera = async () => {
+    try {
+      setError('');
+      setStatus('loading');
+
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: 'user',
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      streamRef.current = mediaStream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+        videoRef.current.muted = true;
+        await videoRef.current.play().catch(() => {});
+      }
+
+      setStatus('idle');
+    } catch (error: any) {
+      console.error(error);
+
+      if (error?.name === 'NotAllowedError') {
+        setError('Camera or microphone permission was denied.');
+      } else if (error?.name === 'NotFoundError') {
+        setError('Camera or microphone was not found.');
+      } else {
+        setError('Could not start camera.');
+      }
+
+      setStatus('error');
+    }
+  };
 
   useEffect(() => {
     startCamera();
+
     return () => {
-      stopCamera();
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
+      clearTimer();
+      stopStream();
+
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
       }
     };
   }, []);
 
-  const startCamera = async () => {
+  const startRecording = () => {
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: true, 
-        audio: true 
-      });
-      setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-      }
-    } catch (error) {
-      console.error('Error accessing camera:', error);
-      // Handle permission errors gracefully
-      if (error instanceof Error && error.name === 'NotAllowedError') {
-        // Permission was denied, but don't show error - user should use file upload instead
+      const mediaStream = streamRef.current;
+
+      if (!mediaStream) {
+        setError('Camera is not ready yet.');
         return;
       }
-    }
-  };
 
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
-    }
-  };
-
-  const startRecording = () => {
-    if (!stream) return;
-
-    chunksRef.current = [];
-    const recorder = new MediaRecorder(stream);
-    setMediaRecorder(recorder);
-
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        chunksRef.current.push(event.data);
+      if (typeof MediaRecorder === 'undefined') {
+        setError('Media recording is not supported in this browser.');
+        setStatus('error');
+        return;
       }
-    };
 
-    recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-      setRecordedBlob(blob);
+      setError('');
+      setRecordedBlob(null);
+      revokePreviewUrl();
+      setPreviewUrl(null);
       chunksRef.current = [];
-    };
+      resetTimer();
 
-    recorder.start();
-    setIsRecording(true);
-    setRecordingTime(0);
-    
-    timerRef.current = setInterval(() => {
-      setRecordingTime(prev => prev + 1);
-    }, 1000);
-  };
+      const mimeType = getSupportedVideoMimeType();
 
-  const stopRecording = () => {
-    if (mediaRecorder && isRecording) {
-      mediaRecorder.stop();
-      setIsRecording(false);
-      setIsPaused(false);
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      const recorder = new MediaRecorder(
+        mediaStream,
+        mimeType ? { mimeType } : undefined,
+      );
+
+      recorderRef.current = recorder;
+
+      recorder.ondataavailable = event => {
+        if (event.data && event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onerror = () => {
+        pauseTimer();
+        setError('Recording failed. Please try again.');
+        setStatus('error');
+      };
+
+      recorder.onstop = () => {
+        pauseTimer();
+
+        const finalMimeType = recorder.mimeType || mimeType || 'video/webm';
+
+        const blob = new Blob(chunksRef.current, {
+          type: finalMimeType,
+        });
+
+        chunksRef.current = [];
+
+        if (!blob.size) {
+          setError('Recording is empty. Please try again.');
+          setStatus('error');
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+
+        setRecordedBlob(blob);
+        setPreviewUrl(url);
+        setStatus('stopped');
+      };
+
+      recorder.start(1000);
+
+      // Important: start timer immediately on the first recording.
+      startTimer();
+      setStatus('recording');
+    } catch (error) {
+      console.error(error);
+      pauseTimer();
+      setError('Could not start video recording.');
+      setStatus('error');
     }
   };
 
   const pauseRecording = () => {
-    if (mediaRecorder && isRecording) {
-      if (isPaused) {
-        mediaRecorder.resume();
-        timerRef.current = setInterval(() => {
-          setRecordingTime(prev => prev + 1);
-        }, 1000);
-      } else {
-        mediaRecorder.pause();
-        if (timerRef.current) {
-          clearInterval(timerRef.current);
-        }
-      }
-      setIsPaused(!isPaused);
+    const recorder = recorderRef.current;
+
+    if (!recorder || recorder.state !== 'recording') return;
+
+    recorder.pause();
+    pauseTimer();
+    setStatus('paused');
+  };
+
+  const resumeRecording = () => {
+    const recorder = recorderRef.current;
+
+    if (!recorder || recorder.state !== 'paused') return;
+
+    recorder.resume();
+    startTimer();
+    setStatus('recording');
+  };
+
+  const stopRecording = () => {
+    const recorder = recorderRef.current;
+
+    if (!recorder) return;
+
+    if (recorder.state === 'recording') {
+      pauseTimer();
+    }
+
+    if (recorder.state === 'recording' || recorder.state === 'paused') {
+      recorder.stop();
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const resetRecording = async () => {
+    revokePreviewUrl();
+    setPreviewUrl(null);
+    setRecordedBlob(null);
+    chunksRef.current = [];
+    resetTimer();
+    setError('');
+
+    if (!streamRef.current) {
+      await startCamera();
+      return;
+    }
+
+    setStatus('idle');
   };
 
   const handleSaveRecording = () => {
@@ -126,74 +319,163 @@ export function VideoRecorder({ onVideoRecorded, onClose }: VideoRecorderProps) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl">
-        <CardContent className="p-6">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Video className="w-5 h-5" />
-                <h3 className="text-lg font-medium">Video Recorder</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <Card className="w-full max-w-3xl overflow-hidden rounded-3xl border border-border/70 shadow-2xl">
+        <CardContent className="space-y-6 p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-4 border-b pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 text-red-600">
+                <Video className="h-6 w-6" />
               </div>
-              <Button variant="ghost" onClick={onClose}>×</Button>
+
+              <div>
+                <h3 className="text-lg font-semibold">Video Recorder</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Record your video, preview it, then attach it.
+                </p>
+              </div>
             </div>
 
-            <div className="relative bg-black rounded-lg overflow-hidden">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="rounded-full"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+
+          <div className="relative overflow-hidden rounded-3xl bg-black">
+            {previewUrl ? (
+              <video
+                controls
+                src={previewUrl}
+                className="aspect-video w-full object-cover"
+              />
+            ) : (
               <video
                 ref={videoRef}
                 autoPlay
                 muted
-                className="w-full h-64 object-cover"
+                playsInline
+                className="aspect-video w-full object-cover"
               />
-              
-              {isRecording && (
-                <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600 text-white px-2 py-1 rounded text-sm">
-                  <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                  REC {formatTime(recordingTime)}
-                </div>
-              )}
-            </div>
+            )}
 
-            <div className="flex items-center justify-center gap-4">
-              {!isRecording && !recordedBlob && (
-                <Button onClick={startRecording} className="bg-red-600 hover:bg-red-700">
-                  <Video className="w-4 h-4 mr-2" />
-                  Start Recording
-                </Button>
-              )}
-
-              {isRecording && (
-                <>
-                  <Button onClick={pauseRecording} variant="outline">
-                    {isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-                    {isPaused ? 'Resume' : 'Pause'}
-                  </Button>
-                  <Button onClick={stopRecording} variant="destructive">
-                    <Square className="w-4 h-4 mr-2" />
-                    Stop Recording
-                  </Button>
-                </>
-              )}
-
-              {recordedBlob && (
-                <div className="flex gap-2">
-                  <Button onClick={() => setRecordedBlob(null)} variant="outline">
-                    Record Again
-                  </Button>
-                  <Button onClick={handleSaveRecording} className="bg-green-600 hover:bg-green-700">
-                    <Download className="w-4 h-4 mr-2" />
-                    Save Recording
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {recordedBlob && (
-              <div className="mt-4">
-                <p className="text-sm text-muted-foreground text-center">
-                  Recording saved! You can record again or save this recording.
-                </p>
+            {(status === 'recording' || status === 'paused') && (
+              <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-red-600 px-3 py-1.5 text-sm font-medium text-white shadow-lg">
+                <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                {status === 'paused' ? 'PAUSED' : 'REC'} {formatTime(elapsedMs)}
               </div>
+            )}
+
+            {status === 'loading' && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white">
+                Starting camera...
+              </div>
+            )}
+          </div>
+
+          {recordedBlob && (
+            <div className="rounded-2xl border bg-background p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">Preview recording</p>
+                <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                  {formatBytes(recordedBlob.size)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="flex gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <p>{error}</p>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            {(status === 'idle' || status === 'error') && !recordedBlob && (
+              <Button
+                type="button"
+                onClick={startRecording}
+                className="rounded-2xl bg-red-600 text-white hover:bg-red-700"
+              >
+                <Video className="mr-2 h-4 w-4" />
+                Start Recording
+              </Button>
+            )}
+
+            {status === 'recording' && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={pauseRecording}
+                  className="rounded-2xl"
+                >
+                  <Pause className="mr-2 h-4 w-4" />
+                  Pause
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={stopRecording}
+                  className="rounded-2xl"
+                >
+                  <Square className="mr-2 h-4 w-4" />
+                  Stop Recording
+                </Button>
+              </>
+            )}
+
+            {status === 'paused' && (
+              <>
+                <Button
+                  type="button"
+                  onClick={resumeRecording}
+                  className="rounded-2xl"
+                >
+                  <Play className="mr-2 h-4 w-4" />
+                  Resume
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={stopRecording}
+                  className="rounded-2xl"
+                >
+                  <Square className="mr-2 h-4 w-4" />
+                  Stop Recording
+                </Button>
+              </>
+            )}
+
+            {status === 'stopped' && recordedBlob && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetRecording}
+                  className="rounded-2xl"
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Record Again
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={handleSaveRecording}
+                  className="rounded-2xl bg-green-600 text-white hover:bg-green-700"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Save Recording
+                </Button>
+              </>
             )}
           </div>
         </CardContent>

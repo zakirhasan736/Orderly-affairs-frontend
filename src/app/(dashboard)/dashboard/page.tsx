@@ -10,7 +10,6 @@ import { GuidedTour } from '@/onboarding/components/GuidedTour';
 import { shouldTriggerContextualTour } from '@/onboarding/utils/contextualTrigger';
 import { useOnboarding } from '@/onboarding/components/OnboardingProvider';
 
-
 import { deleteUpload } from '@/libs/api/upload';
 import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
 
@@ -20,7 +19,19 @@ import { Button } from '@/components/common/ui/button';
 import { Card, CardContent } from '@/components/common/ui/card';
 import { Badge } from '@/components/common/ui/badge';
 import { Progress } from '@/components/common/ui/progress';
-import { CheckCircle, Circle, Save, FileText, Menu, User } from 'lucide-react';
+import {
+  CheckCircle,
+  Circle,
+  Save,
+  FileText,
+  User,
+  Home,
+  LayoutList,
+  Clock3,
+  MoreHorizontal,
+  X,
+  ChevronRight,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import Image from 'next/image';
 import { NextOfKinLoginPage } from '@/components/NextOfKinLoginPage';
@@ -90,9 +101,20 @@ import {
 } from '@/libs/mappers/section1Mapper';
 import { useGetNokLetterQuery } from '@/services/nokLetterApi';
 import { WelcomeModal } from '@/onboarding/components/WelcomeModal';
-import { useGetTourStatusQuery, useUpdateTourStatusMutation } from '@/services/onboardingApi';
+import {
+  useGetTourStatusQuery,
+  useUpdateTourStatusMutation,
+} from '@/services/onboardingApi';
 
-type AppMode = 'owner_login' | 'owner' | 'nok_login' | 'nok_pending_approval' | 'nok_dashboard' | 'nok_section_view' | 'test_access_management' | 'test_mfa';
+type AppMode =
+  | 'owner_login'
+  | 'owner'
+  | 'nok_login'
+  | 'nok_pending_approval'
+  | 'nok_dashboard'
+  | 'nok_section_view'
+  | 'test_access_management'
+  | 'test_mfa';
 // Suppress Iterable SDK errors from browser extensions
 if (typeof window !== 'undefined') {
   const originalError = console.error;
@@ -118,70 +140,68 @@ export default function DashboardPage() {
   const [nokActiveSection, setNokActiveSection] = useState<string | null>(null);
   const [showOwnerLetter, setShowOwnerLetter] = useState(false);
   const [showMessagesDelivery, setShowMessagesDelivery] = useState(false);
-const [showWelcome, setShowWelcome] = useState(false);
-const [tourStarted, setTourStarted] = useState(false);
-const derivedRole = useMemo(() => {
-  if (appMode === 'owner') return 'owner';
-  if (appMode === 'nok_dashboard' || appMode === 'nok_section_view')
-    return 'nextkin';
-  return null;
-}, [appMode]);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [tourStarted, setTourStarted] = useState(false);
+  const derivedRole = useMemo(() => {
+    if (appMode === 'owner') return 'owner';
+    if (appMode === 'nok_dashboard' || appMode === 'nok_section_view')
+      return 'nextkin';
+    return null;
+  }, [appMode]);
 
-const { startTour, activeRole } = useOnboarding();
+  const { startTour, activeRole } = useOnboarding();
 
-const { data: status, isLoading: loading } = useGetTourStatusQuery();
-const [updateStatus] = useUpdateTourStatusMutation();
-
-
-
+  const { data: status, isLoading: loading } = useGetTourStatusQuery();
+  const [updateStatus] = useUpdateTourStatusMutation();
 
   // backed next kin handler
   const [nextkinLogin] = useNextkinLoginMutation();
 
-const { data: myNextKin, refetch: refetchNextKin } = useGetMyNextKinQuery(
-  undefined,
-  {
-    skip: appMode !== 'owner',
-  },
-);
-const firstNokId = myNextKin?.[0]?.id;
+  const { data: myNextKin, refetch: refetchNextKin } = useGetMyNextKinQuery(
+    undefined,
+    {
+      skip: appMode !== 'owner',
+    },
+  );
+  const firstNokId = myNextKin?.[0]?.id;
 
-const sectionSaveMap: Record<string, (token: string, data: any) => Promise<any>> = {
-  '1': async (token, data) =>
-    saveSection1(token, mapUIToSection1Payload(data)),
+  const sectionSaveMap: Record<
+    string,
+    (token: string, data: any) => Promise<any>
+  > = {
+    '1': async (token, data) =>
+      saveSection1(token, mapUIToSection1Payload(data)),
 
-  '5': saveSection5,
-  '6': async (token, data) => saveSection6(token, { '6A': data?.['6A'] }),
-  '7': async (token, data) => saveSection7(token, { '7A': data?.['7A'] }),
-  '8': async (token, data) => saveSection8(token, { '8A': data?.['8A'] }),
-  '9': async (token, data) => saveSection9(token, { '9A': data?.['9A'] }),
-  '10': async (token, data) => saveSection10(token, { '10A': data?.['10A'] }),
-  '11': async (token, data) => saveSection11(token, { '11A': data?.['11A'] }),
-  '12': async (token, data) =>
-    saveSection12(token, {
-      ...(data?.['12A'] && { '12A': data['12A'] }),
-      ...(data?.['12B'] && { '12B': data['12B'] }),
-    }),
-  '13': async (token, data) => saveSection13(token, { '13A': data?.['13A'] }),
-  '14': async (token, data) => saveSection14(token, { '14A': data?.['14A'] }),
-  '15': async (token, data) =>
-    saveSection15(token, {
-      ...(data?.['15A'] && { '15A': data['15A'] }),
-      ...(data?.['15B'] && { '15B': data['15B'] }),
-    }),
-  '16': async (token, data) =>
-    saveSection16(token, {
-      ...(data?.['16A'] && { '16A': data['16A'] }),
-      ...(data?.['16B'] && { '16B': data['16B'] }),
-    }),
-  '17': saveSection17,
-  '18': saveSection18,
-  '19': saveSection19,
-  '20': saveSection20,
-  '21': saveSection21,
-};
-
-
+    '5': saveSection5,
+    '6': async (token, data) => saveSection6(token, { '6A': data?.['6A'] }),
+    '7': async (token, data) => saveSection7(token, { '7A': data?.['7A'] }),
+    '8': async (token, data) => saveSection8(token, { '8A': data?.['8A'] }),
+    '9': async (token, data) => saveSection9(token, { '9A': data?.['9A'] }),
+    '10': async (token, data) => saveSection10(token, { '10A': data?.['10A'] }),
+    '11': async (token, data) => saveSection11(token, { '11A': data?.['11A'] }),
+    '12': async (token, data) =>
+      saveSection12(token, {
+        ...(data?.['12A'] && { '12A': data['12A'] }),
+        ...(data?.['12B'] && { '12B': data['12B'] }),
+      }),
+    '13': async (token, data) => saveSection13(token, { '13A': data?.['13A'] }),
+    '14': async (token, data) => saveSection14(token, { '14A': data?.['14A'] }),
+    '15': async (token, data) =>
+      saveSection15(token, {
+        ...(data?.['15A'] && { '15A': data['15A'] }),
+        ...(data?.['15B'] && { '15B': data['15B'] }),
+      }),
+    '16': async (token, data) =>
+      saveSection16(token, {
+        ...(data?.['16A'] && { '16A': data['16A'] }),
+        ...(data?.['16B'] && { '16B': data['16B'] }),
+      }),
+    '17': saveSection17,
+    '18': saveSection18,
+    '19': saveSection19,
+    '20': saveSection20,
+    '21': saveSection21,
+  };
 
   const [approveNextKinAccess] = useApproveNextKinAccessMutation();
   const [ownerLogout] = useOwnerLogoutMutation();
@@ -192,14 +212,15 @@ const sectionSaveMap: Record<string, (token: string, data: any) => Promise<any>>
   type DashboardFormData = Record<string, any>;
 
   const [formData, setFormData] = useState<DashboardFormData>({});
-const contextualStep = useMemo(() => {
-  if (appMode !== 'owner') return null;
-  return shouldTriggerContextualTour(formData, myNextKin || []);
-}, [formData, myNextKin, appMode]);
+  const contextualStep = useMemo(() => {
+    if (appMode !== 'owner') return null;
+    return shouldTriggerContextualTour(formData, myNextKin || []);
+  }, [formData, myNextKin, appMode]);
 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [disabledSections, setDisabledSections] = useState<
     Record<string, boolean>
   >({});
@@ -209,52 +230,52 @@ const contextualStep = useMemo(() => {
   const [collapsedSubsections, setCollapsedSubsections] = useState<
     Record<string, boolean>
   >({ '17E': true }); // Start with 17E collapsed
-const allSections = VAULT_NAVIGATION;
+  const allSections = VAULT_NAVIGATION;
   // Sections that include obituary content (marked with dove symbol)
   const obituarySections = useMemo(
     () => new Set(['7', '8', '9', '10', '16']),
-    []
+    [],
   );
   const obituarySubsections = useMemo(() => new Set(['20B']), []);
 
   const { data: dashboardNokLetter } = useGetNokLetterQuery(
     firstNokId ? { nokId: firstNokId } : undefined,
   );
-useEffect(() => {
-if (
-  ![
-    '1',
-    '5',
-    '6',
-    '7',
-    '8',
-    '9',
-    '10',
-    '11',
-    '12',
-    '13',
-    '14',
-    '15',
-    '16',
-    '17',
-    '18',
-    '19',
-    '20',
-    '21',
-  ].includes(activeSection)
-)
-  return;
+  useEffect(() => {
+    if (
+      ![
+        '1',
+        '5',
+        '6',
+        '7',
+        '8',
+        '9',
+        '10',
+        '11',
+        '12',
+        '13',
+        '14',
+        '15',
+        '16',
+        '17',
+        '18',
+        '19',
+        '20',
+        '21',
+      ].includes(activeSection)
+    )
+      return;
 
-  const token = Cookies.get('auth_token') || Cookies.get('nok_auth_token');
-  if (!token) return;
+    const token = Cookies.get('auth_token') || Cookies.get('nok_auth_token');
+    if (!token) return;
 
-  getSection1(token).then(res => {
-    setFormData(prev => ({
-      ...prev,
-      '1': mapSection1ResponseToUI(res),
-    }));
-  });
-  getSection5(token)
+    getSection1(token).then(res => {
+      setFormData(prev => ({
+        ...prev,
+        '1': mapSection1ResponseToUI(res),
+      }));
+    });
+    getSection5(token)
       .then(res => {
         if (res?.data) {
           setFormData(prev => ({
@@ -266,24 +287,24 @@ if (
       .catch(err => {
         console.error('Failed to load Section 5', err);
       });
-      getSection6(token).then(res => {
-        setFormData(prev => ({
-          ...prev,
-          '6': res.data,
-        }));
-      });
-      getSection7(token).then(res => {
-        setFormData(prev => ({
-         ...prev,
-          '7': res.data,
-        }));
-     });
-     getSection8(token).then(res => {
-        setFormData(prev => ({
-         ...prev,
-          '8': res.data,
-        }));
-     });
+    getSection6(token).then(res => {
+      setFormData(prev => ({
+        ...prev,
+        '6': res.data,
+      }));
+    });
+    getSection7(token).then(res => {
+      setFormData(prev => ({
+        ...prev,
+        '7': res.data,
+      }));
+    });
+    getSection8(token).then(res => {
+      setFormData(prev => ({
+        ...prev,
+        '8': res.data,
+      }));
+    });
     getSection9(token).then(res => {
       setFormData(prev => ({
         ...prev,
@@ -302,115 +323,91 @@ if (
         '11': res.data,
       }));
     });
-    getSection12(token)
+    getSection12(token).then(res => {
+      if (res?.data) {
+        setFormData(prev => ({
+          ...prev,
+          '12': res.data,
+        }));
+      }
+    });
+    getSection13(token).then(res => {
+      if (res?.data) {
+        setFormData(prev => ({
+          ...prev,
+          '13': res.data,
+        }));
+      }
+    });
+    getSection14(token).then(res => {
+      if (res?.data) {
+        setFormData(prev => ({
+          ...prev,
+          '14': res.data,
+        }));
+      }
+    });
+    getSection15(token).then(res => {
+      if (res?.data) {
+        setFormData(prev => ({
+          ...prev,
+          '15': res.data,
+        }));
+      }
+    });
+    getSection16(token).then(res => {
+      if (res?.data) {
+        setFormData(prev => ({
+          ...prev,
+          '16': res.data,
+        }));
+      }
+    });
+    getSection17(token).then(res => {
+      if (res?.data) {
+        setFormData(prev => ({
+          ...prev,
+          '17': res.data,
+        }));
+      }
+    });
+    getSection18(token).then(res => {
+      if (res?.data) {
+        setFormData(prev => ({
+          ...prev,
+          '18': res.data,
+        }));
+      }
+    });
+    getSection19(token).then(res => {
+      if (res?.data) {
+        setFormData(prev => ({
+          ...prev,
+          '19': res.data,
+        }));
+      }
+    });
+    getSection20(token).then(res => {
+      if (res?.data) {
+        setFormData(prev => ({
+          ...prev,
+          '20': res.data,
+        }));
+      }
+    });
+    getSection21(token)
       .then(res => {
         if (res?.data) {
           setFormData(prev => ({
             ...prev,
-            '12': res.data,
+            '21': res.data,
           }));
         }
       })
-      getSection13(token)
-        .then(res => {
-          if (res?.data) {
-            setFormData(prev => ({
-              ...prev,
-              '13': res.data,
-            }));
-          }
-        })
-        getSection14(token)
-          .then(res => {
-            if (res?.data) {
-              setFormData(prev => ({
-                ...prev,
-                '14': res.data,
-              }));
-            }
-          })
-          getSection15(token)
-            .then(res => {
-              if (res?.data) {
-                setFormData(prev => ({
-                  ...prev,
-                  '15': res.data,
-                }));
-              }
-           })
-          getSection16(token)
-            .then(res => {
-              if (res?.data) {
-                setFormData(prev => ({
-                  ...prev,
-                  '16': res.data,
-                }));
-              }
-            })
-            getSection17(token)
-              .then(res => {
-                if (res?.data) {
-                  setFormData(prev => ({
-                    ...prev,
-                    '17': res.data,
-                  }));
-                }
-              })
-              getSection18(token)
-                .then(res => {
-                  if (res?.data) {
-                    setFormData(prev => ({
-                      ...prev,
-                      '18': res.data,
-                    }));
-                  }
-                })
-                getSection19(token)
-                  .then(res => {
-                    if (res?.data) {
-                      setFormData(prev => ({
-                        ...prev,
-                        '19': res.data,
-                      }));
-                    }
-                  })
-                  getSection20(token)
-                    .then(res => {
-                      if (res?.data) {
-                        setFormData(prev => ({
-                          ...prev,
-                          '20': res.data,
-                        }));
-                      }
-                    })
-                   getSection21(
-                     token,
-                  )
-                    .then(
-                      res => {
-                        if (
-                          res?.data
-                        ) {
-                          setFormData(
-                            prev => ({
-                              ...prev,
-                              '21': res.data,
-                            }),
-                          );
-                        }
-                      },
-                    )
-                    .catch(
-                      err => {
-                        console.error(
-                          'Failed to load Section 12',
-                          err,
-                        );
-                      },
-                    );
-}, [activeSection]);
-
-
+      .catch(err => {
+        console.error('Failed to load Section 12', err);
+      });
+  }, [activeSection]);
 
   // Timer refs for cleanup
   const autoSaveRef = useRef<NodeJS.Timeout | null>(null);
@@ -450,72 +447,47 @@ if (
     appMode,
   ]);
 
-useEffect(() => {
-  if (!loading && status && !status.has_completed && !tourStarted) {
-    setShowWelcome(true);
-  }
-}, [loading, status, tourStarted]);
-
-
-
-
-  // Debounced auto-save with cleanup - only trigger on actual data changes
-  // useEffect(() => {
-  //   if (appMode !== 'owner') return; // Only auto-save for owner mode
-
-  //   if (autoSaveRef.current) {
-  //     clearTimeout(autoSaveRef.current);
-  //   }
-  //   autoSaveRef.current = setTimeout(autoSave, 2000);
-
-  //   return () => {
-  //     if (autoSaveRef.current) {
-  //       clearTimeout(autoSaveRef.current);
-  //     }
-  //   };
-  // }, [
-  //   formData,
-  //   disabledSections,
-  //   disabledSubsections,
-  //   collapsedSubsections,
-  //   appMode,
-  // ]);
-useEffect(() => {
-  if (appMode !== 'owner') return;
-  if (!activeSection || activeSection === 'dashboard') return;
-  if (!sectionSaveMap[activeSection]) return;
-
-  const token = Cookies.get('auth_token');
-  if (!token) return;
-
-  if (autoSaveRef.current) {
-    clearTimeout(autoSaveRef.current);
-  }
-
-  autoSaveRef.current = setTimeout(async () => {
-    try {
-      setAutoSaving(true);
-
-      const sectionData = formData[activeSection];
-      if (!sectionData) return;
-
-      await sectionSaveMap[activeSection](token, sectionData);
-
-      setLastSaved(new Date());
-    } catch (err) {
-      console.error('Auto-save failed:', err);
-    } finally {
-      setAutoSaving(false);
+  useEffect(() => {
+    if (!loading && status && !status.has_completed && !tourStarted) {
+      setShowWelcome(true);
     }
-  }, 2000);
+  }, [loading, status, tourStarted]);
 
-  return () => {
+  useEffect(() => {
+    if (appMode !== 'owner') return;
+    if (!activeSection || activeSection === 'dashboard') return;
+    if (!sectionSaveMap[activeSection]) return;
+
+    const token = Cookies.get('auth_token');
+    if (!token) return;
+
     if (autoSaveRef.current) {
       clearTimeout(autoSaveRef.current);
     }
-  };
-}, [formData[activeSection], activeSection]);
 
+    autoSaveRef.current = setTimeout(async () => {
+      try {
+        setAutoSaving(true);
+
+        const sectionData = formData[activeSection];
+        if (!sectionData) return;
+
+        await sectionSaveMap[activeSection](token, sectionData);
+
+        setLastSaved(new Date());
+      } catch (err) {
+        console.error('Auto-save failed:', err);
+      } finally {
+        setAutoSaving(false);
+      }
+    }, 2000);
+
+    return () => {
+      if (autoSaveRef.current) {
+        clearTimeout(autoSaveRef.current);
+      }
+    };
+  }, [formData[activeSection], activeSection]);
 
   // Cleanup all timers on unmount
   useEffect(() => {
@@ -569,13 +541,13 @@ useEffect(() => {
     if (appMode === 'owner') {
       const saved = localStorage.getItem('orderlyAffairsData');
       const savedDisabled = localStorage.getItem(
-        'orderlyAffairsDisabledSections'
+        'orderlyAffairsDisabledSections',
       );
       const savedDisabledSubsections = localStorage.getItem(
-        'orderlyAffairsDisabledSubsections'
+        'orderlyAffairsDisabledSubsections',
       );
       const savedCollapsedSubsections = localStorage.getItem(
-        'orderlyAffairsCollapsedSubsections'
+        'orderlyAffairsCollapsedSubsections',
       );
 
       if (saved) {
@@ -598,7 +570,7 @@ useEffect(() => {
       if (savedDisabledSubsections) {
         try {
           const parsedDisabledSubsections = JSON.parse(
-            savedDisabledSubsections
+            savedDisabledSubsections,
           );
           setDisabledSubsections(parsedDisabledSubsections);
         } catch (error) {
@@ -608,7 +580,7 @@ useEffect(() => {
       if (savedCollapsedSubsections) {
         try {
           const parsedCollapsedSubsections = JSON.parse(
-            savedCollapsedSubsections
+            savedCollapsedSubsections,
           );
           setCollapsedSubsections(parsedCollapsedSubsections);
         } catch (error) {
@@ -633,7 +605,7 @@ useEffect(() => {
         });
       }
     },
-    []
+    [],
   );
 
   // NOK LOGIN — store in nok_auth_token (do NOT touch auth_token)
@@ -656,7 +628,7 @@ useEffect(() => {
           const decoded = JSON.parse(atob(result.access_token.split('.')[1]));
           if (decoded?.role === 'nextkin') {
             setCurrentNOK({
-              email: decoded.sub, 
+              email: decoded.sub,
               owner_id: decoded.owner_id,
             });
             setAppMode('nok_dashboard');
@@ -671,29 +643,30 @@ useEffect(() => {
         }
       } catch (error: any) {
         toast.error(
-          error?.data?.message || 'Login failed. Please check your credentials.'
+          error?.data?.message ||
+            'Login failed. Please check your credentials.',
         );
       }
     },
-    [nextkinLogin, router]
+    [nextkinLogin, router],
   );
-const handleOwnerApproval = useCallback(async () => {
-  try {
-    if (!pendingNOK) return;
+  const handleOwnerApproval = useCallback(async () => {
+    try {
+      if (!pendingNOK) return;
 
-await approveNextKinAccess(pendingNOK.id).unwrap();
+      await approveNextKinAccess(pendingNOK.id).unwrap();
 
-    toast.success('Next of Kin access approved.');
+      toast.success('Next of Kin access approved.');
 
-    setShowOwnerNotification(false);
-    setPendingNOK(null);
+      setShowOwnerNotification(false);
+      setPendingNOK(null);
 
-    refetchNextKin(); // refresh owner NOK list
-  } catch (error) {
-    console.error('Approval failed:', error);
-    toast.error('Failed to approve access.');
-  }
-}, [pendingNOK, approveNextKinAccess, refetchNextKin]);
+      refetchNextKin(); // refresh owner NOK list
+    } catch (error) {
+      console.error('Approval failed:', error);
+      toast.error('Failed to approve access.');
+    }
+  }, [pendingNOK, approveNextKinAccess, refetchNextKin]);
 
   // NOK LOGOUT — clear ONLY nok_auth_token
   const handleNokLogout = useCallback(() => {
@@ -742,7 +715,7 @@ await approveNextKinAccess(pendingNOK.id).unwrap();
     try {
       ownerLogout({});
     } catch {}
-    Cookies.remove('auth_token', { path: '/' }); 
+    Cookies.remove('auth_token', { path: '/' });
     router.push('/');
   };
 
@@ -762,42 +735,41 @@ await approveNextKinAccess(pendingNOK.id).unwrap();
     setNokActiveSection(null);
     setAppMode('nok_dashboard');
   }, []);
-const [instructionRead, setInstructionRead] = useState(false);
-useEffect(() => {
-  const stored = localStorage.getItem('instruction_read');
-  if (stored === 'true') {
-    setInstructionRead(true);
-  }
-}, []);
+  const [instructionRead, setInstructionRead] = useState(false);
+  useEffect(() => {
+    const stored = localStorage.getItem('instruction_read');
+    if (stored === 'true') {
+      setInstructionRead(true);
+    }
+  }, []);
 
-useEffect(() => {
-  if (instructionRead) {
-    localStorage.setItem('instruction_read', 'true');
-  }
-}, [instructionRead]);
+  useEffect(() => {
+    if (instructionRead) {
+      localStorage.setItem('instruction_read', 'true');
+    }
+  }, [instructionRead]);
 
   // Simplified section completion status function
-const getSectionCompletionStatus = useCallback(
-  (sectionId: string) => {
-    if (disabledSections[sectionId]) return true;
+  const getSectionCompletionStatus = useCallback(
+    (sectionId: string) => {
+      if (disabledSections[sectionId]) return true;
 
-    // 🔥 SPECIAL CASE: INSTRUCTIONS
-    if (sectionId === '0') {
-      return instructionRead;
-    }
+      // 🔥 SPECIAL CASE: INSTRUCTIONS
+      if (sectionId === '0') {
+        return instructionRead;
+      }
 
-    if (sectionId === '2') {
-      return Array.isArray(myNextKin) && myNextKin.length > 0;
-    }
+      if (sectionId === '2') {
+        return Array.isArray(myNextKin) && myNextKin.length > 0;
+      }
 
-    const sectionData = formData[sectionId];
-    if (!sectionData) return false;
+      const sectionData = formData[sectionId];
+      if (!sectionData) return false;
 
-    return Object.keys(sectionData).length > 0;
-  },
-  [formData, disabledSections, myNextKin, instructionRead],
-);
-
+      return Object.keys(sectionData).length > 0;
+    },
+    [formData, disabledSections, myNextKin, instructionRead],
+  );
 
   // Simplified progress calculation to avoid performance issues
   const progress = useMemo(() => {
@@ -814,192 +786,191 @@ const getSectionCompletionStatus = useCallback(
     }
   }, [allSections.length, formData, disabledSections, myNextKin]);
 
-const currentSectionLabel = useMemo(() => {
-  if (activeSection === 'dashboard') {
-    return 'Dashboard';
-  }
-  if (activeSection === 'vault-settings') {
-    return 'Vault Settings';
-  }
-
-  const section = allSections.find(s => s.id === activeSection);
-  if (!section) return 'Dashboard';
-
-  if (activeSubsection && section.subsections) {
-    const sub = section.subsections.find(
-      (ss: any) => ss.id === activeSubsection,
-    );
-    if (sub) {
-      return `${sub.id}. ${sub.title}`;
+  const currentSectionLabel = useMemo(() => {
+    if (activeSection === 'dashboard') {
+      return 'Dashboard';
     }
-  }
+    if (activeSection === 'vault-settings') {
+      return 'Vault Settings';
+    }
 
-  return `${section.id}. ${section.title}`;
-}, [activeSection, activeSubsection, allSections]);
-useEffect(() => {
-  if (!contextualStep) return;
+    const section = allSections.find(s => s.id === activeSection);
+    if (!section) return 'Dashboard';
 
-  if (contextualStep === 'assign_nok') {
-    setActiveSection('2');
-  }
-
-  if (contextualStep === 'create_messages') {
-    setActiveSection('4');
-  }
-}, [contextualStep]);
-
-
-useEffect(() => {
-  console.log('NextKin loaded:', myNextKin);
-}, [myNextKin]);
-
-const manualSave = useCallback(async () => {
-  try {
-    setAutoSaving(true);
-
-    const token = Cookies.get('auth_token');
-    if (!token) return;
-
-    // 🔥 COLLECT ALL DELETED CLOUDINARY FILES (SECTION 1 ONLY)
-    const deletedPublicIds: string[] = [];
-
-    Object.values(formData['1'] || {}).forEach((field: any) => {
-      if (field?._deleted_files?.length) {
-        deletedPublicIds.push(...field._deleted_files);
-      }
-    });
-
-    // 🔥 DELETE FROM CLOUDINARY (OWNER ONLY)
-    for (const public_id of deletedPublicIds) {
-      try {
-        await deleteUpload(token, public_id);
-      } catch (err) {
-        console.error('Cloudinary delete failed:', public_id, err);
+    if (activeSubsection && section.subsections) {
+      const sub = section.subsections.find(
+        (ss: any) => ss.id === activeSubsection,
+      );
+      if (sub) {
+        return `${sub.id}. ${sub.title}`;
       }
     }
 
-    // 🔐 SAVE SECTION 1
-    if (formData['1']) {
-      await saveSection1(token, mapUIToSection1Payload(formData['1']));
+    return `${section.id}. ${section.title}`;
+  }, [activeSection, activeSubsection, allSections]);
+  useEffect(() => {
+    if (!contextualStep) return;
+
+    if (contextualStep === 'assign_nok') {
+      setActiveSection('2');
     }
 
-    // 🚗 SAVE SECTION 5 (Vehicles)
-    if (formData['5']) {
-      await saveSection5(token, formData['5']);
+    if (contextualStep === 'create_messages') {
+      setActiveSection('4');
     }
-    // 🚗 SAVE SECTION 5 (Vehicles)
-    if (formData['6']?.['6A']) {
-      await saveSection6(token, {
-        '6A': formData['6']['6A'],
-      });
-    }
-    // 🛡️ SAVE SECTION 7 (Insurance Policies)
-    if (formData['7']?.['7A']) {
-      await saveSection7(token, {
-        '7A': formData['7']['7A'],
-      });
-    }
-    // 🛡️ SAVE SECTION 8 (Insurance Policies)
-    if (formData['8']?.['8A']) {
-      await saveSection8(token, {
-        '8A': formData['8']['8A'],
-      });
-    }
-    // 🛡️ SAVE SECTION 9 (Insurance Policies)
-    if (formData['9']?.['9A']) {
-      await saveSection9(token, {
-        '9A': formData['9']['9A'],
-      });
-    }
-    // 🛡️ SAVE SECTION 10 (Insurance Policies)
-    if (formData['10']?.['10A']) {
-      await saveSection10(token, {
-        '10A': formData['10']['10A'],
-      });
-    }
-    // 🛡️ SAVE SECTION 11 (Insurance Policies)
-    if (formData['11']?.['11A']) {
-      await saveSection11(token, {
-        '11A': formData['11']['11A'],
-      });
-    }
-    // 🏦 SAVE SECTION 12 (Banking & Financial Accounts)
-    if (formData['12']?.['12A'] || formData['12']?.['12B']) {
-      await saveSection12(token, {
-        ...(formData['12']['12A'] && { '12A': formData['12']['12A'] }),
-        ...(formData['12']['12B'] && { '12B': formData['12']['12B'] }),
-      });
-    }
-    // 🛡️ SAVE SECTION 13 (Insurance Policies)
-    if (formData['13']?.['13A']) {
-      await saveSection13(token, {
-        '13A': formData['13']['13A'],
-      });
-    }
-    // 🛡️ SAVE SECTION 14 (Insurance Policies)
-    if (formData['14']?.['14A']) {
-      await saveSection14(token, {
-        '14A': formData['14']['14A'],
-      });
-    }
-    // 🏥 SAVE SECTION 15 (Health Information)
-    if (formData['15']?.['15A'] || formData['15']?.['15B']) {
-      await saveSection15(token, {
-        ...(formData['15']['15A'] && { '15A': formData['15']['15A'] }),
-        ...(formData['15']['15B'] && { '15B': formData['15']['15B'] }),
-      });
-    }
-    // 🏥 SAVE SECTION 16 (Health Information)
-    if (formData['16']?.['16A'] || formData['16']?.['16B']) {
-      await saveSection16(token, {
-        ...(formData['16']['16A'] && { '16A': formData['16']['16A'] }),
-        ...(formData['16']['16B'] && { '16B': formData['16']['16B'] }),
-      });
-    }
-    // SAVE SECTION 17 (Family & Treasured Connections)
-    if (formData['17']) {
-      await saveSection17(token, formData['17']);
-    }
-    // SAVE SECTION 18 (Employment & Business)
-    if (formData['18']) {
-      await saveSection18(token, formData['18']);
-    }
-    // SAVE SECTION 19 (Employment & Business)
-    if (formData['19']) {
-      await saveSection19(token, formData['19']);
-    }
-    // SAVE SECTION 20 (Legal Documents)
-    if (formData['20']) {
-      await saveSection20(token, formData['20']);
-    }
-    // SAVE SECTION 21
-    if (formData['21']) {
-      await saveSection21(token, formData['21']);
-    }
+  }, [contextualStep]);
 
-    // 💾 SAVE NON-SENSITIVE UI STATE
-    localStorage.setItem(
-      'orderlyAffairsDisabledSections',
-      JSON.stringify(disabledSections),
-    );
-    localStorage.setItem(
-      'orderlyAffairsDisabledSubsections',
-      JSON.stringify(disabledSubsections),
-    );
-    localStorage.setItem(
-      'orderlyAffairsCollapsedSubsections',
-      JSON.stringify(collapsedSubsections),
-    );
+  useEffect(() => {
+    console.log('NextKin loaded:', myNextKin);
+  }, [myNextKin]);
 
-    setLastSaved(new Date());
-    toast.success('Saved successfully!');
-  } catch (error) {
-    console.error('Manual save failed:', error);
-    toast.error('Save failed. Please try again.');
-  } finally {
-    setAutoSaving(false);
-  }
-}, [formData, disabledSections, disabledSubsections, collapsedSubsections]);
+  const manualSave = useCallback(async () => {
+    try {
+      setAutoSaving(true);
+
+      const token = Cookies.get('auth_token');
+      if (!token) return;
+
+      // 🔥 COLLECT ALL DELETED CLOUDINARY FILES (SECTION 1 ONLY)
+      const deletedPublicIds: string[] = [];
+
+      Object.values(formData['1'] || {}).forEach((field: any) => {
+        if (field?._deleted_files?.length) {
+          deletedPublicIds.push(...field._deleted_files);
+        }
+      });
+
+      // 🔥 DELETE FROM CLOUDINARY (OWNER ONLY)
+      for (const public_id of deletedPublicIds) {
+        try {
+          await deleteUpload(token, public_id);
+        } catch (err) {
+          console.error('Cloudinary delete failed:', public_id, err);
+        }
+      }
+
+      // 🔐 SAVE SECTION 1
+      if (formData['1']) {
+        await saveSection1(token, mapUIToSection1Payload(formData['1']));
+      }
+
+      // 🚗 SAVE SECTION 5 (Vehicles)
+      if (formData['5']) {
+        await saveSection5(token, formData['5']);
+      }
+      // 🚗 SAVE SECTION 5 (Vehicles)
+      if (formData['6']?.['6A']) {
+        await saveSection6(token, {
+          '6A': formData['6']['6A'],
+        });
+      }
+      // 🛡️ SAVE SECTION 7 (Insurance Policies)
+      if (formData['7']?.['7A']) {
+        await saveSection7(token, {
+          '7A': formData['7']['7A'],
+        });
+      }
+      // 🛡️ SAVE SECTION 8 (Insurance Policies)
+      if (formData['8']?.['8A']) {
+        await saveSection8(token, {
+          '8A': formData['8']['8A'],
+        });
+      }
+      // 🛡️ SAVE SECTION 9 (Insurance Policies)
+      if (formData['9']?.['9A']) {
+        await saveSection9(token, {
+          '9A': formData['9']['9A'],
+        });
+      }
+      // 🛡️ SAVE SECTION 10 (Insurance Policies)
+      if (formData['10']?.['10A']) {
+        await saveSection10(token, {
+          '10A': formData['10']['10A'],
+        });
+      }
+      // 🛡️ SAVE SECTION 11 (Insurance Policies)
+      if (formData['11']?.['11A']) {
+        await saveSection11(token, {
+          '11A': formData['11']['11A'],
+        });
+      }
+      // 🏦 SAVE SECTION 12 (Banking & Financial Accounts)
+      if (formData['12']?.['12A'] || formData['12']?.['12B']) {
+        await saveSection12(token, {
+          ...(formData['12']['12A'] && { '12A': formData['12']['12A'] }),
+          ...(formData['12']['12B'] && { '12B': formData['12']['12B'] }),
+        });
+      }
+      // 🛡️ SAVE SECTION 13 (Insurance Policies)
+      if (formData['13']?.['13A']) {
+        await saveSection13(token, {
+          '13A': formData['13']['13A'],
+        });
+      }
+      // 🛡️ SAVE SECTION 14 (Insurance Policies)
+      if (formData['14']?.['14A']) {
+        await saveSection14(token, {
+          '14A': formData['14']['14A'],
+        });
+      }
+      // 🏥 SAVE SECTION 15 (Health Information)
+      if (formData['15']?.['15A'] || formData['15']?.['15B']) {
+        await saveSection15(token, {
+          ...(formData['15']['15A'] && { '15A': formData['15']['15A'] }),
+          ...(formData['15']['15B'] && { '15B': formData['15']['15B'] }),
+        });
+      }
+      // 🏥 SAVE SECTION 16 (Health Information)
+      if (formData['16']?.['16A'] || formData['16']?.['16B']) {
+        await saveSection16(token, {
+          ...(formData['16']['16A'] && { '16A': formData['16']['16A'] }),
+          ...(formData['16']['16B'] && { '16B': formData['16']['16B'] }),
+        });
+      }
+      // SAVE SECTION 17 (Family & Treasured Connections)
+      if (formData['17']) {
+        await saveSection17(token, formData['17']);
+      }
+      // SAVE SECTION 18 (Employment & Business)
+      if (formData['18']) {
+        await saveSection18(token, formData['18']);
+      }
+      // SAVE SECTION 19 (Employment & Business)
+      if (formData['19']) {
+        await saveSection19(token, formData['19']);
+      }
+      // SAVE SECTION 20 (Legal Documents)
+      if (formData['20']) {
+        await saveSection20(token, formData['20']);
+      }
+      // SAVE SECTION 21
+      if (formData['21']) {
+        await saveSection21(token, formData['21']);
+      }
+
+      // 💾 SAVE NON-SENSITIVE UI STATE
+      localStorage.setItem(
+        'orderlyAffairsDisabledSections',
+        JSON.stringify(disabledSections),
+      );
+      localStorage.setItem(
+        'orderlyAffairsDisabledSubsections',
+        JSON.stringify(disabledSubsections),
+      );
+      localStorage.setItem(
+        'orderlyAffairsCollapsedSubsections',
+        JSON.stringify(collapsedSubsections),
+      );
+
+      setLastSaved(new Date());
+      toast.success('Saved successfully!');
+    } catch (error) {
+      console.error('Manual save failed:', error);
+      toast.error('Save failed. Please try again.');
+    } finally {
+      setAutoSaving(false);
+    }
+  }, [formData, disabledSections, disabledSubsections, collapsedSubsections]);
 
   const exportData = useCallback(() => {
     try {
@@ -1029,7 +1000,7 @@ const manualSave = useCallback(async () => {
       const confirmed = window.confirm(
         subsectionId
           ? `Are you sure you want to clear all data from subsection ${subsectionId}? This action cannot be undone.`
-          : `Are you sure you want to clear all data from section ${sectionId}? This action cannot be undone.`
+          : `Are you sure you want to clear all data from section ${sectionId}? This action cannot be undone.`,
       );
 
       if (confirmed) {
@@ -1061,7 +1032,7 @@ const manualSave = useCallback(async () => {
         // Clear from localStorage
         try {
           const currentData = JSON.parse(
-            localStorage.getItem('orderlyAffairsData') || '{}'
+            localStorage.getItem('orderlyAffairsData') || '{}',
           );
           if (subsectionId) {
             if (
@@ -1078,7 +1049,7 @@ const manualSave = useCallback(async () => {
           }
           localStorage.setItem(
             'orderlyAffairsData',
-            JSON.stringify(currentData)
+            JSON.stringify(currentData),
           );
         } catch (error) {
           console.error('Error clearing localStorage:', error);
@@ -1087,11 +1058,11 @@ const manualSave = useCallback(async () => {
         toast.success(
           subsectionId
             ? `Subsection ${subsectionId} data cleared!`
-            : `Section ${sectionId} data cleared!`
+            : `Section ${sectionId} data cleared!`,
         );
       }
     },
-    []
+    [],
   );
 
   const currentSection = useMemo(() => {
@@ -1223,7 +1194,6 @@ const manualSave = useCallback(async () => {
     );
   }
 
-
   if (appMode === 'test_mfa') {
     return (
       <div className="min-h-screen bg-background">
@@ -1244,570 +1214,680 @@ const manualSave = useCallback(async () => {
     );
   }
 
-const ExportIcon = () => (
-  <svg
-    className="w-4 h-4"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2.5}
-      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-    />
-  </svg>
-);
+  const ExportIcon = () => (
+    <svg
+      className="w-4 h-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2.5}
+        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+      />
+    </svg>
+  );
 
-function renderSection() {
-  switch (activeSection) {
-    case '0':
-      return (
-        <Section0PersonalInformation
-          onFullyRead={() => setInstructionRead(true)}
-        />
-      );
-    case '1':
-      return (
-        <Section1VitalInformation
-          data={formData['1'] || {}}
-          onChange={data => updateSectionData('1', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '2':
-      return (
-        <Section2AccessManagement
-          data={formData['2'] || {}}
-          onChange={data => updateSectionData('2', data)}
-        />
-      );
-    case '3':
-      return (
-        <Section3NextKinLetter
-          data={formData['3'] || {}}
-          onChange={data => updateSectionData('3', data)}
-        />
-      );
-    case '4':
-      return (
-        <Section4NextKInMessages
-          data={formData['4'] || {}}
-          fullFormData={formData}
-          onChange={data => updateSectionData('4', data)}
-          isActive={!activeSubsection || activeSubsection === '4A'}
-        />
-      );
+  function renderSection() {
+    switch (activeSection) {
+      case '0':
+        return (
+          <Section0PersonalInformation
+            onFullyRead={() => setInstructionRead(true)}
+          />
+        );
+      case '1':
+        return (
+          <Section1VitalInformation
+            data={formData['1'] || {}}
+            onChange={data => updateSectionData('1', data)}
+            activeSubsection={activeSubsection as any}
+          />
+        );
+      case '2':
+        return (
+          <Section2AccessManagement
+            data={formData['2'] || {}}
+            onChange={data => updateSectionData('2', data)}
+          />
+        );
+      case '3':
+        return (
+          <Section3NextKinLetter
+            data={formData['3'] || {}}
+            onChange={data => updateSectionData('3', data)}
+          />
+        );
+      case '4':
+        return (
+          <Section4NextKInMessages
+            data={formData['4'] || {}}
+            fullFormData={formData}
+            onChange={data => updateSectionData('4', data)}
+            isActive={!activeSubsection || activeSubsection === '4A'}
+          />
+        );
 
-    case '5':
-      return (
-        <Section5Vehicles
-          data={formData['5'] || {}}
-          onChange={data => updateSectionData('5', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '6':
-      return (
-        <Section6MainResidences
-          data={formData['6'] || {}}
-          onChange={data => updateSectionData('6', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '7':
-      return (
-        <Section7InsurancePolicies
-          data={formData['7'] || {}}
-          onChange={data => updateSectionData('7', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '8':
-      return (
-        <Section8CommunityMembership
-          data={formData['8'] || {}}
-          onChange={data => updateSectionData('8', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '8':
-      return (
-        <Section8CommunityMembership
-          data={formData['8'] || {}}
-          onChange={data => updateSectionData('8', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '9':
-      return (
-        <Section9CharitableGiving
-          data={formData['9'] || {}}
-          onChange={data => updateSectionData('9', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '10':
-      return (
-        <Section10EducationAccomplishments
-          data={formData['10'] || {}}
-          onChange={data => updateSectionData('10', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '11':
-      return (
-        <Section11MilitaryService
-          data={formData['11'] || {}}
-          onChange={data => updateSectionData('11', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '12':
-      return (
-        <Section12BankingFinancialAccounts
-          data={formData['12'] || {}}
-          onChange={data => updateSectionData('12', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '13':
-      return (
-        <Section13PasswordsOnlineAccounts
-          data={formData['13'] || {}}
-          onChange={data => updateSectionData('13', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '14':
-      return (
-        <Section14InvestmentAccounts
-          data={formData['14'] || {}}
-          onChange={data => updateSectionData('14', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '15':
-      return (
-        <Section15HealthInformation
-          data={formData['15'] || {}}
-          onChange={data => updateSectionData('15', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '16':
-      return (
-        <Section16CreditCardsDebt
-          data={formData['16'] || {}}
-          onChange={data => updateSectionData('16', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '17':
-      return (
-        <Section17FamilyTreasuredConnections
-          data={formData['17'] || {}}
-          onChange={data => updateSectionData('17', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '18':
-      return (
-        <Section18EmploymentBusiness
-          data={formData['18'] || {}}
-          onChange={data => updateSectionData('18', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '19':
-      return (
-        <Section19AssetsValuables
-          data={formData['19'] || {}}
-          onChange={data => updateSectionData('19', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '20':
-      return (
-        <Section20LegalDocumentsRecords
-          data={formData['20'] || {}}
-          onChange={data => updateSectionData('20', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    case '21':
-      return (
-        <Section21EstatePlanningFinalWishes
-          data={formData['21'] || {}}
-          onChange={data => updateSectionData('21', data)}
-          activeSubsection={activeSubsection}
-        />
-      );
-    default:
-      return (
-        <Card>
-          <CardContent>
-            <p className="text-muted-foreground">Section under construction</p>
-          </CardContent>
-        </Card>
-      );
-  }
-}
-
-const nextTask = useMemo(() => {
-  if (!allSections?.length) return null;
-
-  for (const section of allSections) {
-    const isComplete = getSectionCompletionStatus(section.id);
-
-    if (!isComplete) {
-      return {
-        id: section.id,
-        title: `${section.id}. ${section.title}`,
-      };
+      case '5':
+        return (
+          <Section5Vehicles
+            data={formData['5'] || {}}
+            onChange={data => updateSectionData('5', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '6':
+        return (
+          <Section6MainResidences
+            data={formData['6'] || {}}
+            onChange={data => updateSectionData('6', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '7':
+        return (
+          <Section7InsurancePolicies
+            data={formData['7'] || {}}
+            onChange={data => updateSectionData('7', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '8':
+        return (
+          <Section8CommunityMembership
+            data={formData['8'] || {}}
+            onChange={data => updateSectionData('8', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '8':
+        return (
+          <Section8CommunityMembership
+            data={formData['8'] || {}}
+            onChange={data => updateSectionData('8', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '9':
+        return (
+          <Section9CharitableGiving
+            data={formData['9'] || {}}
+            onChange={data => updateSectionData('9', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '10':
+        return (
+          <Section10EducationAccomplishments
+            data={formData['10'] || {}}
+            onChange={data => updateSectionData('10', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '11':
+        return (
+          <Section11MilitaryService
+            data={formData['11'] || {}}
+            onChange={data => updateSectionData('11', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '12':
+        return (
+          <Section12BankingFinancialAccounts
+            data={formData['12'] || {}}
+            onChange={data => updateSectionData('12', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '13':
+        return (
+          <Section13PasswordsOnlineAccounts
+            data={formData['13'] || {}}
+            onChange={data => updateSectionData('13', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '14':
+        return (
+          <Section14InvestmentAccounts
+            data={formData['14'] || {}}
+            onChange={data => updateSectionData('14', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '15':
+        return (
+          <Section15HealthInformation
+            data={formData['15'] || {}}
+            onChange={data => updateSectionData('15', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '16':
+        return (
+          <Section16CreditCardsDebt
+            data={formData['16'] || {}}
+            onChange={data => updateSectionData('16', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '17':
+        return (
+          <Section17FamilyTreasuredConnections
+            data={formData['17'] || {}}
+            onChange={data => updateSectionData('17', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '18':
+        return (
+          <Section18EmploymentBusiness
+            data={formData['18'] || {}}
+            onChange={data => updateSectionData('18', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '19':
+        return (
+          <Section19AssetsValuables
+            data={formData['19'] || {}}
+            onChange={data => updateSectionData('19', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '20':
+        return (
+          <Section20LegalDocumentsRecords
+            data={formData['20'] || {}}
+            onChange={data => updateSectionData('20', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      case '21':
+        return (
+          <Section21EstatePlanningFinalWishes
+            data={formData['21'] || {}}
+            onChange={data => updateSectionData('21', data)}
+            activeSubsection={activeSubsection}
+          />
+        );
+      default:
+        return (
+          <Card>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Section under construction
+              </p>
+            </CardContent>
+          </Card>
+        );
     }
   }
 
-  return null; // everything complete
-}, [allSections, getSectionCompletionStatus]);
+  const nextTask = useMemo(() => {
+    if (!allSections?.length) return null;
 
+    for (const section of allSections) {
+      const isComplete = getSectionCompletionStatus(section.id);
+
+      if (!isComplete) {
+        return {
+          id: section.id,
+          title: `${section.id}. ${section.title}`,
+        };
+      }
+    }
+
+    return null; // everything complete
+  }, [allSections, getSectionCompletionStatus]);
+
+  const completedSectionsCount = allSections.filter(s =>
+    getSectionCompletionStatus(s.id),
+  ).length;
+
+  const getSectionDescription = (sectionId: string) => {
+    switch (sectionId) {
+      case '0':
+        return 'Important legal information and instructions for using the Orderly Affairs Kit effectively.';
+      case '2':
+        return 'Manage who can access your Orderly Affairs Kit after your passing. Add your Primary Next of Kin, assign access levels, and keep secure credentials organized.';
+      case '3':
+        return 'Create an important introductory letter for your designated next of kin that explains how to access and use your Orderly Affairs Kit.';
+      case '4':
+        return 'Create heartfelt personal messages for your loved ones. Write letters, record video or audio, and choose when each message should be delivered.';
+      case '5':
+        return 'Document your current vehicles, registration details, insurance, financing, and anything your loved ones may need to manage these assets.';
+      case '6':
+        return 'Document your primary residence, ownership or rental details, mortgage, utilities, insurance, security details, and important home contacts.';
+      case '7':
+        return 'Keep your insurance policies updated with current statements, policy documents, photos, and contact information.';
+      case '8':
+        return 'Record the communities, memberships, organizations, clubs, churches, and professional groups that matter to you.';
+      case '9':
+        return 'Track your charitable giving, ongoing contributions, automatic donations, and charities you plan to include in your estate planning.';
+      case '10':
+        return 'Preserve your education, accomplishments, awards, and legacy details that may help your family tell your story.';
+      case '11':
+        return 'Document military service details, deployments, records, DD-214 documents, VA benefits, and service legacy information.';
+      case '12':
+        return 'Organize bank accounts, digital payment services, statements, account contacts, automatic payments, and safe deposit information.';
+      case '13':
+        return 'Securely document important online accounts, usernames, recovery options, and instructions so accounts can be managed when needed.';
+      case '14':
+        return 'Document investment and retirement accounts, beneficiaries, advisors, plan documents, and distribution instructions.';
+      case '15':
+        return 'Record health information, medical providers, insurance details, medications, allergies, and healthcare directives for emergencies.';
+      case '16':
+        return 'Document credit cards, loans, debts, balances, payment methods, autopay details, and creditor contact information.';
+      case '17':
+        return 'Preserve family relationships, close friends, important people, sentimental items, pets, stories, and treasured connections.';
+      case '18':
+        return 'Document employment history, business ownership, income sources, benefits, business contacts, and succession details.';
+      case '19':
+        return 'Record valuable items, collectibles, jewelry, art, electronics, heirlooms, estimated values, and distribution wishes.';
+      case '20':
+        return 'Store and organize legal records, tax documents, estate documents, trust documents, and important paperwork locations.';
+      case '21':
+        return 'Document estate planning documents, end-of-life wishes, ceremonies, final arrangements, and instructions for your loved ones.';
+      default:
+        return 'Complete the sections below with your important information.';
+    }
+  };
+
+  const goToDashboard = () => {
+    setActiveSection('dashboard');
+    setActiveSubsection(null);
+    setSidebarOpen(false);
+    setMobileMoreOpen(false);
+  };
+
+  const goToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    setActiveSubsection(null);
+    setSidebarOpen(false);
+    setMobileMoreOpen(false);
+  };
+
+  const goToSubsection = (sectionId: string, subsectionId: string) => {
+    setActiveSection(sectionId);
+    setActiveSubsection(subsectionId);
+    setSidebarOpen(false);
+    setMobileMoreOpen(false);
+
+    setTimeout(() => {
+      const element = document.getElementById(`subsection-${subsectionId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
 
   return (
     <>
-      <div className="min-h-screen bg-background">
-        {/* Header */}
-        <div className="border-b flex flex-col md:flex-row bg-card">
-          <div className="max-w-72 w-full"></div>
-          <div className="container max-w-full ml-auto px-8 py-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="lg:hidden"
+      <div className="min-h-screen bg-[#f6f8fb] text-slate-950 pb-24 md:pb-0">
+        {/* Mobile header — matches the clean app-style screenshot */}
+        <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/95 backdrop-blur-xl md:hidden">
+          <div className="flex h-[74px] items-center justify-between px-4">
+            <button
+              type="button"
+              onClick={goToDashboard}
+              className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70 active:scale-95"
+              aria-label="Go to dashboard overview"
+            >
+              <Image
+                src="/images/brand-logo.png"
+                alt="Orderly Affairs Logo"
+                width={42}
+                height={42}
+                className="h-9 w-9 object-contain"
+                priority
+              />
+            </button>
+
+            <div className="min-w-0 flex-1 px-3 text-center">
+              <h1 className="truncate text-[14px] font-semibold leading-5 text-[#10213f]">
+                {activeSection === 'dashboard'
+                  ? 'Dashboard'
+                  : currentSectionLabel}
+              </h1>
+              <p className="truncate text-[11px] font-medium text-slate-400">
+                {activeSection === 'dashboard'
+                  ? 'Overview'
+                  : activeSubsection
+                    ? 'Subsection'
+                    : 'Section'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setMobileMoreOpen(prev => !prev)}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#10213f] shadow-sm ring-1 ring-slate-200/80 active:scale-95"
+              aria-label="Open account menu"
+            >
+              <User className="h-5 w-5" />
+            </button>
+          </div>
+        </header>
+
+        {/* Desktop header */}
+        <header className="hidden border-b border-slate-200/80 bg-white/95 backdrop-blur-xl md:block">
+          <div className="flex h-[76px] items-center justify-between pl-[304px] pr-6 xl:pr-10">
+            <div className="flex min-w-0 items-center gap-4">
+              <div className="hidden items-center gap-3 xl:flex">
+                <Image
+                  src="/images/brand-logo.png"
+                  alt="Orderly Affairs Logo"
+                  width={120}
+                  height={64}
+                  className="h-14 w-auto object-contain"
+                  priority
+                />
+                <div className="h-8 w-px bg-slate-200" />
+              </div>
+
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-400">
+                  Current Area
+                </p>
+                <h1 className="mt-1 truncate text-[18px] font-semibold text-[#10213f]">
+                  {currentSectionLabel}
+                </h1>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="hidden items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-2 lg:flex">
+                <div className="h-2 w-28 overflow-hidden rounded-full bg-slate-200">
+                  <Progress value={progress} className="h-full w-full" />
+                </div>
+                <span className="text-xs font-semibold text-[#10213f]">
+                  {progress}%
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  await updateStatus({ manually_started: true });
+                  startTour(derivedRole ?? 'owner');
+                  setTourStarted(true);
+                }}
+                className="rounded-2xl bg-[#10213f] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
+              >
+                Run Tour
+              </button>
+
+              <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={manualSave}
+                  className="owners-states-save flex h-9 items-center gap-2 rounded-xl px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#10213f] active:scale-95"
                 >
-                  <Menu className="h-4 w-4" />
-                </Button>
-                <div className="flex items-center gap-2">
-                  <Image
-                    src={'/images/brand-logo.png'}
-                    alt="Orderly Affairs Logo"
-                    className="h-16 w-auto"
-                    width={120}
-                    height={64}
-                  />
-                  <div>
-                    <div className="hidden md:block">
-                      <h1 className="text-[12px] md:text-[14px] font-black text-[#1e293b] uppercase tracking-[0.15em] leading-tight">
-                        Orderly
-                      </h1>
-                      <p className="text-[9px] md:text-[12px] text-slate-400 font-bold uppercase tracking-widest leading-tight mt-0.5">
-                        Affairs
+                  <Save className="h-4 w-4" />
+                  <span className="hidden xl:inline">
+                    {autoSaving ? 'Saving...' : 'Save'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={exportData}
+                  className="owners-states-export flex h-9 items-center gap-2 rounded-xl px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#10213f] active:scale-95"
+                >
+                  <ExportIcon />
+                  <span className="hidden xl:inline">Export</span>
+                </button>
+              </div>
+
+              <div className="owner-state-information group relative">
+                <button className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-[#10213f] shadow-sm transition hover:ring-4 hover:ring-slate-100">
+                  <User className="h-5 w-5" />
+                </button>
+
+                <div className="invisible absolute right-0 top-full z-[60] mt-3 translate-y-2 opacity-0 transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                  <div className="min-w-[230px] rounded-3xl border border-slate-100 bg-white p-2 shadow-2xl">
+                    <div className="mb-1 border-b border-slate-100 px-4 py-3">
+                      {currentUser && (
+                        <p className="truncate text-[12px] font-semibold text-[#10213f]">
+                          {currentUser.email}
+                        </p>
+                      )}
+                      <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                        Premium Member
                       </p>
                     </div>
-                  </div>
-                </div>
-                <div className="hidden sm:block h-5 md:h-6 w-px bg-slate-200 mx-1 md:mx-2" />
-
-                <div className="flex items-center gap-2 max-w-35 md:max-w-none">
-                  <span className="hidden xl:inline text-[10px] font-black text-slate-300 uppercase tracking-widest">
-                    Sector
-                  </span>
-                  <span className="px-3 py-1 bg-slate-100/50 border border-slate-200/50 rounded-lg text-[9px] md:text-[10px] font-black text-[#1e293b] uppercase tracking-tight truncate">
-                    {currentSectionLabel}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 md:gap-4">
-                  <div className="hidden md:flex header-progress-indicator items-center gap-3 px-4 py-1.5 bg-slate-50/50 rounded-xl border border-slate-100/50">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 lg:w-24 h-1 bg-slate-200 rounded-full overflow-hidden">
-                        <Progress value={progress} className="w-40" />
-                      </div>
-                      <span className="text-[10px] font-black text-[#1e293b]">
-                        {progress}%
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1 bg-slate-50/80 p-1 rounded-xl border border-slate-100">
-                    {/* {status?.has_completed && (
-                      <span className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded-full">
-                        Tour Completed ✔
-                      </span>
-                    )} */}
 
                     <button
-                      onClick={async () => {
-                        await updateStatus({ manually_started: true });
-                        startTour(derivedRole ?? 'owner');
-                        setTourStarted(true);
-                      }}
-                      className="text-sm px-4 py-2 bg-neutral-800 text-white rounded-md"
+                      type="button"
+                      onClick={() => goToSection('vault-settings')}
+                      className="w-full rounded-2xl px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#10213f]"
                     >
-                      Run Tour
+                      Account Info
                     </button>
 
                     <button
-                      onClick={manualSave}
-                      className={`flex cursor-pointer owners-states-save items-center gap-2 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#1e293b] hover:bg-white rounded-lg transition-all active:scale-95`}
+                      type="button"
+                      onClick={() => goToSection('vault-settings')}
+                      className="w-full rounded-2xl px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#10213f]"
                     >
-                      <Save className="h-4 w-4 mr-1" />
-                      {autoSaving ? (
-                        <span className="text-xs text-gray-500 ml-2">
-                          Saving...
-                        </span>
-                      ) : (
-                        <span className="hidden xl:inline">Save</span>
-                      )}
+                      Security Keys
                     </button>
+
                     <button
-                      onClick={exportData}
-                      className={`flex cursor-pointer owners-states-export items-center gap-2 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#1e293b] hover:bg-white rounded-lg transition-all active:scale-95`}
+                      type="button"
+                      onClick={handleOwnerLogout}
+                      className="w-full rounded-2xl px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-rose-500 transition hover:bg-rose-50"
                     >
-                      <ExportIcon />
-                      <span className="hidden xl:inline">Export</span>
+                      Log Out
                     </button>
-                  </div>
-
-                  <div className="relative group owner-state-information">
-                    <button className="w-9 h-9  md:w-11 md:h-11 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center overflow-hidden hover:ring-4 ring-slate-100 transition-all shrink-0">
-                      <User className="h-4 w-4" />
-                    </button>
-
-                    <div className="absolute right-0 top-full mt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 translate-y-2 group-hover:translate-y-0 z-[60]">
-                      <div className="bg-white shadow-2xl rounded-2xl border border-slate-100 p-1.5 min-w-[200px]">
-                        <div className="px-4 py-3 border-b border-slate-50 mb-1">
-                          {currentUser && (
-                            <p className="text-[11px] font-black text-[#1e293b]">
-                              {currentUser.email}
-                            </p>
-                          )}
-                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                            Premium Member
-                          </p>
-                        </div>
-
-                        <button
-                          onClick={() => {
-                            setActiveSection('vault-settings');
-                            setActiveSubsection(null);
-                          }}
-                          className="w-full cursor-pointer text-left px-4 py-2.5 text-[10px] font-black text-slate-600 hover:text-[#1e293b] hover:bg-slate-50 rounded-lg transition-all uppercase tracking-widest"
-                        >
-                          Account info
-                        </button>
-
-                        <button
-                          onClick={() => 'security-keys'}
-                          className="w-full cursor-pointer text-left px-4 py-2.5 text-[10px] font-black text-slate-600 hover:text-[#1e293b] hover:bg-slate-50 rounded-lg transition-all uppercase tracking-widest"
-                        >
-                          Security Keys
-                        </button>
-                        <div className="h-px bg-slate-50 my-1" />
-                        <button
-                          onClick={handleOwnerLogout}
-                          className="w-full cursor-pointer text-left px-4 py-2.5 text-[10px] font-black text-rose-500 hover:bg-rose-50 rounded-lg transition-all uppercase tracking-widest"
-                        >
-                          Log Out
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-        <div className="flex">
-          {/* Sidebar */}
-          <div
-            className={`fixed inset-y-0 sidebar-navigation left-0 z-50 w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 shadow-lg transform transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+        </header>
+
+        <div className="flex min-h-[calc(100vh-76px)]">
+          {/* Sidebar drawer */}
+          <aside
+            className={`sidebar-navigation fixed inset-y-0 left-0 z-[70] w-[88vw] max-w-[330px] transform border-r border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out lg:sticky lg:top-0 lg:z-20 lg:h-screen lg:w-72 lg:max-w-none lg:translate-x-0 lg:shadow-none ${
               sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             }`}
           >
-            <div className="flex flex-col h-full">
-              <div className="p-4 border-b">
-                <h2>Vault Navigation</h2>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4">
-                <div className="space-y-2">
-                  {/* Dashboard Section */}
-                  <button
-                    onClick={() => {
-                      setActiveSection('dashboard');
-                      setActiveSubsection(null);
-                      setSidebarOpen(false);
-                    }}
-                    className={`w-full owner-dashboard-item text-left p-3 rounded-lg transition-colors ${
-                      activeSection === 'dashboard'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'hover:bg-muted'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                      <span className="font-medium">Dashboard Overview</span>
+            <div className="flex h-full flex-col">
+              <div className="border-b border-slate-100 bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Image
+                      src="/images/brand-logo.png"
+                      alt="Orderly Affairs Logo"
+                      width={44}
+                      height={44}
+                      className="h-10 w-10 object-contain"
+                    />
+                    <div className="min-w-0">
+                      <h2 className="truncate text-[14px] font-semibold text-[#10213f]">
+                        Vault Navigation
+                      </h2>
+                      <p className="text-[11px] font-medium text-slate-400">
+                        {completedSectionsCount} of {allSections.length}{' '}
+                        completed
+                      </p>
                     </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setSidebarOpen(false)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-slate-500 lg:hidden"
+                    aria-label="Close navigation"
+                  >
+                    <X className="h-5 w-5" />
                   </button>
+                </div>
 
-                  {allSections.map(section => (
-                    <div
-                      key={`main-section-${section.id}`}
-                      className="space-y-1"
-                    >
-                      {/* Main Section Button */}
-                      <button
-                        onClick={() => {
-                          setActiveSection(section.id);
-                          setActiveSubsection(null);
-                          setSidebarOpen(false);
-                        }}
-                        className={`w-full text-left p-3 rounded-lg transition-colors section-${section.id}-nav ${
-                          activeSection === section.id && !activeSubsection
-                            ? 'bg-primary text-primary-foreground'
-                            : 'hover:bg-muted'
-                        } ${disabledSections[section.id] ? 'opacity-50' : ''}`}
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
+                    <Progress value={progress} className="h-full w-full" />
+                  </div>
+                  <span className="text-xs font-semibold text-[#10213f]">
+                    {progress}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-3 py-4">
+                <button
+                  type="button"
+                  onClick={goToDashboard}
+                  className={`owner-dashboard-item mb-3 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition ${
+                    activeSection === 'dashboard'
+                      ? 'bg-[#10213f] text-white shadow-lg shadow-slate-900/10'
+                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
+                      <Home className="h-4 w-4" />
+                    </span>
+                    <span className="text-sm font-semibold">
+                      Dashboard Overview
+                    </span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 opacity-60" />
+                </button>
+
+                <div className="space-y-2">
+                  {allSections.map(section => {
+                    const isSelected =
+                      activeSection === section.id && !activeSubsection;
+                    const isExpanded =
+                      activeSection === section.id &&
+                      !disabledSections[section.id];
+                    const isComplete = getSectionCompletionStatus(section.id);
+
+                    return (
+                      <div
+                        key={`main-section-${section.id}`}
+                        className="space-y-1"
                       >
-                        <div className="flex items-center gap-2">
-                          {getSectionCompletionStatus(section.id) ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <Circle className="h-4 w-4" />
-                          )}
-                          <span className="font-medium">
-                            {(obituarySections.has(section.id) ||
-                              hasDoveTag(section.id)) && (
-                              <span className="mr-1">🕊️</span>
-                            )}
-                            {section.id}. {section.title}
-                          </span>
-                          {disabledSections[section.id] && (
-                            <span className="text-xs text-muted-foreground ml-auto">
-                              Not Applicable
-                            </span>
-                          )}
-                        </div>
-                      </button>
-
-                      {/* Subsections */}
-                      {section.subsections &&
-                        activeSection === section.id &&
-                        !disabledSections[section.id] && (
-                          <div
-                            key={`subsections-container-${section.id}`}
-                            className="ml-6 space-y-1"
+                        <button
+                          type="button"
+                          onClick={() => goToSection(section.id)}
+                          className={`section-${section.id}-nav flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                            isSelected
+                              ? 'bg-[#10213f] text-white shadow-lg shadow-slate-900/10'
+                              : 'text-slate-700 hover:bg-slate-50'
+                          } ${disabledSections[section.id] ? 'opacity-55' : ''}`}
+                        >
+                          <span
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                              isSelected ? 'bg-white/15' : 'bg-slate-100'
+                            }`}
                           >
-                            {section.subsections.map((subsection: any) => (
-                              <div
-                                key={`section-${section.id}-subsection-${subsection.id}`}
-                              >
-                                <button
-                                  onClick={() => {
-                                    setActiveSection(section.id);
-                                    setActiveSubsection(subsection.id);
-                                    setSidebarOpen(false);
-                                    // Scroll to subsection
-                                    setTimeout(() => {
-                                      const element = document.getElementById(
-                                        `subsection-${subsection.id}`,
-                                      );
-                                      if (element) {
-                                        element.scrollIntoView({
-                                          behavior: 'smooth',
-                                          block: 'start',
-                                        });
-                                      }
-                                    }, 100);
-                                  }}
-                                  className={`w-full text-left p-2 rounded-md transition-colors text-sm ${
-                                    activeSubsection === subsection.id
-                                      ? 'bg-secondary text-secondary-foreground font-medium'
-                                      : 'hover:bg-muted/50 text-muted-foreground'
-                                  } ${
-                                    disabledSubsections[subsection.id]
-                                      ? 'opacity-50'
-                                      : ''
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full bg-current opacity-60" />
-                                    <span>
-                                      {(obituarySubsections.has(
-                                        subsection.id,
-                                      ) ||
-                                        hasDoveTag(
-                                          section.id,
-                                          subsection.id,
-                                        )) && <span className="mr-1">🕊️</span>}
-                                      {subsection.id}. {subsection.title}
-                                    </span>
-                                    {disabledSubsections[subsection.id] && (
-                                      <span className="text-xs text-muted-foreground ml-auto">
-                                        Not Applicable
-                                      </span>
-                                    )}
-                                  </div>
-                                </button>
+                            {isComplete ? (
+                              <CheckCircle className="h-4 w-4 text-emerald-500" />
+                            ) : (
+                              <Circle className="h-4 w-4" />
+                            )}
+                          </span>
 
-                                {/* Simplified sidebar items - removed complex rendering to improve performance */}
-                                {activeSection === section.id &&
-                                  formData[section.id]?.[subsection.id] && (
-                                    <div className="ml-4 mt-1">
-                                      <div className="w-full text-left p-2 rounded-md text-xs text-muted-foreground">
-                                        <div className="flex items-center gap-2">
-                                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                          <span className="truncate">
-                                            Has data
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold">
+                              {(obituarySections.has(section.id) ||
+                                hasDoveTag(section.id)) && (
+                                <span className="mr-1">🕊️</span>
+                              )}
+                              {section.id}. {section.title}
+                            </span>
+                            {disabledSections[section.id] && (
+                              <span className="text-[10px] font-semibold text-slate-400">
+                                Not Applicable
+                              </span>
+                            )}
+                          </span>
+                        </button>
+
+                        {section.subsections && isExpanded && (
+                          <div className="ml-4 space-y-1 border-l border-slate-100 pl-3">
+                            {section.subsections.map((subsection: any) => (
+                              <button
+                                key={`section-${section.id}-subsection-${subsection.id}`}
+                                type="button"
+                                onClick={() =>
+                                  goToSubsection(section.id, subsection.id)
+                                }
+                                className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${
+                                  activeSubsection === subsection.id
+                                    ? 'bg-slate-100 font-semibold text-[#10213f]'
+                                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                                } ${disabledSubsections[subsection.id] ? 'opacity-50' : ''}`}
+                              >
+                                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
+                                <span className="min-w-0 flex-1 truncate">
+                                  {(obituarySubsections.has(subsection.id) ||
+                                    hasDoveTag(section.id, subsection.id)) && (
+                                    <span className="mr-1">🕊️</span>
                                   )}
-                              </div>
+                                  {subsection.id}. {subsection.title}
+                                </span>
+                              </button>
                             ))}
                           </div>
                         )}
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
-          </div>
+          </aside>
 
-          {/* Overlay for mobile */}
+          {/* Drawer overlay */}
           {sidebarOpen && (
-            <div
-              className="fixed inset-0 bg-black/95 z-40 lg:hidden"
+            <button
+              type="button"
+              className="fixed inset-0 z-[60] bg-slate-950/55 backdrop-blur-sm lg:hidden"
               onClick={() => setSidebarOpen(false)}
+              aria-label="Close navigation overlay"
             />
           )}
 
-          {/* Floating Menu Button for Mobile - Persistent Access */}
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="fixed bottom-6 right-6 z-50 lg:hidden w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center backdrop-blur-lg border border-border"
-            aria-label="Open menu"
-          >
-            <Menu className="h-6 w-6" />
-          </button>
-
-          {/* Main Content */}
-          <div className="flex-1 min-w-0">
-            <div className="container mx-auto px-4 py-6">
-              {/* Dashboard View */}
+          {/* Main content */}
+          <main className="min-w-0 flex-1">
+            <div className="mx-auto w-full max-w-[1480px] px-4 py-4 sm:px-5 md:px-6 md:py-6 lg:px-8 xl:px-10">
               {activeSection === 'dashboard' ? (
-                <div className="space-y-6 owner-dashboard-overview-area">
-                  <div className="hidden">
-                    <h1>Dashboard Overview</h1>
-                    <p className="text-text-secondary mt-1">
-                      Monitor your progress and manage your important
-                      information efficiently using the comprehensive data
-                      binding system.
-                    </p>
+                <div className="owner-dashboard-overview-area space-y-5 md:space-y-6">
+                  <div className="rounded-[28px] border border-white/70 bg-white p-4 shadow-sm sm:p-6 md:hidden">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+                          Orderly Affairs
+                        </p>
+                        <h2 className="mt-1 text-[22px] font-semibold leading-tight text-[#10213f]">
+                          Dashboard Overview
+                        </h2>
+                      </div>
+                      {progress === 100 ? (
+                        <Badge variant="default" className="bg-emerald-500">
+                          Complete
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">{progress}%</Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
+                        <Progress value={progress} className="h-full w-full" />
+                      </div>
+                      <span className="text-xs font-semibold text-[#10213f]">
+                        {completedSectionsCount}/{allSections.length}
+                      </span>
+                    </div>
                   </div>
 
                   <DataBindingDashboard
@@ -1815,206 +1895,312 @@ const nextTask = useMemo(() => {
                     nextKinList={myNextKin || []}
                     nokLetter={dashboardNokLetter || null}
                     nextTask={nextTask}
-                    onNavigateToSection={sectionId => {
-                      setActiveSection(sectionId);
-                      setActiveSubsection(null);
-                      setSidebarOpen(false);
-                    }}
+                    onNavigateToSection={sectionId => goToSection(sectionId)}
                   />
                 </div>
               ) : activeSection === 'vault-settings' ? (
-                <VaultSettings />
+                <div className="space-y-5">
+                  <div className="rounded-[28px] border border-white/70 bg-white p-5 shadow-sm sm:p-6">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+                      Secure Account
+                    </p>
+                    <h2 className="mt-1 text-2xl font-semibold text-[#10213f] md:text-3xl">
+                      Vault Settings
+                    </h2>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+                      Manage your account, security keys, and access settings.
+                    </p>
+                  </div>
+                  <VaultSettings />
+                </div>
               ) : currentSection ? (
-                <>
-                  <div className="space-y-6">
-                    <div>
-                      <h1>
-                        {(obituarySections.has(currentSection.id) ||
-                          hasDoveTag(currentSection.id)) && (
-                          <span className="mr-2">🕊️</span>
-                        )}
-                        {currentSection.id}. {currentSection.title}
-                      </h1>
-                      <p className="text-text-secondary mt-1">
-                        {activeSection === '0'
-                          ? 'Important legal information and instructions for using the Orderly Affairs Kit effectively.'
-                          : activeSection === '2'
-                            ? 'This section manages who can access your Orderly Affairs Kit after your passing. You must designate at least one person as your Primary Next of Kin with full access, and can optionally add additional trusted people with either full or limited access to specific sections. Each person receives unique login credentials and a master access password for secure entry. The system notifies you whenever someone logs in and allows you to revoke access at any time.'
-                            : activeSection === '3'
-                              ? 'Create an important introductory letter for your designated next of kin that explains how to access and use your Orderly Affairs Kit.'
-                              : activeSection === '4'
-                                ? 'Create heartfelt personal messages for your loved ones that can be delivered when they need them most. Write letters, record video messages, or create audio recordings that provide comfort, guidance, and your final words. Set delivery triggers for specific dates (like anniversaries or birthdays) or upon your passing. These messages serve as a lasting gift of love and wisdom for those who matter most to you.'
-                                : activeSection === '5'
-                                  ? 'Document your current vehicles, including cars, trucks, motorcycles, boats, or other motorized vehicles. Include important details like registration, insurance, and financing information to help your loved ones manage these assets.'
-                                  : activeSection === '6'
-                                    ? 'Document comprehensive information about your primary residence to help your loved ones manage your home and related accounts. This includes ownership details, mortgage information, utility accounts, insurance policies, and important service provider contacts. Whether you own or rent, this section ensures your family has all the essential information needed to maintain or transition your living situation. Include emergency information like shutoff locations and security details.'
-                                    : activeSection === '7'
-                                      ? 'Keep this section updated with your current insurance policies —replace the old documents each year when you receive your new policy statements. No need to write out long numbers; upload the updated paperwork (policy information) or take a picture of a current policy in here and discard the previous version.'
-                                      : activeSection === '8'
-                                        ? 'This section helps your loved ones learn about the groups and communities that have played a meaningful role in your life. Whether personal or professional, these may include churches, volunteer organizations, clubs, professional associations, or social groups that are important to you. If you manage any online profiles or memberships related to these groups, include those here as well, so your next of kin can easily access or close accounts if needed. For social media and other online accounts, please refer to the Passwords & Online Accounts section.'
-                                        : activeSection === '9'
-                                          ? 'This section is dedicated to tracking any charitable contributions you currently make or intend to make in the future. Keeping this information organized will help your next of kin manage or discontinue donations appropriately. Note any ongoing contributions to charities or causes. Be sure to list the charities you plan to include in your will or trust. Record any charities from which you make automatic withdrawals so that these can be canceled after your passing.'
-                                          : activeSection === '10'
-                                            ? 'These details can provide valuable context for your next of kin and assist in writing an obituary or preserving your legacy. Use this section to document your educational background and accomplishments.'
-                                            : activeSection === '11'
-                                              ? "Military service is a significant part of your personal history that should be documented for your next of kin. This information can be valuable for accessing veterans benefits, burial arrangements, and preserving your service legacy. Include all branches of service, deployments, and important military documents. If you have completed your military service, be sure to file separation papers (DD-214) and any other critical military records in this section. You may also include a VA Form 40-1330 if you wish to Claim for Standard Government Headstone or Marker, used by veterans, their families, or representatives to request a government-furnished headstone, marker, or medallion for an eligible veteran's grave."
-                                              : activeSection === '12'
-                                                ? 'To organize your financial accounts clearly, please fill in the details for each bank account. Attach copies of statements where applicable.'
-                                                : activeSection === '13'
-                                                  ? "Securely document all your important digital accounts, passwords, and instructions so your next of kin can manage or close them as needed. Fill out the details for each digital account you hold. Include usernames, passwords, recovery options, and any special instructions regarding the account's handling after your passing."
-                                                  : activeSection === '14'
-                                                    ? "Note: Physical real estate or property investments should be filed separately under the Assets section.\nNotes on Investments\nMany investments include a designated beneficiary. Upon your passing, these funds typically transfer directly to the beneficiary, bypassing the probate process. Your trust may also serve as a beneficiary in many cases.\n• If a beneficiary is a minor, additional legal steps may be necessary to manage the funds on their behalf, including the appointment of a conservator. We've provided a checklist for you.\n• Consult with an attorney to ensure your beneficiaries are correctly designated and updated."
-                                                    : activeSection === '15'
-                                                      ? 'Document your health information, medical providers, and insurance details so your next of kin can manage your healthcare needs and make informed decisions. This section is critical for medical emergencies and ongoing healthcare management. Include current medications, allergies, medical conditions, and contact information for all healthcare providers. Keep insurance information up to date and ensure your healthcare directives are properly documented and accessible.\n\nNote: You will be able to store living wills, and medical powers of attorney, in the Estate Documents section.'
-                                                      : activeSection === '16'
-                                                        ? 'Document your credit cards and debt information so your next of kin can properly manage or close these accounts. This includes credit cards, loans, and any other forms of debt. Upload relevant documents and statements to help with account management.'
-                                                        : activeSection === '17'
-                                                          ? 'This section helps preserve the important relationships and treasured connections in your life. Document family members, close friends, and meaningful relationships so your loved ones can understand the people who matter most to you. Include contact information for those who should be notified, special memories, and details about your connections that your family might not know. This section serves as both a relationship directory and a way to preserve your social legacy and treasured bonds.'
-                                                          : activeSection ===
-                                                              '18'
-                                                            ? 'Document your employment history, business ownership, and all sources of income including salaries, retirement income, Social Security, and freelance work. This section helps your next of kin understand your financial situation and manage employment-related benefits and obligations. Include current employer contacts, business succession plans, and beneficiary information for retirement accounts.'
-                                                            : activeSection ===
-                                                                '19'
-                                                              ? 'Record your valuable items (jewelry, artwork, collectibles, antiques, electronics, etc.). Note estimated values, insurance details, and care instructions to ensure they are properly identified, protected, and distributed. Complete this worksheet for all non-financial assets to help your next of kin locate and manage them.'
-                                                              : activeSection ===
-                                                                  '20'
-                                                                ? "To help your executors and trustees efficiently settle your estate, it's essential to keep organized records of your legal documents. This section is dedicated to storing copies of essential paperwork related to your personal and financial affairs. Consider storing the originals in your fireproof document bag.\n\nWhen managing an estate or trust, executors or trustees are required to file annual tax returns until the estate is fully settled. Keeping tax documents well-organized will make this process much smoother and less stressful for your loved ones."
-                                                                : activeSection ===
-                                                                    '21'
-                                                                  ? 'Document your estate planning documents and end-of-life wishes to ensure your loved ones can honor your intentions and manage your affairs properly. This section helps organize critical legal documents including wills, trusts, powers of attorney, and healthcare directives, along with your personal wishes for ceremonies and final arrangements. Having this information organized will provide peace of mind and clear guidance for your family during difficult times.'
-                                                                  : 'Complete the sections below with your information'}
-                      </p>
-                    </div>
-                    {renderSection()}
-                    {/* VA Information Button for Military Service */}
-                    {activeSection === '11' && (
-                      <div className="flex justify-start">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            window.open(
-                              'https://www.va.gov/burials-memorials/veterans-burial-allowance/',
-                              '_blank',
-                            )
-                          }
-                          className="flex items-center gap-2"
-                        >
-                          <FileText className="h-4 w-4" />
-                          VA Burial Benefits Information
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Military Service Opt-out Checkbox */}
-                    {activeSection === '11' && (
-                      <div className="bg-card border rounded-lg p-4 relative z-10">
-                        <div className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            id="military-service-opt-out"
-                            checked={disabledSections['11'] || false}
-                            onChange={e =>
-                              toggleSectionDisabled('11', e.target.checked)
-                            }
-                            className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary focus:ring-2 focus:ring-offset-2"
-                          />
-                          <label
-                            htmlFor="military-service-opt-out"
-                            className="text-sm cursor-pointer"
-                          >
-                            <span className="font-medium">
-                              I have not served in the military.
+                <div className="space-y-5 md:space-y-6">
+                  <section className="overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-sm">
+                    <div className="relative p-5 sm:p-6 md:p-7">
+                      <div className="pointer-events-none absolute right-0 top-0 h-28 w-28 rounded-bl-[60px] bg-[#10213f]/5" />
+                      <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-3 flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-[#10213f] px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-white">
+                              Section {currentSection.id}
                             </span>
-                            <p className="text-muted-foreground mt-1">
-                              Check this box if you have never served in any
-                              branch of the military. This will mark this
-                              section as not applicable and remove it from your
-                              form.
-                            </p>
-                          </label>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Personal Messages Clear Button - Simplified */}
-                    {activeSection === '4' && formData['4']?.['4A'] && (
-                      <div className="bg-card border rounded-lg p-4 relative z-10">
-                        <div className="flex items-start gap-3">
-                          <div className="flex-1">
-                            <span className="font-medium text-sm">
-                              Clear Personal Messages Data
-                            </span>
-                            <p className="text-muted-foreground text-sm mt-1">
-                              Clear all personal messages data to start fresh.
-                            </p>
+                            {activeSubsection && (
+                              <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-500">
+                                {activeSubsection}
+                              </span>
+                            )}
                           </div>
+
+                          <h2 className="text-[24px] font-semibold leading-tight text-[#10213f] sm:text-[30px] md:text-[34px]">
+                            {(obituarySections.has(currentSection.id) ||
+                              hasDoveTag(currentSection.id)) && (
+                              <span className="mr-2">🕊️</span>
+                            )}
+                            {currentSection.title}
+                          </h2>
+
+                          <p className="mt-3 max-w-5xl whitespace-pre-line text-sm leading-7 text-slate-500 sm:text-[15px]">
+                            {getSectionDescription(activeSection)}
+                          </p>
+                        </div>
+
+                        <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
                           <Button
-                            onClick={() => clearSectionData('4', '4A')}
-                            variant="destructive"
+                            type="button"
+                            variant="outline"
                             size="sm"
-                            className="flex items-center gap-2"
+                            onClick={manualSave}
+                            className="rounded-2xl border-slate-200 bg-white px-4"
                           >
-                            Clear Messages
+                            <Save className="mr-2 h-4 w-4" />
+                            {autoSaving ? 'Saving...' : 'Save'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={exportData}
+                            className="rounded-2xl border-slate-200 bg-white px-4"
+                          >
+                            <ExportIcon />
+                            <span className="ml-2">Export</span>
                           </Button>
                         </div>
                       </div>
-                    )}
+                    </div>
+                  </section>
 
-                    <div
-                      className={`transition-all duration-500 ${
-                        disabledSections[activeSection]
-                          ? 'opacity-30 pointer-events-none select-none'
-                          : ''
-                      }`}
-                    ></div>
+                  <div
+                    className={`transition-all duration-300 ${
+                      disabledSections[activeSection]
+                        ? 'pointer-events-none select-none opacity-30'
+                        : ''
+                    }`}
+                  >
+                    {renderSection()}
+                  </div>
 
-                    {disabledSections[activeSection] && (
-                      <div className="text-center py-8">
-                        <p className="text-muted-foreground text-sm">
-                          This section has been marked as not applicable.
-                          Uncheck the box above to enable it.
+                  {activeSection === '11' && (
+                    <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-[#10213f]">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold text-[#10213f]">
+                            VA Burial Benefits Information
+                          </h3>
+                          <p className="mt-1 text-sm text-slate-500">
+                            Open official VA information in a new tab.
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          window.open(
+                            'https://www.va.gov/burials-memorials/veterans-burial-allowance/',
+                            '_blank',
+                          )
+                        }
+                        className="rounded-2xl"
+                      >
+                        Open VA Info
+                      </Button>
+                    </div>
+                  )}
+
+                  {activeSection === '11' && (
+                    <label className="flex cursor-pointer items-start gap-3 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+                      <input
+                        type="checkbox"
+                        id="military-service-opt-out"
+                        checked={disabledSections['11'] || false}
+                        onChange={e =>
+                          toggleSectionDisabled('11', e.target.checked)
+                        }
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold text-[#10213f]">
+                          I have not served in the military.
+                        </span>
+                        <span className="mt-1 block text-sm leading-6 text-slate-500">
+                          Check this box if you have never served in any branch
+                          of the military. This marks the section as not
+                          applicable.
+                        </span>
+                      </span>
+                    </label>
+                  )}
+
+                  {activeSection === '4' && formData['4']?.['4A'] && (
+                    <div className="flex flex-col gap-3 rounded-[24px] border border-rose-100 bg-rose-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-rose-700">
+                          Clear Personal Messages Data
+                        </h3>
+                        <p className="mt-1 text-sm text-rose-600/80">
+                          Clear all personal messages data to start fresh.
                         </p>
                       </div>
-                    )}
-                  </div>
-                </>
-              ) : activeSection === 'dashboard' ? (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground">Loading dashboard...</p>
+                      <Button
+                        onClick={() => clearSectionData('4', '4A')}
+                        variant="destructive"
+                        size="sm"
+                        className="rounded-2xl"
+                      >
+                        Clear Messages
+                      </Button>
+                    </div>
+                  )}
+
+                  {disabledSections[activeSection] && (
+                    <div className="rounded-[24px] border border-slate-200 bg-white p-6 text-center shadow-sm">
+                      <p className="text-sm text-slate-500">
+                        This section has been marked as not applicable. Uncheck
+                        the box above to enable it.
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground">
-                    Select a section to begin
+                <div className="rounded-[28px] border border-white/70 bg-white p-10 text-center shadow-sm">
+                  <p className="text-sm text-slate-500">
+                    Select a section to begin.
                   </p>
                 </div>
               )}
             </div>
-          </div>
+          </main>
         </div>
-        {/* Summary Footer */}
-        <div className="border-t bg-card">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <span className="text-sm">
-                  {
-                    allSections.filter(s => getSectionCompletionStatus(s.id))
-                      .length
-                  }{' '}
-                  of {allSections.length} sections completed
-                </span>
-                <Progress value={progress} className="w-32" />
+
+        {/* Mobile More Sheet */}
+        {mobileMoreOpen && (
+          <>
+            <button
+              type="button"
+              className="fixed inset-0 z-[75] bg-slate-950/40 backdrop-blur-sm md:hidden"
+              onClick={() => setMobileMoreOpen(false)}
+              aria-label="Close more menu"
+            />
+            <div className="fixed inset-x-3 bottom-24 z-[80] rounded-[30px] border border-white/70 bg-white p-3 shadow-2xl md:hidden">
+              <div className="px-3 pb-3 pt-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+                  Account
+                </p>
+                {currentUser && (
+                  <p className="mt-1 truncate text-sm font-semibold text-[#10213f]">
+                    {currentUser.email}
+                  </p>
+                )}
               </div>
-              {progress === 100 && (
-                <Badge variant="default" className="bg-green-500">
-                  All Complete!
-                </Badge>
-              )}
+
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => goToSection('vault-settings')}
+                  className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#10213f]"
+                >
+                  Vault Settings <ChevronRight className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={manualSave}
+                  className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#10213f]"
+                >
+                  Save Now <Save className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={exportData}
+                  className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#10213f]"
+                >
+                  Export Data <ExportIcon />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOwnerLogout}
+                  className="rounded-2xl bg-rose-50 px-4 py-3 text-left text-sm font-semibold text-rose-600"
+                >
+                  Log Out
+                </button>
+              </div>
             </div>
+          </>
+        )}
+
+        {/* Mobile bottom navigation */}
+        <nav className="fixed inset-x-3 bottom-3 z-50 rounded-[24px] border border-white/80 bg-white/95 px-3 py-2 shadow-[0_16px_40px_rgba(15,23,42,0.18)] backdrop-blur-xl md:hidden">
+          <div className="grid grid-cols-4 gap-1">
+            <button
+              type="button"
+              onClick={goToDashboard}
+              className={`flex flex-col items-center justify-center rounded-2xl px-2 py-2 transition active:scale-95 ${
+                activeSection === 'dashboard'
+                  ? 'text-[#10213f]'
+                  : 'text-slate-400'
+              }`}
+            >
+              <Home className="h-5 w-5" />
+              <span className="mt-1 text-[10px] font-semibold">Home</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="flex flex-col items-center justify-center rounded-2xl px-2 py-2 text-slate-500 transition active:scale-95"
+            >
+              <LayoutList className="h-5 w-5" />
+              <span className="mt-1 text-[10px] font-semibold">Sections</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                goToDashboard();
+                toast.info(
+                  'Activity summary is shown on the dashboard overview.',
+                );
+              }}
+              className="flex flex-col items-center justify-center rounded-2xl px-2 py-2 text-slate-500 transition active:scale-95"
+            >
+              <Clock3 className="h-5 w-5" />
+              <span className="mt-1 text-[10px] font-semibold">Activity</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMobileMoreOpen(prev => !prev)}
+              className={`flex flex-col items-center justify-center rounded-2xl px-2 py-2 transition active:scale-95 ${
+                mobileMoreOpen ? 'text-[#10213f]' : 'text-slate-500'
+              }`}
+            >
+              <MoreHorizontal className="h-5 w-5" />
+              <span className="mt-1 text-[10px] font-semibold">More</span>
+            </button>
           </div>
-        </div>
+        </nav>
+
+        {/* Summary footer for desktop */}
+        <footer className="hidden border-t border-slate-200 bg-white md:block">
+          <div className="mx-auto flex max-w-[1480px] items-center justify-between px-6 py-4 lg:px-8 xl:px-10">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-semibold text-slate-600">
+                {completedSectionsCount} of {allSections.length} sections
+                completed
+              </span>
+              <Progress value={progress} className="w-40" />
+            </div>
+            {progress === 100 && (
+              <Badge variant="default" className="bg-emerald-500">
+                All Complete!
+              </Badge>
+            )}
+          </div>
+        </footer>
+
         {showWelcome && (
           <WelcomeModal
             role={derivedRole ?? 'owner'}
@@ -2047,7 +2233,6 @@ const nextTask = useMemo(() => {
           />
         )}
 
-        {/* Owner Notification Modal */}
         {showOwnerNotification && pendingNOK && (
           <OwnerNotificationModal
             nokData={pendingNOK}

@@ -1,7 +1,6 @@
-
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -9,6 +8,21 @@ import {
   CardContent,
 } from '@/components/common/ui/card';
 import { DynamicFormField } from '@/components/DynamicFormField';
+import { Button } from '@/components/common/ui/button';
+import { Alert, AlertDescription } from '@/components/common/ui/alert';
+import {
+  CheckCircle2,
+  FileText,
+  HeartHandshake,
+  Loader2,
+  ScrollText,
+  ShieldCheck,
+  Sparkles,
+  UploadCloud,
+} from 'lucide-react';
+
+import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { uploadAIDocument } from '@/services/aiDocumentUpload';
 
 /* ============================================================
    FIELD CONFIGS (STATIC)
@@ -22,7 +36,6 @@ const SECTION_21A_FIELDS = [
     content:
       'Document your estate planning documents and end-of-life wishes to ensure your loved ones can honor your intentions and manage your affairs properly. This section helps organize critical legal documents including wills, trusts, powers of attorney, and healthcare directives, along with your personal wishes for ceremonies and final arrangements.',
   },
-
   {
     key: 'will_testament_header',
     label: 'Will & Testament',
@@ -60,7 +73,6 @@ const SECTION_21A_FIELDS = [
     type: 'TextInputWithUpload',
     helperText: 'Contact information for the attorney who prepared your will',
   },
-
   {
     key: 'trust_documents_header',
     label: 'Trust Documents',
@@ -92,7 +104,6 @@ const SECTION_21A_FIELDS = [
     type: 'TextInputWithUpload',
     helperText: 'Contact information for attorney who prepared trust documents',
   },
-
   {
     key: 'power_of_attorney_header',
     label: 'Powers of Attorney',
@@ -113,7 +124,6 @@ const SECTION_21A_FIELDS = [
     helperText:
       "Upload medical POA or note location, include agent's contact information",
   },
-
   {
     key: 'healthcare_directives_header',
     label: 'Healthcare Directives',
@@ -138,7 +148,6 @@ const SECTION_21A_FIELDS = [
     type: 'TextArea',
     helperText: 'Your wishes regarding organ and tissue donation',
   },
-
   {
     key: 'beneficiary_info_header',
     label: 'Beneficiary Information',
@@ -180,7 +189,6 @@ const SECTION_21B_FIELDS = [
     content:
       'Having this information organized will provide peace of mind and clear guidance for your family during difficult times. These are your personal wishes and preferences for your final arrangements.',
   },
-
   {
     key: 'funeral_preferences_header',
     label: 'Funeral/Memorial Preferences',
@@ -234,7 +242,6 @@ const SECTION_21B_FIELDS = [
     helperText:
       'Specific requests for music, readings, flowers, or other service elements',
   },
-
   {
     key: 'disposition_preferences_header',
     label: 'Body Disposition Preferences',
@@ -279,7 +286,6 @@ const SECTION_21B_FIELDS = [
       value: 'Donation to Science',
     },
   },
-
   {
     key: 'memorial_preferences_header',
     label: 'Memorial Preferences',
@@ -305,7 +311,6 @@ const SECTION_21B_FIELDS = [
     helperText:
       'Any other special requests or wishes for your final arrangements',
   },
-
   {
     key: 'obituary_information_header',
     label: 'Obituary Information',
@@ -325,7 +330,6 @@ const SECTION_21B_FIELDS = [
     type: 'TextInputWithUpload',
     helperText: 'Upload preferred photo for obituary or note location',
   },
-
   {
     key: 'prepaid_arrangements_header',
     label: 'Prepaid Arrangements',
@@ -361,7 +365,6 @@ const SECTION_21C_FIELDS = [
     content:
       "If you have minor children, it's essential to designate guardians who will care for them if something happens to you and your spouse/partner. This section helps organize your guardianship preferences and instructions for the care of your children.",
   },
-
   {
     key: 'minor_children_header',
     label: 'Minor Children Information',
@@ -375,7 +378,6 @@ const SECTION_21C_FIELDS = [
     type: 'TextArea',
     helperText: 'Names, birthdates, and current ages of your minor children',
   },
-
   {
     key: 'primary_guardian_header',
     label: 'Primary Guardian',
@@ -412,7 +414,6 @@ const SECTION_21C_FIELDS = [
     ],
     helperText: 'Has this person formally agreed to serve as guardian?',
   },
-
   {
     key: 'alternate_guardian_header',
     label: 'Alternate Guardian',
@@ -450,7 +451,6 @@ const SECTION_21C_FIELDS = [
     helperText:
       'Has this person formally agreed to serve as alternate guardian?',
   },
-
   {
     key: 'guardian_instructions_header',
     label: 'Instructions for Guardians',
@@ -506,7 +506,6 @@ const SECTION_21C_FIELDS = [
     helperText:
       'Important family relationships to maintain, grandparents, extended family, close friends',
   },
-
   {
     key: 'financial_provisions_header',
     label: 'Financial Provisions',
@@ -541,7 +540,6 @@ const SECTION_21C_FIELDS = [
     helperText:
       'Any provisions for compensating guardians for their care of your children',
   },
-
   {
     key: 'legal_documents_header',
     label: 'Legal Documentation',
@@ -574,7 +572,6 @@ const SECTION_21C_FIELDS = [
     helperText:
       'Attorney who prepared guardianship documents or can assist with guardianship matters',
   },
-
   {
     key: 'excluded_guardians_header',
     label: 'Exclusions',
@@ -588,7 +585,6 @@ const SECTION_21C_FIELDS = [
     helperText:
       'Names of people you specifically do NOT want as guardians and reasons why',
   },
-
   {
     key: 'emergency_contacts_header',
     label: 'Emergency Contacts',
@@ -618,9 +614,8 @@ const SECTION_21C_FIELDS = [
   },
 ];
 
-
 /* ============================================================
-   COMPONENT
+   TYPES / HELPERS
 ============================================================ */
 
 interface Props {
@@ -629,19 +624,153 @@ interface Props {
   activeSubsection?: string | null;
 }
 
+type SubsectionId = '21A' | '21B' | '21C';
+type UploadScope = '21A-full' | '21B-full' | '21C-full';
+
+type UploadedAIFile = {
+  file_id: string;
+  mime_type: string;
+  expires_at?: string;
+};
+
+const ALLOWED_UPLOAD_TYPES = [
+  'application/pdf',
+  'text/plain',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+];
+
+const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
+
+const SECTION_CONFIG: Record<
+  SubsectionId,
+  {
+    title: string;
+    fields: any[];
+    icon: React.ElementType;
+    tone: {
+      header: string;
+      wrapper: string;
+      icon: string;
+      uploadBox: string;
+      glowOne: string;
+      glowTwo: string;
+    };
+    uploadTitle: string;
+    uploadDescription: string;
+    buttonLabel: string;
+    emptyError: string;
+    successMessage: string;
+  }
+> = {
+  '21A': {
+    title: 'Estate Planning Documents',
+    fields: SECTION_21A_FIELDS,
+    icon: ScrollText,
+    tone: {
+      header: 'to-blue-50/70',
+      wrapper:
+        'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-blue-50/60 hover:border-blue-300',
+      icon: 'text-blue-600',
+      uploadBox: 'hover:border-blue-300 hover:bg-blue-50/50',
+      glowOne: 'bg-blue-100/70',
+      glowTwo: 'bg-sky-100/70',
+    },
+    uploadTitle: 'Upload estate planning document',
+    uploadDescription:
+      'Upload a will, trust, power of attorney, medical POA, living will, DNR, beneficiary summary, or estate attorney document. AI will fill the matching estate planning fields.',
+    buttonLabel: 'Auto-fill Estate Planning',
+    emptyError:
+      'AI could not find estate planning document information in this file.',
+    successMessage:
+      'AI filled estate planning document fields. Please review the results.',
+  },
+  '21B': {
+    title: 'Final Arrangements & Wishes',
+    fields: SECTION_21B_FIELDS,
+    icon: HeartHandshake,
+    tone: {
+      header: 'to-rose-50/70',
+      wrapper:
+        'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-rose-50/60 hover:border-rose-300',
+      icon: 'text-rose-600',
+      uploadBox: 'hover:border-rose-300 hover:bg-rose-50/50',
+      glowOne: 'bg-rose-100/70',
+      glowTwo: 'bg-pink-100/70',
+    },
+    uploadTitle: 'Upload final arrangements document',
+    uploadDescription:
+      'Upload funeral wishes, prepaid funeral contracts, cemetery plot deeds, memorial instructions, obituary notes, organ donation wishes, or final arrangement documents. AI will fill the matching fields.',
+    buttonLabel: 'Auto-fill Final Wishes',
+    emptyError:
+      'AI could not find final arrangement or funeral wish information in this file.',
+    successMessage:
+      'AI filled final arrangement and wishes fields. Please review the results.',
+  },
+  '21C': {
+    title: 'Guardianship Arrangements',
+    fields: SECTION_21C_FIELDS,
+    icon: ShieldCheck,
+    tone: {
+      header: 'to-emerald-50/70',
+      wrapper:
+        'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-emerald-50/60 hover:border-emerald-300',
+      icon: 'text-emerald-600',
+      uploadBox: 'hover:border-emerald-300 hover:bg-emerald-50/50',
+      glowOne: 'bg-emerald-100/70',
+      glowTwo: 'bg-green-100/70',
+    },
+    uploadTitle: 'Upload guardianship document',
+    uploadDescription:
+      'Upload guardianship instructions, custody agreements, will sections naming guardians, child care notes, letters to guardians, or family law attorney documents. AI will fill the matching guardianship fields.',
+    buttonLabel: 'Auto-fill Guardianship',
+    emptyError:
+      'AI could not find guardianship arrangement information in this file.',
+    successMessage:
+      'AI filled guardianship arrangement fields. Please review the results.',
+  },
+};
+
+const getReadableFileType = (mimeType?: string) => {
+  if (!mimeType) return 'Document';
+  if (mimeType === 'application/pdf') return 'PDF';
+  if (mimeType === 'text/plain') return 'Text';
+  if (mimeType.includes('image')) return 'Image';
+  return mimeType;
+};
+
+/* ============================================================
+   COMPONENT
+============================================================ */
+
 export default function Section21EstatePlanningFinalWishes({
   data = {},
   onChange = () => {},
   activeSubsection,
 }: Props) {
-  /* ------------------------------------------------------------
-     ✅ CRITICAL FIX — INITIALIZE SECTION DATA ONCE
-  ------------------------------------------------------------ */
+  const [aiNotice, setAiNotice] = useState('');
+  const [aiError, setAiError] = useState('');
+
+  const [uploadingScope, setUploadingScope] = useState<UploadScope | null>(
+    null,
+  );
+  const [aiLoadingScope, setAiLoadingScope] = useState<UploadScope | null>(
+    null,
+  );
+
+  const [uploadedFiles, setUploadedFiles] = useState<
+    Record<string, UploadedAIFile | null>
+  >({});
+
+  const isAnyAIActionRunning =
+    uploadingScope !== null || aiLoadingScope !== null;
+
   useEffect(() => {
     const next = { ...data };
     let changed = false;
 
-    ['21A', '21B', '21C'].forEach(id => {
+    (['21A', '21B', '21C'] as SubsectionId[]).forEach(id => {
       if (!next[id]) {
         next[id] = {};
         changed = true;
@@ -651,11 +780,16 @@ export default function Section21EstatePlanningFinalWishes({
     if (changed) {
       onChange(next);
     }
+
+    // Initialize once only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ------------------------------------------------------------ */
+  const getUploadedFileForScope = (scope: UploadScope) => {
+    return uploadedFiles[scope] || null;
+  };
 
-  const update = (sectionId: string, key: string, value: any) =>
+  const updateField = (sectionId: SubsectionId, key: string, value: any) => {
     onChange({
       ...data,
       [sectionId]: {
@@ -663,32 +797,286 @@ export default function Section21EstatePlanningFinalWishes({
         [key]: value,
       },
     });
+  };
 
-  const renderSection = (id: string, title: string, fields: any[]) => {
+  const updateSectionWithPatch = (sectionId: SubsectionId, patch: any) => {
+    onChange({
+      ...data,
+      [sectionId]: {
+        ...(data[sectionId] || {}),
+        ...patch,
+      },
+    });
+  };
+
+  const cleanPatchObject = (patch: any) => {
+    if (!patch || typeof patch !== 'object') return {};
+
+    return Object.fromEntries(
+      Object.entries(patch).filter(([key, value]) => {
+        if (key === '__rowId') return false;
+        if (key.endsWith('_instructions')) return false;
+        if (key.endsWith('_header')) return false;
+        if (value === null || value === undefined || value === '') return false;
+        if (Array.isArray(value) && value.length === 0) return false;
+        return true;
+      }),
+    );
+  };
+
+  const extractObjectFromPatch = (subsection: SubsectionId, patch: any) => {
+    const raw = patch?.[subsection];
+
+    if (Array.isArray(raw)) {
+      return cleanPatchObject(raw[0] || {});
+    }
+
+    if (raw && typeof raw === 'object') {
+      return cleanPatchObject(raw);
+    }
+
+    return {};
+  };
+
+  const handleDocumentUpload = async (
+    file?: File | null,
+    scope?: UploadScope,
+  ) => {
+    try {
+      if (!file || !scope) return;
+
+      setAiError('');
+      setAiNotice('');
+
+      if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
+        setAiError('Upload PDF, TXT, PNG, JPG, JPEG, or WEBP only.');
+        return;
+      }
+
+      if (file.size > MAX_UPLOAD_SIZE) {
+        setAiError('File too large. Max 15MB.');
+        return;
+      }
+
+      setUploadingScope(scope);
+
+      const uploaded = await uploadAIDocument(file);
+
+      setUploadedFiles(prev => ({
+        ...prev,
+ [scope]: {
+    file_id: uploaded.file_id,
+    mime_type: uploaded.mime_type,
+    expires_at: uploaded.expires_at,
+  },
+      }));
+
+      setAiNotice('Document uploaded. You can now use AI autofill.');
+    } catch (err: any) {
+      setAiError(err?.message || 'Document upload failed');
+    } finally {
+      setUploadingScope(null);
+    }
+  };
+
+  const handleAutofill = async (subsection: SubsectionId) => {
+    const scope = `${subsection}-full` as UploadScope;
+    const config = SECTION_CONFIG[subsection];
+
+    try {
+      const uploadedFile = getUploadedFileForScope(scope);
+
+      if (!uploadedFile) {
+        setAiError('Please upload a document first.');
+        return;
+      }
+
+      setAiError('');
+      setAiNotice('');
+      setAiLoadingScope(scope);
+
+      const json = await autofillSectionFromDocument({
+        section: 'estate_planning_final_wishes',
+        file_id: uploadedFile.file_id,
+        subsection,
+      });
+
+      const patch = json?.result?.patch ?? {};
+      const extracted = extractObjectFromPatch(subsection, patch);
+
+      if (Object.keys(extracted).length === 0) {
+        setAiError(config.emptyError);
+        return;
+      }
+
+      updateSectionWithPatch(subsection, extracted);
+      setAiNotice(config.successMessage);
+    } catch (err: any) {
+      setAiError(err?.message || 'AI autofill failed');
+    } finally {
+      setAiLoadingScope(null);
+    }
+  };
+
+  const renderUploader = (subsection: SubsectionId) => {
+    const config = SECTION_CONFIG[subsection];
+    const scope = `${subsection}-full` as UploadScope;
+    const uploadedFile = getUploadedFileForScope(scope);
+    const isUploading = uploadingScope === scope;
+    const isReading = aiLoadingScope === scope;
+    const tone = config.tone;
+
+    return (
+      <div
+        className={[
+          'relative overflow-hidden rounded-2xl border border-dashed p-4 shadow-sm transition-all duration-200 hover:shadow-md',
+          tone.wrapper,
+          'space-y-4',
+        ].join(' ')}
+      >
+        <div
+          className={[
+            'pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full blur-2xl',
+            tone.glowOne,
+          ].join(' ')}
+        />
+
+        <div
+          className={[
+            'pointer-events-none absolute -bottom-10 -left-10 h-24 w-24 rounded-full blur-2xl',
+            tone.glowTwo,
+          ].join(' ')}
+        />
+
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+              {isUploading ? (
+                <Loader2 className={`h-5 w-5 animate-spin ${tone.icon}`} />
+              ) : uploadedFile ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              ) : (
+                <UploadCloud className={`h-5 w-5 ${tone.icon}`} />
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <p className="font-semibold text-slate-900">
+                {config.uploadTitle}
+              </p>
+
+              <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
+                {config.uploadDescription}
+              </p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => handleAutofill(subsection)}
+            disabled={isAnyAIActionRunning || !uploadedFile}
+            className="shrink-0 rounded-xl"
+          >
+            {isReading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="mr-2 h-4 w-4" />
+            )}
+
+            {isReading ? 'Reading…' : config.buttonLabel}
+          </Button>
+        </div>
+
+        <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <label
+            className={[
+              'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center transition',
+              tone.uploadBox,
+              isAnyAIActionRunning ? 'pointer-events-none opacity-60' : '',
+            ].join(' ')}
+          >
+            <input
+              type="file"
+              className="sr-only"
+              accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp"
+              disabled={isAnyAIActionRunning}
+              onChange={event => {
+                const file = event.currentTarget.files?.[0] || null;
+                void handleDocumentUpload(file, scope);
+                event.currentTarget.value = '';
+              }}
+            />
+
+            <UploadCloud className={`h-5 w-5 ${tone.icon}`} />
+
+            <div>
+              <p className="text-sm font-medium text-slate-800">
+                Click to upload document
+              </p>
+
+              <p className="text-xs text-slate-500">
+                PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB
+              </p>
+            </div>
+          </label>
+
+          {uploadedFile && (
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              <FileText className="h-4 w-4" />
+              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
+            </div>
+          )}
+        </div>
+
+        {isUploading && (
+          <div className="relative flex items-center gap-2 text-xs text-slate-500">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Uploading document…
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSection = (id: SubsectionId) => {
+    const config = SECTION_CONFIG[id];
     const show = !activeSubsection || activeSubsection === id;
+    const sectionData = data[id] || {};
+    const Icon = config.icon;
 
     return (
       <div
         id={`subsection-${id}`}
-        className={`rounded-3xl ${show ? 'border border-primary' : ''}`}
+        className={`rounded-3xl ${show ? 'border border-primary p-1' : ''}`}
       >
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {id}. {title}
+        <Card className="overflow-hidden border-slate-200 shadow-sm">
+          <CardHeader
+            className={[
+              'border-b bg-gradient-to-r from-slate-50',
+              config.tone.header,
+            ].join(' ')}
+          >
+            <CardTitle className="flex items-center gap-2">
+              <Icon className={`h-5 w-5 ${config.tone.icon}`} />
+              {id}. {config.title}
             </CardTitle>
           </CardHeader>
 
-          <CardContent className="grid grid-cols-1 md:grid-cols-1 gap-4"> 
-            {fields.map(field => (
-              <DynamicFormField
-                key={field.key}
-                field={field}
-                value={data[id]?.[field.key]}
-                formData={data[id]}
-                onChange={v => update(id, field.key, v)}
-              />
-            ))}
+          <CardContent className="space-y-6 p-5">
+            {renderUploader(id)}
+
+            <div className="grid grid-cols-1 gap-4">
+              {config.fields.map(field => (
+                <DynamicFormField
+                  key={field.key}
+                  field={field}
+                  value={sectionData?.[field.key]}
+                  formData={sectionData}
+                  onChange={value => updateField(id, field.key, value)}
+                />
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -697,9 +1085,26 @@ export default function Section21EstatePlanningFinalWishes({
 
   return (
     <div className="space-y-10">
-      {renderSection('21A', 'Estate Planning Documents', SECTION_21A_FIELDS)}
-      {renderSection('21B', 'Final Arrangements & Wishes', SECTION_21B_FIELDS)}
-      {renderSection('21C', 'Guardianship Arrangements', SECTION_21C_FIELDS)}
+      {(aiNotice || aiError) && (
+        <div className="space-y-3">
+          {aiNotice && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>{aiNotice}</AlertDescription>
+            </Alert>
+          )}
+
+          {aiError && (
+            <Alert variant="destructive">
+              <AlertDescription>{aiError}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
+
+      {renderSection('21A')}
+      {renderSection('21B')}
+      {renderSection('21C')}
     </div>
   );
 }

@@ -1,23 +1,48 @@
-import React, { useEffect, useState } from 'react';
+'use client';
+
+import React, { useEffect, useMemo, useState } from 'react';
+import Cookies from 'js-cookie';
+import { toast } from 'sonner';
+import {
+  ArrowLeft,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Edit2,
+  FileText,
+  Heart,
+  Mail,
+  Mic,
+  Plus,
+  Printer,
+  Sparkles,
+  Trash2,
+  Upload,
+  Users,
+  Video,
+  X,
+  AlertTriangle,
+  Save,
+} from 'lucide-react';
+
 import { Button } from '@common/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@common/ui/card';
-import { Textarea } from '@common/ui/textarea';
+import { Card, CardContent } from '@common/ui/card';
 import { Input } from '@common/ui/input';
 import { Label } from '@common/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@common/ui/select';
-import { RadioGroup, RadioGroupItem } from '@common/ui/radio-group';
+import { Textarea } from '@common/ui/textarea';
 import { Badge } from '@common/ui/badge';
-import { ArrowLeft, Plus, FileText,  Save, Edit2, Printer, Video, Mic, Calendar,  AlertTriangle, Send, Mail, Upload,  Trash2 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@common/ui/select';
 
 import { SafeMediaRecorder } from '@/components/SafeMediaRecorder';
-
-// import { MediaDiagnostics } from '@/components/MediaDiagnostics';
-// import { RecordingSupport } from '@/components/RecordingSupport';
-
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { DatePicker } from '@/components/DatePicker';
-import { toast } from 'sonner';
-import { Edit3 } from 'lucide-react';
+
 import {
   createMessage,
   updateMessage,
@@ -26,7 +51,13 @@ import {
   uploadMessageMedia,
 } from '@/libs/api/lettersOfNaxtKinMessage';
 
-import Cookies from 'js-cookie';
+/* ============================================================
+   TYPES
+============================================================ */
+
+type MessageType = 'letter' | 'video' | 'audio';
+type DeliveryTrigger = 'date' | 'death';
+type MessageStatus = 'pending' | 'sent';
 
 interface LettersProps {
   onBack?: () => void;
@@ -37,1474 +68,767 @@ interface LettersProps {
   formData?: any;
 }
 
+interface LetterMedia {
+  url: string;
+  public_id: string;
+  type: string;
+  format?: string;
+  size?: number;
+}
+
 interface Letter {
   id: string;
-
   title: string;
   subject?: string;
   content?: string;
-
   recipient: string;
   recipientEmail: string;
-
-  messageType: 'letter' | 'video' | 'audio';
-  deliveryTrigger: 'date' | 'death';
+  messageType: MessageType;
+  deliveryTrigger: DeliveryTrigger;
   deliveryDate?: string;
   deliveryOccasion?: string;
-
-  media?: {
-    url: string;
-    public_id: string;
-    type: string;
-    format?: string;
-    size?: number;
-  };
-
-  status?: 'pending' | 'sent';
+  media?: LetterMedia;
+  status?: MessageStatus;
   lastModified: Date;
 }
+
+interface RecipientOption {
+  name: string;
+  email?: string;
+  source: string;
+}
+
+/* ============================================================
+   HELPERS
+============================================================ */
 
 const letterTemplates = [
   {
     title: 'Letter to Spouse/Partner',
-    content: 'My dearest [NAME],\\n\\nIf you are reading this, it means I am no longer with you. I want you to know that you have been the love of my life and my greatest blessing.\\n\\n[Add your personal message here]\\n\\nWith all my love,\\n[YOUR NAME]'
+    content:
+      'My dearest [NAME],\n\nIf you are reading this, it means I am no longer with you. I want you to know that you have been the love of my life and my greatest blessing.\n\n[Add your personal message here]\n\nWith all my love,\n[YOUR NAME]',
   },
   {
     title: 'Letter to Children',
-    content: 'My beloved children,\\n\\nYou have been the greatest joy of my life. I am so proud of who you have become and who you will continue to be.\\n\\n[Add your personal message here]\\n\\nRemember that I will always love you,\\n[YOUR NAME]'
+    content:
+      'My beloved children,\n\nYou have been the greatest joy of my life. I am so proud of who you have become and who you will continue to be.\n\n[Add your personal message here]\n\nRemember that I will always love you,\n[YOUR NAME]',
   },
   {
     title: 'Letter to Family',
-    content: 'Dear Family,\\n\\nThank you for all the love, laughter, and memories we have shared together. You have made my life complete.\\n\\n[Add your personal message here]\\n\\nWith love and gratitude,\\n[YOUR NAME]'
-  }
+    content:
+      'Dear Family,\n\nThank you for all the love, laughter, and memories we have shared together. You have made my life complete.\n\n[Add your personal message here]\n\nWith love and gratitude,\n[YOUR NAME]',
+  },
 ];
 
-export function Letters({ onBack,  value = {}, onChange, isNextOfKin = false, formData }: LettersProps) {
-  const mapLetter = (l: any): Letter => ({
-    id: l._id,
-    title: l.title,
+function cn(...classes: Array<string | false | undefined | null>) {
+  return classes.filter(Boolean).join(' ');
+}
 
-    subject: l.subject ?? '',
-    content: l.content ?? '',
+function emptyLetter(): Letter {
+  return {
+    id: `local-${Date.now()}`,
+    title: '',
+    subject: '',
+    content: '',
+    recipient: '',
+    recipientEmail: '',
+    messageType: 'letter',
+    deliveryTrigger: 'death',
+    deliveryDate: '',
+    deliveryOccasion: '',
+    status: 'pending',
+    lastModified: new Date(),
+  };
+}
 
-    recipient: l.recipient,
-    recipientEmail: l.recipient_email,
+function normalizeLetter(raw: any): Letter {
+  return {
+    id: raw?._id || raw?.id || `local-${Date.now()}`,
+    title: raw?.title || '',
+    subject: raw?.subject || '',
+    content: raw?.content || '',
+    recipient: raw?.recipient || '',
+    recipientEmail: raw?.recipient_email || raw?.recipientEmail || '',
+    messageType: raw?.message_type || raw?.messageType || 'letter',
+    deliveryTrigger: raw?.delivery_trigger || raw?.deliveryTrigger || 'death',
+    deliveryDate: raw?.delivery_date || raw?.deliveryDate || '',
+    deliveryOccasion: raw?.delivery_occasion || raw?.deliveryOccasion || '',
+    media: raw?.media || undefined,
+    status: raw?.status || 'pending',
+    lastModified: raw?.updated_at
+      ? new Date(raw.updated_at)
+      : raw?.lastModified
+        ? new Date(raw.lastModified)
+        : new Date(),
+  };
+}
 
-    messageType: l.message_type,
-    deliveryTrigger: l.delivery_trigger,
-    deliveryDate: l.delivery_date,
-    deliveryOccasion: l.delivery_occasion ?? '',
+function normalizeValue(value: any): Letter[] {
+  if (Array.isArray(value)) return value.map(normalizeLetter);
+  if (Array.isArray(value?.letters)) return value.letters.map(normalizeLetter);
+  return [];
+}
 
-    media: l.media,
-    status: l.status,
-    lastModified: new Date(l.updated_at),
-  });
+function stripHtml(value?: string) {
+  if (!value) return '';
+  return value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  // Initialize letters from value prop or default to empty array (no sample letters)
-  const [letters, setLetters] = useState<Letter[]>(() => {
-    if (value && Array.isArray(value)) {
-      return value;
-    }
-    if (value && value.letters && Array.isArray(value.letters)) {
-      return value.letters;
-    }
-    // Return empty array instead of sample letters
-    return [];
-  });
-  // const isOwnerDeceased = formData?.owner_status === 'deceased';
+function formatFileSize(size?: number) {
+  if (!size) return '';
+  return `${(size / (1024 * 1024)).toFixed(2)} MB`;
+}
 
-const token = isNextOfKin
-  ? Cookies.get('nok_auth_token')
-  : Cookies.get('auth_token');
-  // Use ref to track previous value and prevent unnecessary updates
-  // const prevLettersRef = React.useRef<Letter[]>([]);
-  const [isWriting, setIsWriting] = useState(false);
+function escapeHtml(value?: string) {
+  if (!value) return '';
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+/* ============================================================
+   MAIN COMPONENT
+============================================================ */
+
+export function Letters({
+  onBack,
+  value = {},
+  onChange,
+  isNextOfKin = false,
+  formData,
+}: LettersProps) {
+  const token = isNextOfKin
+    ? Cookies.get('nok_auth_token')
+    : Cookies.get('auth_token');
+
+  const [letters, setLetters] = useState<Letter[]>(() => normalizeValue(value));
   const [currentLetter, setCurrentLetter] = useState<Letter | null>(null);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [isDelivering, setIsDelivering] = useState(false);
+
+  const [isWriting, setIsWriting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [showSuggestedLetters, setShowSuggestedLetters] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [isDelivering, setIsDelivering] = useState(false);
 
-  // Extract authorized contacts from Access Management ONLY
-  const getNextOfKinOptions = React.useMemo(() => {
-    if (!formData) return [];
-    
-    const options: Array<{ name: string; email?: string; source: string }> = [];
-    
-    // Extract ONLY from Access Management (Section 2A)
-    if (formData['2'] && formData['2']['2A'] && formData['2']['2A']['access_management_data']) {
-      const accessData = formData['2']['2A']['access_management_data'];
-      
-      // Access Management data structure
-      if (accessData.authorized_people && Array.isArray(accessData.authorized_people)) {
-        accessData.authorized_people.forEach((person: any) => {
-          if (person.person_name) {
-            options.push({
-              name: person.person_name,
-              email: person.email_address || '', // Correct field name
-              source: 'Access Management'
-            });
-          }
-        });
-      }
-    }
-    
-    // Debug logging
-    if (options.length > 0) {
-      console.log('Letters: Found', options.length, 'authorized contacts:', options.map(c => `${c.name} (${c.source})`));
-    } else {
-      console.log('Letters: No authorized contacts found. Add people to Section 2A (Access Management) first.');
-    }
-    
-    return options;
-  }, [formData]);
-
-  // Get suggested letters for people who don't have letters yet
-  const getSuggestedLetters = React.useMemo(() => {
-    const existingRecipients = new Set(letters.map(letter => letter.recipient.toLowerCase()));
-    
-    return getNextOfKinOptions.filter(contact => 
-      contact.name && !existingRecipients.has(contact.name.toLowerCase())
-    );
-  }, [getNextOfKinOptions, letters]);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
-  // const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [
-    rerecordingLetter, setRerecordingLetter] = useState<Letter | null>(null);
 
-  // Update parent component when letters change
-  // React.useEffect(() => {
-  //   if (onChange) {
-  //     // Use JSON.stringify for deep comparison to prevent unnecessary calls
-  //     const lettersString = JSON.stringify(letters);
-  //     const prevString = JSON.stringify(prevLettersRef.current);
-      
-  //     if (lettersString !== prevString) {
-  //       prevLettersRef.current = letters;
-  //       onChange(letters);
-  //     }
-  //   }
-  // }, [letters]); // Remove onChange from dependencies to prevent infinite loop
+  const showHeader = Boolean(onBack);
+
+  const recipientOptions = useMemo<RecipientOption[]>(() => {
+    const contacts: RecipientOption[] = [];
+
+    const accessData =
+      formData?.['2']?.['2A']?.access_management_data ||
+      formData?.['2A']?.access_management_data;
+
+    const authorizedPeople = accessData?.authorized_people;
+
+    if (Array.isArray(authorizedPeople)) {
+      authorizedPeople.forEach((person: any) => {
+        if (!person?.person_name) return;
+
+        contacts.push({
+          name: person.person_name,
+          email: person.email_address || '',
+          source: 'Access Management',
+        });
+      });
+    }
+
+    return contacts;
+  }, [formData]);
+
+  const suggestedRecipients = useMemo(() => {
+    const existing = new Set(
+      letters.map(item => item.recipient.trim().toLowerCase()).filter(Boolean),
+    );
+
+    return recipientOptions.filter(
+      item => item.name && !existing.has(item.name.trim().toLowerCase()),
+    );
+  }, [letters, recipientOptions]);
+
+  const pendingCount = letters.filter(item => item.status !== 'sent').length;
+  const letterCount = letters.filter(
+    item => item.messageType === 'letter',
+  ).length;
+  const videoCount = letters.filter(
+    item => item.messageType === 'video',
+  ).length;
+  const audioCount = letters.filter(
+    item => item.messageType === 'audio',
+  ).length;
+
   useEffect(() => {
     if (!onChange) return;
     onChange(letters);
-  }, [letters]);
+  }, [letters, onChange]);
 
-  // Reset letters when value prop changes (for clearing functionality)
-useEffect(() => {
-  if (!value) return;
+  useEffect(() => {
+    const next = normalizeValue(value);
 
-  let newLetters: Letter[] = [];
-
-  if (Array.isArray(value)) {
-    newLetters = value;
-  } else if (value.letters && Array.isArray(value.letters)) {
-    newLetters = value.letters;
-  }
-
-  setLetters(prev => {
-    if (JSON.stringify(prev) === JSON.stringify(newLetters)) {
-      return prev; // 🔥 prevent infinite loop
-    }
-    return newLetters;
-  });
-}, [value]);
-
-
-React.useEffect(() => {
-  if (!token) return;
-
-  setIsLoading(true);
-
-  getMessages(token).then(data => {
-    setLetters(data.map(mapLetter));
-  })
-    .catch(() => toast.error('Failed to load letters'))
-    .finally(() => setIsLoading(false));
-}, [token]);
-
-  const handleNewLetter = () => {
-    setCurrentLetter({
-      id: Date.now().toString(),
-      title: '',
-      subject: '',
-      content: '',
-
-      recipient: '',
-      recipientEmail: '',
-
-      messageType: 'letter',
-      deliveryTrigger: 'death',
-      deliveryDate: undefined,
-      deliveryOccasion: '',
-
-      lastModified: new Date(),
+    setLetters(prev => {
+      if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+      return next;
     });
+  }, [value]);
 
-    setIsWriting(true);
+  useEffect(() => {
+    if (!token) return;
+
+    setIsLoading(true);
+
+    getMessages(token)
+      .then((data: any[]) => {
+        setLetters(data.map(normalizeLetter));
+      })
+      .catch(() => {
+        toast.error('Failed to load messages');
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [token]);
+
+  const refreshMessages = async () => {
+    if (!token) return;
+
+    const data = await getMessages(token);
+    setLetters(data.map(normalizeLetter));
   };
-const handleMediaUploaded = (media: any) => {
-  if (!currentLetter) return;
 
-  setCurrentLetter(prev => ({
-    ...prev!,
-    media,
-  }));
-
-  toast.success('Media uploaded successfully');
-};
-
-
-  const handleUseTemplate = (template: any) => {
+  const openNewMessage = (type: MessageType = 'letter') => {
     setCurrentLetter({
-      id: Date.now().toString(),
-      title: template.title,
-      recipient: '',
-      recipientEmail: '',
-      content: template.content,
-      lastModified: new Date(),
-      messageType: 'letter',
-      deliveryTrigger: 'death',
-      status: 'pending',
+      ...emptyLetter(),
+      messageType: type,
     });
     setIsWriting(true);
     setShowTemplates(false);
   };
 
-
-  const createSuggestedLetter = (contact: { name: string; email?: string; source: string }) => {
-    const newLetter: Letter = {
-      id: Date.now().toString(),
-      title: `Letter to ${contact.name}`,
-      recipient: contact.name,
-      recipientEmail: contact.email || '',
-      content: `Dear ${contact.name},\n\nIf you are reading this letter, it means I am no longer with you. I wanted to take a moment to share some important thoughts and guidance as you navigate this difficult time.\n\n[Please personalize this message with your own words and feelings.]\n\nWith all my love,\n[Your name]`,
-      lastModified: new Date(),
-      messageType: 'letter',
-      deliveryTrigger: 'death',
-      status: 'pending',
-    };
-
-    setCurrentLetter(newLetter);
-    setIsWriting(true);
-  };
-
-const handleSaveLetter = async () => {
-  if (!currentLetter || !token) return;
-
-const payload: any = {
-  title: currentLetter.title,
-
-  recipient: currentLetter.recipient,
-  recipient_email: currentLetter.recipientEmail,
-
-  message_type: currentLetter.messageType,
-  media: currentLetter.media || null,
-
-  delivery_trigger: currentLetter.deliveryTrigger,
-  delivery_date: currentLetter.deliveryDate || null,
-  delivery_occasion: currentLetter.deliveryOccasion || null,
-};
-
-if (currentLetter.subject !== undefined) {
-  payload.subject = currentLetter.subject;
-}
-
-if (currentLetter.content !== undefined) {
-  payload.content = currentLetter.content;
-}
-
-  try {
-    const exists = letters.some(
-      l => l.id === currentLetter.id && l.id.length > 10,
-    );
-
-    if (exists) {
-      await updateMessage(token, currentLetter.id, payload);
-      toast.success('Letter updated');
-    } else {
-      await createMessage(token, payload);
-      toast.success('Letter saved');
-    }
-
-    setIsWriting(false);
-    setCurrentLetter(null);
-
-const refreshed = await getMessages(token);
-setLetters(refreshed.map(mapLetter));
-
-
-  } catch {
-    toast.error('Save failed');
-  }
-};
-// const handleSaveLetter = async () => {
-//   if (!currentLetter || !token) return;
-
-//   const payload: any = {
-//     title: currentLetter.title,
-//     recipient: currentLetter.recipient,
-//     recipient_email: currentLetter.recipientEmail,
-//     message_type: currentLetter.messageType,
-//     media: currentLetter.media || null,
-//     delivery_trigger: currentLetter.deliveryTrigger,
-//     delivery_date: currentLetter.deliveryDate || null,
-//     delivery_occasion: currentLetter.deliveryOccasion || null,
-//   };
-
-//   if (currentLetter.subject !== undefined) {
-//     payload.subject = currentLetter.subject;
-//   }
-
-//   if (currentLetter.content !== undefined) {
-//     payload.content = currentLetter.content;
-//   }
-
-//   try {
-//     // 🔥 UPDATE
-//     if (currentLetter.id && letters.find(l => l.id === currentLetter.id)) {
-//       const updated = await updateMessage(
-//         token,
-//         currentLetter.id,
-//         payload
-//       );
-
-//       setLetters(prev =>
-//         prev.map(l =>
-//           l.id === currentLetter.id ? mapLetter(updated) : l
-//         )
-//       );
-
-//       toast.success('Letter updated');
-//     }
-
-//     // 🔥 CREATE
-//     else {
-//       const created = await createMessage(token, payload);
-
-//       const newLetter = mapLetter(created);
-
-//       setLetters(prev => [...prev, newLetter]);
-
-//       setCurrentLetter(newLetter); // 🔥 important
-//       toast.success('Letter saved');
-//     }
-
-//     setIsWriting(false);
-//   } catch (err) {
-//     toast.error('Save failed');
-//   }
-// };
-
-  const handleEditLetter = (letter: Letter) => {
-    setCurrentLetter(letter);
-    setIsWriting(true);
-  };
-
-const handleDeleteMessage = async (id: string) => {
-  if (!token) return;
-  if (!confirm('Delete this message?')) return;
-
-  await deleteMessage(token, id);
-  setLetters(prev => prev.filter(l => l.id !== id));
-  toast.success('Message deleted');
-};
-
-const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file || !token || !currentLetter) return;
-
-  try {
-    const media = await uploadMessageMedia(token, file);
-
+  const useTemplate = (template: (typeof letterTemplates)[number]) => {
     setCurrentLetter({
-      ...currentLetter,
-      media,
+      ...emptyLetter(),
+      title: template.title,
+      content: template.content,
+      messageType: 'letter',
+    });
+    setIsWriting(true);
+    setShowTemplates(false);
+  };
+
+  const createSuggestedMessage = (recipient: RecipientOption) => {
+    setCurrentLetter({
+      ...emptyLetter(),
+      title: `Letter to ${recipient.name}`,
+      recipient: recipient.name,
+      recipientEmail: recipient.email || '',
+      messageType: 'letter',
+      content: `Dear ${recipient.name},\n\nIf you are reading this letter, it means I am no longer with you. I wanted to share some important thoughts, love, and guidance with you.\n\n[Please personalize this message with your own words.]\n\nWith love,\n[Your name]`,
     });
 
-    toast.success('Media uploaded');
-  } catch {
-    toast.error('Upload failed');
-  }
-};
+    setIsWriting(true);
+    setShowSuggestions(false);
+  };
 
+  const closeEditor = () => {
+    setIsWriting(false);
+    setCurrentLetter(null);
+    setShowVideoRecorder(false);
+    setShowAudioRecorder(false);
+  };
 
-  const handleDeliverMessages = async () => {
-    setIsDelivering(true);
+  const handleMediaUploaded = (media: any) => {
+    setCurrentLetter(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        media,
+      };
+    });
+
+    setShowVideoRecorder(false);
+    setShowAudioRecorder(false);
+    toast.success('Media attached successfully');
+  };
+
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file || !token) return;
+
     try {
-      // Mock delivery - in real app, this would send to backend
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const undeliveredLetters = letters.filter(
-        letter => letter.status !== 'sent',
-      );
+      const media = await uploadMessageMedia(token, file);
+
+      setCurrentLetter(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          media,
+        };
+      });
+
+      toast.success('Media uploaded successfully');
+    } catch {
+      toast.error('Media upload failed');
+    }
+  };
+
+  const validateBeforeSave = (message: Letter) => {
+    if (!message.title.trim()) {
+      toast.error('Please add a message title');
+      return false;
+    }
+
+    if (!message.recipient.trim()) {
+      toast.error('Please add a recipient');
+      return false;
+    }
+
+    if (message.deliveryTrigger === 'date' && !message.deliveryDate) {
+      toast.error('Please select a delivery date');
+      return false;
+    }
+
+    if (message.messageType !== 'letter' && !message.media?.url) {
+      toast.error('Please record or upload your media before saving');
+      return false;
+    }
+
+    return true;
+  };
+
+  const saveMessage = async () => {
+    if (!token) {
+      toast.error('You are not logged in');
+      return;
+    }
+
+    if (!currentLetter) return;
+    if (!validateBeforeSave(currentLetter)) return;
+
+    const payload = {
+      title: currentLetter.title,
+      subject: currentLetter.subject || '',
+      content: currentLetter.content || '',
+      recipient: currentLetter.recipient,
+      recipient_email: currentLetter.recipientEmail || '',
+      message_type: currentLetter.messageType,
+      delivery_trigger: currentLetter.deliveryTrigger,
+      delivery_date: currentLetter.deliveryDate || null,
+      delivery_occasion: currentLetter.deliveryOccasion || null,
+      media: currentLetter.media || null,
+    };
+
+    try {
+      setSaving(true);
+
+      const alreadyExists = letters.some(item => item.id === currentLetter.id);
+
+      if (alreadyExists) {
+        await updateMessage(token, currentLetter.id, payload);
+        toast.success('Message updated');
+      } else {
+        await createMessage(token, payload);
+        toast.success('Message saved');
+      }
+
+      closeEditor();
+      await refreshMessages();
+    } catch {
+      toast.error('Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const editMessage = (letter: Letter) => {
+    setCurrentLetter(letter);
+    setIsWriting(true);
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 50);
+  };
+
+  const removeMessage = async (id: string) => {
+    if (!token) return;
+    if (!confirm('Delete this message?')) return;
+
+    try {
+      await deleteMessage(token, id);
+      setLetters(prev => prev.filter(item => item.id !== id));
+      toast.success('Message deleted');
+    } catch {
+      toast.error('Delete failed');
+    }
+  };
+
+  const deliverMessages = async () => {
+    setIsDelivering(true);
+
+    try {
+      await new Promise(resolve => setTimeout(resolve, 900));
+
       setLetters(prev =>
-        prev.map(l =>
-          undeliveredLetters.some(ul => ul.id === l.id)
-            ? { ...l, status: 'sent' }
-            : l,
+        prev.map(item =>
+          item.status === 'sent'
+            ? item
+            : {
+                ...item,
+                status: 'sent',
+              },
         ),
       );
 
-      
-    } catch (error) {
-      console.error('Error delivering messages:', error);
+      toast.success('Pending messages marked as delivered');
+    } catch {
+      toast.error('Delivery failed');
     } finally {
       setIsDelivering(false);
     }
   };
 
-  const handlePrintLetter = (letter: Letter) => {
-    // Create a new window with the letter content formatted for printing
+  const printMessage = (letter: Letter) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
     const currentDate = new Date().toLocaleDateString();
-    const printContent = `
-      <!DOCTYPE html>
+
+    const content =
+      letter.messageType === 'letter'
+        ? letter.content || ''
+        : `<p>${escapeHtml(letter.content || 'Media message')}</p>`;
+
+    printWindow.document.write(`
+      <!doctype html>
       <html>
         <head>
-          <title>${letter.title}</title>
+          <title>${escapeHtml(letter.title)}</title>
           <style>
-            @media print {
-              @page {
-                margin: 1in;
-                size: letter;
-              }
-            }
+            @page { margin: 1in; size: letter; }
             body {
-              font-family: 'Times New Roman', serif;
-              line-height: 1.6;
-              color: #333;
               max-width: 8.5in;
               margin: 0 auto;
-              padding: 20px;
+              padding: 24px;
+              color: #222;
+              font-family: Georgia, 'Times New Roman', serif;
+              line-height: 1.7;
             }
             .header {
               text-align: center;
-              margin-bottom: 40px;
-              border-bottom: 2px solid #333;
+              border-bottom: 1px solid #ddd;
               padding-bottom: 20px;
+              margin-bottom: 36px;
             }
-            .title {
-              font-size: 24px;
-              font-weight: bold;
-              margin-bottom: 10px;
+            h1 {
+              font-size: 28px;
+              margin: 0 0 8px;
             }
-            .recipient {
-              font-size: 18px;
-              font-style: italic;
-              margin-bottom: 5px;
-            }
-            .date {
+            .meta {
+              color: #555;
               font-size: 14px;
-              color: #666;
             }
             .content {
-              margin-top: 40px;
               font-size: 16px;
               white-space: pre-wrap;
             }
             .footer {
-              margin-top: 40px;
-              padding-top: 20px;
-              border-top: 1px solid #ccc;
-              font-size: 12px;
-              color: #666;
+              border-top: 1px solid #ddd;
+              margin-top: 48px;
+              padding-top: 16px;
               text-align: center;
+              color: #777;
+              font-size: 12px;
             }
           </style>
         </head>
         <body>
           <div class="header">
-            <div class="title">${letter.title}</div>
-            <div class="recipient">To: ${letter.recipient}</div>
-            <div class="date">Created: ${new Date(letter.lastModified).toLocaleDateString()}</div>
+            <h1>${escapeHtml(letter.title || 'Personal Message')}</h1>
+            <div class="meta">To: ${escapeHtml(letter.recipient || 'Recipient')}</div>
           </div>
-          <div class="content">${letter.content}</div>
-          <div class="footer">
-            Printed from Orderly Affairs on ${currentDate}
-          </div>
+          <div class="content">${content}</div>
+          <div class="footer">Printed from Orderly Affairs on ${currentDate}</div>
         </body>
       </html>
-    `;
+    `);
 
-    printWindow.document.write(printContent);
     printWindow.document.close();
-    
-    // Wait for content to load then print
+
     printWindow.onload = () => {
       printWindow.print();
       printWindow.close();
     };
   };
 
-  const getMessageTypeIcon = (type: string) => {
-    switch (type) {
-      case 'video': return Video;
-      case 'audio': return Mic;
-      default: return FileText;
-    }
-  };
-
-  const getDeliveryTriggerIcon = (trigger: string) => {
-    switch (trigger) {
-      case 'date': return Calendar;
-      case 'death': return AlertTriangle;
-      default: return Calendar;
-    }
-  };
-
-  // If used as standalone component (not in form), show header
-  const showHeader = !!onBack;
-
   return (
     <div
-      className={
-        showHeader
-          ? 'min-h-screen bg-background w-full max-w-none'
-          : 'w-full max-w-none'
-      }
+      className={cn(
+        'w-full max-w-none',
+        showHeader && 'min-h-screen bg-slate-50/70',
+      )}
     >
-      {/* Header */}
       {showHeader && (
-        <div className="bg-primary text-primary-foreground p-6 pb-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center">
+        <div className="sticky top-0 z-30 border-b bg-background/90 px-4 py-3 backdrop-blur-xl sm:px-6">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
                 onClick={onBack}
-                className="text-primary-foreground hover:bg-primary-foreground/20 p-2 mr-3"
+                className="h-10 w-10 shrink-0 rounded-full p-0"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="h-4 w-4" />
               </Button>
-              <div>
-                <h1 className="text-xl">Letters to Next of Kin</h1>
-                <p className="text-primary-foreground/80 text-sm">
-                  Messages for your loved ones
+
+              <div className="min-w-0">
+                <h1 className="truncate text-base font-semibold sm:text-lg">
+                  Personal Messages
+                </h1>
+                <p className="hidden text-xs text-muted-foreground sm:block">
+                  Letters, video, and audio messages for loved ones
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {isNextOfKin && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleDeliverMessages}
-                  disabled={
-                    isDelivering ||
-                    letters.filter(l => l.status !== 'sent').length === 0
-                  }
-                  className="text-primary-foreground hover:bg-primary-foreground/20 px-3 py-2 border border-primary-foreground/30"
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  {isDelivering ? 'Delivering...' : 'Deliver Messages'}
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleNewLetter}
-                className="text-primary-foreground hover:bg-primary-foreground/20 p-2"
-              >
-                <Plus className="w-5 h-5" />
+
+            {!isWriting && (
+              <Button type="button" size="sm" onClick={() => openNewMessage()}>
+                <Plus className="mr-2 h-4 w-4" />
+                New
               </Button>
-            </div>
+            )}
           </div>
         </div>
       )}
 
-      <div
-        className={showHeader ? 'px-4 sm:px-6 pb-6 w-full' : 'w-full space-y-6'}
-      >
-        {/* Writing Interface */}
-        {isWriting && currentLetter && (
-          <Card
-            className={`mb-6 ${showHeader ? '-mt-4' : ''} shadow-lg w-full`}
-          >
-            <CardHeader>
-              <CardTitle>
-                {currentLetter.id ? 'Edit Message' : 'Create New Message'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6 p-4 sm:p-6">
-              {/* Message Type Selection */}
-              <div>
-                <Label>Choose Message Type</Label>
-                <RadioGroup
-                  value={currentLetter.messageType}
-                  onValueChange={(value: 'letter' | 'video' | 'audio') =>
-                    setCurrentLetter({ ...currentLetter, messageType: value })
-                  }
-                  className="flex flex-row gap-6 mt-2"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="letter" id="letter" />
-                    <Label htmlFor="letter" className="flex items-center gap-2">
-                      <FileText className="w-4 h-4" />
-                      Letter
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="video" id="video" />
-                    <Label htmlFor="video" className="flex items-center gap-2">
-                      <Video className="w-4 h-4" />
-                      Video
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="audio" id="audio" />
-                    <Label htmlFor="audio" className="flex items-center gap-2">
-                      <Mic className="w-4 h-4" />
-                      Audio
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Basic Details */}
-              <div>
-                <Label htmlFor="title">Message Title</Label>
-                <Input
-                  id="title"
-                  value={currentLetter.title}
-                  onChange={e =>
-                    setCurrentLetter({
-                      ...currentLetter,
-                      title: e.target.value,
-                    })
-                  }
-                  placeholder="e.g., Letter to My Children"
-                />
-              </div>
-
-              {/* Recipient Details */}
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <Label htmlFor="recipient">Recipient Name(s)</Label>
-                  {getNextOfKinOptions.length > 0 ? (
-                    <div className="space-y-2">
-                      <Select
-                        value={currentLetter.recipient}
-                        onValueChange={value => {
-                          const selectedContact = getNextOfKinOptions.find(
-                            contact => contact.name === value,
-                          );
-                          setCurrentLetter({
-                            ...currentLetter,
-                            recipient: value,
-                            recipientEmail:
-                              selectedContact?.email ||
-                              currentLetter.recipientEmail,
-                          });
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select from authorized people or type custom name" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {getNextOfKinOptions.map((contact, index) => (
-                            <SelectItem
-                              key={`${contact.source}-${contact.name}-${index}`}
-                              value={contact.name}
-                            >
-                              <div className="flex flex-col">
-                                <span>{contact.name}</span>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  <span>{contact.source}</span>
-                                  {contact.email && (
-                                    <span>• {contact.email}</span>
-                                  )}
-                                </div>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        id="recipient-custom"
-                        value={currentLetter.recipient}
-                        onChange={e =>
-                          setCurrentLetter({
-                            ...currentLetter,
-                            recipient: e.target.value,
-                          })
-                        }
-                        placeholder="Or type a custom recipient name"
-                        className="text-sm"
-                      />
-                    </div>
-                  ) : (
-                    <Input
-                      id="recipient"
-                      value={currentLetter.recipient}
-                      onChange={e =>
-                        setCurrentLetter({
-                          ...currentLetter,
-                          recipient: e.target.value,
-                        })
-                      }
-                      placeholder="Who is this message for?"
-                    />
-                  )}
-                </div>
-                <div>
-                  <Label htmlFor="recipientEmail">Recipient Email</Label>
-                  <Input
-                    id="recipientEmail"
-                    type="email"
-                    value={currentLetter.recipientEmail}
-                    onChange={e =>
-                      setCurrentLetter({
-                        ...currentLetter,
-                        recipientEmail: e.target.value,
-                      })
-                    }
-                    placeholder="Email address for delivery"
-                  />
-                </div>
-              </div>
-
-              {/* Delivery Trigger */}
-              <div>
-                <Label>Set Delivery Trigger</Label>
-                <RadioGroup
-                  value={currentLetter.deliveryTrigger}
-                  onValueChange={(value: 'date' | 'death') =>
-                    setCurrentLetter({
-                      ...currentLetter,
-                      deliveryTrigger: value,
-                    })
-                  }
-                  className="mt-2"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="death" id="death" />
-                    <Label htmlFor="death" className="flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4" />
-                      Upon death
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="date" id="date" />
-                    <Label htmlFor="date" className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4" />
-                      Specific date
-                    </Label>
-                  </div>
-                </RadioGroup>
-
-                {/* Conditional delivery details */}
-                {currentLetter.deliveryTrigger === 'date' && (
-                  <div className="mt-3 space-y-3">
-                    <div>
-                      <Label htmlFor="deliveryDate">Delivery Date</Label>
-                      <DatePicker
-                        value={currentLetter.deliveryDate || ''}
-                        onChange={value =>
-                          setCurrentLetter({
-                            ...currentLetter,
-                            deliveryDate: value || '',
-                          })
-                        }
-                        placeholder="Select delivery date"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="deliveryOccasion">
-                        Occasion (Optional)
-                      </Label>
-                      <Input
-                        id="deliveryOccasion"
-                        value={currentLetter.deliveryOccasion || ''}
-                        onChange={e =>
-                          setCurrentLetter({
-                            ...currentLetter,
-                            deliveryOccasion: e.target.value,
-                          })
-                        }
-                        placeholder="e.g., Anniversary, Birthday, Graduation"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Letter Content Writing Section */}
-              {currentLetter.messageType === 'letter' && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Edit3 className="w-5 h-5 text-primary" />
-                    <h3 className="text-lg">Write a Letter</h3>
-                  </div>
-
-                  {/* Letter Subject */}
-                  <div>
-                    <Label htmlFor="letterSubject">Letter Subject</Label>
-                    <Input
-                      id="letterSubject"
-                      value={currentLetter.subject || ''}
-                      onChange={e =>
-                        setCurrentLetter({
-                          ...currentLetter,
-                          subject: e.target.value,
-                        })
-                      }
-                      placeholder="Read This When You Need Me Close"
-                      className="mt-2"
-                    />
-                  </div>
-
-                  {/* Rich Text Editor */}
-                  <div>
-                    <RichTextEditor
-                      value={currentLetter.content ?? ''}
-                      onChange={content =>
-                        setCurrentLetter({ ...currentLetter, content })
-                      }
-                      placeholder="Write your heartfelt message here..."
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* File Upload for Video/Audio */}
-              {currentLetter.messageType === 'video' && (
-                <div>
-                  <Label htmlFor="videoFile">Video Message</Label>
-                  <div className="space-y-3 mt-2">
-                    <div className="p-2 bg-blue-50 border border-blue-200 rounded-md">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-blue-800">
-                          💡 <strong>Tip:</strong> Test permissions first or use
-                          file upload
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Record Now Button */}
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        onClick={() => setShowVideoRecorder(true)}
-                        className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                      >
-                        <Video className="w-4 h-4 mr-2" />
-                        Record Now
-                      </Button>
-                    </div>
-
-                    <div className="text-center text-sm text-muted-foreground">
-                      or
-                    </div>
-
-                    {/* File Upload - Always available */}
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="videoFile"
-                        type="file"
-                        accept="video/*"
-                        onChange={handleFileUpload}
-                        className="flex-1"
-                      />
-                      <Button variant="outline" size="sm" type="button">
-                        <Upload className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {currentLetter.media?.url && (
-                    <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Video className="w-4 h-4 text-green-600" />
-                        <p className="text-sm text-green-800">Video uploaded</p>
-                      </div>
-
-                      {currentLetter.media.size && (
-                        <p className="text-xs text-green-600 mb-2">
-                          Size:{' '}
-                          {(currentLetter.media.size / (1024 * 1024)).toFixed(
-                            2,
-                          )}{' '}
-                          MB
-                        </p>
-                      )}
-
-                      <video
-                        controls
-                        className="w-full h-32 bg-black rounded object-cover"
-                        src={currentLetter.media.url}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-              {currentLetter.messageType === 'audio' && (
-                <div>
-                  <Label htmlFor="audioFile">Audio Message</Label>
-
-                  <div className="space-y-3 mt-2">
-                    <div className="p-2 bg-blue-50 border border-blue-200 rounded-md">
-                      <p className="text-xs text-blue-800">
-                        💡 <strong>Tip:</strong> You can record or upload an
-                        audio message
-                      </p>
-                    </div>
-
-                    {/* Record Audio */}
-                    <Button
-                      type="button"
-                      onClick={() => setShowAudioRecorder(true)}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      <Mic className="w-4 h-4 mr-2" />
-                      Record Audio
-                    </Button>
-
-                    <div className="text-center text-sm text-muted-foreground">
-                      or
-                    </div>
-
-                    {/* Upload Audio */}
-                    <Input
-                      id="audioFile"
-                      type="file"
-                      accept="audio/*"
-                      onChange={handleFileUpload}
-                    />
-                  </div>
-
-                  {/* Preview */}
-                  {currentLetter.media?.url && (
-                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Mic className="w-4 h-4 text-blue-600" />
-                        <p className="text-sm text-blue-800">Audio uploaded</p>
-                      </div>
-
-                      {currentLetter.media.size && (
-                        <p className="text-xs text-blue-600 mb-2">
-                          Size:{' '}
-                          {(currentLetter.media.size / (1024 * 1024)).toFixed(
-                            2,
-                          )}{' '}
-                          MB
-                        </p>
-                      )}
-
-                      <audio
-                        controls
-                        className="w-full"
-                        src={currentLetter.media.url}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Message Content for Video/Audio */}
-              {currentLetter.messageType !== 'letter' && (
-                <div>
-                  <Label htmlFor="content">Message Description</Label>
-                  <Textarea
-                    id="content"
-                    value={currentLetter.content}
-                    onChange={e =>
-                      setCurrentLetter({
-                        ...currentLetter,
-                        content: e.target.value,
-                      })
-                    }
-                    placeholder="Describe your video/audio message..."
-                    rows={6}
-                    className="resize-none"
-                  />
-                </div>
-              )}
-
-              {/* Message Review Section */}
-              {((currentLetter.media &&
-                currentLetter.messageType !== 'letter') ||
-                (currentLetter.messageType === 'letter' &&
-                  currentLetter.content)) && (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <h4 className="font-medium mb-3 flex items-center gap-2">
-                    <Save className="w-4 h-4" />
-                    Review Your Message
-                  </h4>
-
-                  <div className="space-y-3">
-                    {/* Message Details */}
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="font-medium">Type:</span>{' '}
-                        {currentLetter.messageType === 'letter'
-                          ? 'Written Letter'
-                          : currentLetter.messageType === 'video'
-                            ? 'Video Message'
-                            : 'Audio Message'}
-                      </div>
-                      <div>
-                        <span className="font-medium">Delivery:</span>{' '}
-                        {currentLetter.deliveryTrigger === 'death'
-                          ? 'Upon passing'
-                          : `On ${currentLetter.deliveryDate ? new Date(currentLetter.deliveryDate).toLocaleDateString() : 'selected date'}`}
-                      </div>
-                      {currentLetter.deliveryOccasion && (
-                        <div className="col-span-2">
-                          <span className="font-medium">Occasion:</span>{' '}
-                          {currentLetter.deliveryOccasion}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Content Preview */}
-                    {currentLetter.messageType === 'letter' &&
-                      currentLetter.content && (
-                        <div>
-                          <p className="font-medium text-sm mb-2">
-                            Letter Content Preview:
-                          </p>
-                          <div className="bg-white p-3 rounded border max-h-32 overflow-y-auto text-sm">
-                            <div
-                              dangerouslySetInnerHTML={{
-                                __html:
-                                  currentLetter.content.substring(0, 200) +
-                                  (currentLetter.content.length > 200
-                                    ? '...'
-                                    : ''),
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                    {/* Media Preview */}
-                    {currentLetter.media?.url &&
-                      currentLetter.messageType === 'video' && (
-                        <video
-                          controls
-                          src={currentLetter.media.url}
-                          className="w-full h-32"
-                        />
-                      )}
-
-                    {currentLetter.media?.url &&
-                      currentLetter.messageType === 'audio' && (
-                        <audio controls src={currentLetter.media.url} />
-                      )}
-
-                    {currentLetter.content &&
-                      currentLetter.messageType !== 'letter' && (
-                        <div>
-                          <p className="font-medium text-sm mb-2">
-                            Description:
-                          </p>
-                          <p className="text-sm text-gray-600 bg-white p-2 rounded border">
-                            {currentLetter.content || 'No description provided'}
-                          </p>
-                        </div>
-                      )}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <Button onClick={handleSaveLetter} className="flex-1">
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Message
-                </Button>
-                <Button variant="outline" onClick={() => setIsWriting(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Summary and Quick Actions */}
+      <div className={cn(showHeader ? 'mx-auto max-w-7xl p-4 sm:p-6' : '')}>
         {!isWriting && (
-          <>
-            <Card
-              className={`mb-6 ${showHeader ? '-mt-4' : ''} shadow-lg w-full`}
-            >
-              <CardContent className="p-4 sm:p-6 w-full">
-                {isLoading ? (
-                  <div className="text-center py-4">
-                    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                    <p className="text-sm text-muted-foreground">
-                      Loading your messages...
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4 w-full">
-                    <div>
-                      <h3 className="text-primary">Your Messages</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {letters.length} messages saved •{' '}
-                        {letters.filter(l => l.status !== 'sent').length}{' '}
-                        pending delivery
-                      </p>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-3 w-full">
-                      <Button
-                        onClick={handleNewLetter}
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground flex-1 sm:flex-none sm:min-w-50"
-                        size="lg"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create New Message
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowTemplates(!showTemplates)}
-                        className="flex-1 sm:flex-none sm:min-w-37.5"
-                      >
-                        {showTemplates ? 'Hide Templates' : 'Show Templates'}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          <div className="space-y-5">
+            <HeroPanel
+              pendingCount={pendingCount}
+              letterCount={letterCount}
+              videoCount={videoCount}
+              audioCount={audioCount}
+              onCreate={() => openNewMessage()}
+              onTemplates={() => setShowTemplates(prev => !prev)}
+            />
 
-            {/* Suggested Letters */}
-            {getSuggestedLetters.length > 0 && (
-              <Card className="mb-6 border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-900/20">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <h4 className="font-medium text-blue-900 dark:text-blue-100">
-                        Suggested Letters
-                      </h4>
-                      <p className="text-sm text-blue-700 dark:text-blue-300">
-                        Create letters for people in your Access Management
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        setShowSuggestedLetters(!showSuggestedLetters)
-                      }
-                      className="text-blue-700 dark:text-blue-300"
-                    >
-                      {showSuggestedLetters ? 'Hide' : 'Show'} (
-                      {getSuggestedLetters.length})
-                    </Button>
-                  </div>
-
-                  {showSuggestedLetters && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {getSuggestedLetters.map((contact, index) => (
-                        <div
-                          key={`suggested-${contact.source}-${contact.name}-${index}`}
-                          className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-700"
-                        >
-                          <div className="flex-1">
-                            <p className="font-medium text-sm">
-                              {contact.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {contact.source}
-                              {contact.email && ` • ${contact.email}`}
-                            </p>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => createSuggestedLetter(contact)}
-                            className="ml-3 border-blue-300 text-blue-700 hover:bg-blue-100 dark:border-blue-600 dark:text-blue-300 dark:hover:bg-blue-900"
-                          >
-                            <Plus className="w-3 h-3 mr-1" />
-                            Create Letter
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+            {isLoading && (
+              <Card className="border-dashed">
+                <CardContent className="flex items-center justify-center gap-3 p-8">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  <p className="text-sm text-muted-foreground">
+                    Loading personal messages...
+                  </p>
                 </CardContent>
               </Card>
             )}
 
-            {/* Templates */}
+            {!isLoading && suggestedRecipients.length > 0 && (
+              <SuggestedPanel
+                recipients={suggestedRecipients}
+                open={showSuggestions}
+                onToggle={() => setShowSuggestions(prev => !prev)}
+                onCreate={createSuggestedMessage}
+              />
+            )}
+
             {showTemplates && (
-              <div className="mb-6 w-full">
-                <h2 className="text-primary mb-3">Letter Templates</h2>
-                <div className="space-y-3 w-full">
-                  {letterTemplates.map((template, index) => (
-                    <Card
-                      key={index}
-                      className="cursor-pointer hover:shadow-md transition-shadow w-full"
-                    >
-                      <CardContent className="p-4 sm:p-6 w-full">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 w-full">
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-primary">{template.title}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              Pre-written template to get you started
-                            </p>
-                          </div>
-                          <Button 
-                            size="sm"
-                            onClick={() => handleUseTemplate(template)}
-                            className="w-full sm:w-auto sm:flex-shrink-0"
-                          >
-                            Use Template
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+              <TemplateGrid templates={letterTemplates} onUse={useTemplate} />
+            )}
+
+            {!isLoading && letters.length > 0 && (
+              <div className="grid gap-4">
+                {letters.map(letter => (
+                  <MessageCard
+                    key={letter.id}
+                    letter={letter}
+                    onEdit={() => editMessage(letter)}
+                    onDelete={() => removeMessage(letter.id)}
+                    onPrint={() => printMessage(letter)}
+                  />
+                ))}
               </div>
             )}
 
-            {/* Messages List */}
-            {!isLoading && (
-              <div className="space-y-4   w-full">
-                {letters.map(letter => {
-                  const MessageIcon = getMessageTypeIcon(letter.messageType);
-                  const TriggerIcon = getDeliveryTriggerIcon(
-                    letter.deliveryTrigger,
-                  );
-
-                  return (
-                    <Card
-                      key={letter.id}
-                      className="hover:shadow-md transition-shadow w-full"
-                    >
-                      <CardContent className="p-4 sm:p-6">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            {/* Message Header */}
-                            <div className="flex items-center gap-3 mb-2">
-                              <div className="flex items-center gap-2">
-                                <MessageIcon className="w-5 h-5 text-primary" />
-                                <span className="font-medium capitalize text-sm">
-                                  {letter.messageType} Message
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <TriggerIcon className="w-4 h-4 text-muted-foreground" />
-                                <span className="text-sm text-muted-foreground">
-                                  {letter.deliveryTrigger === 'death'
-                                    ? 'Upon death'
-                                    : 'Specific date'}
-                                </span>
-                              </div>
-                              {letter.status === 'sent' && (
-                                <Badge variant="secondary" className="text-xs">
-                                  Delivered
-                                </Badge>
-                              )}
-                            </div>
-
-                            {/* Title and Recipient */}
-                            <h3 className="font-medium text-base mb-1 line-clamp-1">
-                              {letter.title}
-                            </h3>
-                            <p className="text-sm text-muted-foreground mb-2">
-                              To: {letter.recipient}
-                              {letter.recipientEmail &&
-                                ` (${letter.recipientEmail})`}
-                            </p>
-
-                            {/* Delivery Details */}
-                            <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground mb-3">
-                              {letter.deliveryTrigger === 'date' &&
-                                letter.deliveryDate && (
-                                  <span>
-                                    📅{' '}
-                                    {new Date(
-                                      letter.deliveryDate,
-                                    ).toLocaleDateString()}
-                                  </span>
-                                )}
-                              {letter.deliveryOccasion && (
-                                <span>🎉 {letter.deliveryOccasion}</span>
-                              )}
-                              <span>
-                                ✏️ Modified{' '}
-                                {new Date(
-                                  letter.lastModified,
-                                ).toLocaleDateString()}
-                              </span>
-                            </div>
-
-                            {/* Content Preview */}
-                            {letter.messageType === 'letter' &&
-                              letter.content && (
-                                <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
-                                  {letter.content
-                                    .replace(/\\n/g, ' ')
-                                    .substring(0, 150)}
-                                  {letter.content.length > 150 ? '...' : ''}
-                                </p>
-                              )}
-
-                            {/* File Attachments and Preview */}
-                            <div className="space-y-3">
-                              <div className="flex flex-wrap gap-2">
-                                {letter.media?.url && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs flex items-center gap-1"
-                                  >
-                                    {letter.messageType === 'video' ? (
-                                      <Video className="w-3 h-3" />
-                                    ) : (
-                                      <Mic className="w-3 h-3" />
-                                    )}
-                                    Media attached
-                                  </Badge>
-                                )}
-
-                                {letter.subject && (
-                                  <Badge variant="outline" className="text-xs">
-                                    Subject: {letter.subject}
-                                  </Badge>
-                                )}
-                              </div>
-
-                              {/* Media Preview */}
-                              {letter.media?.url &&
-                                letter.messageType === 'video' && (
-                                  <div className="bg-muted rounded-lg p-3">
-                                    <div className="flex items-center justify-between mb-2">
-                                      <span className="text-sm font-medium">
-                                        Video Preview
-                                      </span>
-                                    </div>
-
-                                    <video
-                                      controls
-                                      src={letter.media.url}
-                                      className="w-full h-32 bg-black rounded object-cover"
-                                    />
-                                  </div>
-                                )}
-
-                              {letter.media?.url &&
-                                letter.messageType === 'audio' && (
-                                  <div className="bg-muted rounded-lg p-3">
-                                    <div className="flex items-center justify-between mb-2">
-                                      <span className="text-sm font-medium">
-                                        Audio Preview
-                                      </span>
-                                    </div>
-
-                                    <audio
-                                      controls
-                                      src={letter.media.url}
-                                      className="w-full"
-                                    />
-                                  </div>
-                                )}
-                            </div>
-                          </div>
-
-                          {/* Action Buttons */}
-                          <div className="flex flex-col gap-2 ml-4">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleEditLetter(letter)}
-                              className="h-8 px-3"
-                            >
-                              <Edit2 className="w-3 h-3 mr-1" />
-                              Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handlePrintLetter(letter)}
-                              className="h-8 px-3"
-                            >
-                              <Printer className="w-3 h-3 mr-1" />
-                              Print
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleDeleteMessage(letter.id)}
-                              className="h-8 px-3"
-                            >
-                              <Trash2 className="w-3 h-3 mr-1" />
-                              Delete
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-
-                {letters.length === 0 && (
-                  <Card className="w-full">
-                    <CardContent className="p-8 text-center">
-                      <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="text-lg font-medium mb-2">
-                        No messages yet
-                      </h3>
-                      <p className="text-muted-foreground mb-4">
-                        Create your first personal message for your loved ones
-                      </p>
-                      <Button onClick={handleNewLetter}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create First Message
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+            {!isLoading && letters.length === 0 && (
+              <EmptyState onCreate={() => openNewMessage()} />
             )}
 
-            {/* Quick Actions - Next of Kin Only */}
             {isNextOfKin && (
-              <div className="mt-8 pt-6 border-t bg-muted/20 -mx-4 px-4 sm:-mx-6 sm:px-6 rounded-lg">
-                <div className="space-y-3">
-                  <h3 className="font-medium text-primary">
-                    Next of Kin Actions
-                  </h3>
-                  <Button
-                    variant="default"
-                    onClick={handleDeliverMessages}
-                    disabled={
-                      isDelivering ||
-                      letters.filter(l => l.status !== 'sent').length === 0
-                    }
-                    className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white"
-                    size="lg"
-                  >
-                    <Mail className="w-4 h-4 mr-2" />
-                    {isDelivering
-                      ? 'Delivering Messages...'
-                      : 'Deliver Messages to Loved Ones'}
-                  </Button>
-                  <p className="text-xs text-muted-foreground text-center">
-                    This will send all undelivered messages to their intended
-                    recipients
-                  </p>
-                </div>
-              </div>
+              <Card className="border-purple-200 bg-purple-50/70">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="font-semibold text-purple-950">
+                        Next of Kin Delivery
+                      </h3>
+                      <p className="mt-1 text-sm text-purple-700">
+                        Deliver all pending messages to their recipients.
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      disabled={isDelivering || pendingCount === 0}
+                      onClick={deliverMessages}
+                      className="bg-purple-600 text-white hover:bg-purple-700"
+                    >
+                      <Mail className="mr-2 h-4 w-4" />
+                      {isDelivering ? 'Delivering...' : 'Deliver Messages'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             )}
-          </>
+          </div>
+        )}
+
+        {isWriting && currentLetter && (
+          <div className="space-y-5">
+            <EditorHeader
+              isEditing={letters.some(item => item.id === currentLetter.id)}
+              onClose={closeEditor}
+            />
+
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+              <Card className="overflow-hidden rounded-[28px]">
+                <CardContent className="space-y-7 p-4 sm:p-6">
+                  <TypeSelector
+                    value={currentLetter.messageType}
+                    onChange={messageType =>
+                      setCurrentLetter(prev =>
+                        prev
+                          ? {
+                              ...prev,
+                              messageType,
+                              media:
+                                prev.messageType === messageType
+                                  ? prev.media
+                                  : undefined,
+                            }
+                          : prev,
+                      )
+                    }
+                  />
+
+                  <BasicDetails
+                    letter={currentLetter}
+                    recipients={recipientOptions}
+                    onChange={patch =>
+                      setCurrentLetter(prev =>
+                        prev
+                          ? {
+                              ...prev,
+                              ...patch,
+                            }
+                          : prev,
+                      )
+                    }
+                  />
+
+                  <DeliverySection
+                    letter={currentLetter}
+                    onChange={patch =>
+                      setCurrentLetter(prev =>
+                        prev
+                          ? {
+                              ...prev,
+                              ...patch,
+                            }
+                          : prev,
+                      )
+                    }
+                  />
+
+                  {currentLetter.messageType === 'letter' ? (
+                    <LetterEditor
+                      letter={currentLetter}
+                      onChange={patch =>
+                        setCurrentLetter(prev =>
+                          prev
+                            ? {
+                                ...prev,
+                                ...patch,
+                              }
+                            : prev,
+                        )
+                      }
+                    />
+                  ) : (
+                    <MediaEditor
+                      letter={currentLetter}
+                      onRecord={() => {
+                        if (currentLetter.messageType === 'video') {
+                          setShowVideoRecorder(true);
+                        } else {
+                          setShowAudioRecorder(true);
+                        }
+                      }}
+                      onUpload={handleFileUpload}
+                      onChange={patch =>
+                        setCurrentLetter(prev =>
+                          prev
+                            ? {
+                                ...prev,
+                                ...patch,
+                              }
+                            : prev,
+                        )
+                      }
+                    />
+                  )}
+
+                  <div className="sticky bottom-0 z-10 -mx-4 -mb-4 border-t bg-background/95 p-4 backdrop-blur sm:static sm:m-0 sm:border-t sm:bg-transparent sm:p-0">
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <Button
+                        type="button"
+                        disabled={saving}
+                        onClick={saveMessage}
+                        className="h-11 flex-1 rounded-xl"
+                      >
+                        <Save className="mr-2 h-4 w-4" />
+                        {saving ? 'Saving...' : 'Save Message'}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={closeEditor}
+                        className="h-11 rounded-xl"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <PreviewSidebar letter={currentLetter} />
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Modals */}
       {showVideoRecorder && (
         <SafeMediaRecorder
           type="video"
           token={token}
           onUploaded={handleMediaUploaded}
-          onClose={() => {
-            setShowVideoRecorder(false);
-            setRerecordingLetter(null);
-          }}
+          onClose={() => setShowVideoRecorder(false)}
         />
       )}
 
@@ -1513,12 +837,957 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
           type="audio"
           token={token}
           onUploaded={handleMediaUploaded}
-          onClose={() => {
-            setShowAudioRecorder(false);
-            setRerecordingLetter(null);
-          }}
+          onClose={() => setShowAudioRecorder(false)}
         />
       )}
     </div>
   );
 }
+
+/* ============================================================
+   MAIN UI SECTIONS
+============================================================ */
+
+function HeroPanel({
+  pendingCount,
+  letterCount,
+  videoCount,
+  audioCount,
+  onCreate,
+  onTemplates,
+}: {
+  pendingCount: number;
+  letterCount: number;
+  videoCount: number;
+  audioCount: number;
+  onCreate: () => void;
+  onTemplates: () => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-[28px] border bg-card shadow-sm">
+      <div className="relative p-5 sm:p-6 lg:p-7">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.16),transparent_38%)]" />
+
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="rounded-full">
+                <Heart className="mr-1 h-3 w-3" />
+                Personal legacy
+              </Badge>
+
+              <Badge variant="outline" className="rounded-full">
+                {pendingCount} pending
+              </Badge>
+            </div>
+
+            <div>
+              <h2 className="max-w-2xl text-xl font-semibold tracking-tight sm:text-2xl">
+                Create meaningful messages for loved ones
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                Write letters, record voice notes, or upload video messages.
+                Everything stays organized by recipient and delivery timing.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[300px]">
+            <Button type="button" size="lg" onClick={onCreate}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Message
+            </Button>
+
+            <Button
+              type="button"
+              size="lg"
+              variant="outline"
+              onClick={onTemplates}
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              Templates
+            </Button>
+          </div>
+        </div>
+
+        <div className="relative mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            icon={<FileText className="h-4 w-4" />}
+            label="Letters"
+            value={letterCount}
+          />
+          <StatCard
+            icon={<Video className="h-4 w-4" />}
+            label="Videos"
+            value={videoCount}
+          />
+          <StatCard
+            icon={<Mic className="h-4 w-4" />}
+            label="Audio"
+            value={audioCount}
+          />
+          <StatCard
+            icon={<Clock className="h-4 w-4" />}
+            label="Pending"
+            value={pendingCount}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SuggestedPanel({
+  recipients,
+  open,
+  onToggle,
+  onCreate,
+}: {
+  recipients: RecipientOption[];
+  open: boolean;
+  onToggle: () => void;
+  onCreate: (recipient: RecipientOption) => void;
+}) {
+  return (
+    <Card className="border-primary/20 bg-primary/5">
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-background text-primary shadow-sm">
+              <Users className="h-5 w-5" />
+            </div>
+
+            <div>
+              <h3 className="font-semibold">Suggested recipients</h3>
+              <p className="text-sm text-muted-foreground">
+                People from Access Management who do not have a message yet.
+              </p>
+            </div>
+          </div>
+
+          <Button type="button" variant="outline" size="sm" onClick={onToggle}>
+            {open ? 'Hide' : 'Show'} {recipients.length}
+          </Button>
+        </div>
+
+        {open && (
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {recipients.map((recipient, index) => (
+              <div
+                key={`${recipient.name}-${index}`}
+                className="flex flex-col gap-3 rounded-2xl border bg-background p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {recipient.name}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {recipient.email || recipient.source}
+                  </p>
+                </div>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onCreate(recipient)}
+                  className="w-full sm:w-auto"
+                >
+                  Create
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function TemplateGrid({
+  templates,
+  onUse,
+}: {
+  templates: typeof letterTemplates;
+  onUse: (template: (typeof letterTemplates)[number]) => void;
+}) {
+  return (
+    <div className="grid gap-3 md:grid-cols-3">
+      {templates.map((template, index) => (
+        <Card
+          key={index}
+          onClick={() => onUse(template)}
+          className="group cursor-pointer rounded-[24px] transition hover:-translate-y-0.5 hover:shadow-md"
+        >
+          <CardContent className="p-5">
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <FileText className="h-5 w-5" />
+            </div>
+
+            <h3 className="font-semibold">{template.title}</h3>
+            <p className="mt-2 text-sm leading-5 text-muted-foreground">
+              Start from a thoughtful draft and personalize it.
+            </p>
+
+            <Button type="button" className="mt-4 w-full" variant="outline">
+              Use Template
+            </Button>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <Card className="border-dashed">
+      <CardContent className="p-8 text-center sm:p-12">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/10 text-primary">
+          <Heart className="h-8 w-8" />
+        </div>
+
+        <h3 className="text-lg font-semibold">No messages yet</h3>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+          Create your first personal letter, video, or audio message for someone
+          important.
+        </p>
+
+        <Button type="button" className="mt-5" onClick={onCreate}>
+          <Plus className="mr-2 h-4 w-4" />
+          Create First Message
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ============================================================
+   EDITOR
+============================================================ */
+
+function EditorHeader({
+  isEditing,
+  onClose,
+}: {
+  isEditing: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-[28px] border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
+      <div>
+        <Badge variant="outline" className="mb-2 rounded-full">
+          {isEditing ? 'Editing' : 'New message'}
+        </Badge>
+
+        <h2 className="text-lg font-semibold sm:text-xl">
+          {isEditing ? 'Edit Personal Message' : 'Create Personal Message'}
+        </h2>
+
+        <p className="text-sm text-muted-foreground">
+          Add recipient, delivery timing, and your message content.
+        </p>
+      </div>
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={onClose}
+        className="self-start rounded-full sm:self-auto"
+      >
+        <X className="mr-2 h-4 w-4" />
+        Close
+      </Button>
+    </div>
+  );
+}
+
+function TypeSelector({
+  value,
+  onChange,
+}: {
+  value: MessageType;
+  onChange: (value: MessageType) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <Label>Message Type</Label>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <TypeCard
+          active={value === 'letter'}
+          icon={<FileText className="h-5 w-5" />}
+          title="Letter"
+          text="Write a rich text message"
+          onClick={() => onChange('letter')}
+        />
+
+        <TypeCard
+          active={value === 'video'}
+          icon={<Video className="h-5 w-5" />}
+          title="Video"
+          text="Record or upload video"
+          onClick={() => onChange('video')}
+        />
+
+        <TypeCard
+          active={value === 'audio'}
+          icon={<Mic className="h-5 w-5" />}
+          title="Audio"
+          text="Record or upload voice"
+          onClick={() => onChange('audio')}
+        />
+      </div>
+    </div>
+  );
+}
+
+function BasicDetails({
+  letter,
+  recipients,
+  onChange,
+}: {
+  letter: Letter;
+  recipients: RecipientOption[];
+  onChange: (patch: Partial<Letter>) => void;
+}) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <FieldBlock label="Message Title">
+        <Input
+          value={letter.title}
+          onChange={event => onChange({ title: event.target.value })}
+          placeholder="e.g., Letter to My Children"
+          className="h-11 rounded-xl"
+        />
+      </FieldBlock>
+
+      <FieldBlock label="Recipient Email">
+        <Input
+          type="email"
+          value={letter.recipientEmail}
+          onChange={event => onChange({ recipientEmail: event.target.value })}
+          placeholder="recipient@email.com"
+          className="h-11 rounded-xl"
+        />
+      </FieldBlock>
+
+      <FieldBlock label="Recipient Name" className="md:col-span-2">
+        {recipients.length > 0 ? (
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr]">
+            <Select
+              value={letter.recipient}
+              onValueChange={selectedName => {
+                const selected = recipients.find(
+                  item => item.name === selectedName,
+                );
+
+                onChange({
+                  recipient: selectedName,
+                  recipientEmail: selected?.email || letter.recipientEmail,
+                });
+              }}
+            >
+              <SelectTrigger className="h-11 rounded-xl">
+                <SelectValue placeholder="Select from Access Management" />
+              </SelectTrigger>
+
+              <SelectContent>
+                {recipients.map((recipient, index) => (
+                  <SelectItem
+                    key={`${recipient.name}-${index}`}
+                    value={recipient.name}
+                  >
+                    {recipient.name}
+                    {recipient.email ? ` • ${recipient.email}` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Input
+              value={letter.recipient}
+              onChange={event => onChange({ recipient: event.target.value })}
+              placeholder="Or type custom recipient"
+              className="h-11 rounded-xl"
+            />
+          </div>
+        ) : (
+          <Input
+            value={letter.recipient}
+            onChange={event => onChange({ recipient: event.target.value })}
+            placeholder="Who is this message for?"
+            className="h-11 rounded-xl"
+          />
+        )}
+      </FieldBlock>
+    </div>
+  );
+}
+
+function DeliverySection({
+  letter,
+  onChange,
+}: {
+  letter: Letter;
+  onChange: (patch: Partial<Letter>) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <Label>Delivery Trigger</Label>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <DeliveryCard
+          active={letter.deliveryTrigger === 'death'}
+          icon={<AlertTriangle className="h-5 w-5" />}
+          title="Upon death"
+          text="Deliver when final verification occurs"
+          onClick={() =>
+            onChange({
+              deliveryTrigger: 'death',
+              deliveryDate: '',
+              deliveryOccasion: '',
+            })
+          }
+        />
+
+        <DeliveryCard
+          active={letter.deliveryTrigger === 'date'}
+          icon={<Calendar className="h-5 w-5" />}
+          title="Specific date"
+          text="Schedule for birthday or occasion"
+          onClick={() => onChange({ deliveryTrigger: 'date' })}
+        />
+      </div>
+
+      {letter.deliveryTrigger === 'date' && (
+        <div className="grid gap-4 rounded-2xl border bg-muted/30 p-4 md:grid-cols-2">
+          <FieldBlock label="Delivery Date">
+            <DatePicker
+              value={letter.deliveryDate || ''}
+              onChange={value => onChange({ deliveryDate: value || '' })}
+              placeholder="Select delivery date"
+            />
+          </FieldBlock>
+
+          <FieldBlock label="Occasion">
+            <Input
+              value={letter.deliveryOccasion || ''}
+              onChange={event =>
+                onChange({ deliveryOccasion: event.target.value })
+              }
+              placeholder="Birthday, anniversary, graduation..."
+              className="h-11 rounded-xl"
+            />
+          </FieldBlock>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LetterEditor({
+  letter,
+  onChange,
+}: {
+  letter: Letter;
+  onChange: (patch: Partial<Letter>) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <FieldBlock label="Letter Subject">
+        <Input
+          value={letter.subject || ''}
+          onChange={event => onChange({ subject: event.target.value })}
+          placeholder="Read this when you need me close"
+          className="h-11 rounded-xl"
+        />
+      </FieldBlock>
+
+      <div className="space-y-2">
+        <Label>Letter Content</Label>
+        <div className="overflow-hidden rounded-2xl border bg-background">
+          <RichTextEditor
+            value={letter.content || ''}
+            onChange={content => onChange({ content })}
+            placeholder="Write your heartfelt message here..."
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MediaEditor({
+  letter,
+  onRecord,
+  onUpload,
+  onChange,
+}: {
+  letter: Letter;
+  onRecord: () => void;
+  onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onChange: (patch: Partial<Letter>) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <MediaUploadPanel
+        type={letter.messageType as 'video' | 'audio'}
+        media={letter.media}
+        onRecord={onRecord}
+        onUpload={onUpload}
+      />
+
+      <FieldBlock label="Message Description">
+        <Textarea
+          value={letter.content || ''}
+          onChange={event => onChange({ content: event.target.value })}
+          placeholder="Add a short description for this video or audio message..."
+          rows={5}
+          className="resize-none rounded-2xl"
+        />
+      </FieldBlock>
+    </div>
+  );
+}
+
+function PreviewSidebar({ letter }: { letter: Letter }) {
+  return (
+    <div className="xl:sticky xl:top-6 xl:self-start">
+      <Card className="overflow-hidden rounded-[28px]">
+        <CardContent className="p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+
+            <div>
+              <h3 className="font-semibold">Message Preview</h3>
+              <p className="text-xs text-muted-foreground">
+                Review before saving
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4 text-sm">
+            <PreviewRow
+              label="Type"
+              value={
+                letter.messageType === 'letter'
+                  ? 'Written letter'
+                  : letter.messageType === 'video'
+                    ? 'Video message'
+                    : 'Audio message'
+              }
+            />
+
+            <PreviewRow
+              label="Recipient"
+              value={letter.recipient || 'Not selected'}
+            />
+
+            <PreviewRow
+              label="Delivery"
+              value={
+                letter.deliveryTrigger === 'death'
+                  ? 'Upon death'
+                  : letter.deliveryDate || 'Date not selected'
+              }
+            />
+
+            {letter.deliveryOccasion && (
+              <PreviewRow label="Occasion" value={letter.deliveryOccasion} />
+            )}
+
+            {letter.media?.url && (
+              <div className="rounded-2xl border bg-muted/30 p-3">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                  Attached media {formatFileSize(letter.media.size)}
+                </p>
+
+                {letter.messageType === 'video' ? (
+                  <video
+                    controls
+                    src={letter.media.url}
+                    className="h-40 w-full rounded-xl bg-black object-cover"
+                  />
+                ) : (
+                  <audio controls src={letter.media.url} className="w-full" />
+                )}
+              </div>
+            )}
+
+            {letter.content && (
+              <div className="rounded-2xl border bg-muted/30 p-3">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                  Content preview
+                </p>
+                <p className="line-clamp-5 text-sm leading-6">
+                  {stripHtml(letter.content)}
+                </p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/* ============================================================
+   SMALL COMPONENTS
+============================================================ */
+
+function StatCard({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="rounded-2xl border bg-background/80 p-4 shadow-sm backdrop-blur">
+      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        {icon}
+      </div>
+      <p className="text-2xl font-semibold">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function FieldBlock({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn('space-y-2', className)}>
+      <Label className="text-sm font-medium">{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+function TypeCard({
+  active,
+  icon,
+  title,
+  text,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ReactNode;
+  title: string;
+  text: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'rounded-2xl border p-4 text-left transition hover:bg-muted/60',
+        active
+          ? 'border-primary bg-primary/10 shadow-sm'
+          : 'border-border bg-background',
+      )}
+    >
+      <div
+        className={cn(
+          'mb-3 flex h-10 w-10 items-center justify-center rounded-xl',
+          active
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-muted text-primary',
+        )}
+      >
+        {icon}
+      </div>
+
+      <p className="font-semibold">{title}</p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">{text}</p>
+    </button>
+  );
+}
+
+function DeliveryCard({
+  active,
+  icon,
+  title,
+  text,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ReactNode;
+  title: string;
+  text: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex items-start gap-3 rounded-2xl border p-4 text-left transition hover:bg-muted/60',
+        active
+          ? 'border-primary bg-primary/10 shadow-sm'
+          : 'border-border bg-background',
+      )}
+    >
+      <div
+        className={cn(
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+          active
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-muted text-primary',
+        )}
+      >
+        {icon}
+      </div>
+
+      <div>
+        <p className="font-semibold">{title}</p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{text}</p>
+      </div>
+    </button>
+  );
+}
+
+function MediaUploadPanel({
+  type,
+  media,
+  onRecord,
+  onUpload,
+}: {
+  type: 'video' | 'audio';
+  media?: LetterMedia;
+  onRecord: () => void;
+  onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const reactId = React.useId();
+  const inputId = `${type}-upload-${reactId}`;
+  const isVideo = type === 'video';
+
+  return (
+    <div className="rounded-[24px] border bg-muted/25 p-4 sm:p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-3">
+          <div
+            className={cn(
+              'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm',
+              isVideo ? 'bg-rose-600' : 'bg-blue-600',
+            )}
+          >
+            {isVideo ? (
+              <Video className="h-5 w-5" />
+            ) : (
+              <Mic className="h-5 w-5" />
+            )}
+          </div>
+
+          <div>
+            <h3 className="font-semibold">
+              {isVideo ? 'Video Message' : 'Audio Message'}
+            </h3>
+            <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+              {isVideo
+                ? 'Record a personal video or upload an existing video file.'
+                : 'Record your voice or upload an existing audio file.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[280px]">
+          <Button type="button" onClick={onRecord} className="h-11 rounded-xl">
+            {isVideo ? (
+              <Video className="mr-2 h-4 w-4" />
+            ) : (
+              <Mic className="mr-2 h-4 w-4" />
+            )}
+            Record
+          </Button>
+
+          <div>
+            <input
+              id={inputId}
+              type="file"
+              accept={isVideo ? 'video/*' : 'audio/*'}
+              onChange={onUpload}
+              className="hidden"
+            />
+
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full rounded-xl"
+              onClick={() => document.getElementById(inputId)?.click()}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Upload
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {media?.url && (
+        <div className="mt-5 rounded-2xl border bg-background p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <p className="text-sm font-medium">
+                {isVideo ? 'Video attached' : 'Audio attached'}
+              </p>
+            </div>
+
+            {media.size && (
+              <Badge variant="outline" className="rounded-full">
+                {formatFileSize(media.size)}
+              </Badge>
+            )}
+          </div>
+
+          {isVideo ? (
+            <video
+              controls
+              src={media.url}
+              className="h-56 w-full rounded-xl bg-black object-cover sm:h-72"
+            />
+          ) : (
+            <audio controls src={media.url} className="w-full" />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PreviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b pb-3 last:border-b-0">
+      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      <span className="max-w-[180px] text-right text-sm font-medium">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function MessageCard({
+  letter,
+  onEdit,
+  onDelete,
+  onPrint,
+}: {
+  letter: Letter;
+  onEdit: () => void;
+  onDelete: () => void;
+  onPrint: () => void;
+}) {
+  const isVideo = letter.messageType === 'video';
+  const isAudio = letter.messageType === 'audio';
+  const Icon = isVideo ? Video : isAudio ? Mic : FileText;
+
+  return (
+    <Card className="overflow-hidden rounded-[24px] transition hover:-translate-y-0.5 hover:shadow-md">
+      <CardContent className="p-0">
+        <div className="flex flex-col lg:flex-row">
+          <div className="min-w-0 flex-1 p-4 sm:p-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="rounded-full capitalize">
+                <Icon className="mr-1 h-3 w-3" />
+                {letter.messageType}
+              </Badge>
+
+              <Badge variant="outline" className="rounded-full">
+                {letter.deliveryTrigger === 'death'
+                  ? 'Upon death'
+                  : 'Specific date'}
+              </Badge>
+
+              {letter.status === 'sent' && (
+                <Badge className="rounded-full bg-green-600">Delivered</Badge>
+              )}
+            </div>
+
+            <h3 className="mt-3 line-clamp-1 text-base font-semibold sm:text-lg">
+              {letter.title || 'Untitled message'}
+            </h3>
+
+            <p className="mt-1 break-words text-sm text-muted-foreground">
+              To: {letter.recipient || 'No recipient'}
+              {letter.recipientEmail ? ` • ${letter.recipientEmail}` : ''}
+            </p>
+
+            <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
+              {letter.deliveryTrigger === 'date' && letter.deliveryDate && (
+                <span>
+                  📅 {new Date(letter.deliveryDate).toLocaleDateString()}
+                </span>
+              )}
+
+              {letter.deliveryOccasion && (
+                <span>🎉 {letter.deliveryOccasion}</span>
+              )}
+
+              <span>
+                ✏️ {new Date(letter.lastModified).toLocaleDateString()}
+              </span>
+            </div>
+
+            {letter.messageType === 'letter' && letter.content && (
+              <p className="mt-4 line-clamp-3 text-sm leading-6 text-muted-foreground">
+                {stripHtml(letter.content)}
+              </p>
+            )}
+
+            {letter.media?.url && (
+              <div className="mt-4 rounded-2xl border bg-muted/25 p-3">
+                {isVideo ? (
+                  <video
+                    controls
+                    src={letter.media.url}
+                    className="h-44 w-full rounded-xl bg-black object-cover sm:h-56"
+                  />
+                ) : (
+                  <audio controls src={letter.media.url} className="w-full" />
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 border-t bg-muted/25 p-3 lg:w-[150px] lg:grid-cols-1 lg:border-l lg:border-t-0">
+            <Button type="button" variant="outline" size="sm" onClick={onEdit}>
+              <Edit2 className="mr-2 h-3.5 w-3.5" />
+              Edit
+            </Button>
+
+            <Button type="button" variant="outline" size="sm" onClick={onPrint}>
+              <Printer className="mr-2 h-3.5 w-3.5" />
+              Print
+            </Button>
+
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={onDelete}
+            >
+              <Trash2 className="mr-2 h-3.5 w-3.5" />
+              Delete
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default Letters;

@@ -1,16 +1,29 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
 } from '@/components/common/ui/card';
+import { Button } from '@/components/common/ui/button';
+import {
+  Sparkles,
+  UploadCloud,
+  FileText,
+  CheckCircle2,
+  Loader2,
+  Home,
+} from 'lucide-react';
 import { DynamicFormField } from '@/components/DynamicFormField';
+import { Alert, AlertDescription } from '@/components/common/ui/alert';
+
+import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { uploadAIDocument } from '@/services/aiDocumentUpload';
 
 /* ------------------------------------------------------------------ */
-/* CONFIG — HARD WIRED (from your JSON)                                */
+/* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
 
 const SECTION_6A = {
@@ -105,7 +118,6 @@ const SECTION_6A = {
       type: 'TextInput',
       helperText: 'County where the property is located',
     },
-
     {
       key: 'mortgage_financial_documents_label',
       label: 'Mortgage & Financial Documents',
@@ -127,7 +139,6 @@ const SECTION_6A = {
       helperText:
         'How payments are made (check, online, autopay, etc.) and include online access details if available',
     },
-
     {
       key: 'property_ownership_docs_label',
       label: 'Property Ownership Documents',
@@ -142,7 +153,6 @@ const SECTION_6A = {
       helperText:
         'Upload deeds and titles or note their location (Recommendation: Place in Protected Documents bag)',
     },
-
     {
       key: 'current_financing_docs_label',
       label: 'Current Financing Documents',
@@ -169,7 +179,6 @@ const SECTION_6A = {
       type: 'TextInputWithUpload',
       helperText: 'Upload current property tax bills and payment records',
     },
-
     {
       key: 'historical_special_docs_label',
       label: 'Historical & Special Documents',
@@ -197,7 +206,6 @@ const SECTION_6A = {
       type: 'TextInputWithUpload',
       helperText: 'Information and documents about any reverse mortgages',
     },
-
     {
       key: 'professional_contacts_label',
       label: 'Professional Contacts',
@@ -212,7 +220,6 @@ const SECTION_6A = {
       helperText:
         'Contact details and business cards for real estate agent or landlord',
     },
-
     {
       key: 'occupancy_info_label',
       label: 'Current Occupancy Information',
@@ -232,7 +239,6 @@ const SECTION_6A = {
       helperText:
         'Details about pets, including names, types, and any special care instructions',
     },
-
     {
       key: 'year_built',
       label: 'Year Built',
@@ -371,7 +377,7 @@ const SECTION_6A = {
 };
 
 /* ------------------------------------------------------------------ */
-/* PROPS                                                              */
+/* TYPES                                                              */
 /* ------------------------------------------------------------------ */
 
 interface Props {
@@ -379,6 +385,32 @@ interface Props {
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
 }
+
+type UploadScope = '6A';
+
+type UploadedAIFile = {
+  file_id: string;
+  mime_type: string;
+  expires_at?: string;
+};
+
+const ALLOWED_UPLOAD_TYPES = [
+  'application/pdf',
+  'text/plain',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+];
+
+const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
+
+const getReadableFileType = (mimeType?: string) => {
+  if (!mimeType) return 'Document';
+  if (mimeType === 'application/pdf') return 'PDF';
+  if (mimeType === 'text/plain') return 'Text';
+  if (mimeType.includes('image')) return 'Image';
+  return mimeType;
+};
 
 /* ------------------------------------------------------------------ */
 /* COMPONENT                                                          */
@@ -389,7 +421,31 @@ export default function Section6MainResidence({
   onChange = () => {},
   activeSubsection,
 }: Props) {
+  const [aiNotice, setAiNotice] = useState('');
+  const [aiError, setAiError] = useState('');
+
+  const [uploadingScope, setUploadingScope] = useState<UploadScope | null>(
+    null,
+  );
+  const [aiLoadingScope, setAiLoadingScope] = useState<UploadScope | null>(
+    null,
+  );
+
+  const [uploadedFiles, setUploadedFiles] = useState<
+    Record<string, UploadedAIFile | null>
+  >({
+    '6A': null,
+  });
+
   const subsectionData = data['6A'] || {};
+  const show6A = !activeSubsection || activeSubsection === '6A';
+
+  const isAnyAIActionRunning =
+    uploadingScope !== null || aiLoadingScope !== null;
+
+  const getUploadedFileForScope = (scope: UploadScope) => {
+    return uploadedFiles[scope] || null;
+  };
 
   const updateField = (key: string, value: any) => {
     onChange({
@@ -401,32 +457,257 @@ export default function Section6MainResidence({
     });
   };
 
-  const show6A = !activeSubsection || activeSubsection === '6A';
+  const cleanPatchObject = (patch: any) => {
+    if (!patch || typeof patch !== 'object') return {};
+
+    return Object.fromEntries(
+      Object.entries(patch).filter(([, value]) => {
+        if (value === null || value === undefined || value === '') return false;
+        if (Array.isArray(value) && value.length === 0) return false;
+        return true;
+      }),
+    );
+  };
+
+  const handleDocumentUpload = async (
+    file?: File | null,
+    scope: UploadScope = '6A',
+  ) => {
+    try {
+      if (!file) return;
+
+      setAiError('');
+      setAiNotice('');
+
+      if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
+        setAiError('Upload PDF, TXT, PNG, JPG, JPEG, or WEBP only.');
+        return;
+      }
+
+      if (file.size > MAX_UPLOAD_SIZE) {
+        setAiError('File too large. Max 15MB.');
+        return;
+      }
+
+      setUploadingScope(scope);
+
+      const uploaded = await uploadAIDocument(file);
+
+      setUploadedFiles(prev => ({
+        ...prev,
+ [scope]: {
+    file_id: uploaded.file_id,
+    mime_type: uploaded.mime_type,
+    expires_at: uploaded.expires_at,
+  },
+      }));
+
+      setAiNotice('Document uploaded. You can now use AI autofill.');
+    } catch (err: any) {
+      setAiError(err?.message || 'Document upload failed');
+    } finally {
+      setUploadingScope(null);
+    }
+  };
+
+  const handleAutofill = async (scope: UploadScope = '6A') => {
+    try {
+      const uploadedFile = getUploadedFileForScope(scope);
+
+      if (!uploadedFile) {
+        setAiError('Please upload a document first.');
+        return;
+      }
+
+      setAiError('');
+      setAiNotice('');
+      setAiLoadingScope(scope);
+
+      const json = await autofillSectionFromDocument({
+        section: 'main_residence',
+        file_id: uploadedFile.file_id,
+        subsection: '6A',
+      });
+
+      const patch = json?.result?.patch ?? {};
+      const subsectionPatch = cleanPatchObject(patch?.['6A']);
+
+      if (Object.keys(subsectionPatch).length === 0) {
+        setAiError(
+          'AI could not find main residence information in this document.',
+        );
+        return;
+      }
+
+      onChange({
+        ...data,
+        '6A': {
+          ...subsectionData,
+          ...subsectionPatch,
+        },
+      });
+
+      setAiNotice('AI filled 6A Main Residence. Please review the fields.');
+    } catch (err: any) {
+      setAiError(err?.message || 'AI autofill failed');
+    } finally {
+      setAiLoadingScope(null);
+    }
+  };
+
+  const renderUploader = () => {
+    const scope: UploadScope = '6A';
+    const uploadedFile = getUploadedFileForScope(scope);
+    const isUploading = uploadingScope === scope;
+    const isReading = aiLoadingScope === scope;
+
+    return (
+      <div
+        className={[
+          'relative overflow-hidden rounded-2xl border border-dashed',
+          'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-emerald-50/50',
+          'p-4 shadow-sm transition-all duration-200',
+          'hover:border-emerald-300 hover:shadow-md',
+          'space-y-4',
+        ].join(' ')}
+      >
+        <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-emerald-100/70 blur-2xl" />
+        <div className="pointer-events-none absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-cyan-100/70 blur-2xl" />
+
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+              {isUploading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+              ) : uploadedFile ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              ) : (
+                <UploadCloud className="h-5 w-5 text-emerald-600" />
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <p className="font-semibold text-slate-900">
+                Upload document for 6A Main Residence
+              </p>
+              <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
+                Upload a deed, lease, mortgage statement, tax bill, home
+                warranty, appliance manual, home inventory, utility shutoff
+                photo, or residence information document.
+              </p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => handleAutofill('6A')}
+            disabled={isAnyAIActionRunning || !uploadedFile}
+            className="shrink-0 rounded-xl"
+          >
+            {isReading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="mr-2 h-4 w-4" />
+            )}
+            {isReading ? 'Reading…' : 'Auto-fill 6A'}
+          </Button>
+        </div>
+
+        <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <label
+            className={[
+              'group flex cursor-pointer flex-col items-center justify-center gap-2',
+              'rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center',
+              'transition hover:border-emerald-300 hover:bg-emerald-50/50',
+              isAnyAIActionRunning ? 'pointer-events-none opacity-60' : '',
+            ].join(' ')}
+          >
+            <input
+              type="file"
+              className="sr-only"
+              accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp"
+              disabled={isAnyAIActionRunning}
+              onChange={event => {
+                const file = event.currentTarget.files?.[0] || null;
+                void handleDocumentUpload(file, '6A');
+                event.currentTarget.value = '';
+              }}
+            />
+
+            <UploadCloud className="h-5 w-5 text-slate-500 group-hover:text-emerald-600" />
+
+            <div>
+              <p className="text-sm font-medium text-slate-800">
+                Click to upload residence document
+              </p>
+              <p className="text-xs text-slate-500">
+                PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB
+              </p>
+            </div>
+          </label>
+
+          {uploadedFile && (
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              <FileText className="h-4 w-4" />
+              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
+            </div>
+          )}
+        </div>
+
+        {isUploading && (
+          <div className="relative flex items-center gap-2 text-xs text-slate-500">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Uploading document…
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  if (!show6A) return null;
 
   return (
     <div className="space-y-8">
-      <div
-        id="subsection-6A"
-        className={`rounded-3xl ${show6A ? 'border border-primary' : ''}`}
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle>6A. {SECTION_6A.title}</CardTitle>
-          </CardHeader>
+      {(aiNotice || aiError) && (
+        <div className="space-y-3">
+          {aiNotice && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>{aiNotice}</AlertDescription>
+            </Alert>
+          )}
 
-          <CardContent className="space-y-6">
-            {SECTION_6A.fields.map(field => (
-              <DynamicFormField
-                key={field.key}
-                field={field}
-                value={subsectionData[field.key]}
-                formData={subsectionData}
-                onChange={value => updateField(field.key, value)}
-              />
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+          {aiError && (
+            <Alert variant="destructive">
+              <AlertDescription>{aiError}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
+
+      <Card className="overflow-hidden border-slate-200 shadow-sm">
+        <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-emerald-50/70">
+          <CardTitle className="flex items-center gap-2">
+            <Home className="h-5 w-5 text-emerald-600" />
+            6A. {SECTION_6A.title}
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="space-y-6 p-5">
+          {renderUploader()}
+
+          {SECTION_6A.fields.map((field: any) => (
+            <DynamicFormField
+              key={field.key}
+              field={field}
+              value={subsectionData[field.key]}
+              formData={subsectionData}
+              onChange={(value: any) => updateField(field.key, value)}
+            />
+          ))}
+        </CardContent>
+      </Card>
     </div>
   );
 }

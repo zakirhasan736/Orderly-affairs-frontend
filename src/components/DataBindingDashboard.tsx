@@ -1,24 +1,36 @@
-import React, { useState, useMemo, useEffect } from 'react';
+'use client';
+
+import React, { useEffect, useMemo, useState } from 'react';
+import Cookies from 'js-cookie';
 import { getMessages } from '@/libs/api/lettersOfNaxtKinMessage';
-import { Card, CardHeader, CardTitle, CardContent } from '@common/ui/card';
+
+import { Card, CardContent } from '@common/ui/card';
 import { Button } from '@common/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@common/ui/tabs';
 import { Badge } from '@common/ui/badge';
 import { Progress } from '@common/ui/progress';
-import { Input } from '@common/ui/input';
-import Cookies from 'js-cookie';
+
 import {
-  Users,
-  FileText,
-  MessageSquare,
-  Search,
-  Filter,
+  ArrowRight,
+  CheckCircle2,
   ChevronRight,
-  Shield,
-  Video,
-  Mic,
+  CircleCheck,
+  Clock3,
+  FileText,
+  Fingerprint,
+  LockKeyhole,
   Mail,
+  MessageCircleHeart,
+  MessageSquare,
+  Mic,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Users,
+  Video,
+  X,
 } from 'lucide-react';
+
 import { AccessPersonCard } from './AccessPersonCard';
 import { NOKLetterCard } from './NOKLetterCard';
 import { MessageCard } from './MessageCard';
@@ -31,6 +43,7 @@ interface DataBindingDashboardProps {
   nextTask: { id: string; title: string } | null;
   onNavigateToSection: (sectionId: string) => void;
 }
+
 interface ApiMessage {
   _id: string;
   title: string;
@@ -47,6 +60,23 @@ interface ApiMessage {
   subject?: string;
 }
 
+type MessageFilter = 'all' | 'letter' | 'audio' | 'video';
+
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
+
+function safeText(value: any) {
+  return String(value || '').toLowerCase();
+}
+
+function hasData(value: any) {
+  if (!value) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'object') return Object.keys(value).length > 0;
+  return Boolean(value);
+}
+
 export function DataBindingDashboard({
   formData,
   nextKinList,
@@ -56,14 +86,14 @@ export function DataBindingDashboard({
   nextTask,
 }: DataBindingDashboardProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [messageFilter, setMessageFilter] = useState<
-    'all' | 'audio' | 'video' | 'letter'
-  >('all');
+  const [messageFilter, setMessageFilter] = useState<MessageFilter>('all');
   const [messages, setMessages] = useState<ApiMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+
   const token = isNextOfKin
     ? Cookies.get('nok_auth_token')
     : Cookies.get('auth_token');
+
   useEffect(() => {
     const fetchMessages = async () => {
       if (!token) return;
@@ -71,8 +101,7 @@ export function DataBindingDashboard({
       try {
         setLoadingMessages(true);
         const response = await getMessages(token);
-        console.log('FULL API RESPONSE:', response);
-        setMessages(response || []);
+        setMessages(Array.isArray(response) ? response : []);
       } catch (error) {
         console.error('Failed to fetch messages:', error);
       } finally {
@@ -83,410 +112,460 @@ export function DataBindingDashboard({
     fetchMessages();
   }, [token]);
 
-  // Computed progress function from JSON spec
-  const computedProgress = useMemo(() => {
-    try {
-      const sections = [
-        'formData.2.2A.access_management_data',
-        'formData.3.3A.next_of_kin_letter_data',
-        'formData.4.4A.letters_data',
-      ];
-      let done = 0;
-      const total = sections.length;
-
-      sections.forEach(path => {
-        const value = path
-          .split('.')
-          .reduce((a: any, k: string) => a && a[k], { formData });
-        if (
-          value &&
-          ((Array.isArray(value) && value.length > 0) ||
-            (typeof value === 'object' && Object.keys(value).length > 0))
-        ) {
-          done++;
-        }
-      });
-
-      return Math.round((done / total) * 100);
-    } catch (e) {
-      return 72; // fallback
-    }
-  }, [formData]);
-
-  // Data extraction based on JSON spec paths
   const accessManagementData = useMemo(() => {
-    return nextKinList || [];
+    return Array.isArray(nextKinList) ? nextKinList : [];
   }, [nextKinList]);
 
-  // const nextOfKinLetterData = useMemo(() => {
-  //   return formData?.['3']?.['3A']?.next_of_kin_letter_data || null;
-  // }, [formData]);
-  console.log('NOK Letter from API:', nokLetter);
   const nextOfKinLetterData = nokLetter;
-  console.log('Next of Kin Letter Data:', nextOfKinLetterData);
 
-  const pendingMessages = useMemo(() => {
+  const fallbackLettersData = useMemo(() => {
+    return (
+      formData?.['4']?.['4A']?.letters_data ||
+      formData?.['4A']?.letters_data ||
+      []
+    );
+  }, [formData]);
+
+  const hasMessagesData = useMemo(() => {
+    return messages.length > 0 || hasData(fallbackLettersData);
+  }, [messages.length, fallbackLettersData]);
+
+  const computedProgress = useMemo(() => {
+    const checks = [
+      hasData(accessManagementData),
+      hasData(nextOfKinLetterData),
+      hasMessagesData,
+    ];
+
+    const completed = checks.filter(Boolean).length;
+    return Math.round((completed / checks.length) * 100);
+  }, [accessManagementData, nextOfKinLetterData, hasMessagesData]);
+
+  const remainingProgress = Math.max(0, 100 - computedProgress);
+
+  const allPendingMessages = useMemo(() => {
     return messages
       .map((item: ApiMessage) => ({
         id: item._id,
-        title: item.title,
-        recipient: item.recipient,
-        recipientEmail: item.recipient_email,
-        content: item.content || '', // ✅ REQUIRED
+        title: item.title || 'Untitled message',
+        recipient: item.recipient || '',
+        recipientEmail: item.recipient_email || '',
+        content: item.content || '',
         lastModified: item.updated_at,
         messageType: item.message_type as 'letter' | 'video' | 'audio',
         deliveryTrigger: item.delivery_trigger,
-        isDelivered: item.status === 'sent', // ✅ REQUIRED
+        isDelivered: item.status === 'sent',
         deliveryDate: item.delivery_date,
         deliveryOccasion: item.delivery_occasion,
         subject: item.subject,
-
-        // Optional media mapping
         audioFile:
           item.message_type === 'audio' && item.media
             ? { name: 'Audio Message', type: 'audio' }
             : undefined,
-
         videoFile:
           item.message_type === 'video' && item.media
             ? { name: 'Video Message', type: 'video' }
             : undefined,
       }))
-      .filter(msg => !msg.isDelivered) // ✅ ONLY PENDING
-      .filter(msg =>
-        messageFilter === 'all' ? true : msg.messageType === messageFilter,
-      ) // ✅ TYPE FILTER
-      .filter(msg => {
-        if (!searchTerm) return true;
+      .filter(item => !item.isDelivered);
+  }, [messages]);
 
-        const search = searchTerm.toLowerCase();
-        return (
-          msg.title.toLowerCase().includes(search) ||
-          msg.recipient.toLowerCase().includes(search) ||
-          msg.content.toLowerCase().includes(search)
-        );
-      }); // ✅ SEARCH FILTER
-  }, [messages, messageFilter, searchTerm]);
-
-  // Filter access management data based on search
   const filteredAccessData = useMemo(() => {
-    if (!searchTerm) return accessManagementData;
+    const search = searchTerm.trim().toLowerCase();
 
-    return accessManagementData.filter(
-      (item: any) =>
-        item.person_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.relationship?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.email_address?.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
+    if (!search) return accessManagementData;
+
+    return accessManagementData.filter((item: any) => {
+      return (
+        safeText(item.person_name).includes(search) ||
+        safeText(item.relationship).includes(search) ||
+        safeText(item.email_address).includes(search) ||
+        safeText(item.phone_number).includes(search)
+      );
+    });
   }, [accessManagementData, searchTerm]);
 
-  const getMessageTypeCount = (type: string) => {
-    return pendingMessages.filter((item: any) => item.messageType === type)
-      .length;
+  const pendingMessages = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+
+    return allPendingMessages
+      .filter(item =>
+        messageFilter === 'all' ? true : item.messageType === messageFilter,
+      )
+      .filter(item => {
+        if (!search) return true;
+
+        return (
+          safeText(item.title).includes(search) ||
+          safeText(item.recipient).includes(search) ||
+          safeText(item.recipientEmail).includes(search) ||
+          safeText(item.content).includes(search) ||
+          safeText(item.subject).includes(search)
+        );
+      });
+  }, [allPendingMessages, messageFilter, searchTerm]);
+
+  const letterCount = allPendingMessages.filter(
+    item => item.messageType === 'letter',
+  ).length;
+
+  const audioCount = allPendingMessages.filter(
+    item => item.messageType === 'audio',
+  ).length;
+
+  const videoCount = allPendingMessages.filter(
+    item => item.messageType === 'video',
+  ).length;
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setMessageFilter('all');
+  };
+
+  const goToNextIncompleteSection = () => {
+    const sections = [
+      { id: '2', data: accessManagementData },
+      { id: '3', data: nextOfKinLetterData },
+      { id: '4', data: hasMessagesData },
+    ];
+
+    const incomplete = sections.find(section => !hasData(section.data));
+
+    if (incomplete) {
+      onNavigateToSection(incomplete.id);
+      return;
+    }
+
+    onNavigateToSection(nextTask?.id || '0');
   };
 
   return (
-    <div className="space-y-6">
-      {/* Top Welcome & Progress Section */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        <div className="flex-1 bg-white p-8 rounded-2xl border border-slate-200  flex flex-col justify-between relative overflow-hidden group">
-          <div className="relative z-10">
-            <h1 className="text-2xl font-bold text-[#1e293b]">
-              {' '}
-              {computedProgress}% organized
-            </h1>
-            <p className="text-slate-500 mt-2 text-sm max-w-sm">
-              You are on the right track. Secure your final wishes by completing
-              the remaining 67% of your legacy plan.
-            </p>
-            <div className="mt-8 flex items-center gap-4">
-              <Button
-                onClick={() => {
-                  // Find next incomplete section starting with instructions
-                  const sections = [
-                    { id: '0', name: 'Instructions', data: true }, // Always complete since it's just instructions
-                    {
-                      id: '2',
-                      name: 'Access & Next of Kin',
-                      data: accessManagementData,
-                    },
-                    {
-                      id: '3',
-                      name: 'Next of Kin Letters',
-                      data: nextOfKinLetterData,
-                    },
-                    { id: '4', name: 'Messages', data: pendingMessages },
-                  ];
+    <div className="space-y-5 sm:space-y-6">
+      {/* HERO */}
+      <section className="relative overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(15,23,42,0.08),transparent_34%)]" />
 
-                  const incomplete = sections.find(
-                    section =>
-                      !section.data ||
-                      (Array.isArray(section.data) &&
-                        section.data.length === 0) ||
-                      (typeof section.data === 'object' &&
-                        Object.keys(section.data).length === 0),
-                  );
+        <div className="relative grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:p-8">
+          <div className="min-w-0 space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="rounded-full bg-slate-950 px-3 py-1 text-white hover:bg-slate-950">
+                <Sparkles className="mr-1 h-3.5 w-3.5" />
+                Smart Overview
+              </Badge>
 
-                  if (incomplete) {
-                    onNavigateToSection(incomplete.id);
-                  } else {
-                    onNavigateToSection('0');
-                  }
-                }}
-                className="px-8 py-3  text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
+              <Badge
+                variant="outline"
+                className="rounded-full border-slate-200 bg-white/80 px-3 py-1 text-slate-600"
               >
-                Continue organizing
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 7l5 5m0 0l-5 5m5-5H6"
-                  />
-                </svg>
-              </Button>
-              <div className="block">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
-                  Overall Progress
-                </span>
-                <Progress value={computedProgress} className="w-32" />
-              </div>
+                {computedProgress}% organized
+              </Badge>
             </div>
-          </div>
-          {/* Subtle background abstract shape */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-slate-50 rounded-full -mr-20 -mt-20 group-hover:bg-indigo-50/50 transition-colors duration-500" />
-        </div>
 
-        <div className="lg:max-w-90 w-full grid grid-cols-2 lg:grid-cols-1 gap-4">
-          <div className="bg-[#1e293b] dashboard-next-task p-6 rounded-2xl text-white  flex flex-col justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">
-              Next Task
-            </h3>
-            {nextTask ? (
-              <>
-                <p className="font-bold text-sm mt-2">
-                  Complete {nextTask.title}
-                </p>
+            <div>
+              <h1 className="max-w-3xl text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl lg:text-4xl">
+                Your important details, beautifully organized.
+              </h1>
 
-                <button
-                  onClick={() => onNavigateToSection(nextTask.id)}
-                  className="text-[10px] font-bold text-indigo-400 mt-4 hover:text-indigo-300"
-                >
-                  Go to Section →
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="font-bold text-sm mt-2">
-                  🎉 All Sections Completed!
-                </p>
-                <p className="text-[10px] text-slate-400 mt-4">
-                  Your vault is fully organized.
-                </p>
-              </>
-            )}
-          </div>
-          <div className="bg-white p-6 rounded-2xl border border-slate-200  flex flex-col justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">
-              Vault Status
-            </h3>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              <p className="font-bold text-sm text-slate-800">
-                Fully Encrypted
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
+                Review access people, next-of-kin letters, and personal messages
+                from one secure overview. Keep everything clear, guided, and
+                easy to complete.
               </p>
             </div>
-            <p className="text-[10px] text-slate-500 mt-1">
-              256-bit AES Protection
-            </p>
+
+            <div className="max-w-xl rounded-[26px] border border-slate-200 bg-white/75 p-4 shadow-sm backdrop-blur">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-950 text-white">
+                    <ShieldCheck className="h-4 w-4" />
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">
+                      Legacy setup progress
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {remainingProgress > 0
+                        ? `${remainingProgress}% left to complete`
+                        : 'Core overview completed'}
+                    </p>
+                  </div>
+                </div>
+
+                <span className="text-lg font-semibold text-slate-950">
+                  {computedProgress}%
+                </span>
+              </div>
+
+              <Progress value={computedProgress} className="mt-4 h-2.5" />
+
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <ProgressPill
+                  active={accessManagementData.length > 0}
+                  label="Access"
+                />
+                <ProgressPill
+                  active={Boolean(nextOfKinLetterData)}
+                  label="NOK"
+                />
+                <ProgressPill active={hasMessagesData} label="Messages" />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button
+                type="button"
+                onClick={goToNextIncompleteSection}
+                className="h-12 rounded-2xl bg-slate-950 px-5 text-white shadow-sm hover:bg-slate-800"
+              >
+                Continue organizing
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onNavigateToSection('0')}
+                className="h-12 rounded-2xl border-slate-200 bg-white px-5"
+              >
+                View instructions
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2 rounded-[26px] border border-slate-200 bg-white/75 p-2 shadow-sm backdrop-blur">
+              <HeroMetric
+                icon={<Users className="h-4 w-4" />}
+                label="Access"
+                value={accessManagementData.length}
+              />
+              <HeroMetric
+                icon={<FileText className="h-4 w-4" />}
+                label="NOK"
+                value={nextOfKinLetterData ? 1 : 0}
+              />
+              <HeroMetric
+                icon={<MessageCircleHeart className="h-4 w-4" />}
+                label="Messages"
+                value={allPendingMessages.length}
+              />
+            </div>
+
+            <div className="rounded-[28px] bg-slate-950 p-5 text-white shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+                    Next best action
+                  </p>
+
+                  <h3 className="mt-3 text-base font-bold leading-6">
+                    {nextTask
+                      ? `Complete ${nextTask.title}`
+                      : 'Your core overview is ready'}
+                  </h3>
+
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    {nextTask
+                      ? 'Jump to the next section that needs your attention.'
+                      : 'You can continue reviewing or editing your details.'}
+                  </p>
+                </div>
+
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10">
+                  <Clock3 className="h-5 w-5" />
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                onClick={() => onNavigateToSection(nextTask?.id || '0')}
+                className="mt-5 h-11 w-full rounded-2xl bg-white text-slate-950 hover:bg-slate-100"
+              >
+                {nextTask ? 'Open next section' : 'Open guide'}
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                  <LockKeyhole className="h-5 w-5" />
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-slate-950">
+                    Vault protected
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Sensitive information stays secured.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card
-          className="glass-card dashboard-instructions-card cursor-pointer hover:bg-muted/50 transition-colors"
+      {/* QUICK ACTIONS */}
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <QuickActionCard
+          title="Instructions"
+          description="Guide and setup notes"
+          icon={<FileText className="h-5 w-5" />}
+          tone="emerald"
           onClick={() => onNavigateToSection('0')}
-        >
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
-                <FileText className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-brand-primary">
-                  Instructions
-                </h3>
-                <p className="text-text-secondary text-sm">
-                  Getting started guide
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        />
 
-        <Card
-          className="glass-card dashboard-access-card cursor-pointer hover:bg-muted/50 transition-colors"
+        <QuickActionCard
+          title="Access People"
+          description={`${accessManagementData.length} authorized ${
+            accessManagementData.length === 1 ? 'person' : 'people'
+          }`}
+          icon={<Fingerprint className="h-5 w-5" />}
+          tone="indigo"
           onClick={() => onNavigateToSection('2')}
-        >
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-indigo-100 dark:bg-indigo-900/20 rounded-lg">
-                <Users className="h-6 w-6 text-indigo-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-brand-primary">
-                  Access Management
-                </h3>
-                <p className="text-text-secondary text-sm">
-                  {accessManagementData.length} authorized{' '}
-                  {accessManagementData.length === 1 ? 'person' : 'people'}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        />
 
-        <Card
-          className="glass-card dashboard-nok-card cursor-pointer hover:bg-muted/50 transition-colors"
+        <QuickActionCard
+          title="Next of Kin"
+          description={
+            nextOfKinLetterData ? 'Letter configured' : 'No letter yet'
+          }
+          icon={<ShieldCheck className="h-5 w-5" />}
+          tone="rose"
           onClick={() => onNavigateToSection('3')}
-        >
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-pink-100 dark:bg-pink-900/20 rounded-lg">
-                <FileText className="h-6 w-6 text-pink-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-brand-primary">
-                  NOK Letters
-                </h3>
-                <p className="text-text-secondary text-sm">
-                  {nextOfKinLetterData ? 'Letter configured' : 'No letter yet'}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          className="glass-card dashboard-messages-card cursor-pointer hover:bg-muted/50 transition-colors"
-          onClick={() => onNavigateToSection('4')}
-        >
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
-                <MessageSquare className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-brand-primary">Messages</h3>
-                <p className="text-text-secondary text-sm">
-                  {pendingMessages.length} personal{' '}
-                  {pendingMessages.length === 1 ? 'message' : 'messages'}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        />
 
-      {/* Search and Filter */}
-      <div className="bg-white dashboard-filter-and-search p-4 rounded-2xl border border-slate-200 justify-between shadow-sm flex flex-col md:flex-row items-center gap-8">
-        <div className="flex-1 relative max-w-full w-full">
-          <svg
-            className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-300"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+        <QuickActionCard
+          title="Messages"
+          description={`${allPendingMessages.length} pending ${
+            allPendingMessages.length === 1 ? 'message' : 'messages'
+          }`}
+          icon={<MessageCircleHeart className="h-5 w-5" />}
+          tone="blue"
+          onClick={() => onNavigateToSection('4')}
+        />
+      </section>
+
+      {/* SEARCH + FILTER */}
+      <section className="sticky top-[84px] z-20 rounded-[26px] border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur-xl md:static md:p-4">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+            <input
+              value={searchTerm}
+              onChange={event => setSearchTerm(event.target.value)}
+              placeholder="Search people, recipients, emails, messages..."
+              className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-11 pr-11 text-sm font-medium text-slate-700 outline-none transition focus:bg-white focus:ring-2 focus:ring-slate-900/10"
             />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search across all sections..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-2xl text-xs focus:ring-2 ring-slate-200 transition-all outline-none text-slate-600 font-medium"
-          />
+
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm hover:text-slate-900"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 xl:pb-0">
+            <FilterChip
+              active={messageFilter === 'all'}
+              onClick={() => setMessageFilter('all')}
+            >
+              All {allPendingMessages.length}
+            </FilterChip>
+
+            <FilterChip
+              active={messageFilter === 'letter'}
+              onClick={() => setMessageFilter('letter')}
+            >
+              <Mail className="mr-1.5 h-4 w-4" />
+              Letters {letterCount}
+            </FilterChip>
+
+            <FilterChip
+              active={messageFilter === 'audio'}
+              onClick={() => setMessageFilter('audio')}
+            >
+              <Mic className="mr-1.5 h-4 w-4" />
+              Audio {audioCount}
+            </FilterChip>
+
+            <FilterChip
+              active={messageFilter === 'video'}
+              onClick={() => setMessageFilter('video')}
+            >
+              <Video className="mr-1.5 h-4 w-4" />
+              Video {videoCount}
+            </FilterChip>
+          </div>
         </div>
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
-          <Button
-            variant={messageFilter === 'all' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setMessageFilter('all')}
+
+        {(searchTerm || messageFilter !== 'all') && (
+          <div className="mt-3 flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+            <p className="text-xs font-medium text-slate-500">
+              Showing filtered results
+            </p>
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-8 rounded-xl"
+            >
+              Clear
+            </Button>
+          </div>
+        )}
+      </section>
+
+      {/* CONTENT TABS */}
+      <Tabs defaultValue="access" className="w-full">
+        <TabsList className="grid h-auto w-full grid-cols-3 rounded-[22px] bg-slate-100 p-1">
+          <TabsTrigger
+            value="access"
+            className="min-h-12 rounded-2xl px-2 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm sm:text-sm"
           >
-            All Messages
-          </Button>
-          <Button
-            variant={messageFilter === 'letter' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setMessageFilter('letter')}
-          >
-            <Mail className="h-4 w-4 mr-1" />
-            Letters ({getMessageTypeCount('letter')})
-          </Button>
-          <Button
-            variant={messageFilter === 'audio' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setMessageFilter('audio')}
-          >
-            <Mic className="h-4 w-4 mr-1" />
-            Audio ({getMessageTypeCount('audio')})
-          </Button>
-          <Button
-            variant={messageFilter === 'video' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setMessageFilter('video')}
-          >
-            <Video className="h-4 w-4 mr-1" />
-            Video ({getMessageTypeCount('video')})
-          </Button>
-        </div>
-      </div>
-      {/* Data Sections */}
-      <Tabs defaultValue="access" className="w-full dashboard-tabs-section">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="access" className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            Access Management
-            {accessManagementData.length > 0 && (
-              <Badge variant="secondary" className="ml-1">
-                {accessManagementData.length}
-              </Badge>
-            )}
+            <Users className="mr-1.5 h-4 w-4" />
+            <span>Access</span>
           </TabsTrigger>
-          <TabsTrigger value="nok-letters" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            NOK Letters
-            {nextOfKinLetterData && (
-              <Badge variant="secondary" className="ml-1">
-                1
-              </Badge>
-            )}
+
+          <TabsTrigger
+            value="nok-letters"
+            className="min-h-12 rounded-2xl px-2 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm sm:text-sm"
+          >
+            <FileText className="mr-1.5 h-4 w-4" />
+            <span className="hidden sm:inline">NOK Letter</span>
+            <span className="sm:hidden">NOK</span>
           </TabsTrigger>
-          <TabsTrigger value="messages" className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" />
-            Messages
-            {pendingMessages.length > 0 && (
-              <Badge variant="secondary" className="ml-1">
-                {pendingMessages.length}
-              </Badge>
-            )}
+
+          <TabsTrigger
+            value="messages"
+            className="min-h-12 rounded-2xl px-2 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm sm:text-sm"
+          >
+            <MessageSquare className="mr-1.5 h-4 w-4" />
+            <span>Messages</span>
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="access" className="space-y-4 mt-6">
+        <TabsContent value="access" className="mt-5">
+          <SectionHeader
+            title="Access Management"
+            description="Trusted people who may access or help manage your important information."
+            count={filteredAccessData.length}
+            actionLabel="Manage Access"
+            onAction={() => onNavigateToSection('2')}
+          />
+
           {filteredAccessData.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
               {filteredAccessData.map((item: any, index: number) => (
                 <AccessPersonCard
                   key={`access-${index}`}
@@ -497,43 +576,35 @@ export function DataBindingDashboard({
               ))}
             </div>
           ) : (
-            <Card className="glass-card">
-              <CardContent className="pt-6 text-center">
-                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <div className="w-24 h-24 mx-auto rounded-full bg-slate-50 flex items-center justify-center mb-8 border border-slate-100">
-                  <svg
-                    className="w-12 h-12 text-slate-200"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                    />
-                  </svg>
-                </div>
-                <h3 className="font-semibold text-brand-primary mb-2">
-                  No Access Management Data
-                </h3>
-                <p className="text-text-secondary text-sm mb-4">
-                  {searchTerm
-                    ? 'No results found for your search.'
-                    : 'Start by adding authorized people who can access your kit.'}
-                </p>
-                <Button onClick={() => onNavigateToSection('2')}>
-                  {searchTerm ? 'Clear Search' : 'Set Up Access Management'}
-                </Button>
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={<Users className="h-8 w-8" />}
+              title="No access people found"
+              description={
+                searchTerm
+                  ? 'No authorized people match your current search.'
+                  : 'Add trusted people who can access or help manage your kit.'
+              }
+              buttonLabel={searchTerm ? 'Clear search' : 'Add access people'}
+              onClick={
+                searchTerm
+                  ? () => setSearchTerm('')
+                  : () => onNavigateToSection('2')
+              }
+            />
           )}
         </TabsContent>
 
-        <TabsContent value="nok-letters" className="space-y-4 mt-6">
+        <TabsContent value="nok-letters" className="mt-5">
+          <SectionHeader
+            title="Next of Kin Letter"
+            description="A clear letter to guide your designated next of kin."
+            count={nextOfKinLetterData ? 1 : 0}
+            actionLabel="Manage Letter"
+            onAction={() => onNavigateToSection('3')}
+          />
+
           {nextOfKinLetterData ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
               <NOKLetterCard
                 obj={nextOfKinLetterData}
                 onEdit={() => onNavigateToSection('3')}
@@ -541,35 +612,34 @@ export function DataBindingDashboard({
               />
             </div>
           ) : (
-            <Card className="glass-card">
-              <CardContent className="pt-6 text-center">
-                <div className="w-24 h-24  mx-auto rounded-full bg-rose-50 flex items-center justify-center mb-8 border border-rose-100">
-                  <span className="text-4xl">✉️</span>
-                </div>
-
-                <h3 className="font-semibold text-brand-primary mb-2">
-                  No Next of Kin Letter
-                </h3>
-                <p className="text-text-secondary text-sm mb-4">
-                  Create an important introductory letter for your designated
-                  next of kin.
-                </p>
-                <Button onClick={() => onNavigateToSection('3')}>
-                  Create NOK Letter
-                </Button>
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={<FileText className="h-8 w-8" />}
+              title="No next of kin letter yet"
+              description="Create a helpful letter so your next of kin knows what to do first."
+              buttonLabel="Create letter"
+              onClick={() => onNavigateToSection('3')}
+            />
           )}
         </TabsContent>
 
-        <TabsContent value="messages" className="space-y-4 mt-6">
+        <TabsContent value="messages" className="mt-5">
+          <SectionHeader
+            title="Personal Messages"
+            description="Letters, audio, and video messages prepared for loved ones."
+            count={pendingMessages.length}
+            actionLabel="Manage Messages"
+            onAction={() => onNavigateToSection('4')}
+          />
+
           {loadingMessages ? (
-            <div className="text-center py-10 text-muted-foreground">
-              {' '}
-              Loading messages...{' '}
-            </div>
+            <Card className="mt-4 rounded-[28px] border-dashed border-slate-200">
+              <CardContent className="flex items-center justify-center gap-3 p-10 text-slate-500">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />
+                Loading personal messages...
+              </CardContent>
+            </Card>
           ) : pendingMessages.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
               {pendingMessages.map((item, index) => (
                 <MessageCard
                   key={item.id || index}
@@ -581,29 +651,231 @@ export function DataBindingDashboard({
               ))}
             </div>
           ) : (
-            <Card className="glass-card">
-              <CardContent className="pt-6 text-center">
-                <div className="w-24 h-24  mx-auto rounded-full bg-blue-50 flex items-center justify-center mb-8 border border-blue-100">
-                  <span className="text-4xl">🎬</span>
-                </div>
-                <h3 className="font-semibold text-brand-primary mb-2">
-                  No Messages
-                </h3>
-                <p className="text-text-secondary text-sm mb-4">
-                  {searchTerm || messageFilter !== 'all'
-                    ? 'No messages match your current filters.'
-                    : 'Create heartfelt personal messages for your loved ones.'}
-                </p>
-                <Button onClick={() => onNavigateToSection('4')}>
-                  {searchTerm || messageFilter !== 'all'
-                    ? 'Clear Filters'
-                    : 'Create Messages'}
-                </Button>
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={<MessageCircleHeart className="h-8 w-8" />}
+              title="No messages found"
+              description={
+                searchTerm || messageFilter !== 'all'
+                  ? 'No messages match your current filters.'
+                  : 'Create heartfelt letters, voice notes, or videos for loved ones.'
+              }
+              buttonLabel={
+                searchTerm || messageFilter !== 'all'
+                  ? 'Clear filters'
+                  : 'Create message'
+              }
+              onClick={
+                searchTerm || messageFilter !== 'all'
+                  ? clearFilters
+                  : () => onNavigateToSection('4')
+              }
+            />
           )}
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* SMALL COMPONENTS                                                    */
+/* ------------------------------------------------------------------ */
+
+function ProgressPill({ active, label }: { active: boolean; label: string }) {
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[11px] font-bold',
+        active ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-400',
+      )}
+    >
+      {active ? (
+        <CircleCheck className="h-3.5 w-3.5" />
+      ) : (
+        <span className="h-3.5 w-3.5 rounded-full border border-current" />
+      )}
+      {label}
+    </div>
+  );
+}
+
+function HeroMetric({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="rounded-[22px] bg-slate-50 p-3 text-center">
+      <div className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-2xl bg-white text-slate-950 shadow-sm">
+        {icon}
+      </div>
+
+      <p className="text-lg font-semibold leading-none text-slate-950">{value}</p>
+      <p className="mt-1 text-[11px] font-semibold text-slate-400">{label}</p>
+    </div>
+  );
+}
+
+function QuickActionCard({
+  title,
+  description,
+  icon,
+  tone,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  tone: 'emerald' | 'indigo' | 'rose' | 'blue';
+  onClick: () => void;
+}) {
+  const toneClass = {
+    emerald: 'bg-emerald-50 text-emerald-600',
+    indigo: 'bg-indigo-50 text-indigo-600',
+    rose: 'bg-rose-50 text-rose-600',
+    blue: 'bg-blue-50 text-blue-600',
+  }[tone];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group rounded-[28px] border border-slate-200 bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-5"
+    >
+      <div className="flex items-start gap-4">
+        <div
+          className={cn(
+            'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition group-hover:scale-105',
+            toneClass,
+          )}
+        >
+          {icon}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <h3 className="line-clamp-1 text-sm font-semibold text-slate-950 sm:text-base">
+            {title}
+          </h3>
+
+          <p className="mt-1 line-clamp-2 text-xs font-medium leading-5 text-slate-500 sm:text-sm">
+            {description}
+          </p>
+        </div>
+
+        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-slate-900" />
+      </div>
+    </button>
+  );
+}
+
+function FilterChip({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={active ? 'default' : 'outline'}
+      onClick={onClick}
+      className={cn(
+        'h-10 shrink-0 rounded-2xl px-4 text-xs font-bold sm:text-sm',
+        active
+          ? 'bg-slate-950 text-white hover:bg-slate-800'
+          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+      )}
+    >
+      {children}
+    </Button>
+  );
+}
+
+function SectionHeader({
+  title,
+  description,
+  count,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  description: string;
+  count: number;
+  actionLabel: string;
+  onAction: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
+      <div className="min-w-0">
+        <Badge variant="secondary" className="mb-2 rounded-full">
+          {count} {count === 1 ? 'item' : 'items'}
+        </Badge>
+
+        <h2 className="text-base font-semibold text-slate-950 sm:text-lg">
+          {title}
+        </h2>
+
+        <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+          {description}
+        </p>
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        onClick={onAction}
+        className="h-11 rounded-2xl border-slate-200 bg-white"
+      >
+        {actionLabel}
+      </Button>
+    </div>
+  );
+}
+
+function EmptyState({
+  icon,
+  title,
+  description,
+  buttonLabel,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  buttonLabel: string;
+  onClick: () => void;
+}) {
+  return (
+    <Card className="mt-4 rounded-[32px] border-dashed border-slate-200 bg-slate-50/60">
+      <CardContent className="p-8 text-center sm:p-12">
+        <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-[28px] bg-white text-slate-950 shadow-sm">
+          {icon}
+        </div>
+
+        <h3 className="text-base font-semibold text-slate-950 sm:text-lg">
+          {title}
+        </h3>
+
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+          {description}
+        </p>
+
+        <Button
+          type="button"
+          onClick={onClick}
+          className="mt-5 rounded-2xl bg-slate-950 text-white hover:bg-slate-800"
+        >
+          {buttonLabel}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -8,11 +8,27 @@ import {
   CardContent,
 } from '@/components/common/ui/card';
 import { Button } from '@/components/common/ui/button';
-import { Plus, Minus } from 'lucide-react';
+import {
+  Plus,
+  Minus,
+  Sparkles,
+  UploadCloud,
+  FileText,
+  CheckCircle2,
+  Loader2,
+} from 'lucide-react';
 import { DynamicFormField } from '@/components/DynamicFormField';
+import { Alert, AlertDescription } from '@/components/common/ui/alert';
+
+import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  applySection1AIPatch,
+  applySection1SubsectionPatch,
+} from '@/utils/applySection1AIPatch';
 
 /* ------------------------------------------------------------------ */
-/* CONFIG — HARD WIRED (from your JSON)                                */
+/* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
 
 const SECTION_1 = {
@@ -24,7 +40,6 @@ const SECTION_1 = {
       content:
         "This page contains the most essential information your next of kin may need when managing your estate or gaining access to your accounts. If you're not comfortable placing all this information in one place, that's okay. You can note where each piece can be found instead—just make sure your loved one knows how to locate it. Feel free to store this information in your encrypted USB drive.",
     },
-
     {
       key: 'personal_details_header',
       label: 'Personal Details',
@@ -58,7 +73,6 @@ const SECTION_1 = {
       helperText:
         'Last 4 digits of SSN or location where full SSN can be found',
     },
-
     {
       key: 'phone_device_header',
       label: 'Phone & Device Access',
@@ -91,7 +105,6 @@ const SECTION_1 = {
       inputType: 'password',
       helperText: 'Password to access your computer or laptop',
     },
-
     {
       key: 'email_accounts_header',
       label: 'Email Accounts',
@@ -115,16 +128,15 @@ const SECTION_1 = {
       key: 'secondary_email_username',
       label: 'Secondary Email Username/Address',
       type: 'TextInput',
-      helperText: 'Secondary email address (if applicable)',
+      helperText: 'Secondary email address if applicable',
     },
     {
       key: 'secondary_email_password',
       label: 'Secondary Email Password',
       type: 'TextInput',
       inputType: 'password',
-      helperText: 'Password for secondary email account (if applicable)',
+      helperText: 'Password for secondary email account if applicable',
     },
-
     {
       key: 'secure_locations_header',
       label: 'Secure Locations',
@@ -149,7 +161,6 @@ const SECTION_1 = {
       type: 'TextInput',
       helperText: 'Location of keys for safe or lockbox',
     },
-
     {
       key: 'digital_ids_header',
       label: 'Digital IDs & Accounts',
@@ -182,13 +193,12 @@ const SECTION_1 = {
       inputType: 'password',
       helperText: 'Password for your Apple ID account',
     },
-
     {
       key: 'security_questions_header',
       label: 'Security Questions & PINs',
       type: 'Instructions',
       content:
-        'If you use common answers to security questions (e.g., "mother\'s maiden name" or "first car"), you can list them here or write: "See Password Manager" or "Ask [Name]."',
+        'If you use common answers to security questions, you can list them here or write: "See Password Manager" or "Ask [Name]."',
     },
     {
       key: 'security_question_answers',
@@ -375,7 +385,7 @@ const SECTION_1 = {
           label: 'Relationship',
           type: 'TextInput',
           helperText:
-            'How this person relates to you (professional, family, friend, etc.)',
+            'How this person relates to you: professional, family, friend, etc.',
         },
         {
           key: 'phone_number',
@@ -441,24 +451,137 @@ const SECTION_1 = {
 };
 
 /* ------------------------------------------------------------------ */
-/* COMPONENT                                                          */
+/* TYPES                                                              */
 /* ------------------------------------------------------------------ */
+
+type Section1Subsection =
+  | 'vital_info'
+  | 'next_of_kin'
+  | 'executor_trustee'
+  | 'additional_contacts';
+
+type ContactSubsection = Exclude<Section1Subsection, 'vital_info'>;
+
+type UploadScope = 'full' | 'vital_info' | `${ContactSubsection}:${number}`;
+
+type UploadedAIFile = {
+  file_id: string;
+  mime_type: string;
+  expires_at?: string;
+};
+
+type ContactAutofillTarget = {
+  groupKey: ContactSubsection;
+  index: number;
+  label: string;
+};
+
+type NormalizedActiveSubsection = Section1Subsection | 'contacts' | null;
 
 interface Props {
   data?: any;
   onChange?: (data: any) => void;
+
+  /**
+   * Dashboard may pass "1A" / "1C".
+   * This component also supports direct keys:
+   * "vital_info", "next_of_kin", "executor_trustee", "additional_contacts".
+   */
   activeSubsection?: string | null;
+
+  /**
+   * Optional old parent-level document support.
+   * You can leave these unused from Dashboard.
+   */
+  selectedDocumentUrl?: string | null;
+  selectedDocumentMimeType?: string | null;
 }
+
+const ALLOWED_UPLOAD_TYPES = [
+  'application/pdf',
+  'text/plain',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+];
+
+const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
+
+const normalizeActiveSubsection = (
+  activeSubsection?: string | null,
+): NormalizedActiveSubsection => {
+  if (!activeSubsection) return null;
+
+  if (activeSubsection === '1A') return 'vital_info';
+
+  if (activeSubsection === '1B' || activeSubsection === '1C') {
+    return 'contacts';
+  }
+
+  if (
+    activeSubsection === 'vital_info' ||
+    activeSubsection === 'next_of_kin' ||
+    activeSubsection === 'executor_trustee' ||
+    activeSubsection === 'additional_contacts'
+  ) {
+    return activeSubsection;
+  }
+
+  return null;
+};
+
+const getReadableFileType = (mimeType?: string) => {
+  if (!mimeType) return 'Document';
+  if (mimeType === 'application/pdf') return 'PDF';
+  if (mimeType === 'text/plain') return 'Text';
+  if (mimeType.includes('image')) return 'Image';
+  return mimeType;
+};
+
+/* ------------------------------------------------------------------ */
+/* COMPONENT                                                          */
+/* ------------------------------------------------------------------ */
 
 export default function Section1VitalInformation({
   data = {},
   onChange = () => {},
-  activeSubsection,
+  activeSubsection = null,
+  // selectedDocumentUrl: selectedDocumentUrlFromParent = null,
+  // selectedDocumentMimeType: selectedDocumentMimeTypeFromParent = null,
 }: Props) {
+  const [aiNotice, setAiNotice] = useState('');
+  const [aiError, setAiError] = useState('');
 
-  /* -------------------- NORMALIZED STATE -------------------- */
+  const [uploadingScope, setUploadingScope] = useState<UploadScope | null>(
+    null,
+  );
+  const [aiLoadingScope, setAiLoadingScope] = useState<UploadScope | null>(
+    null,
+  );
 
+const [uploadedFiles, setUploadedFiles] = useState<
+  Record<string, UploadedAIFile | null>
+>({
+  full: null,
+  vital_info: null,
+});
+
+  const active = normalizeActiveSubsection(activeSubsection);
   const vitalInfo = data.vital_info || {};
+
+  const showVitalInfo = !active || active === 'vital_info';
+
+  const contactGroupsToRender =
+    !active || active === 'contacts'
+      ? SECTION_1.contactGroups
+      : SECTION_1.contactGroups.filter(group => group.key === active);
+
+  const isAnyAIActionRunning =
+    uploadingScope !== null || aiLoadingScope !== null;
+
+  const getUploadedFileForScope = (scope: UploadScope) => {
+    return uploadedFiles[scope] || null;
+  };
 
   const updateVital = (key: string, value: any) => {
     onChange({
@@ -470,95 +593,517 @@ export default function Section1VitalInformation({
     });
   };
 
-  const getGroupArray = (key: string) =>
-    Array.isArray(data[key]) ? data[key] : [];
+  const getGroupArray = (key: string) => {
+    return Array.isArray(data[key]) ? data[key] : [];
+  };
 
   const updateGroup = (key: string, value: any[]) => {
-    onChange({ ...data, [key]: value });
+    onChange({
+      ...data,
+      [key]: value,
+    });
   };
 
   const addGroupItem = (groupKey: string, fields: any[]) => {
-    const newItem = Object.fromEntries(fields.map(f => [f.key, '']));
+    const newItem = Object.fromEntries(fields.map(field => [field.key, '']));
+
     updateGroup(groupKey, [...getGroupArray(groupKey), newItem]);
   };
 
-  const updateGroupItem = (groupKey: string, index: number, fieldKey: string, value: any) => {
+  const updateGroupItem = (
+    groupKey: string,
+    index: number,
+    fieldKey: string,
+    value: any,
+  ) => {
     const items = [...getGroupArray(groupKey)];
-    items[index] = { ...items[index], [fieldKey]: value };
+
+    items[index] = {
+      ...(items[index] || {}),
+      [fieldKey]: value,
+    };
+
     updateGroup(groupKey, items);
   };
 
   const removeGroupItem = (groupKey: string, index: number) => {
-    updateGroup(groupKey, getGroupArray(groupKey).filter((_, i) => i !== index));
+    updateGroup(
+      groupKey,
+      getGroupArray(groupKey).filter((_: any, itemIndex: number) => {
+        return itemIndex !== index;
+      }),
+    );
   };
 
+  const cleanPatchObject = (patch: any) => {
+    if (!patch || typeof patch !== 'object') return {};
 
+    return Object.fromEntries(
+      Object.entries(patch).filter(([, value]) => {
+        if (value === null || value === undefined || value === '') return false;
+        if (Array.isArray(value) && value.length === 0) return false;
+        return true;
+      }),
+    );
+  };
+
+  const extractSingleContactPatch = (
+    patch: any,
+    groupKey: ContactSubsection,
+  ) => {
+    const groupPatch = patch?.[groupKey];
+
+    if (Array.isArray(groupPatch)) {
+      return cleanPatchObject(groupPatch[0] || {});
+    }
+
+    if (groupPatch && typeof groupPatch === 'object') {
+      return cleanPatchObject(groupPatch);
+    }
+
+    return {};
+  };
+
+  const applyContactItemPatch = (
+    groupKey: ContactSubsection,
+    index: number,
+    itemPatch: any,
+  ) => {
+    const items = [...getGroupArray(groupKey)];
+
+    items[index] = {
+      ...(items[index] || {}),
+      ...itemPatch,
+    };
+
+    updateGroup(groupKey, items);
+  };
+
+  const handleDocumentUpload = async (
+    file?: File | null,
+    scope: UploadScope = 'full',
+  ) => {
+    try {
+      if (!file) return;
+
+      setAiError('');
+      setAiNotice('');
+
+      if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
+        setAiError('Upload PDF, TXT, PNG, JPG, JPEG, or WEBP only.');
+        return;
+      }
+
+      if (file.size > MAX_UPLOAD_SIZE) {
+        setAiError('File too large. Max 15MB.');
+        return;
+      }
+
+      setUploadingScope(scope);
+
+      const uploaded = await uploadAIDocument(file);
+
+      setUploadedFiles(prev => ({
+        ...prev,
+ [scope]: {
+    file_id: uploaded.file_id,
+    mime_type: uploaded.mime_type,
+    expires_at: uploaded.expires_at,
+  },
+      }));
+
+      setAiNotice('Document uploaded. You can now use AI autofill.');
+    } catch (err: any) {
+      setAiError(err?.message || 'Document upload failed');
+    } finally {
+      setUploadingScope(null);
+    }
+  };
+
+  const handleAutofill = async (
+    scope: UploadScope = 'full',
+    contactTarget?: ContactAutofillTarget,
+  ) => {
+    try {
+      const uploadedFile = getUploadedFileForScope(scope);
+
+      if (!uploadedFile) {
+        setAiError('Please upload a document first.');
+        return;
+      }
+
+      setAiError('');
+      setAiNotice('');
+      setAiLoadingScope(scope);
+
+      const subsection =
+        scope === 'full'
+          ? null
+          : contactTarget
+            ? contactTarget.groupKey
+            : 'vital_info';
+
+      const json = await autofillSectionFromDocument({
+        section: 'vital_information',
+        file_id: uploadedFile.file_id,
+        subsection,
+      });
+
+      const patch = json?.result?.patch ?? {};
+
+      if (contactTarget) {
+        const itemPatch = extractSingleContactPatch(
+          patch,
+          contactTarget.groupKey,
+        );
+
+        if (Object.keys(itemPatch).length === 0) {
+          setAiError('AI could not find contact information in this document.');
+          return;
+        }
+
+        applyContactItemPatch(
+          contactTarget.groupKey,
+          contactTarget.index,
+          itemPatch,
+        );
+
+        setAiNotice(
+          `AI filled ${contactTarget.label}. Please review the fields.`,
+        );
+
+        return;
+      }
+
+      const nextData =
+        subsection === 'vital_info'
+          ? applySection1SubsectionPatch(data, 'vital_info', patch)
+          : applySection1AIPatch(data, patch);
+
+      onChange(nextData);
+
+      setAiNotice(
+        subsection === 'vital_info'
+          ? 'AI filled 1A Vital Information. Please review the fields.'
+          : 'AI filled Section 1. Please review all fields.',
+      );
+    } catch (err: any) {
+      setAiError(err?.message || 'AI autofill failed');
+    } finally {
+      setAiLoadingScope(null);
+    }
+  };
+
+  const renderUploader = ({
+    scope,
+    title,
+    description,
+    buttonLabel = 'Auto-fill',
+    onAutofill,
+    compact = false,
+  }: {
+    scope: UploadScope;
+    title: string;
+    description: string;
+    buttonLabel?: string;
+    onAutofill: () => void;
+    compact?: boolean;
+  }) => {
+    const uploadedFile = getUploadedFileForScope(scope);
+    const isUploading = uploadingScope === scope;
+    const isReading = aiLoadingScope === scope;
+
+    return (
+      <div
+        className={[
+          'relative overflow-hidden rounded-2xl border border-dashed',
+          'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-indigo-50/40',
+          'p-4 shadow-sm transition-all duration-200',
+          'hover:border-indigo-300 hover:shadow-md',
+          compact ? 'space-y-3' : 'space-y-4',
+        ].join(' ')}
+      >
+        <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-indigo-100/60 blur-2xl" />
+        <div className="pointer-events-none absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-cyan-100/60 blur-2xl" />
+
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+              {isUploading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
+              ) : uploadedFile ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              ) : (
+                <UploadCloud className="h-5 w-5 text-indigo-600" />
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <p className="font-semibold text-slate-900">{title}</p>
+              <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
+                {description}
+              </p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            size="sm"
+            onClick={onAutofill}
+            disabled={isAnyAIActionRunning || !uploadedFile}
+            className="shrink-0 rounded-xl"
+          >
+            {isReading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="mr-2 h-4 w-4" />
+            )}
+            {isReading ? 'Reading…' : buttonLabel}
+          </Button>
+        </div>
+
+        <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <label
+            className={[
+              'group flex cursor-pointer flex-col items-center justify-center gap-2',
+              'rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center',
+              'transition hover:border-indigo-300 hover:bg-indigo-50/50',
+              compact
+                ? 'md:flex-row md:justify-start md:py-3 md:text-left'
+                : '',
+              isAnyAIActionRunning ? 'pointer-events-none opacity-60' : '',
+            ].join(' ')}
+          >
+            <input
+              type="file"
+              className="sr-only"
+              accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp"
+              disabled={isAnyAIActionRunning}
+              onChange={event => {
+                const file = event.currentTarget.files?.[0] || null;
+                void handleDocumentUpload(file, scope);
+                event.currentTarget.value = '';
+              }}
+            />
+
+            <UploadCloud className="h-5 w-5 text-slate-500 group-hover:text-indigo-600" />
+
+            <div>
+              <p className="text-sm font-medium text-slate-800">
+                Click to upload PDF, TXT, PNG, JPG, JPEG, or WEBP
+              </p>
+              <p className="text-xs text-slate-500">Maximum file size 15MB</p>
+            </div>
+          </label>
+
+          {uploadedFile && (
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              <FileText className="h-4 w-4" />
+              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
+            </div>
+          )}
+        </div>
+
+        {isUploading && (
+          <div className="relative flex items-center gap-2 text-xs text-slate-500">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Uploading document…
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-8">
+      {(aiNotice || aiError) && (
+        <div className="space-y-3">
+          {aiNotice && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>{aiNotice}</AlertDescription>
+            </Alert>
+          )}
 
-      {/* ====================== 1A — VITAL INFO ====================== */}
-      {/* {show1A && ( */}
-        <Card id="subsection-1A">
+          {aiError && (
+            <Alert variant="destructive">
+              <AlertDescription>{aiError}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
+
+      <Card className="overflow-hidden hidden border-slate-200 shadow-sm">
+        <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-indigo-50/60">
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-indigo-600" />
+            AI Autofill
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="p-5">
+          {renderUploader({
+            scope: 'full',
+            title: 'Upload one document for full Section 1',
+            description:
+              'Use this only when one document contains information for all Section 1 areas. It can fill vital information and all contact groups together.',
+            buttonLabel: 'Auto-fill Section 1',
+            onAutofill: () => handleAutofill('full'),
+          })}
+        </CardContent>
+      </Card>
+
+      {showVitalInfo && (
+        <Card id="subsection-1A" className="border-slate-200 shadow-sm">
           <CardHeader>
             <CardTitle>1A. Vital Information</CardTitle>
           </CardHeader>
+
           <CardContent className="space-y-6">
-            {SECTION_1.vitalFields.map(field => (
+            {renderUploader({
+              scope: 'vital_info',
+              title: 'Upload document for 1A Vital Information',
+              description:
+                'Use this for personal details, phone/device access, email accounts, safe/lockbox details, digital IDs, security answers, or PIN notes.',
+              buttonLabel: 'Auto-fill 1A',
+              onAutofill: () => handleAutofill('vital_info'),
+            })}
+
+            {SECTION_1.vitalFields.map((field: any) => (
               <DynamicFormField
                 key={field.key}
                 field={field}
                 value={vitalInfo[field.key]}
-                onChange={v => updateVital(field.key, v)}
+                onChange={(value: any) => updateVital(field.key, value)}
               />
             ))}
           </CardContent>
         </Card>
-      {/* )} */}
+      )}
 
-      {/* ====================== 1C — CONTACTS ====================== */}
-      {/* {show1C && ( */}
-        <Card id="subsection-1C">
+      {contactGroupsToRender.length > 0 && (
+        <Card id="subsection-1C" className="border-slate-200 shadow-sm">
           <CardHeader>
             <CardTitle>1C. Key Contacts</CardTitle>
           </CardHeader>
+
           <CardContent className="space-y-8">
-            {SECTION_1.contactGroups.map(group => (
-              <div key={group.key} className="space-y-4">
-                <div className="flex justify-between">
-                  <h3 className="font-semibold">{group.title}</h3>
-                  <Button size="sm" onClick={() => addGroupItem(group.key, group.fields)}>
-                    <Plus className="h-4 w-4 mr-1" /> Add
-                  </Button>
+            {contactGroupsToRender.map((group: any) => {
+              const items = getGroupArray(group.key);
+              const groupKey = group.key as ContactSubsection;
+
+              return (
+                <div key={group.key} className="space-y-4">
+                  <div className="flex flex-col gap-3 rounded-2xl border bg-slate-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="font-semibold text-slate-900">
+                        {group.title}
+                      </h3>
+                      <p className="text-sm text-slate-500">
+                        Add one form per person/contact. Each form can upload
+                        its own document and autofill only that form.
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => addGroupItem(group.key, group.fields)}
+                      className="rounded-xl"
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Add {group.title}
+                    </Button>
+                  </div>
+
+                  {items.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
+                        <Plus className="h-5 w-5 text-slate-500" />
+                      </div>
+                      <p className="font-medium text-slate-800">
+                        No {group.title.toLowerCase()} form added yet.
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Click “Add {group.title}” first, then upload a document
+                        inside that specific form to autofill it.
+                      </p>
+                    </div>
+                  )}
+
+                  {items.map((item: any, index: number) => {
+                    const itemScope = `${groupKey}:${index}` as UploadScope;
+                    const itemLabel = `${group.title} #${index + 1}`;
+
+                    return (
+                      <Card
+                        key={`${group.key}-${index}`}
+                        className="overflow-hidden border-slate-200 shadow-sm"
+                      >
+                        <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <strong className="text-slate-900">
+                              {itemLabel}
+                            </strong>
+                            <p className="text-sm text-slate-500">
+                              Upload a document here to autofill only this form.
+                            </p>
+                          </div>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => removeGroupItem(group.key, index)}
+                            className="rounded-xl"
+                          >
+                            <Minus className="mr-1 h-4 w-4" />
+                            Remove
+                          </Button>
+                        </div>
+
+                        <CardContent className="space-y-6 p-5">
+                          {renderUploader({
+                            scope: itemScope,
+                            title: `Upload document for ${itemLabel}`,
+                            description: `This will autofill only ${itemLabel}. It will not overwrite other ${group.title.toLowerCase()} forms.`,
+                            buttonLabel: `Auto-fill ${itemLabel}`,
+                            compact: true,
+                            onAutofill: () =>
+                              handleAutofill(itemScope, {
+                                groupKey,
+                                index,
+                                label: itemLabel,
+                              }),
+                          })}
+
+                          <div className="grid gap-4 md:grid-cols-2">
+                            {group.fields.map((field: any) => (
+                              <DynamicFormField
+                                key={field.key}
+                                field={field}
+                                value={item?.[field.key]}
+                                onChange={(value: any) =>
+                                  updateGroupItem(
+                                    group.key,
+                                    index,
+                                    field.key,
+                                    value,
+                                  )
+                                }
+                              />
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
-
-                {getGroupArray(group.key).map((item, i) => (
-                  <Card key={i} className="p-4">
-                    <div className="flex justify-between mb-4">
-                      <strong>{group.title} #{i + 1}</strong>
-                      <Button size="sm" variant="destructive" onClick={() => removeGroupItem(group.key, i)}>
-                        <Minus className="h-4 w-4 mr-1" /> Remove
-                      </Button>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {group.fields.map(field => (
-                        <DynamicFormField
-                          key={field.key}
-                          field={field}
-                          value={item[field.key]}
-                          onChange={v => updateGroupItem(group.key, i, field.key, v)}
-                        />
-                      ))}
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
-      {/* )} */}
-
+      )}
     </div>
   );
 }
