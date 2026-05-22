@@ -12,6 +12,8 @@ import {
   RotateCcw,
   X,
   AlertTriangle,
+  CheckCircle2,
+  Camera,
 } from 'lucide-react';
 
 interface VideoRecorderProps {
@@ -64,7 +66,9 @@ export function VideoRecorder({
   const [elapsedMs, setElapsedMs] = useState(0);
   const [error, setError] = useState('');
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const liveVideoRef = useRef<HTMLVideoElement | null>(null);
+  const recordedVideoRef = useRef<HTMLVideoElement | null>(null);
+
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -72,6 +76,8 @@ export function VideoRecorder({
   const timerRef = useRef<number | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const elapsedBeforePauseRef = useRef(0);
+
+  const previewUrlRef = useRef<string | null>(null);
 
   const clearTimer = () => {
     if (timerRef.current) {
@@ -112,19 +118,44 @@ export function VideoRecorder({
     setElapsedMs(0);
   };
 
+  const revokePreviewUrl = () => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  };
+
   const stopStream = () => {
     streamRef.current?.getTracks().forEach(track => track.stop());
     streamRef.current = null;
 
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
+    if (liveVideoRef.current) {
+      liveVideoRef.current.srcObject = null;
     }
   };
 
-  const revokePreviewUrl = () => {
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
+  const cleanupRecorder = () => {
+    try {
+      const recorder = recorderRef.current;
+
+      if (
+        recorder &&
+        (recorder.state === 'recording' || recorder.state === 'paused')
+      ) {
+        recorder.stop();
+      }
+    } catch {
+      // ignore cleanup errors
     }
+
+    recorderRef.current = null;
+  };
+
+  const cleanupAll = () => {
+    clearTimer();
+    cleanupRecorder();
+    stopStream();
+    revokePreviewUrl();
   };
 
   const startCamera = async () => {
@@ -147,19 +178,19 @@ export function VideoRecorder({
 
       streamRef.current = mediaStream;
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        videoRef.current.muted = true;
-        await videoRef.current.play().catch(() => {});
+      if (liveVideoRef.current) {
+        liveVideoRef.current.srcObject = mediaStream;
+        liveVideoRef.current.muted = true;
+        await liveVideoRef.current.play().catch(() => {});
       }
 
       setStatus('idle');
-    } catch (error: any) {
-      console.error(error);
+    } catch (err: any) {
+      console.error(err);
 
-      if (error?.name === 'NotAllowedError') {
+      if (err?.name === 'NotAllowedError') {
         setError('Camera or microphone permission was denied.');
-      } else if (error?.name === 'NotFoundError') {
+      } else if (err?.name === 'NotFoundError') {
         setError('Camera or microphone was not found.');
       } else {
         setError('Could not start camera.');
@@ -173,14 +204,22 @@ export function VideoRecorder({
     startCamera();
 
     return () => {
-      clearTimer();
-      stopStream();
-
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
+      cleanupAll();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!previewUrl || !recordedVideoRef.current) return;
+
+    const videoEl = recordedVideoRef.current;
+
+    videoEl.load();
+    videoEl.currentTime = 0;
+
+    // Let the browser show the first frame. Autoplay may be blocked, so controls remain visible.
+    videoEl.play().catch(() => {});
+  }, [previewUrl]);
 
   const startRecording = () => {
     try {
@@ -199,8 +238,8 @@ export function VideoRecorder({
 
       setError('');
       setRecordedBlob(null);
-      revokePreviewUrl();
       setPreviewUrl(null);
+      revokePreviewUrl();
       chunksRef.current = [];
       resetTimer();
 
@@ -243,19 +282,22 @@ export function VideoRecorder({
         }
 
         const url = URL.createObjectURL(blob);
+        previewUrlRef.current = url;
 
         setRecordedBlob(blob);
         setPreviewUrl(url);
         setStatus('stopped');
+
+        // Stop camera after recording so the preview area focuses on the saved video.
+        stopStream();
       };
 
       recorder.start(1000);
 
-      // Important: start timer immediately on the first recording.
       startTimer();
       setStatus('recording');
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error(err);
       pauseTimer();
       setError('Could not start video recording.');
       setStatus('error');
@@ -298,40 +340,46 @@ export function VideoRecorder({
 
   const resetRecording = async () => {
     revokePreviewUrl();
+
     setPreviewUrl(null);
     setRecordedBlob(null);
     chunksRef.current = [];
+    recorderRef.current = null;
     resetTimer();
     setError('');
 
-    if (!streamRef.current) {
-      await startCamera();
-      return;
-    }
-
-    setStatus('idle');
+    await startCamera();
   };
 
   const handleSaveRecording = () => {
-    if (recordedBlob) {
-      onVideoRecorded(recordedBlob);
-    }
+    if (!recordedBlob) return;
+    onVideoRecorded(recordedBlob);
   };
 
+  const handleClose = () => {
+    cleanupAll();
+    onClose();
+  };
+
+  const isRecordedPreview = Boolean(previewUrl && recordedBlob);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <Card className="w-full max-w-3xl overflow-hidden rounded-3xl border border-border/70 shadow-2xl">
-        <CardContent className="space-y-6 p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-4 border-b pb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 backdrop-blur-md sm:p-4">
+      <Card className="max-h-[94vh] w-full max-w-4xl overflow-hidden rounded-[28px] border border-white/10 bg-white shadow-2xl">
+        <CardContent className="flex max-h-[94vh] flex-col p-0">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-4 py-4 sm:px-6">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 text-red-600">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600">
                 <Video className="h-6 w-6" />
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold">Video Recorder</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Record your video, preview it, then attach it.
+                <h3 className="text-base font-black text-slate-950 sm:text-lg">
+                  Video Recorder
+                </h3>
+                <p className="mt-1 text-xs font-medium leading-5 text-slate-500 sm:text-sm">
+                  Record your message, preview it, then save it.
                 </p>
               </div>
             </div>
@@ -340,143 +388,232 @@ export function VideoRecorder({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={onClose}
-              className="rounded-full"
+              onClick={handleClose}
+              className="h-10 w-10 rounded-full p-0"
+              aria-label="Close video recorder"
             >
               <X className="h-5 w-5" />
             </Button>
           </div>
 
-          <div className="relative overflow-hidden rounded-3xl bg-black">
-            {previewUrl ? (
-              <video
-                controls
-                src={previewUrl}
-                className="aspect-video w-full object-cover"
-              />
-            ) : (
-              <video
-                ref={videoRef}
-                autoPlay
-                muted
-                playsInline
-                className="aspect-video w-full object-cover"
-              />
-            )}
+          {/* Body */}
+          <div className="overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
+              {/* Video Preview Area */}
+              <div className="space-y-4">
+                <div className="relative overflow-hidden rounded-[28px] bg-black shadow-xl">
+                  {isRecordedPreview ? (
+                    <video
+                      key={previewUrl}
+                      ref={recordedVideoRef}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      src={previewUrl || undefined}
+                      className="aspect-video w-full bg-black object-contain"
+                    />
+                  ) : (
+                    <video
+                      ref={liveVideoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className="aspect-video w-full bg-black object-cover"
+                    />
+                  )}
 
-            {(status === 'recording' || status === 'paused') && (
-              <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-red-600 px-3 py-1.5 text-sm font-medium text-white shadow-lg">
-                <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
-                {status === 'paused' ? 'PAUSED' : 'REC'} {formatTime(elapsedMs)}
+                  {/* Top status badge */}
+                  <div className="absolute left-4 top-4">
+                    {isRecordedPreview ? (
+                      <div className="flex items-center gap-2 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg">
+                        <CheckCircle2 className="h-4 w-4" />
+                        RECORDED PREVIEW
+                      </div>
+                    ) : status === 'recording' || status === 'paused' ? (
+                      <div className="flex items-center gap-2 rounded-full bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow-lg">
+                        <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                        {status === 'paused' ? 'PAUSED' : 'REC'}{' '}
+                        {formatTime(elapsedMs)}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-slate-900 shadow-lg backdrop-blur">
+                        <Camera className="h-4 w-4" />
+                        LIVE CAMERA
+                      </div>
+                    )}
+                  </div>
+
+                  {status === 'loading' && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-white">
+                      <div className="mb-3 h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      <p className="text-sm font-semibold">
+                        Starting camera...
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {isRecordedPreview && recordedBlob && (
+                  <div className="rounded-[24px] border border-emerald-100 bg-emerald-50 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm">
+                          <CheckCircle2 className="h-5 w-5" />
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-black text-emerald-950">
+                            Recorded video is ready to preview
+                          </p>
+                          <p className="mt-1 text-xs font-medium leading-5 text-emerald-700">
+                            Watch the video above. If it looks good, click Save
+                            Recording.
+                          </p>
+                        </div>
+                      </div>
+
+                      <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-bold text-emerald-700 shadow-sm">
+                        {formatBytes(recordedBlob.size)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {error && (
+                  <div className="flex gap-3 rounded-[22px] border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                    <p>{error}</p>
+                  </div>
+                )}
               </div>
-            )}
 
-            {status === 'loading' && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white">
-                Starting camera...
-              </div>
-            )}
-          </div>
+              {/* Side Controls */}
+              <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-4">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+                    Recording Status
+                  </p>
 
-          {recordedBlob && (
-            <div className="rounded-2xl border bg-background p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium">Preview recording</p>
-                <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                  {formatBytes(recordedBlob.size)}
-                </span>
+                  <h4 className="mt-2 text-xl font-black text-slate-950">
+                    {isRecordedPreview
+                      ? 'Preview Ready'
+                      : status === 'recording'
+                        ? 'Recording'
+                        : status === 'paused'
+                          ? 'Paused'
+                          : status === 'loading'
+                            ? 'Loading'
+                            : 'Ready'}
+                  </h4>
+
+                  <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+                    {isRecordedPreview
+                      ? 'Your recorded video is showing in the preview area.'
+                      : 'Use the buttons below to record your personal message.'}
+                  </p>
+                </div>
+
+                <div className="mt-5 rounded-2xl bg-white p-4 shadow-sm">
+                  <p className="text-xs font-bold text-slate-500">Duration</p>
+                  <p className="mt-1 text-3xl font-black text-slate-950">
+                    {formatTime(elapsedMs)}
+                  </p>
+                </div>
+
+                <div className="mt-5 grid gap-3">
+                  {(status === 'idle' || status === 'error') &&
+                    !recordedBlob && (
+                      <Button
+                        type="button"
+                        onClick={startRecording}
+                        className="h-12 rounded-2xl bg-red-600 text-white hover:bg-red-700"
+                      >
+                        <Video className="mr-2 h-4 w-4" />
+                        Start Recording
+                      </Button>
+                    )}
+
+                  {status === 'recording' && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={pauseRecording}
+                        className="h-12 rounded-2xl bg-white"
+                      >
+                        <Pause className="mr-2 h-4 w-4" />
+                        Pause
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={stopRecording}
+                        className="h-12 rounded-2xl"
+                      >
+                        <Square className="mr-2 h-4 w-4" />
+                        Stop Recording
+                      </Button>
+                    </>
+                  )}
+
+                  {status === 'paused' && (
+                    <>
+                      <Button
+                        type="button"
+                        onClick={resumeRecording}
+                        className="h-12 rounded-2xl"
+                      >
+                        <Play className="mr-2 h-4 w-4" />
+                        Resume
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={stopRecording}
+                        className="h-12 rounded-2xl"
+                      >
+                        <Square className="mr-2 h-4 w-4" />
+                        Stop Recording
+                      </Button>
+                    </>
+                  )}
+
+                  {status === 'stopped' && recordedBlob && (
+                    <>
+                      <Button
+                        type="button"
+                        onClick={handleSaveRecording}
+                        className="h-12 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700"
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Save Recording
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={resetRecording}
+                        className="h-12 rounded-2xl bg-white"
+                      >
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Record Again
+                      </Button>
+                    </>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handleClose}
+                    className="h-11 rounded-2xl text-slate-500 hover:text-slate-900"
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
             </div>
-          )}
-
-          {error && (
-            <div className="flex gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-              <p>{error}</p>
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            {(status === 'idle' || status === 'error') && !recordedBlob && (
-              <Button
-                type="button"
-                onClick={startRecording}
-                className="rounded-2xl bg-red-600 text-white hover:bg-red-700"
-              >
-                <Video className="mr-2 h-4 w-4" />
-                Start Recording
-              </Button>
-            )}
-
-            {status === 'recording' && (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={pauseRecording}
-                  className="rounded-2xl"
-                >
-                  <Pause className="mr-2 h-4 w-4" />
-                  Pause
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={stopRecording}
-                  className="rounded-2xl"
-                >
-                  <Square className="mr-2 h-4 w-4" />
-                  Stop Recording
-                </Button>
-              </>
-            )}
-
-            {status === 'paused' && (
-              <>
-                <Button
-                  type="button"
-                  onClick={resumeRecording}
-                  className="rounded-2xl"
-                >
-                  <Play className="mr-2 h-4 w-4" />
-                  Resume
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={stopRecording}
-                  className="rounded-2xl"
-                >
-                  <Square className="mr-2 h-4 w-4" />
-                  Stop Recording
-                </Button>
-              </>
-            )}
-
-            {status === 'stopped' && recordedBlob && (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={resetRecording}
-                  className="rounded-2xl"
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Record Again
-                </Button>
-
-                <Button
-                  type="button"
-                  onClick={handleSaveRecording}
-                  className="rounded-2xl bg-green-600 text-white hover:bg-green-700"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Save Recording
-                </Button>
-              </>
-            )}
           </div>
         </CardContent>
       </Card>
