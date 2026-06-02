@@ -70,6 +70,18 @@ function safeText(value: any) {
   return String(value || '').toLowerCase();
 }
 
+function accessPersonName(item: any) {
+  return item?.full_name || item?.person_name || '';
+}
+
+function accessPersonEmail(item: any) {
+  return item?.email || item?.email_address || '';
+}
+
+function accessPersonPhone(item: any) {
+  return item?.phone_number || item?.phone || '';
+}
+
 function hasData(value: any) {
   if (!value) return false;
   if (Array.isArray(value)) return value.length > 0;
@@ -158,6 +170,7 @@ export function DataBindingDashboard({
         deliveryDate: item.delivery_date,
         deliveryOccasion: item.delivery_occasion,
         subject: item.subject,
+        media: item.media,
         audioFile:
           item.message_type === 'audio' && item.media
             ? { name: 'Audio Message', type: 'audio' }
@@ -177,10 +190,10 @@ export function DataBindingDashboard({
 
     return accessManagementData.filter((item: any) => {
       return (
-        safeText(item.person_name).includes(search) ||
+        safeText(accessPersonName(item)).includes(search) ||
         safeText(item.relationship).includes(search) ||
-        safeText(item.email_address).includes(search) ||
-        safeText(item.phone_number).includes(search)
+        safeText(accessPersonEmail(item)).includes(search) ||
+        safeText(accessPersonPhone(item)).includes(search)
       );
     });
   }, [accessManagementData, searchTerm]);
@@ -250,7 +263,7 @@ export function DataBindingDashboard({
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="rounded-full bg-slate-950 px-3 py-1 text-white hover:bg-slate-950">
                 <Sparkles className="mr-1 h-3.5 w-3.5" />
-                Smart Overview
+                Dashboard Overview
               </Badge>
 
               <Badge
@@ -263,13 +276,12 @@ export function DataBindingDashboard({
 
             <div>
               <h1 className="max-w-3xl text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl lg:text-4xl">
-                Your important details, beautifully organized.
+                Your secure vault overview.
               </h1>
 
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
-                Review access people, next-of-kin letters, and personal messages
-                from one secure overview. Keep everything clear, guided, and
-                easy to complete.
+                Review trusted access, next-of-kin letters, and personal
+                messages from one clear place before opening any section.
               </p>
             </div>
 
@@ -328,7 +340,7 @@ export function DataBindingDashboard({
                 onClick={() => onNavigateToSection('0')}
                 className="h-12 rounded-2xl border-slate-200 bg-white px-5"
               >
-                View instructions
+                Open guide
               </Button>
             </div>
           </div>
@@ -568,7 +580,7 @@ export function DataBindingDashboard({
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
               {filteredAccessData.map((item: any, index: number) => (
                 <AccessPersonCard
-                  key={`access-${index}`}
+                  key={item.id || item._id || item.email || `access-${index}`}
                   item={item}
                   onEdit={() => onNavigateToSection('2')}
                   showSensitiveInfo={false}

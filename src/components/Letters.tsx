@@ -810,7 +810,7 @@ export function Letters({
           <div className="space-y-5">
             <EditorHeader
               isEditing={letters.some(item => item.id === currentLetter.id)}
-              onClose={closeEditor}
+              onClose={() => closeEditor()}
             />
 
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -905,7 +905,7 @@ export function Letters({
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={closeEditor}
+                        onClick={() => closeEditor()}
                         className="h-11 rounded-xl"
                       >
                         Cancel

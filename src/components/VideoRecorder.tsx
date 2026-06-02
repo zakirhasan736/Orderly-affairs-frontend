@@ -10,6 +10,7 @@ import {
   Pause,
   Download,
   RotateCcw,
+  Trash2,
   X,
   AlertTriangle,
   CheckCircle2,
@@ -599,6 +600,16 @@ export function VideoRecorder({
                       >
                         <RotateCcw className="mr-2 h-4 w-4" />
                         Record Again
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={resetRecording}
+                        className="h-12 rounded-2xl"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Recording
                       </Button>
                     </>
                   )}

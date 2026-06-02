@@ -209,6 +209,7 @@ export default function DashboardPage() {
   // Existing owner app state
   const [activeSection, setActiveSection] = useState('dashboard');
   const [activeSubsection, setActiveSubsection] = useState<string | null>(null);
+  const skipInitialContextualNavigation = useRef(true);
   type DashboardFormData = Record<string, any>;
 
   const [formData, setFormData] = useState<DashboardFormData>({});
@@ -525,6 +526,11 @@ export default function DashboardPage() {
         const d = JSON.parse(atob(ownerToken.split('.')[1]));
         if (d?.role === 'owner') {
           setCurrentUser({ email: d.sub });
+          setActiveSection('dashboard');
+          setActiveSubsection(null);
+          setSidebarOpen(false);
+          setMobileMoreOpen(false);
+          skipInitialContextualNavigation.current = true;
           setAppMode('owner');
           return;
         }
@@ -809,7 +815,22 @@ export default function DashboardPage() {
     return `${section.id}. ${section.title}`;
   }, [activeSection, activeSubsection, allSections]);
   useEffect(() => {
+    if (appMode === 'owner') {
+      setActiveSection('dashboard');
+      setActiveSubsection(null);
+      setSidebarOpen(false);
+      setMobileMoreOpen(false);
+      skipInitialContextualNavigation.current = true;
+    }
+  }, [appMode]);
+
+  useEffect(() => {
     if (!contextualStep) return;
+
+    if (skipInitialContextualNavigation.current) {
+      skipInitialContextualNavigation.current = false;
+      return;
+    }
 
     if (contextualStep === 'assign_nok') {
       setActiveSection('2');

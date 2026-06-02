@@ -1,25 +1,27 @@
 import React from 'react';
-import { Card, CardHeader, CardContent } from '@common/ui/card';
 import { Badge } from '@common/ui/badge';
 import { Button } from '@common/ui/button';
-import { 
-  Mail, 
-  Phone, 
-  FileText, 
-  Video, 
-  Mic, 
-  Calendar, 
-  Clock, 
-  Send, 
-  Edit, 
-  Trash2, 
-  User,
-  CheckCircle,
-  AlertCircle,
+import {
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  Edit2,
+  Eye,
+  FileText,
+  Mail,
+  Mic,
   Play,
-  ViewIcon,
-  EditIcon
+  Trash2,
+  UserRound,
+  Video,
 } from 'lucide-react';
+
+interface MessageMedia {
+  url?: string;
+  type?: string;
+  format?: string;
+  size?: number;
+}
 
 interface MessageData {
   id: string;
@@ -33,8 +35,9 @@ interface MessageData {
   isDelivered: boolean;
   deliveryDate?: string;
   deliveryOccasion?: string;
-  audioFile?: { name: string; type: string; };
-  videoFile?: { name: string; type: string; };
+  audioFile?: { name: string; type: string };
+  videoFile?: { name: string; type: string };
+  media?: MessageMedia;
   subject?: string;
 }
 
@@ -46,280 +49,291 @@ interface MessageCardProps {
   onPlay?: () => void;
 }
 
-export function MessageCard({ 
-  item, 
-  onEdit, 
+function getTypeConfig(type: MessageData['messageType']) {
+  switch (type) {
+    case 'video':
+      return {
+        icon: <Video className="h-5 w-5" />,
+        label: 'Video',
+        accent: 'bg-rose-50 text-rose-600 ring-rose-100',
+        badge: 'border-rose-200 bg-rose-50 text-rose-700',
+      };
+    case 'audio':
+      return {
+        icon: <Mic className="h-5 w-5" />,
+        label: 'Audio',
+        accent: 'bg-blue-50 text-blue-600 ring-blue-100',
+        badge: 'border-blue-200 bg-blue-50 text-blue-700',
+      };
+    default:
+      return {
+        icon: <FileText className="h-5 w-5" />,
+        label: 'Letter',
+        accent: 'bg-emerald-50 text-emerald-600 ring-emerald-100',
+        badge: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+      };
+  }
+}
+
+function formatDate(dateString?: string) {
+  if (!dateString) return '';
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.valueOf())) return dateString;
+
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function formatDateTime(dateString?: string) {
+  if (!dateString) return 'Not saved yet';
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.valueOf())) return dateString;
+
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function stripHtml(value?: string) {
+  if (!value) return '';
+  return value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function truncateContent(text?: string, maxLength = 150) {
+  const clean = stripHtml(text);
+  if (!clean) return 'No content preview added.';
+  if (clean.length <= maxLength) return clean;
+  return `${clean.substring(0, maxLength)}...`;
+}
+
+export function MessageCard({
+  item,
+  onEdit,
   onDelete,
   onView,
-  onPlay 
+  onPlay,
 }: MessageCardProps) {
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'video':
-        return <Video className="h-5 w-5" />;
-      case 'audio':
-        return <Mic className="h-5 w-5" />;
-      case 'letter':
-      default:
-        return <FileText className="h-5 w-5" />;
-    }
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'video':
-        return 'bg-purple-500';
-      case 'audio':
-        return 'bg-green-500';
-      case 'letter':
-      default:
-        return 'bg-blue-500';
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch {
-      return dateString;
-    }
-  };
-
-  const formatDateTime = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return dateString;
-    }
-  };
-
-  const truncateContent = (text: string, maxLength: number = 120) => {
-    if (!text) return 'No content';
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
-  };
-
-  // const getDeliveryStatusIcon = () => {
-  //   if (item.isDelivered) {
-  //     return <CheckCircle className="h-4 w-4 text-green-600" />;
-  //   }
-  //   return <AlertCircle className="h-4 w-4 text-yellow-600" />;
-  // };
-
-  const getDeliveryStatusText = () => {
-    if (item.isDelivered) {
-      return `Delivered ${item.deliveryDate ? formatDate(item.deliveryDate) : ''}`;
-    }
-    return `Pending: ${item.deliveryTrigger}`;
-  };
+  const typeConfig = getTypeConfig(item.messageType);
+  const deliveryLabel =
+    item.deliveryTrigger === 'date'
+      ? formatDate(item.deliveryDate) || 'Scheduled date'
+      : 'Upon Death';
+  const actionLabel = item.messageType === 'letter' ? 'View' : 'Play';
 
   return (
-    <>
-
-      <div className="bg-white border border-slate-100 rounded-xl px-7 py-8 hover:shadow-[0_40px_80px_-20px_rgba(30,41,59,0.12)] transition-all group flex flex-col h-full relative overflow-hidden shadow-sm">
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex items-center gap-5">
+    <article className="group overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className="p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
             <div
-              className={`${getTypeColor(item.messageType)} w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm`}
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ring-1 ${typeConfig.accent}`}
             >
-              {getTypeIcon(item.messageType)}
+              {typeConfig.icon}
             </div>
-            <div>
-              <h3 className="text-xl font-black text-[#1e293b] tracking-tight">
+
+            <div className="min-w-0">
+              <div className="mb-2 flex flex-wrap gap-2">
+                <Badge
+                  variant="outline"
+                  className={`rounded-full ${typeConfig.badge}`}
+                >
+                  {typeConfig.label}
+                </Badge>
+
+                <Badge
+                  variant="outline"
+                  className={
+                    item.isDelivered
+                      ? 'rounded-full border-emerald-200 bg-emerald-50 text-emerald-700'
+                      : 'rounded-full border-amber-200 bg-amber-50 text-amber-700'
+                  }
+                >
+                  {item.isDelivered ? (
+                    <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                  ) : (
+                    <Clock3 className="mr-1 h-3.5 w-3.5" />
+                  )}
+                  {item.isDelivered ? 'Delivered' : 'Pending'}
+                </Badge>
+              </div>
+
+              <h3 className="line-clamp-2 text-base font-semibold text-slate-950 sm:text-lg">
                 {item.title || 'Untitled Message'}
               </h3>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">
-                Subject: {item.subject}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            <span
-              className={`${getTypeColor(item.messageType)} px-4 py-1.5 bg-indigo-50 text-indigo-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-indigo-100`}
-            >
-              {item.messageType.charAt(0).toUpperCase() +
-                item.messageType.slice(1)}
-            </span>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-              <span
-                className={`${
-                  item.isDelivered ? 'text-green-600' : 'text-yellow-600'
-                } text-[10px] font-black text-amber-500 uppercase tracking-widest`}
-              >
-                {item.isDelivered ? 'Delivered' : 'Pending'}
-              </span>
-            </div>
-          </div>
-        </div>
 
-        <div className="space-y-5 mb-3">
-          <div className="space-y-2">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-3">
-              <span className="w-1 h-3 bg-indigo-500 rounded-full" />
-              Recipient
-            </p>
-            <div className="pl-4">
-              <p className="text-[15px] font-black text-[#1e293b] tracking-tight">
-                {item.recipient || 'No recipient'}
-              </p>
-              <p className="text-[12px] font-bold text-slate-400 truncate mt-0.5">
-                {item.recipientEmail}
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-3">
-              <span className="w-1 h-3 bg-indigo-500 rounded-full" />
-              Content Preview
-            </p>
-            <div className="pl-4 italic">
-              <p className="text-[13px] text-slate-600 font-medium leading-relaxed">
-                "{truncateContent(item.content, 150)}"
-              </p>
-            </div>
-          </div>
-          {(item.audioFile || item.videoFile) && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-3">
-                <span className="w-1 h-3 bg-indigo-500 rounded-full" />
-                Media Files
-              </p>
-              <div className="pl-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                {item.audioFile && (
-                  <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
-                    <Mic className="h-4 w-4 text-green-600" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-green-800 dark:text-green-200 truncate">
-                        {item.audioFile.name}
-                      </p>
-                      <p className="text-xs text-green-600 dark:text-green-400">
-                        {item.audioFile.type}
-                      </p>
-                    </div>
-                    {onPlay && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={onPlay}
-                        className="h-6 w-6 p-0"
-                      >
-                        <Play className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                )}
-
-                {item.videoFile && (
-                  <div className="flex items-center gap-2 p-2 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                    <Video className="h-4 w-4 text-purple-600" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-purple-800 dark:text-purple-200 truncate">
-                        {item.videoFile.name}
-                      </p>
-                      <p className="text-xs text-purple-600 dark:text-purple-400">
-                        {item.videoFile.type}
-                      </p>
-                    </div>
-                    {onPlay && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={onPlay}
-                        className="h-6 w-6 p-0"
-                      >
-                        <Play className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-3">
-              <span className="w-1 h-3 bg-indigo-500 rounded-full" />
-              Delivery Information
-            </p>
-            <div className="pl-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-              <p className="text-[12px] font-black text-[#1e293b] uppercase tracking-tight">
-                {getDeliveryStatusText()}
-              </p>
-            </div>
-          </div>
-          {item.deliveryOccasion && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-3">
-                <span className="w-1 h-3 bg-indigo-500 rounded-full" />
-                Delivery Schedule
-              </p>
-              <div className="pl-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                <p className="text-[12px] font-black text-[#1e293b] uppercase tracking-tight">
-                  {item.deliveryOccasion}
+              {item.subject && (
+                <p className="mt-1 line-clamp-1 text-xs font-medium text-slate-500">
+                  {item.subject}
                 </p>
-              </div>
+              )}
             </div>
+          </div>
+
+          <div className="flex shrink-0 gap-2">
+            {(onView || onPlay) && (
+              <Button
+                type="button"
+                size="icon"
+                onClick={onPlay || onView}
+                className="h-10 w-10 rounded-2xl bg-slate-950 text-white hover:bg-slate-800"
+                aria-label={`${actionLabel} message`}
+              >
+                {item.messageType === 'letter' ? (
+                  <Eye className="h-4 w-4" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+              </Button>
+            )}
+
+            {onEdit && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={onEdit}
+                className="h-10 w-10 rounded-2xl border-slate-200"
+                aria-label="Edit message"
+              >
+                <Edit2 className="h-4 w-4" />
+              </Button>
+            )}
+
+            {onDelete && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={onDelete}
+                className="h-10 w-10 rounded-2xl border-rose-100 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                aria-label="Delete message"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <InfoTile
+            icon={<UserRound className="h-4 w-4" />}
+            label="Recipient"
+            value={item.recipient || 'No recipient'}
+          />
+          <InfoTile
+            icon={<Mail className="h-4 w-4" />}
+            label="Email"
+            value={item.recipientEmail || 'No email'}
+          />
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="mb-2 flex items-center gap-2 text-slate-500">
+            <CalendarClock className="h-4 w-4" />
+            <p className="text-xs font-semibold uppercase tracking-wide">
+              Delivery
+            </p>
+          </div>
+
+          <p className="text-sm font-semibold text-slate-900">
+            {deliveryLabel}
+          </p>
+
+          {item.deliveryOccasion && (
+            <p className="mt-1 text-xs font-medium text-slate-500">
+              {item.deliveryOccasion}
+            </p>
           )}
         </div>
 
-        <div className="mt-auto pt-0 border-t border-slate-50 flex items-center justify-between gap-6">
-          <div className="flex items-center gap-3 text-slate-300">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+        {item.media?.url ? (
+          <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+            {item.messageType === 'video' ? (
+              <video
+                controls
+                src={item.media.url}
+                className="h-44 w-full rounded-xl bg-black object-cover"
               />
-            </svg>
-            <span className="text-[10px] font-black uppercase text-muted-foreground tracking-tight">
-              Updated: {formatDateTime(item.lastModified)}
-            </span>
+            ) : (
+              <audio controls src={item.media.url} className="w-full" />
+            )}
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onView}
-              className="px-6 py-3 bg-[#1e293b] text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-xl hover:shadow-2xl hover:bg-slate-800 transition-all active:scale-[0.98] flex items-center gap-3"
+        ) : item.audioFile || item.videoFile ? (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Attached Media
+            </p>
+            <p className="mt-1 text-sm font-medium text-slate-800">
+              {item.audioFile?.name || item.videoFile?.name}
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Preview
+            </p>
+            <p className="mt-2 line-clamp-3 text-sm font-medium leading-6 text-slate-700">
+              {truncateContent(item.content)}
+            </p>
+          </div>
+        )}
+
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+          <p className="min-w-0 truncate text-xs font-medium text-slate-400">
+            Updated {formatDateTime(item.lastModified)}
+          </p>
+
+          {(onView || onPlay) && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onPlay || onView}
+              className="h-10 shrink-0 rounded-2xl border-slate-200"
             >
               {item.messageType === 'letter' ? (
-                <ViewIcon className="h-4 w-4 mr-2" />
+                <Eye className="mr-2 h-4 w-4" />
               ) : (
-                <Play className="h-4 w-4 mr-2" />
+                <Play className="mr-2 h-4 w-4" />
               )}
-              {item.messageType === 'letter' ? 'View' : 'Play'}
-            </button>
-            <button
-              onClick={onEdit}
-              className="px-6 py-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-indigo-600 hover:border-indigo-100 hover:bg-indigo-50 transition-all flex items-center justify-center active:scale-[0.98] shadow-sm"
-            >
-              <EditIcon className="w-4 h-4" />
-            </button>
-            <button
-              onClick={onDelete}
-              className="px-6 py-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-indigo-600 hover:border-indigo-100 hover:bg-indigo-50 transition-all flex items-center justify-center active:scale-[0.98] shadow-sm"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
+              {actionLabel}
+            </Button>
+          )}
         </div>
       </div>
-    </>
+    </article>
+  );
+}
+
+function InfoTile({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+        {icon}
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          {label}
+        </p>
+        <p className="truncate text-sm font-medium text-slate-800">{value}</p>
+      </div>
+    </div>
   );
 }
