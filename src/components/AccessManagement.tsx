@@ -19,6 +19,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  Loader2,
   Lock,
   Mail,
   Phone,
@@ -61,11 +62,14 @@ interface AuthorizedPerson {
   access_level: 'Full Kit Access' | 'Section-Specific Access';
   authorized_sections: string[];
   immediate_access: boolean;
+  nok_letter_received: boolean;
   master_password: string;
   password_card_generated: boolean;
   card_storage_location?: string;
   special_instructions?: string;
 }
+
+type PersonAction = 'saving' | 'deleting' | 'approving' | 'revoking';
 
 const SECTION_PRESETS: Record<string, string[] | 'all'> = {
   'Full Access': 'all',
@@ -111,6 +115,7 @@ function createEmptyPerson(): AuthorizedPerson {
     access_level: 'Full Kit Access',
     authorized_sections: [],
     immediate_access: false,
+    nok_letter_received: false,
     master_password: generatePassword(),
     password_card_generated: false,
     card_storage_location: '',
@@ -120,6 +125,42 @@ function createEmptyPerson(): AuthorizedPerson {
 
 function getPersonKey(person: AuthorizedPerson, index: number) {
   return person._id || person.__clientId || `person-${index}`;
+}
+
+function normalizeAccessLevel(
+  accessLevel?: string,
+): AuthorizedPerson['access_level'] {
+  return accessLevel === 'Section-Specific Access'
+    ? 'Section-Specific Access'
+    : 'Full Kit Access';
+}
+
+type CreateNextKinResponseWithId = {
+  id?: string;
+  _id?: string;
+};
+
+type NextKinApiPersonExtras = {
+  _id?: string;
+  master_password?: string | null;
+};
+
+function getApiErrorDetail(error: unknown) {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'data' in error &&
+    error.data &&
+    typeof error.data === 'object' &&
+    'detail' in error.data
+  ) {
+    const detail = error.data.detail;
+    return typeof detail === 'string' ? detail : '';
+  }
+
+  if (error instanceof Error) return error.message;
+
+  return '';
 }
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
@@ -223,6 +264,10 @@ export function AccessManagement() {
     Record<string, boolean>
   >({});
 
+  const [personActions, setPersonActions] = useState<
+    Record<string, PersonAction>
+  >({});
+
   const [search, setSearch] = useState('');
 
   const [createNextKin] = useCreateNextKinMutation();
@@ -240,23 +285,29 @@ export function AccessManagement() {
     setAuthorizedPeople(prev => {
       const unsaved = prev.filter(p => !p._id);
 
-      const fromApi: AuthorizedPerson[] = data.map((nk: any) => ({
-        _id: nk.id || nk._id,
-        __clientId: nk.id || nk._id || makeClientId(),
-        full_name: nk.full_name || '',
-        relationship: nk.relationship || '',
-        email: nk.email || '',
-        phone_number: nk.phone_number || '',
-        access_level: nk.access_level || 'Full Kit Access',
-        authorized_sections: Array.isArray(nk.authorized_sections)
-          ? nk.authorized_sections
-          : [],
-        immediate_access: !!nk.immediate_access,
-        master_password: nk.master_password || '',
-        password_card_generated: !!nk.password_card_generated,
-        card_storage_location: nk.card_storage_location || '',
-        special_instructions: nk.special_instructions || '',
-      }));
+      const fromApi: AuthorizedPerson[] = data.map(rawNextKin => {
+        const nk = rawNextKin as typeof rawNextKin & NextKinApiPersonExtras;
+        const personId = nk.id || nk._id;
+
+        return {
+          _id: personId,
+          __clientId: personId || makeClientId(),
+          full_name: nk.full_name || '',
+          relationship: nk.relationship || '',
+          email: nk.email || '',
+          phone_number: nk.phone_number || '',
+          access_level: normalizeAccessLevel(nk.access_level),
+          authorized_sections: Array.isArray(nk.authorized_sections)
+            ? nk.authorized_sections
+            : [],
+          immediate_access: !!nk.immediate_access,
+          nok_letter_received: !!nk.nok_letter_received,
+          master_password: nk.master_password || '',
+          password_card_generated: !!nk.password_card_generated,
+          card_storage_location: nk.card_storage_location || '',
+          special_instructions: nk.special_instructions || '',
+        };
+      });
 
       return [...fromApi, ...unsaved];
     });
@@ -265,8 +316,8 @@ export function AccessManagement() {
   const sectionOptions = useMemo(() => {
     const options: { id: string; label: string; isSubsection: boolean }[] = [];
 
-    formConfig.chunks.forEach((chunk: any) => {
-      chunk.sections.forEach((section: any) => {
+    formConfig.chunks.forEach(chunk => {
+      chunk.sections.forEach(section => {
         if (section.id === '0') return;
 
         options.push({
@@ -275,7 +326,7 @@ export function AccessManagement() {
           isSubsection: false,
         });
 
-        section.subsections?.forEach((sub: any) => {
+        section.subsections?.forEach(sub => {
           options.push({
             id: sub.id,
             label: `${sub.id}. ${sub.title}`,
@@ -323,6 +374,8 @@ export function AccessManagement() {
     p => p.access_level === 'Section-Specific Access',
   ).length;
 
+  const hasPersonAction = Object.keys(personActions).length > 0;
+
   const addPerson = () => {
     const nextPerson = createEmptyPerson();
 
@@ -342,12 +395,26 @@ export function AccessManagement() {
     });
   };
 
-  const updatePerson = (
+  const updatePerson = <K extends keyof AuthorizedPerson>(
     index: number,
-    key: keyof AuthorizedPerson,
-    value: any,
+    key: K,
+    value: AuthorizedPerson[K],
   ) => {
     patchPerson(index, { [key]: value } as Partial<AuthorizedPerson>);
+  };
+
+  const setPersonAction = (key: string, action?: PersonAction) => {
+    setPersonActions(prev => {
+      const next = { ...prev };
+
+      if (action) {
+        next[key] = action;
+      } else {
+        delete next[key];
+      }
+
+      return next;
+    });
   };
 
   const toggleSection = (index: number, id: string) => {
@@ -404,12 +471,29 @@ export function AccessManagement() {
       return;
     }
 
+    const normalizedEmail = person.email.trim().toLowerCase();
+    const duplicateInList = authorizedPeople.some((candidate, idx) => {
+      if (idx === index) return false;
+      return candidate.email.trim().toLowerCase() === normalizedEmail;
+    });
+
+    if (!person._id && duplicateInList) {
+      toast.error(
+        `A Next-of-Kin with ${person.email} is already in your access list.`
+      );
+      return;
+    }
+
+    const personKey = getPersonKey(person, index);
+    setPersonAction(personKey, 'saving');
+
     try {
       if (person._id) {
         await updateNextKin({ nextkinId: person._id, body: person }).unwrap();
         toast.success(`Updated ${person.full_name}`);
       } else {
-        const res: any = await createNextKin(person).unwrap();
+        const res =
+          (await createNextKin(person).unwrap()) as CreateNextKinResponseWithId;
 
         patchPerson(index, {
           _id: res.id || res._id,
@@ -422,7 +506,18 @@ export function AccessManagement() {
       refetch();
     } catch (error) {
       console.error(error);
-      toast.error('Save failed');
+      const detail = getApiErrorDetail(error);
+
+      if (detail === 'Next-of-Kin already exists') {
+        toast.error(
+          `A Next-of-Kin with ${person.email} already exists. Use the existing entry or enter a different email.`
+        );
+        return;
+      }
+
+      toast.error(detail || 'Save failed');
+    } finally {
+      setPersonAction(personKey);
     }
   };
 
@@ -436,6 +531,9 @@ export function AccessManagement() {
 
     if (!window.confirm(`Delete ${person.full_name}?`)) return;
 
+    const personKey = getPersonKey(person, index);
+    setPersonAction(personKey, 'deleting');
+
     try {
       await deleteNextKin(person._id).unwrap();
       setAuthorizedPeople(prev => prev.filter((_, idx) => idx !== index));
@@ -444,35 +542,50 @@ export function AccessManagement() {
     } catch (error) {
       console.error(error);
       toast.error('Delete failed');
+    } finally {
+      setPersonAction(personKey);
     }
   };
 
   const approveOne = async (index: number) => {
-    const id = authorizedPeople[index]._id;
+    const person = authorizedPeople[index];
+    const id = person._id;
 
     if (!id) {
       toast.error('Please save this person first');
       return;
     }
 
+    const personKey = getPersonKey(person, index);
+    setPersonAction(personKey, 'approving');
+
     try {
       await approveNextKinAccess(id).unwrap();
-      updatePerson(index, 'immediate_access', true);
+      patchPerson(index, {
+        immediate_access: true,
+        nok_letter_received: false,
+      });
       toast.success('Access approved');
       refetch();
     } catch (error) {
       console.error(error);
       toast.error('Approve failed');
+    } finally {
+      setPersonAction(personKey);
     }
   };
 
   const revokeOne = async (index: number) => {
-    const id = authorizedPeople[index]._id;
+    const person = authorizedPeople[index];
+    const id = person._id;
 
     if (!id) {
       updatePerson(index, 'immediate_access', false);
       return;
     }
+
+    const personKey = getPersonKey(person, index);
+    setPersonAction(personKey, 'revoking');
 
     try {
       await revokeNextKinAccess(id).unwrap();
@@ -482,6 +595,8 @@ export function AccessManagement() {
     } catch (error) {
       console.error(error);
       toast.error('Revoke failed');
+    } finally {
+      setPersonAction(personKey);
     }
   };
 
@@ -545,10 +660,14 @@ export function AccessManagement() {
             <Button
               variant="outline"
               onClick={revokeAll}
-              disabled={!authorizedPeople.length || isRevokingAll}
+              disabled={!authorizedPeople.length || isRevokingAll || hasPersonAction}
               className="rounded-2xl border-destructive/30 text-destructive hover:text-destructive"
             >
-              <Lock className="mr-2 h-4 w-4" />
+              {isRevokingAll ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Lock className="mr-2 h-4 w-4" />
+              )}
               {isRevokingAll ? 'Revoking...' : 'Revoke All'}
             </Button>
 
@@ -634,6 +753,14 @@ export function AccessManagement() {
           {filteredPeople.map(({ person, index, key }) => {
             const collapsed = collapsedItems[key] ?? true;
             const showCard = showPasswordCards[key] ?? false;
+            const action = personActions[key];
+            const isSaving = action === 'saving';
+            const isDeleting = action === 'deleting';
+            const isApproving = action === 'approving';
+            const isRevoking = action === 'revoking';
+            const isPersonBusy = !!action || isRevokingAll;
+            const hasReceivedNokLetter =
+              !person.immediate_access && person.nok_letter_received;
 
             const showSectionPicker =
               expandedSectionPicker[key] ??
@@ -647,7 +774,11 @@ export function AccessManagement() {
             return (
               <Card
                 key={key}
-                className="overflow-hidden rounded-3xl md:border shadow-sm transition hover:shadow-md"
+                className={`overflow-hidden rounded-3xl md:border shadow-sm transition hover:shadow-md ${
+                  hasReceivedNokLetter
+                    ? 'border-emerald-300 bg-emerald-50/30'
+                    : ''
+                }`}
               >
                 <Collapsible
                   open={!collapsed}
@@ -675,6 +806,15 @@ export function AccessManagement() {
 
                               <AccessBadge person={person} />
                               <AccessStatusBadge person={person} />
+                              {hasReceivedNokLetter && (
+                                <Badge
+                                  variant="outline"
+                                  className="gap-1 rounded-full border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700"
+                                >
+                                  <CheckCircle className="h-3 w-3" />
+                                  NOK letter received
+                                </Badge>
+                              )}
                             </div>
 
                             <div className="mt-2 flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-4">
@@ -715,10 +855,14 @@ export function AccessManagement() {
                                   event.stopPropagation();
                                   revokeOne(index);
                                 }}
-                                disabled={isRevokingOne}
+                                disabled={isPersonBusy || isRevokingOne}
                               >
-                                <Lock className="mr-1.5 h-4 w-4" />
-                                Revoke
+                                {isRevoking ? (
+                                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Lock className="mr-1.5 h-4 w-4" />
+                                )}
+                                {isRevoking ? 'Revoking...' : 'Revoke'}
                               </Button>
                             ) : (
                               <Button
@@ -729,9 +873,14 @@ export function AccessManagement() {
                                   event.stopPropagation();
                                   approveOne(index);
                                 }}
+                                disabled={isPersonBusy}
                               >
-                                <Unlock className="mr-1.5 h-4 w-4" />
-                                Approve
+                                {isApproving ? (
+                                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Unlock className="mr-1.5 h-4 w-4" />
+                                )}
+                                {isApproving ? 'Approving...' : 'Approve'}
                               </Button>
                             ))}
 
@@ -743,9 +892,14 @@ export function AccessManagement() {
                               event.stopPropagation();
                               savePerson(index);
                             }}
+                            disabled={isPersonBusy}
                           >
-                            <Save className="mr-1.5 h-4 w-4" />
-                            Save
+                            {isSaving ? (
+                              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Save className="mr-1.5 h-4 w-4" />
+                            )}
+                            {isSaving ? 'Saving...' : 'Save'}
                           </Button>
 
                           <Button
@@ -756,9 +910,16 @@ export function AccessManagement() {
                               event.stopPropagation();
                               deletePerson(index);
                             }}
+                            disabled={isPersonBusy}
                           >
-                            <Trash2 className="h-4 w-4" />
-                            <span className="ml-1.5 sm:hidden">Delete</span>
+                            {isDeleting ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                            <span className="ml-1.5 sm:hidden">
+                              {isDeleting ? 'Deleting' : 'Delete'}
+                            </span>
                           </Button>
                         </div>
                       </CardTitle>
@@ -843,24 +1004,56 @@ export function AccessManagement() {
                             </p>
                           </div>
 
-                          <label className="flex cursor-pointer items-center gap-3 rounded-2xl border bg-background px-4 py-3 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={person.immediate_access}
-                              onChange={event =>
-                                updatePerson(
-                                  index,
-                                  'immediate_access',
-                                  event.target.checked,
-                                )
-                              }
-                              className="h-4 w-4"
-                            />
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-4 w-4" />
-                              Immediate Access
-                            </span>
-                          </label>
+                          <div className="flex flex-col gap-2 sm:items-end">
+                            <label className="flex cursor-pointer items-center gap-3 rounded-2xl border bg-background px-4 py-3 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={person.immediate_access}
+                                onChange={event => {
+                                  const checked = event.target.checked;
+
+                                  patchPerson(index, {
+                                    immediate_access: checked,
+                                    nok_letter_received: checked
+                                      ? false
+                                      : person.nok_letter_received,
+                                  });
+                                }}
+                                className="h-4 w-4"
+                              />
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-4 w-4" />
+                                Immediate Access
+                              </span>
+                            </label>
+
+                            {!person.immediate_access && (
+                              <label
+                                className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm ${
+                                  person.nok_letter_received
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                                    : 'bg-background'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={person.nok_letter_received}
+                                  onChange={event =>
+                                    updatePerson(
+                                      index,
+                                      'nok_letter_received',
+                                      event.target.checked,
+                                    )
+                                  }
+                                  className="h-4 w-4"
+                                />
+                                <span className="flex items-center gap-1">
+                                  <CheckCircle className="h-4 w-4" />
+                                  Next-of-Kin Letter Received?
+                                </span>
+                              </label>
+                            )}
+                          </div>
                         </div>
 
                         <DynamicFormField
@@ -1082,9 +1275,14 @@ export function AccessManagement() {
                               event.stopPropagation();
                               savePerson(index);
                             }}
+                            disabled={isPersonBusy}
                           >
-                            <Save className="mr-2 h-4 w-4" />
-                            Save Person
+                            {isSaving ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Save className="mr-2 h-4 w-4" />
+                            )}
+                            {isSaving ? 'Saving...' : 'Save Person'}
                           </Button>
                         </div>
 

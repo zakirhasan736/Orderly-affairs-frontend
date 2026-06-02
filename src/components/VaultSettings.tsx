@@ -381,7 +381,11 @@
 
 // export default VaultSettings;
 'use client';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
+import Cookies from 'js-cookie';
+import { Mail, MessageSquare, ShieldCheck, Smartphone } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   useGetStatusQuery,
   useGetInvoicesQuery,
@@ -392,6 +396,17 @@ import {
   useResumeSubscriptionMutation,
   usePortalMutation,
 } from '@/services/billingApi';
+import {
+  type MFAMethod,
+  useDisableMfaMethodMutation,
+  useGenerateMfaMutation,
+  useGetMeQuery,
+  useLinkAuthenticatorMutation,
+  useSendEmailOtpMutation,
+  useStartSmsMfaMutation,
+  useVerifyEmailCodeMutation,
+  useVerifySmsOtpMutation,
+} from '@/services/authApi';
 import { StripePaymentForm } from './StripePaymentForm';
 interface InvoiceLine {
   description: string;
@@ -427,6 +442,48 @@ const formatDate = (unix: number) =>
     year: 'numeric',
   });
 
+const mfaOptions: Array<{
+  id: MFAMethod;
+  title: string;
+  desc: string;
+  icon: React.ReactNode;
+}> = [
+  {
+    id: 'authenticator',
+    title: 'Authenticator App',
+    desc: 'Use a QR-based app such as Google Authenticator or Authy.',
+    icon: <Smartphone className="h-5 w-5" />,
+  },
+  {
+    id: 'email',
+    title: 'Email Verification',
+    desc: 'Receive verification codes at your owner account email.',
+    icon: <Mail className="h-5 w-5" />,
+  },
+  {
+    id: 'sms',
+    title: 'SMS Text Code',
+    desc: 'Receive verification codes on a verified mobile number.',
+    icon: <MessageSquare className="h-5 w-5" />,
+  },
+];
+
+const getErrorMessage = (err: unknown, fallback: string) => {
+  if (
+    err &&
+    typeof err === 'object' &&
+    'data' in err &&
+    err.data &&
+    typeof err.data === 'object' &&
+    'detail' in err.data &&
+    typeof err.data.detail === 'string'
+  ) {
+    return err.data.detail;
+  }
+
+  return fallback;
+};
+
 /* ---------------- Component ---------------- */
 const VaultSettings = () => {
   const {
@@ -435,16 +492,41 @@ const VaultSettings = () => {
     refetch: refetchStatus,
   } = useGetStatusQuery();
   const { data: invoices, isLoading: invoicesLoading } = useGetInvoicesQuery();
+  const {
+    data: me,
+    isLoading: meLoading,
+    refetch: refetchMe,
+  } = useGetMeQuery();
 
   const [createCustomer] = useCreateCustomerMutation();
   // const [startSubscription] = useStartSubscriptionMutation();
   const [changePlan] = useChangePlanMutation();
+  const [sendEmailOtp] = useSendEmailOtpMutation();
+  const [verifyEmailCode] = useVerifyEmailCodeMutation();
+  const [generateMfa] = useGenerateMfaMutation();
+  const [linkAuthenticator] = useLinkAuthenticatorMutation();
+  const [startSmsMfa] = useStartSmsMfaMutation();
+  const [verifySmsOtp] = useVerifySmsOtpMutation();
+  const [disableMfaMethod] = useDisableMfaMethodMutation();
 
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>(
     'yearly',
   );
   const [isProcessing, setIsProcessing] = useState(false);
+  const [securityLoading, setSecurityLoading] = useState<MFAMethod | null>(
+    null,
+  );
+  const [setupMethod, setSetupMethod] = useState<MFAMethod | null>(null);
+  const [emailCode, setEmailCode] = useState('');
+  const [smsCode, setSmsCode] = useState('');
+  const [smsPhone, setSmsPhone] = useState('');
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [mfaSecret, setMfaSecret] = useState('');
+  const [authCode, setAuthCode] = useState('');
+  const autoEmailVerifyKey = useRef('');
+  const autoAuthenticatorVerifyKey = useRef('');
+  const autoSmsVerifyKey = useRef('');
 const [pauseSub] = usePauseSubscriptionMutation();
 const [resumeSub] = useResumeSubscriptionMutation();
 const [openPortal] = usePortalMutation();
@@ -464,8 +546,227 @@ const openBillingPortal = async () => {
   window.location.href = url;
 };
 
+const saveToken = useCallback((token?: string) => {
+  if (!token) return;
+  Cookies.set('auth_token', token, {
+    secure: true,
+    sameSite: 'strict',
+    path: '/',
+  });
+}, []);
+
+const beginEmailMfa = async () => {
+  if (!me?.email) return;
+  setSecurityLoading('email');
+  try {
+    await sendEmailOtp({ email: me.email }).unwrap();
+    setSetupMethod('email');
+    setEmailCode('');
+    toast.success('Email verification code sent');
+  } catch (err: unknown) {
+    toast.error(getErrorMessage(err, 'Could not send email code'));
+  } finally {
+    setSecurityLoading(null);
+  }
+};
+
+const verifyEmailMfa = useCallback(async () => {
+  if (!me?.email) return;
+  const code = Number(emailCode);
+  if (!Number.isInteger(code) || emailCode.length !== 6) {
+    toast.error('Enter the 6-digit email code');
+    return;
+  }
+
+  setSecurityLoading('email');
+  try {
+    const res = await verifyEmailCode({ email: me.email, code }).unwrap();
+    saveToken(res.access_token);
+    setSetupMethod(null);
+    setEmailCode('');
+    await refetchMe();
+    toast.success('Email MFA enabled');
+  } catch (err: unknown) {
+    toast.error(getErrorMessage(err, 'Email verification failed'));
+  } finally {
+    setSecurityLoading(null);
+  }
+}, [me?.email, emailCode, verifyEmailCode, saveToken, refetchMe]);
+
+const beginAuthenticatorMfa = async () => {
+  if (!me?.email) return;
+  setSecurityLoading('authenticator');
+  try {
+    const res = await generateMfa({ email: me.email }).unwrap();
+    setQrCodeUrl(res.qrCodeUrl);
+    setMfaSecret(res.secret);
+    setAuthCode('');
+    setSetupMethod('authenticator');
+  } catch (err: unknown) {
+    toast.error(getErrorMessage(err, 'Could not start authenticator setup'));
+  } finally {
+    setSecurityLoading(null);
+  }
+};
+
+const verifyAuthenticatorMfa = useCallback(async () => {
+  if (!me?.email || !mfaSecret) return;
+  if (authCode.length !== 6) {
+    toast.error('Enter the 6-digit authenticator code');
+    return;
+  }
+
+  setSecurityLoading('authenticator');
+  try {
+    const res = await linkAuthenticator({
+      email: me.email,
+      code: authCode,
+      secret: mfaSecret,
+    }).unwrap();
+    saveToken(res.access_token);
+    setSetupMethod(null);
+    setQrCodeUrl('');
+    setMfaSecret('');
+    setAuthCode('');
+    await refetchMe();
+    toast.success('Authenticator MFA enabled');
+  } catch (err: unknown) {
+    toast.error(getErrorMessage(err, 'Authenticator verification failed'));
+  } finally {
+    setSecurityLoading(null);
+  }
+}, [
+  me?.email,
+  mfaSecret,
+  authCode,
+  linkAuthenticator,
+  saveToken,
+  refetchMe,
+]);
+
+const beginSmsMfa = async () => {
+  if (!me?.email) return;
+  setSecurityLoading('sms');
+  try {
+    const res = await startSmsMfa({
+      email: me.email,
+      phoneNumber: smsPhone.trim() || undefined,
+    }).unwrap();
+
+    if (res.requires_phone) {
+      toast.error('Enter a phone number to enable SMS MFA');
+      return;
+    }
+
+    setSmsPhone(res.phone || smsPhone);
+    setSmsCode('');
+    setSetupMethod('sms');
+    toast.success('SMS verification code sent');
+  } catch (err: unknown) {
+    toast.error(getErrorMessage(err, 'Could not send SMS code'));
+  } finally {
+    setSecurityLoading(null);
+  }
+};
+
+const verifySmsMfa = useCallback(async () => {
+  if (!me?.email) return;
+  if (smsCode.length !== 6) {
+    toast.error('Enter the 6-digit SMS code');
+    return;
+  }
+
+  setSecurityLoading('sms');
+  try {
+    const res = await verifySmsOtp({ email: me.email, code: smsCode }).unwrap();
+    saveToken(res.access_token);
+    setSetupMethod(null);
+    setSmsCode('');
+    await refetchMe();
+    toast.success('SMS MFA enabled');
+  } catch (err: unknown) {
+    toast.error(getErrorMessage(err, 'SMS verification failed'));
+  } finally {
+    setSecurityLoading(null);
+  }
+}, [me?.email, smsCode, verifySmsOtp, saveToken, refetchMe]);
+
+useEffect(() => {
+  if (setupMethod !== 'email' || emailCode.length !== 6) {
+    autoEmailVerifyKey.current = '';
+    return;
+  }
+
+  if (securityLoading) return;
+
+  const verifyKey = [me?.email || '', emailCode].join(':');
+
+  if (autoEmailVerifyKey.current === verifyKey) return;
+
+  autoEmailVerifyKey.current = verifyKey;
+  void verifyEmailMfa();
+}, [setupMethod, emailCode, securityLoading, me?.email, verifyEmailMfa]);
+
+useEffect(() => {
+  if (setupMethod !== 'authenticator' || authCode.length !== 6 || !mfaSecret) {
+    autoAuthenticatorVerifyKey.current = '';
+    return;
+  }
+
+  if (securityLoading) return;
+
+  const verifyKey = [me?.email || '', mfaSecret, authCode].join(':');
+
+  if (autoAuthenticatorVerifyKey.current === verifyKey) return;
+
+  autoAuthenticatorVerifyKey.current = verifyKey;
+  void verifyAuthenticatorMfa();
+}, [
+  setupMethod,
+  authCode,
+  mfaSecret,
+  securityLoading,
+  me?.email,
+  verifyAuthenticatorMfa,
+]);
+
+useEffect(() => {
+  if (setupMethod !== 'sms' || smsCode.length !== 6) {
+    autoSmsVerifyKey.current = '';
+    return;
+  }
+
+  if (securityLoading) return;
+
+  const verifyKey = [me?.email || '', smsCode].join(':');
+
+  if (autoSmsVerifyKey.current === verifyKey) return;
+
+  autoSmsVerifyKey.current = verifyKey;
+  void verifySmsMfa();
+}, [setupMethod, smsCode, securityLoading, me?.email, verifySmsMfa]);
+
+const disableMethod = async (method: MFAMethod) => {
+  if (activeMfaCount <= 1) {
+    toast.error('At least one MFA method must remain linked.');
+    return;
+  }
+
+  setSecurityLoading(method);
+  try {
+    await disableMfaMethod({ method }).unwrap();
+    if (setupMethod === method) setSetupMethod(null);
+    await refetchMe();
+    toast.success('MFA method disabled');
+  } catch (err: unknown) {
+    toast.error(getErrorMessage(err, 'Could not disable MFA method'));
+  } finally {
+    setSecurityLoading(null);
+  }
+};
+
   /* ---------------- Guards ---------------- */
-  if (statusLoading) {
+  if (statusLoading || meLoading) {
     return (
       <div className="p-12 space-y-6">
         <Skeleton className="h-8 w-64" />
@@ -504,9 +805,9 @@ const handleProcessPayment = async () => {
 
     await refetchStatus();
     setShowUpgradeModal(false);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(err);
-    alert(err?.data?.detail ?? 'Billing failed. Please try again.');
+    alert(getErrorMessage(err, 'Billing failed. Please try again.'));
   } finally {
     setIsProcessing(false);
   }
@@ -514,11 +815,237 @@ const handleProcessPayment = async () => {
 const canChangePlan =
   billing.status === 'active' || billing.status === 'trialing';
 
+const mfaMethods = {
+  authenticator: Boolean(me?.mfa_methods?.authenticator),
+  email: Boolean(me?.mfa_methods?.email),
+  sms: Boolean(me?.mfa_methods?.sms),
+};
+
+const activeMfaCount = Object.values(mfaMethods).filter(Boolean).length;
 
 
   /* ---------------- UI ---------------- */
   return (
     <div className="space-y-12 pb-32 vault-settings-section">
+      {/* OWNER MFA SETTINGS */}
+      <div className="bg-white p-8 md:p-10 rounded-3xl border shadow-sm space-y-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-xl font-black uppercase text-slate-900">
+              Owner MFA Methods
+            </h2>
+            <p className="mt-2 text-sm text-slate-500">
+              Enable multiple verification methods. During login, you can use
+              any linked method.
+            </p>
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-xs font-black uppercase text-slate-600">
+            <ShieldCheck className="h-4 w-4" />
+            {activeMfaCount} Linked
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          {mfaOptions.map(option => {
+            const active = mfaMethods[option.id];
+            const busy = securityLoading === option.id;
+
+            return (
+              <div
+                key={option.id}
+                className={`rounded-2xl border p-5 transition ${
+                  active
+                    ? 'border-emerald-200 bg-emerald-50/60'
+                    : 'border-slate-200 bg-white'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`flex h-11 w-11 items-center justify-center rounded-xl ${
+                        active
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {option.icon}
+                    </div>
+                    <div>
+                      <h3 className="font-black text-slate-900">
+                        {option.title}
+                      </h3>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        {option.desc}
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
+                      active
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    {active ? 'Linked' : 'Off'}
+                  </span>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {active ? (
+                    <button
+                      type="button"
+                      disabled={busy || activeMfaCount <= 1}
+                      onClick={() => disableMethod(option.id)}
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-xs font-black uppercase text-slate-700 transition hover:bg-white disabled:opacity-60"
+                    >
+                      {busy
+                        ? 'Updating...'
+                        : activeMfaCount <= 1
+                          ? 'Keep One Linked'
+                          : 'Disable'}
+                    </button>
+                  ) : (
+                    <>
+                      {option.id === 'email' && setupMethod === 'email' && (
+                        <div className="space-y-2">
+                          <input
+                            value={emailCode}
+                            onChange={e =>
+                              setEmailCode(
+                                e.target.value.replace(/\D/g, '').slice(0, 6),
+                              )
+                            }
+                            placeholder="Email code"
+                            className="w-full rounded-xl border px-4 py-3 text-center tracking-widest"
+                          />
+                          <button
+                            type="button"
+                            disabled={busy || emailCode.length !== 6}
+                            onClick={verifyEmailMfa}
+                            className="w-full rounded-xl bg-slate-900 px-4 py-3 text-xs font-black uppercase text-white disabled:opacity-60"
+                          >
+                            Verify Email
+                          </button>
+                        </div>
+                      )}
+
+                      {option.id === 'authenticator' &&
+                        setupMethod === 'authenticator' && (
+                          <div className="space-y-3">
+                            {qrCodeUrl && (
+                              <Image
+                                src={qrCodeUrl}
+                                alt="Authenticator QR code"
+                                width={160}
+                                height={160}
+                                className="mx-auto rounded-xl border bg-white p-2"
+                              />
+                            )}
+                            {mfaSecret && (
+                              <code className="block rounded-xl bg-slate-100 px-3 py-2 text-center text-[11px] text-slate-700">
+                                {mfaSecret}
+                              </code>
+                            )}
+                            <input
+                              value={authCode}
+                              onChange={e =>
+                                setAuthCode(
+                                  e.target.value
+                                    .replace(/\D/g, '')
+                                    .slice(0, 6),
+                                )
+                              }
+                              placeholder="Authenticator code"
+                              className="w-full rounded-xl border px-4 py-3 text-center tracking-widest"
+                            />
+                            <button
+                              type="button"
+                              disabled={busy || authCode.length !== 6}
+                              onClick={verifyAuthenticatorMfa}
+                              className="w-full rounded-xl bg-slate-900 px-4 py-3 text-xs font-black uppercase text-white disabled:opacity-60"
+                            >
+                              Verify Authenticator
+                            </button>
+                          </div>
+                        )}
+
+                      {option.id === 'sms' && (
+                        <div className="space-y-2">
+                          {setupMethod !== 'sms' && (
+                            <input
+                              value={smsPhone}
+                              onChange={e => setSmsPhone(e.target.value)}
+                              placeholder={
+                                me?.phone || 'Phone number with country code'
+                              }
+                              className="w-full rounded-xl border px-4 py-3"
+                            />
+                          )}
+                          {setupMethod === 'sms' && (
+                            <input
+                              value={smsCode}
+                              onChange={e =>
+                                setSmsCode(
+                                  e.target.value
+                                    .replace(/\D/g, '')
+                                    .slice(0, 6),
+                                )
+                              }
+                              placeholder="SMS code"
+                              className="w-full rounded-xl border px-4 py-3 text-center tracking-widest"
+                            />
+                          )}
+                          <button
+                            type="button"
+                            disabled={
+                              busy ||
+                              (setupMethod === 'sms' && smsCode.length !== 6)
+                            }
+                            onClick={
+                              setupMethod === 'sms'
+                                ? verifySmsMfa
+                                : beginSmsMfa
+                            }
+                            className="w-full rounded-xl bg-slate-900 px-4 py-3 text-xs font-black uppercase text-white disabled:opacity-60"
+                          >
+                            {setupMethod === 'sms'
+                              ? 'Verify SMS'
+                              : 'Send SMS Code'}
+                          </button>
+                        </div>
+                      )}
+
+                      {option.id === 'email' && setupMethod !== 'email' && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={beginEmailMfa}
+                          className="w-full rounded-xl bg-slate-900 px-4 py-3 text-xs font-black uppercase text-white disabled:opacity-60"
+                        >
+                          {busy ? 'Sending...' : 'Send Email Code'}
+                        </button>
+                      )}
+
+                      {option.id === 'authenticator' &&
+                        setupMethod !== 'authenticator' && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={beginAuthenticatorMfa}
+                            className="w-full rounded-xl bg-slate-900 px-4 py-3 text-xs font-black uppercase text-white disabled:opacity-60"
+                          >
+                            {busy ? 'Starting...' : 'Set Up QR'}
+                          </button>
+                        )}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* PLAN CARD */}
       <div className="bg-white p-10 rounded-3xl border shadow-sm">
         <h2 className="text-xl font-black uppercase">
@@ -600,7 +1127,7 @@ const canChangePlan =
             )}
 
             {!invoicesLoading &&
-              invoices?.map(inv => (
+              invoices?.map((inv: Invoice) => (
                 <>
                   <tr key={inv.id} className="border-t">
                     <td className="p-4 font-mono">{inv.id}</td>

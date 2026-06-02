@@ -10,6 +10,7 @@ import {
   Pause,
   Download,
   RotateCcw,
+  Trash2,
   X,
   AlertTriangle,
 } from 'lucide-react';
@@ -442,6 +443,16 @@ export function AudioRecorder({
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Record Again
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={resetRecording}
+                  className="rounded-2xl"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Recording
                 </Button>
 
                 <Button

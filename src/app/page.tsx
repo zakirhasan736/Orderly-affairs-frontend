@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect} from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -32,6 +32,8 @@ import {
   useRequestPasswordResetMutation,
   useResetPasswordMutation,
   useVerifySmsOtpMutation,
+  useStartSmsMfaMutation,
+  useResendSmsMfaMutation,
   useResumePendingSignupMutation,
 } from '@/services/authApi';
 import { Card, CardContent } from '@/components/common/ui/card';
@@ -68,6 +70,66 @@ const isValidEmail = (email: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 const verifyTOTPCode = (code: string) => /^\d{6}$/.test(code);
+
+const getApiErrorMessage = (err: unknown, fallback: string) => {
+  if (err && typeof err === 'object') {
+    const error = err as {
+      data?: { detail?: unknown };
+      message?: unknown;
+    };
+    const detail = error.data?.detail;
+
+    if (Array.isArray(detail)) {
+      const messages = detail
+        .map(item =>
+          item &&
+          typeof item === 'object' &&
+          'msg' in item &&
+          typeof item.msg === 'string'
+            ? item.msg
+            : null,
+        )
+        .filter((message): message is string => Boolean(message));
+
+      if (messages.length) return messages.join(', ');
+    }
+
+    if (typeof detail === 'string') return detail;
+    if (typeof error.message === 'string') return error.message;
+  }
+
+  if (err instanceof Error) return err.message;
+
+  return fallback;
+};
+
+const MFA_METHODS: MFAMethod[] = ['authenticator', 'email', 'sms'];
+const OTP_LENGTH = 6;
+const MAX_ATTEMPTS = 5;
+
+const emptyMfaMethods = (): Record<MFAMethod, boolean> => ({
+  authenticator: false,
+  email: false,
+  sms: false,
+});
+
+const normalizeMfaMethods = (
+  methods?: Partial<Record<MFAMethod, boolean>>,
+  legacyMethod?: MFAMethod,
+) => {
+  const normalized = emptyMfaMethods();
+  MFA_METHODS.forEach(method => {
+    normalized[method] = Boolean(methods?.[method]);
+  });
+  if (legacyMethod) normalized[legacyMethod] = true;
+  return normalized;
+};
+
+const firstAvailableMfaMethod = (
+  methods: Record<MFAMethod, boolean>,
+  fallback: MFAMethod = 'email',
+) => MFA_METHODS.find(method => methods[method]) || fallback;
+
 function PaymentForm({
   isTrial,
   selectedPlan,
@@ -75,7 +137,7 @@ function PaymentForm({
 }: {
   isTrial: boolean;
   selectedPlan: 'monthly' | 'yearly';
-  router: any;
+  router: ReturnType<typeof useRouter>;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -135,17 +197,9 @@ function PaymentForm({
 
       // 4️⃣ Success → dashboard
       router.push('/dashboard');
-    } catch (err: any) {
-  const detail = err?.data?.detail;
-
-  if (Array.isArray(detail)) {
-    setError(detail.map(d => d.msg).join(', '));
-  } else if (typeof detail === 'string') {
-    setError(detail);
-  } else {
-    setError(err?.message || 'Payment failed. Please try again.');
-  }
-} finally {
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Payment failed. Please try again.'));
+    } finally {
       setLoading(false);
     }
   };
@@ -225,6 +279,8 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   const [requestPasswordReset] = useRequestPasswordResetMutation();
   const [resetPassword] = useResetPasswordMutation();
   const [verifySmsOtp] = useVerifySmsOtpMutation();
+  const [startSmsMfa] = useStartSmsMfaMutation();
+  const [resendSmsMfa] = useResendSmsMfaMutation();
 
   const [resetEmail, setResetEmail] = useState('');
   const [resetEmailSent, setResetEmailSent] = useState(false);
@@ -240,6 +296,10 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   const [isNewUser, setIsNewUser] = useState(false);
   const [selectedMFAMethod, setSelectedMFAMethod] =
     useState<MFAMethod>('authenticator');
+  const [isLoginMfaChallenge, setIsLoginMfaChallenge] = useState(false);
+  const [loginMFAMethods, setLoginMFAMethods] = useState(emptyMfaMethods);
+  const [loginPrimaryMFAMethod, setLoginPrimaryMFAMethod] =
+    useState<MFAMethod | null>(null);
   const [hasLinkedAuthenticator, setHasLinkedAuthenticator] = useState(false);
 
   const [email, setEmail] = useState('');
@@ -261,11 +321,12 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   const [loading, setLoading] = useState(false);
 
   // OTP UX
-  const OTP_LENGTH = 6;
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [cooldown, setCooldown] = useState(0);
   const [attempts, setAttempts] = useState(0);
-  const MAX_ATTEMPTS = 5;
+  const autoMfaVerifyKey = useRef('');
+  const autoEmailVerifyKey = useRef('');
+  const autoSmsVerifyKey = useRef('');
 
 useEffect(() => {
   const autoSendEmailOtp = async () => {
@@ -281,8 +342,8 @@ useEffect(() => {
       setLoading(true);
       await sendEmailOtp({ email }).unwrap();
       setVerificationSent(true);
-    } catch (err: any) {
-      setError(err?.data?.detail || 'Failed to send verification code');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Failed to send verification code'));
     } finally {
       setLoading(false);
     }
@@ -354,8 +415,8 @@ const handleOtpPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
        setResetEmail(email);
        alert('Reset code sent. Check your email.');
        setStep('reset_password');
-     } catch (err: any) {
-       setError(err?.data?.detail || 'Failed to send reset code');
+     } catch (err: unknown) {
+       setError(getApiErrorMessage(err, 'Failed to send reset code'));
      } finally {
        setLoading(false);
      }
@@ -373,8 +434,8 @@ const handleOtpPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
      setResetEmailSent(true);
      alert('Reset code sent. Check your email.');
      setStep('reset_password');
-   } catch (err: any) {
-     setError(err?.data?.detail || 'Failed to send reset code');
+   } catch (err: unknown) {
+     setError(getApiErrorMessage(err, 'Failed to send reset code'));
    } finally {
      setLoading(false);
    }
@@ -396,11 +457,38 @@ const handleResetPassword = async () => {
 
     alert('Password reset successfully!');
     setStep('credentials');
-  } catch (err: any) {
-    setError(err?.data?.detail || 'Reset failed');
+  } catch (err: unknown) {
+    setError(getApiErrorMessage(err, 'Reset failed'));
   } finally {
     setLoading(false);
   }
+};
+
+const beginLinkedLoginMfa = async (method: MFAMethod) => {
+  setSelectedMFAMethod(method);
+  setError('');
+
+  if (method === 'authenticator') {
+    setHasLinkedAuthenticator(true);
+    setMfaCode('');
+    setStep('verifyMfa');
+    return;
+  }
+
+  if (method === 'email') {
+    setVerificationSent(false);
+    setEmailCode('');
+    setStep('verifyEmail');
+    return;
+  }
+
+  const smsRes = await startSmsMfa({ email }).unwrap();
+  if (smsRes.phone) setPhoneNumber(smsRes.phone);
+  setSmsSent(true);
+  setOtp(Array(OTP_LENGTH).fill(''));
+  setAttempts(0);
+  setCooldown(30);
+  setStep('verifySms');
 };
 
   // ------------------------------
@@ -464,6 +552,8 @@ const handleResetPassword = async () => {
 const handleCredentialsSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   setError('');
+  setIsLoginMfaChallenge(false);
+  setLoginPrimaryMFAMethod(null);
 
   try {
     if (!isValidEmail(email)) throw new Error('Enter a valid email');
@@ -488,23 +578,25 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
 
     const res = await login({ email, password }).unwrap();
 
-    if (res.mfa_required && res.method === 'sms') {
-      setSmsSent(true);
+    if (res.mfa_required) {
+      const activeMethods = normalizeMfaMethods(
+        res.mfa_methods,
+        res.method as MFAMethod | undefined,
+      );
+      const preferredMethod =
+        res.method && activeMethods[res.method as MFAMethod]
+          ? (res.method as MFAMethod)
+          : firstAvailableMfaMethod(activeMethods);
+
+      setLoginMFAMethods(activeMethods);
+      setLoginPrimaryMFAMethod(preferredMethod);
+      setIsLoginMfaChallenge(true);
+      setSelectedMFAMethod(preferredMethod);
+      setVerificationSent(false);
+      setSmsSent(false);
       setOtp(Array(OTP_LENGTH).fill(''));
       setAttempts(0);
-      setStep('verifySms');
-      return;
-    }
-
-    if (res.mfa_required && res.method === 'email') {
-      setVerificationSent(false);
-      setStep('verifyEmail');
-      return;
-    }
-
-    if (res.mfa_required && res.method === 'authenticator') {
-      setHasLinkedAuthenticator(true);
-      setStep('verifyMfa');
+      await beginLinkedLoginMfa(preferredMethod);
       return;
     }
 
@@ -515,8 +607,8 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
     });
 
     router.push('/dashboard');
-  } catch (err: any) {
-    setError(err?.data?.detail || err.message || 'Authentication failed');
+  } catch (err: unknown) {
+    setError(getApiErrorMessage(err, 'Authentication failed'));
   } finally {
     setLoading(false);
   }
@@ -584,6 +676,19 @@ const handleMFAMethodSelection = async () => {
       }
     }
 
+    if (isLoginMfaChallenge) {
+      const isAlreadyActive = loginMFAMethods[selectedMFAMethod];
+
+      if (!isAlreadyActive) {
+        throw new Error(
+          'That MFA method is not linked. Log in with a linked method, then add new methods in Vault Settings.',
+        );
+      }
+
+      await beginLinkedLoginMfa(selectedMFAMethod);
+      return;
+    }
+
     // =========================
     // EXISTING USER MFA SETUP
     // =========================
@@ -605,10 +710,25 @@ const handleMFAMethodSelection = async () => {
     }
 
     if (selectedMFAMethod === 'sms') {
-      throw new Error('SMS setup is currently available during signup only');
+      const smsRes = await startSmsMfa({
+        email,
+        phoneNumber: phoneNumber.trim() || undefined,
+      }).unwrap();
+
+      if (smsRes.requires_phone) {
+        throw new Error('Enter a phone number to enable SMS MFA');
+      }
+
+      if (smsRes.phone) setPhoneNumber(smsRes.phone);
+      setSmsSent(true);
+      setOtp(Array(OTP_LENGTH).fill(''));
+      setAttempts(0);
+      setCooldown(30);
+      setStep('verifySms');
+      return;
     }
-  } catch (err: any) {
-    const detail = err?.data?.detail || err?.message || 'Failed to continue';
+  } catch (err: unknown) {
+    const detail = getApiErrorMessage(err, 'Failed to continue');
 
     // ✅ PENDING SIGNUP ALREADY EXISTS → CONTINUE INSTEAD OF FAILING
     if (
@@ -627,10 +747,12 @@ const handleMFAMethodSelection = async () => {
         setError('');
         setStep('setupMfa');
         return;
-      } catch (resumeErr: any) {
+      } catch (resumeErr: unknown) {
         setError(
-          resumeErr?.data?.detail ||
+          getApiErrorMessage(
+            resumeErr,
             'Signup already started, but failed to restore QR code.',
+          ),
         );
         return;
       }
@@ -658,8 +780,7 @@ const handleMFAMethodSelection = async () => {
   }
 };
 
-const handleVerifyMfa = async (e: React.FormEvent) => {
-  e.preventDefault();
+const verifyMfaCode = useCallback(async () => {
   setError('');
   setLoading(true);
 
@@ -691,15 +812,28 @@ const handleVerifyMfa = async (e: React.FormEvent) => {
     } else {
       router.push('/dashboard');
     }
-  } catch (err: any) {
-    setError(err?.data?.detail || err.message || 'Invalid verification code');
+  } catch (err: unknown) {
+    setError(getApiErrorMessage(err, 'Invalid verification code'));
   } finally {
     setLoading(false);
   }
+}, [
+  mfaCode,
+  hasLinkedAuthenticator,
+  verifyTotp,
+  email,
+  linkAuthenticator,
+  mfaSecret,
+  isNewUser,
+  router,
+]);
+
+const handleVerifyMfa = async (e: React.FormEvent) => {
+  e.preventDefault();
+  await verifyMfaCode();
 };
 
-const handleVerifyEmail = async (e: React.FormEvent) => {
-  e.preventDefault();
+const verifyEmailOtpCode = useCallback(async () => {
   setError('');
   setLoading(true);
 
@@ -720,15 +854,19 @@ const handleVerifyEmail = async (e: React.FormEvent) => {
     } else {
       router.push('/dashboard');
     }
-  } catch (err: any) {
-    setError(err?.data?.detail || err.message || 'Verification failed');
+  } catch (err: unknown) {
+    setError(getApiErrorMessage(err, 'Verification failed'));
   } finally {
     setLoading(false);
   }
+}, [emailCode, verifyEmailCode, email, isNewUser, router]);
+
+const handleVerifyEmail = async (e: React.FormEvent) => {
+  e.preventDefault();
+  await verifyEmailOtpCode();
 };
 
-const handleVerifySms = async (e: React.FormEvent) => {
-  e.preventDefault();
+const verifySmsOtpCode = useCallback(async () => {
   setError('');
 
   const smsCode = otp.join('');
@@ -746,10 +884,10 @@ const handleVerifySms = async (e: React.FormEvent) => {
   setLoading(true);
 
   try {
-  const res = await verifySmsOtp({
-    email,
-    code: smsCode,
-  }).unwrap();
+    const res = await verifySmsOtp({
+      email,
+      code: smsCode,
+    }).unwrap();
 
     setAttempts(0);
 
@@ -764,19 +902,106 @@ const handleVerifySms = async (e: React.FormEvent) => {
     } else {
       router.push('/dashboard');
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     const nextAttempts = attempts + 1;
     setAttempts(nextAttempts);
 
     setError(
       nextAttempts >= MAX_ATTEMPTS
         ? 'Too many failed attempts. Try again later.'
-        : err?.data?.detail || 'Invalid SMS code',
+        : getApiErrorMessage(err, 'Invalid SMS code'),
     );
   } finally {
     setLoading(false);
   }
+}, [otp, attempts, verifySmsOtp, email, isNewUser, router]);
+
+const handleVerifySms = async (e: React.FormEvent) => {
+  e.preventDefault();
+  await verifySmsOtpCode();
 };
+
+useEffect(() => {
+  const canAutoVerify = step === 'verifyMfa' || step === 'setupMfa';
+
+  if (!canAutoVerify || mfaCode.length !== 6) {
+    autoMfaVerifyKey.current = '';
+    return;
+  }
+
+  if (loading) return;
+
+  const verifyKey = [
+    step,
+    hasLinkedAuthenticator ? 'linked' : 'setup',
+    mfaSecret,
+    mfaCode,
+  ].join(':');
+
+  if (autoMfaVerifyKey.current === verifyKey) return;
+
+  autoMfaVerifyKey.current = verifyKey;
+  void verifyMfaCode();
+}, [step, mfaCode, loading, hasLinkedAuthenticator, mfaSecret, verifyMfaCode]);
+
+useEffect(() => {
+  if (step !== 'verifyEmail' || emailCode.length !== 6 || !verificationSent) {
+    autoEmailVerifyKey.current = '';
+    return;
+  }
+
+  if (loading) return;
+
+  const verifyKey = [
+    email,
+    emailCode,
+    isNewUser ? 'signup' : 'login',
+  ].join(':');
+
+  if (autoEmailVerifyKey.current === verifyKey) return;
+
+  autoEmailVerifyKey.current = verifyKey;
+  void verifyEmailOtpCode();
+}, [
+  step,
+  emailCode,
+  verificationSent,
+  loading,
+  email,
+  isNewUser,
+  verifyEmailOtpCode,
+]);
+
+useEffect(() => {
+  const smsCode = otp.join('');
+
+  if (
+    step !== 'verifySms' ||
+    smsCode.length !== 6 ||
+    !smsSent ||
+    attempts >= MAX_ATTEMPTS
+  ) {
+    autoSmsVerifyKey.current = '';
+    return;
+  }
+
+  if (loading) return;
+
+  const verifyKey = [email, smsCode, attempts].join(':');
+
+  if (autoSmsVerifyKey.current === verifyKey) return;
+
+  autoSmsVerifyKey.current = verifyKey;
+  void verifySmsOtpCode();
+}, [
+  step,
+  otp,
+  smsSent,
+  attempts,
+  loading,
+  email,
+  verifySmsOtpCode,
+]);
 
 const handleResendSms = async () => {
   if (cooldown > 0) return;
@@ -784,25 +1009,12 @@ const handleResendSms = async () => {
   try {
     setError('');
 
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/resend-sms-mfa`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      },
-    );
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data?.detail || 'Failed to resend OTP');
-    }
+    await resendSmsMfa({ email }).unwrap();
 
     setCooldown(30);
     setOtp(Array(OTP_LENGTH).fill(''));
-  } catch (err: any) {
-    setError(err?.message || 'Failed to resend OTP');
+  } catch (err: unknown) {
+    setError(getApiErrorMessage(err, 'Failed to resend OTP'));
   }
 };
   // Animation
@@ -839,6 +1051,67 @@ const handleBack = () => {
   }
 };
 
+const isMethodAvailable = (method: MFAMethod) =>
+  isNewUser || !isLoginMfaChallenge || loginMFAMethods[method];
+
+const getMethodBadge = (method: MFAMethod) => {
+  if (!isLoginMfaChallenge || isNewUser) return null;
+  if (loginMFAMethods[method]) {
+    return method === loginPrimaryMFAMethod
+      ? 'Primary linked'
+      : 'Secondary linked';
+  }
+  return 'Set up in Vault Settings';
+};
+
+const showSmsPhoneInput =
+  selectedMFAMethod === 'sms' &&
+  (isNewUser || (!isLoginMfaChallenge && !isNewUser));
+
+const orderedMfaMethods =
+  isLoginMfaChallenge && loginPrimaryMFAMethod
+    ? [
+        loginPrimaryMFAMethod,
+        ...MFA_METHODS.filter(method => method !== loginPrimaryMFAMethod),
+      ]
+    : MFA_METHODS;
+
+const getMfaMethodMeta = (method: MFAMethod) => {
+  if (method === 'authenticator') {
+    return {
+      icon: <Smartphone className="h-4 w-4 text-primary" />,
+      title: 'Authenticator App',
+      description: 'Use Google Authenticator, Authy, or similar apps.',
+      fallbackBadge: 'Most Secure',
+      badgeVariant: 'secondary' as const,
+    };
+  }
+
+  if (method === 'email') {
+    return {
+      icon: <Mail className="h-4 w-4 text-blue-500" />,
+      title: 'Email Verification',
+      description: 'Receive codes via email.',
+      fallbackBadge: 'Convenient',
+      badgeVariant: 'outline' as const,
+    };
+  }
+
+  return {
+    icon: <MessageSquare className="h-4 w-4 text-gray-400" />,
+    title: 'SMS / Text Message',
+    description: 'Receive verification codes via SMS.',
+    fallbackBadge: 'Medium',
+    badgeVariant: 'outline' as const,
+  };
+};
+
+const backButtonLabel =
+  isLoginMfaChallenge &&
+  (step === 'verifyMfa' || step === 'verifyEmail' || step === 'verifySms')
+    ? 'Try another way'
+    : 'Back';
+
   // -----------------------------------------------------------
   // RENDER
   // -----------------------------------------------------------
@@ -863,7 +1136,9 @@ const handleBack = () => {
                     ? 'Create Your Account'
                     : 'Welcome Back'
                   : step === 'mfa_method_selection'
-                    ? 'Choose Security Method'
+                    ? isLoginMfaChallenge
+                      ? 'Try Another Way'
+                      : 'Choose Security Method'
                     : step === 'setupMfa'
                       ? 'Set Up Two-Factor Authentication'
                       : 'Enter Verification Code'}
@@ -879,7 +1154,9 @@ const handleBack = () => {
                     ? 'Set up your secure Orderly Affairs account'
                     : 'Sign in to your Orderly Affairs account'
                   : step === 'mfa_method_selection'
-                    ? 'Select your preferred two-factor authentication method'
+                    ? isLoginMfaChallenge
+                      ? 'Use another linked verification method'
+                      : 'Select your preferred two-factor authentication method'
                     : step === 'setupMfa'
                       ? 'Complete your security setup'
                       : 'Enter the code to verify your identity'}
@@ -901,7 +1178,7 @@ const handleBack = () => {
                 className="mb-4 flex items-center gap-2"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Back
+                {backButtonLabel}
               </Button>
             )}
 
@@ -1117,94 +1394,67 @@ const handleBack = () => {
                 {step === 'mfa_method_selection' && (
                   <div className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      Choose how you'd like to receive verification codes for
-                      two-factor authentication:
+                      {isLoginMfaChallenge && !isNewUser
+                        ? 'Your primary method starts automatically. Choose another linked method if you need a fallback.'
+                        : "Choose how you'd like to receive verification codes for two-factor authentication:"}
                     </p>
 
                     <div className="space-y-3">
-                      <label className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
-                        <input
-                          type="radio"
-                          name="mfaMethod"
-                          value="authenticator"
-                          checked={selectedMFAMethod === 'authenticator'}
-                          onChange={e =>
-                            setSelectedMFAMethod(e.target.value as MFAMethod)
-                          }
-                          className="mt-1"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Smartphone className="h-4 w-4 text-primary" />
-                            <span className="font-medium">
-                              Authenticator App
-                            </span>
-                            <Badge variant="secondary" className="text-xs">
-                              Most Secure
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            Use Google Authenticator, Authy, or similar apps.
-                          </p>
-                        </div>
-                      </label>
+                      {orderedMfaMethods.map(method => {
+                        const meta = getMfaMethodMeta(method);
+                        const available = isMethodAvailable(method);
 
-                      <label className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
-                        <input
-                          type="radio"
-                          name="mfaMethod"
-                          value="email"
-                          checked={selectedMFAMethod === 'email'}
-                          onChange={e =>
-                            setSelectedMFAMethod(e.target.value as MFAMethod)
-                          }
-                          className="mt-1"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Mail className="h-4 w-4 text-blue-500" />
-                            <span className="font-medium">
-                              Email Verification
-                            </span>
-                            <Badge variant="outline" className="text-xs">
-                              Convenient
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            Receive codes via email.
-                          </p>
-                        </div>
-                      </label>
-
-                      <label className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
-                        <input
-                          type="radio"
-                          name="mfaMethod"
-                          value="sms"
-                          checked={selectedMFAMethod === 'sms'}
-                          onChange={e =>
-                            setSelectedMFAMethod(e.target.value as MFAMethod)
-                          }
-                          className="mt-1"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <MessageSquare className="h-4 w-4 text-gray-400" />
-                            <span className="font-medium">
-                              SMS / Text Message
-                            </span>
-                            <Badge variant="outline" className="text-xs">
-                              Medium
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            Receive verification codes via SMS.
-                          </p>
-                        </div>
-                      </label>
+                        return (
+                          <label
+                            key={method}
+                            className={`flex items-start gap-3 p-4 border rounded-lg transition-colors ${
+                              available
+                                ? 'cursor-pointer hover:bg-muted/50'
+                                : 'cursor-not-allowed opacity-50'
+                            } ${
+                              isLoginMfaChallenge &&
+                              method === loginPrimaryMFAMethod
+                                ? 'border-primary/40 bg-primary/5'
+                                : ''
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="mfaMethod"
+                              value={method}
+                              checked={selectedMFAMethod === method}
+                              disabled={!available}
+                              onChange={e =>
+                                setSelectedMFAMethod(
+                                  e.target.value as MFAMethod,
+                                )
+                              }
+                              className="mt-1"
+                            />
+                            <div className="flex-1">
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
+                                {meta.icon}
+                                <span className="font-medium">
+                                  {meta.title}
+                                </span>
+                                <Badge
+                                  variant={meta.badgeVariant}
+                                  className="text-xs"
+                                >
+                                  {getMethodBadge(method) ||
+                                    meta.fallbackBadge}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {meta.description}
+                              </p>
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
 
-                    {selectedMFAMethod === 'sms' && (
+                    {showSmsPhoneInput && (
                       <div className="space-y-2">
                         <Label htmlFor="phoneNumber">Mobile Number</Label>
                         <Input
@@ -1226,10 +1476,14 @@ const handleBack = () => {
                       disabled={loading}
                     >
                       {loading
-                        ? 'Setting up…'
+                        ? isLoginMfaChallenge
+                          ? 'Starting...'
+                          : 'Setting up...'
                         : isNewUser
                           ? 'Create Account'
-                          : 'Continue'}
+                          : isLoginMfaChallenge
+                            ? 'Use This Method'
+                            : 'Continue'}
                     </Button>
                   </div>
                 )}
@@ -1328,9 +1582,11 @@ const handleBack = () => {
                       variant="link"
                       size="sm"
                       className="cursor-pointer"
-                      onClick={() => setStep('verifyEmail')}
+                      onClick={() => {
+                        setStep('mfa_method_selection');
+                      }}
                     >
-                      Try email verification instead
+                      Choose another method
                     </Button>
                   </div>
                 )}
@@ -1389,9 +1645,12 @@ const handleBack = () => {
                       variant="link"
                       size="sm"
                       className="cursor-pointer"
-                      onClick={() => setStep('setupMfa')}
+                      onClick={() => {
+                        setSelectedMFAMethod('authenticator');
+                        setStep('mfa_method_selection');
+                      }}
                     >
-                      Try authenticator app instead
+                      Choose another method
                     </Button>
                   </div>
                 )}
@@ -1447,6 +1706,15 @@ const handleBack = () => {
                       onClick={handleResendSms}
                     >
                       {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend Code'}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="cursor-pointer"
+                      onClick={() => setStep('mfa_method_selection')}
+                    >
+                      Choose another method
                     </Button>
 
                     {attempts > 0 && attempts < MAX_ATTEMPTS && (

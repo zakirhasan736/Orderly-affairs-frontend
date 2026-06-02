@@ -1,12 +1,10 @@
+'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@common/ui/card';
-import { Input } from '@common/ui/input';
-import { Label } from '@common/ui/label';
-import { Textarea } from '@common/ui/textarea';
-import { Calendar } from '@common/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@common/ui/popover';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Badge } from '@common/ui/badge';
 import { Button } from '@common/ui/button';
+import { Calendar } from '@common/ui/calendar';
+import { Card, CardContent, CardHeader, CardTitle } from '@common/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -15,34 +13,159 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@common/ui/dialog';
+import { Input } from '@common/ui/input';
+import { Label } from '@common/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@common/ui/popover';
+import { Textarea } from '@common/ui/textarea';
 import {
   Calendar as CalendarIcon,
-  FileText,
-  Users,
-  Mail,
-  Printer,
+  CheckCircle2,
   Download,
   Eye,
+  FileText,
+  KeyRound,
+  Loader2,
+  Mail,
+  MapPin,
+  Printer,
+  RefreshCw,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+  Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// ✅ hooks that accept optional nokId
 import {
+  type NOKLetter,
+  type NOKLetterIn,
   useGetNokLetterQuery,
   useSaveNokLetterMutation,
 } from '@/services/nokLetterApi';
 
+type LetterData = Partial<NOKLetter & NOKLetterIn>;
+
 interface NextOfKinLetterFieldProps {
-  data: any;
-  onChange: (data: any) => void;
-  formData?: any;
-  /** the selected NOK user _id (role=nextkin) this letter is for */
+  data?: LetterData;
+  onChange: (data: LetterData) => void;
+  formData?: Record<string, unknown>;
   selectedNokId?: string;
 }
 
-function isValidEmail(v?: string) {
-  if (!v) return false;
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+const DEFAULTS = {
+  letter_greeting: 'Dear',
+  access_url: 'https://orderly-affairs.com',
+  letter_opening:
+    "I'm writing you this note as someone I trust deeply.\n\nAs my next of kin, the executor of my will, a close friend, my attorney, or someone who cares—I want you to know that I've prepared something to help guide you through what comes next.",
+  kit_description:
+    "I've subscribed to an Orderly Affairs Kit. Inside, you'll find everything you may need to manage my affairs if I'm no longer able to, or when I'm gone. It includes not only documents, but also instructions—gentle step-by-step guides to make this process less overwhelming.",
+  accessible_sections:
+    "Once you log in, you'll be able to manage the sections below on my behalf:\n\n(Autofill sections based on selection in the access management section)",
+  key_bag_info:
+    '• The Key Bag: This contains important keys and a guide to what each is for. It may include house keys, PO box keys, or vehicle keys. It is located',
+  documents_bag_info:
+    '• The Documents Bag: Please keep this safe. It contains original documents and space to store items such as death certificates. You may need to refer to it even after everything has been settled. It is located',
+  incomplete_kit_message:
+    "If any part of the kit is incomplete, please don't worry. Even the unfinished parts can still help you stay organized. I've done my best to make sure you won't be left searching through drawers or wondering where things are.",
+  closing_message:
+    "Above all, this kit is my way of caring for you—even when I can't be here in person.\n\nTake your time. Breathe. You've got this, and I'm grateful it's you.",
+  letter_signature: 'With love,',
+};
+
+const EDITOR_STEPS = [
+  {
+    id: 'recipient',
+    label: 'Recipient',
+    icon: UserRound,
+    helper: 'Delivery timing and recipient details',
+  },
+  {
+    id: 'message',
+    label: 'Message',
+    icon: Mail,
+    helper: 'Opening message and kit description',
+  },
+  {
+    id: 'access',
+    label: 'Access',
+    icon: ShieldCheck,
+    helper: 'Login, URL, and allowed access',
+  },
+  {
+    id: 'items',
+    label: 'Items',
+    icon: KeyRound,
+    helper: 'Key bag and documents bag',
+  },
+  {
+    id: 'closing',
+    label: 'Closing',
+    icon: Sparkles,
+    helper: 'Final words and signature',
+  },
+] as const;
+
+type EditorStep = (typeof EDITOR_STEPS)[number]['id'];
+
+function isValidEmail(value?: string) {
+  if (!value) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function formatLetterDate(value?: string | null) {
+  if (!value) return '';
+
+  return new Date(value).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function FieldBlock({
+  label,
+  description,
+  icon,
+  children,
+}: {
+  label: string;
+  description?: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-[1.4rem] border border-border/60 bg-background p-4 shadow-sm">
+      <div className="mb-3 flex items-start gap-3">
+        {icon && (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            {icon}
+          </div>
+        )}
+
+        <div className="min-w-0">
+          <Label className="text-sm font-black text-foreground">{label}</Label>
+          {description && (
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {description}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {children}
+    </div>
+  );
 }
 
 export function NextOfKinLetterField({
@@ -50,57 +173,66 @@ export function NextOfKinLetterField({
   onChange,
   selectedNokId,
 }: NextOfKinLetterFieldProps) {
-  // pass nokId into the GET
+  const [activeStep, setActiveStep] = useState<EditorStep>('recipient');
+
   const {
     data: serverData,
     isFetching,
     isError,
-    error,
     refetch,
   } = useGetNokLetterQuery(
-    selectedNokId ? { nokId: selectedNokId } : undefined
+    selectedNokId ? { nokId: selectedNokId } : undefined,
   );
 
-  // POST upsert that includes nokId
   const [saveLetter, { isLoading: isSaving }] = useSaveNokLetterMutation();
 
-  const [localData, setLocalData] = useState<any>(data || {});
-  const debTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mounted = useRef(false);
-  const hydratedOnce = useRef(false);
+  const [localData, setLocalData] = useState<LetterData>(data || {});
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(false);
+  const hydratedRef = useRef(false);
 
-  // 1) hydrate from server on first load or refetch
+  useEffect(() => {
+    hydratedRef.current = false;
+    setActiveStep('recipient');
+  }, [selectedNokId]);
+
   useEffect(() => {
     if (!serverData) return;
+
     setLocalData(serverData);
     onChange(serverData);
-    hydratedOnce.current = true;
-  }, [serverData]); // eslint-disable-line
+    hydratedRef.current = true;
+  }, [serverData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 2) keep local in sync if parent updates externally
   useEffect(() => {
     if (!data) return;
-    const a = JSON.stringify(data);
-    const b = JSON.stringify(localData);
-    if (a !== b) setLocalData(data);
-  }, [data]); // eslint-disable-line
 
-  // 3) debounced autosave (after first hydration and not while fetching)
+    const incoming = JSON.stringify(data);
+    const current = JSON.stringify(localData);
+
+    if (incoming !== current) {
+      setLocalData(data);
+    }
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
-    if (!mounted.current) {
-      mounted.current = true;
+    if (!mountedRef.current) {
+      mountedRef.current = true;
       return;
     }
-    if (!hydratedOnce.current) return;
+
+    if (!selectedNokId) return;
+    if (!hydratedRef.current) return;
     if (isFetching) return;
 
-    if (debTimer.current) clearTimeout(debTimer.current);
-    debTimer.current = setTimeout(async () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(async () => {
       try {
         await saveLetter({
-          nokId: selectedNokId, // <-- send the target NOK
+          nokId: selectedNokId,
           body: {
-            letter_date: localData.letter_date || undefined,
+            letter_date: localData.letter_date || null,
             letter_to: localData.letter_to || undefined,
             letter_greeting: localData.letter_greeting || undefined,
             letter_opening: localData.letter_opening || undefined,
@@ -109,7 +241,6 @@ export function NextOfKinLetterField({
             login_credentials_text:
               localData.login_credentials_text || undefined,
 
-            // let server autofill if blank
             nok_email: localData.nok_email || undefined,
             nok_phone: localData.nok_phone || undefined,
             password_card_location:
@@ -130,18 +261,32 @@ export function NextOfKinLetterField({
       } catch {
         toast.error('Could not save NOK letter');
       }
-    }, 500);
+    }, 550);
 
     return () => {
-      if (debTimer.current) clearTimeout(debTimer.current);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [JSON.stringify(localData), isFetching, selectedNokId]); // eslint-disable-line
+  }, [JSON.stringify(localData), isFetching, selectedNokId, saveLetter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleFieldChange = (field: string, value: any) => {
+  const handleFieldChange = <K extends keyof LetterData>(
+    field: K,
+    value: LetterData[K],
+  ) => {
     const updated = { ...localData, [field]: value };
     setLocalData(updated);
     onChange(updated);
   };
+
+  const loginCredentialsText =
+    localData.login_credentials_text ||
+    `I have registered your email address (${
+      localData.nok_email || 'will auto-populate from Access Management'
+    }) and your phone number (${
+      localData.nok_phone || 'will auto-populate from Access Management'
+    }), which you can use as your login credentials. The password to gain access to the kit is printed on a password card located ${
+      localData.password_card_location ||
+      'will auto-populate from Access Management'
+    }.`;
 
   const generateLetterContent = () => {
     const date = localData.letter_date
@@ -150,103 +295,130 @@ export function NextOfKinLetterField({
           month: 'long',
           day: 'numeric',
         })
-      : '[Date]';
+      : 'Upon Death';
 
     return `${date}
 
-${localData.letter_greeting || 'Dear'} ${
+${localData.letter_greeting || DEFAULTS.letter_greeting} ${
       localData.letter_to || '[Next of Kin Name]'
     },
 
-${
-  localData.letter_opening ||
-  "I'm writing you this note as someone I trust deeply.\n\nAs my next of kin, the executor of my will, a close friend, my attorney, or someone who cares—I want you to know that I've prepared something to help guide you through what comes next."
-}
+${localData.letter_opening || DEFAULTS.letter_opening}
 
-${
-  localData.kit_description ||
-  "I've subscribed to an Orderly Affairs Kit. Inside, you'll find everything you may need to manage my affairs if I'm no longer able to, or when I'm gone. It includes not only documents, but also instructions—gentle step-by-step guides to make this process less overwhelming."
-}
+${localData.kit_description || DEFAULTS.kit_description}
 
-You can access the kit online at: ${
-      localData.access_url || 'https://orderly-affairs.com'
-    }
+You can access the kit online at: ${localData.access_url || DEFAULTS.access_url}
 
-${
-  localData.login_credentials_text ||
-  `I have registered your email address (${
-    localData.nok_email || '[Email will auto-populate]'
-  }) and your phone number (${
-    localData.nok_phone || '[Phone will auto-populate]'
-  }), which you can use as your login credentials. The password to gain access to the kit, is printed on a password card located ${
-    localData.password_card_location ||
-    '[Password Card Location will auto-populate]'
-  }.`
-}
+${loginCredentialsText}
 
-${
-  localData.accessible_sections ||
-  "Once you log in, you'll be able to manage the sections below on my behalf:\n\n(Autofill sections based on selection in the access management section)"
-}
+${localData.accessible_sections || DEFAULTS.accessible_sections}
 
 In addition to the online kit, you'll find two important physical items:
 
-${
-  localData.key_bag_info ||
-  '• The Key Bag: This contains important keys and a guide to what each is for. It may include house keys, PO box keys, or vehicle keys. It is located'
-} ${localData.key_bag_location || '[Key Bag Location]'}.
+${localData.key_bag_info || DEFAULTS.key_bag_info} ${
+      localData.key_bag_location || '[Key Bag Location]'
+    }.
 
-${
-  localData.documents_bag_info ||
-  '• The Documents Bag: Please keep this safe. It contains original documents and space to store items such as death certificates. You may need to refer to it even after everything has been settled. It is located'
-} ${localData.documents_bag_location || '[Documents Bag Location]'}.
+${localData.documents_bag_info || DEFAULTS.documents_bag_info} ${
+      localData.documents_bag_location || '[Documents Bag Location]'
+    }.
 
-${
-  localData.incomplete_kit_message ||
-  "If any part of the kit is incomplete, please don't worry. Even the unfinished parts can still help you stay organized. I've done my best to make sure you won't be left searching through drawers or wondering where things are."
-}
+${localData.incomplete_kit_message || DEFAULTS.incomplete_kit_message}
 
-${
-  localData.closing_message ||
-  "Above all, this kit is my way of caring for you—even when I can't be here in person.\n\nTake your time. Breathe. You've got this, and I'm grateful it's you."
-}
+${localData.closing_message || DEFAULTS.closing_message}
 
-${localData.letter_signature || 'With love,'}
+${localData.letter_signature || DEFAULTS.letter_signature}
 
 [Your signature]`;
   };
 
+  const letterPreview = useMemo(
+    () => generateLetterContent(),
+    [JSON.stringify(localData)],
+  );
+
   const handlePrint = () => {
-    const content = generateLetterContent();
-    const w = window.open('', '_blank');
-    if (!w) {
+    const content = escapeHtml(generateLetterContent());
+
+    const printWindow = window.open('', '_blank');
+
+    if (!printWindow) {
       toast.error('Pop-up blocked. Please allow pop-ups for printing.');
       return;
     }
-    w.document.write(`
-      <html><head><title>Letter to Next of Kin</title>
-      <style>body{font-family:'Times New Roman',serif;line-height:1.6;max-width:800px;margin:0 auto;padding:40px 20px;color:#333}
-      h1{text-align:center;margin-bottom:30px;color:#444}.letter-content{white-space:pre-line;font-size:14px}
-      @media print{body{margin:0;padding:20px}}</style></head>
-      <body><h1>Letter to Next of Kin</h1><div class="letter-content">${content}</div></body></html>
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Letter to Next of Kin</title>
+          <style>
+            body {
+              font-family: Georgia, 'Times New Roman', serif;
+              line-height: 1.75;
+              max-width: 820px;
+              margin: 0 auto;
+              padding: 48px 24px;
+              color: #1f2937;
+              background: #ffffff;
+            }
+
+            .eyebrow {
+              font-family: Arial, sans-serif;
+              font-size: 11px;
+              letter-spacing: 0.18em;
+              text-transform: uppercase;
+              color: #6b7280;
+              margin-bottom: 10px;
+            }
+
+            h1 {
+              font-family: Arial, sans-serif;
+              font-size: 28px;
+              margin: 0 0 28px;
+              color: #111827;
+            }
+
+            .letter-content {
+              white-space: pre-line;
+              font-size: 15px;
+            }
+
+            @media print {
+              body {
+                margin: 0;
+                padding: 28px;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="eyebrow">Orderly Affairs</div>
+          <h1>Letter to Next of Kin</h1>
+          <div class="letter-content">${content}</div>
+        </body>
+      </html>
     `);
-    w.document.close();
-    w.focus();
-    w.print();
+
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
   };
 
   const handleExport = () => {
     const content = generateLetterContent();
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
+
     const link = document.createElement('a');
     link.href = url;
     link.download = `letter-to-next-of-kin-${
       new Date().toISOString().split('T')[0]
     }.txt`;
+
     document.body.appendChild(link);
     link.click();
     link.remove();
+
     URL.revokeObjectURL(url);
     toast.success('Letter exported successfully!');
   };
@@ -254,452 +426,697 @@ ${localData.letter_signature || 'With love,'}
   const handleEmail = () => {
     if (!isValidEmail(localData.nok_email)) {
       toast.error(
-        'Please provide a valid Next of Kin email in Access Management first.'
+        'Please provide a valid Next of Kin email in Access Management first.',
       );
       return;
     }
-    const content = generateLetterContent();
+
     const subject = 'Letter to Next of Kin - Orderly Affairs Kit';
-    const body = `Please find below your Letter to Next of Kin from your Orderly Affairs Kit:\n\n${content}`;
-    const mailtoLink = `mailto:${
-      localData.nok_email
-    }?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    try {
-      window.location.href = mailtoLink;
-      toast.success('Email client opened with letter content.');
-    } catch {
-      toast.error(
-        'Unable to open email client. Please copy the letter content manually.'
-      );
-    }
+    const body = `Please find below your Letter to Next of Kin from your Orderly Affairs Kit:\n\n${generateLetterContent()}`;
+
+    window.location.href = `mailto:${localData.nok_email}?subject=${encodeURIComponent(
+      subject,
+    )}&body=${encodeURIComponent(body)}`;
   };
 
+  const currentStep = EDITOR_STEPS.find(step => step.id === activeStep);
+
   return (
-    <div className="space-y-6" data-field-type="NextOfKinLetter">
-      <div className="text-xs text-muted-foreground flex items-center gap-2">
-        {selectedNokId && (
-          <span>
-            Target NOK: <code className="text-xs">{selectedNokId}</code>
-          </span>
-        )}
-        <span>
-          {isFetching ? 'Loading letter…' : isSaving ? 'Saving…' : ''}
-        </span>
-        {isError && (
-          <>
-            <span>Failed to load.</span>
-            <button className="underline" onClick={() => refetch()}>
-              Retry
-            </button>
-          </>
-        )}
-      </div>
+    <div
+      className="mx-auto w-full max-w-5xl space-y-5 pb-24 xl:pb-8"
+      data-field-type="NextOfKinLetter"
+    >
+      {/* ================= TOP STATUS ================= */}
+      <div className="rounded-[1.75rem] border border-border/60 bg-gradient-to-br from-background via-background to-muted/40 p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+              {isFetching || isSaving ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <FileText className="h-5 w-5" />
+              )}
+            </div>
 
-      {/* ======= MAIN FORM ======= */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Letter to Next of Kin
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            This letter will be provided to your designated next of kin.
-            Information automatically populates from your Access Management
-            section.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Date */}
-          <div className="space-y-2">
-            <Label>Date</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-lg font-black text-foreground">
+                  Next of Kin Letter
+                </h3>
+
+                <Badge
                   variant="outline"
-                  className="w-full justify-start text-left font-normal"
+                  className="rounded-full border-primary/20 bg-primary/5 px-3 py-1 text-primary"
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {localData.letter_date
-                    ? new Date(localData.letter_date).toLocaleDateString(
-                        'en-US',
-                        { year: 'numeric', month: 'long', day: 'numeric' }
-                      )
-                    : 'Select date'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={
-                    localData.letter_date
-                      ? new Date(localData.letter_date)
-                      : undefined
-                  }
-                  onSelect={date =>
-                    handleFieldChange('letter_date', date?.toISOString())
-                  }
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
+                  {isFetching ? 'Loading' : isSaving ? 'Saving' : 'Auto-saved'}
+                </Badge>
+              </div>
 
-          {/* To */}
-          <div className="space-y-2">
-            <Label>To</Label>
-            <Input
-              value={localData.letter_to || ''}
-              onChange={e => handleFieldChange('letter_to', e.target.value)}
-              placeholder="Will auto-populate from Access Management"
-            />
-          </div>
-
-          {/* Greeting */}
-          <div className="space-y-2">
-            <Label>Greeting</Label>
-            <Input
-              value={localData.letter_greeting ?? 'Dear'}
-              onChange={e =>
-                handleFieldChange('letter_greeting', e.target.value)
-              }
-            />
-          </div>
-
-          {/* Opening */}
-          <div className="space-y-2">
-            <Label>Opening Message</Label>
-            <Textarea
-              value={
-                localData.letter_opening ??
-                "I'm writing you this note as someone I trust deeply.\n\nAs my next of kin, the executor of my will, a close friend, my attorney, or someone who cares—I want you to know that I've prepared something to help guide you through what comes next."
-              }
-              onChange={e =>
-                handleFieldChange('letter_opening', e.target.value)
-              }
-              rows={4}
-            />
-          </div>
-
-          {/* Kit Description */}
-          <div className="space-y-2">
-            <Label>Kit Description</Label>
-            <Textarea
-              value={
-                localData.kit_description ??
-                "I've subscribed to an Orderly Affairs Kit. Inside, you'll find everything you may need to manage my affairs if I'm no longer able to, or when I'm gone. It includes not only documents, but also instructions—gentle step-by-step guides to make this process less overwhelming."
-              }
-              onChange={e =>
-                handleFieldChange('kit_description', e.target.value)
-              }
-              rows={3}
-            />
-          </div>
-
-          {/* Access URL */}
-          <div className="space-y-2">
-            <Label>Access URL</Label>
-            <Input
-              value={localData.access_url ?? 'https://orderly-affairs.com'}
-              onChange={e => handleFieldChange('access_url', e.target.value)}
-            />
-          </div>
-
-          {/* Login Credentials Text */}
-          <div className="space-y-2">
-            <Label>Login Credentials Information</Label>
-            <Textarea
-              value={
-                localData.login_credentials_text ??
-                `I have registered your email address (${
-                  localData.nok_email ||
-                  'will auto-populate from Access Management'
-                }) and your phone number (${
-                  localData.nok_phone ||
-                  'will auto-populate from Access Management'
-                }), which you can use as your login credentials. The password to gain access to the kit, is printed on a password card located ${
-                  localData.password_card_location ||
-                  'will auto-populate from Access Management'
-                }.`
-              }
-              onChange={e =>
-                handleFieldChange('login_credentials_text', e.target.value)
-              }
-              rows={3}
-            />
-          </div>
-
-          {/* Auto fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Next of Kin Email (Auto-populated)
-              </Label>
-              <Input
-                value={localData.nok_email || ''}
-                readOnly
-                className="bg-muted"
-                placeholder="Will auto-populate from Access Management"
-              />
-              <p className="text-xs text-muted-foreground">
-                This field automatically populates from your Access Management
-                section
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Next of Kin Phone (Auto-populated)
-              </Label>
-              <Input
-                value={localData.nok_phone || ''}
-                readOnly
-                className="bg-muted"
-                placeholder="Will auto-populate from Access Management"
-              />
-              <p className="text-xs text-muted-foreground">
-                This field automatically populates from your Access Management
-                section
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                A single focused editor. Use the steps below to complete the
+                letter without losing the main content area.
               </p>
             </div>
           </div>
 
-          {/* Password card location */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Password Card Location (Auto-populated)
-            </Label>
-            <Input
-              value={localData.password_card_location || ''}
-              readOnly
-              className="bg-muted"
-              placeholder="Will auto-populate from Access Management"
-            />
-            <p className="text-xs text-muted-foreground">
-              This field automatically populates from your Access Management
-              section
-            </p>
-          </div>
+          <div className="flex flex-wrap gap-2">
+            {isError && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => refetch()}
+                className="rounded-2xl"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Retry
+              </Button>
+            )}
 
-          {/* Accessible Sections */}
-          <div className="space-y-2">
-            <Label>Accessible Sections</Label>
-            <Textarea
-              value={
-                localData.accessible_sections ??
-                "Once you log in, you'll be able to manage the sections below on my behalf:\n\n(Autofill sections based on selection in the access management section)"
-              }
-              onChange={e =>
-                handleFieldChange('accessible_sections', e.target.value)
-              }
-              rows={4}
-            />
-          </div>
-
-          {/* Key Bag */}
-          <div className="space-y-2">
-            <Label>The Key Bag Information</Label>
-            <Textarea
-              value={
-                localData.key_bag_info ??
-                '• The Key Bag: This contains important keys and a guide to what each is for. It may include house keys, PO box keys, or vehicle keys. It is located'
-              }
-              onChange={e => handleFieldChange('key_bag_info', e.target.value)}
-              rows={2}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Key Bag Location</Label>
-            <Input
-              value={localData.key_bag_location || ''}
-              onChange={e =>
-                handleFieldChange('key_bag_location', e.target.value)
-              }
-              placeholder="(text field)."
-            />
-          </div>
-
-          {/* Documents Bag */}
-          <div className="space-y-2">
-            <Label>The Documents Bag Information</Label>
-            <Textarea
-              value={
-                localData.documents_bag_info ??
-                '• The Documents Bag: Please keep this safe. It contains original documents and space to store items such as death certificates. You may need to refer to it even after everything has been settled. It is located'
-              }
-              onChange={e =>
-                handleFieldChange('documents_bag_info', e.target.value)
-              }
-              rows={3}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Documents Bag Location</Label>
-            <Input
-              value={localData.documents_bag_location || ''}
-              onChange={e =>
-                handleFieldChange('documents_bag_location', e.target.value)
-              }
-              placeholder="(text field)"
-            />
-          </div>
-
-          {/* Incomplete / Closing / Signature */}
-          <div className="space-y-2">
-            <Label>Incomplete Kit Message</Label>
-            <Textarea
-              value={
-                localData.incomplete_kit_message ??
-                "If any part of the kit is incomplete, please don't worry. Even the unfinished parts can still help you stay organized. I've done my best to make sure you won't be left searching through drawers or wondering where things are."
-              }
-              onChange={e =>
-                handleFieldChange('incomplete_kit_message', e.target.value)
-              }
-              rows={3}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Closing Message</Label>
-            <Textarea
-              value={
-                localData.closing_message ??
-                "Above all, this kit is my way of caring for you—even when I can't be here in person.\n\nTake your time. Breathe. You've got this, and I'm grateful it's you."
-              }
-              onChange={e =>
-                handleFieldChange('closing_message', e.target.value)
-              }
-              rows={3}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Signature</Label>
-            <Input
-              value={localData.letter_signature ?? 'With love,'}
-              onChange={e =>
-                handleFieldChange('letter_signature', e.target.value)
-              }
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Letter Actions
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Preview, print, export, or email your letter to next of kin.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-3">
             <Dialog>
               <DialogTrigger asChild>
-                <Button variant="outline" className="flex items-center gap-2">
-                  <Eye className="h-4 w-4" />
-                  Preview Letter
+                <Button variant="outline" className="rounded-2xl">
+                  <Eye className="mr-2 h-4 w-4" />
+                  Preview
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Letter to Next of Kin - Preview</DialogTitle>
+
+              <DialogContent className="max-h-[92svh] w-[calc(100vw-1rem)] max-w-4xl gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl">
+                <DialogHeader className="border-b bg-muted/30 px-5 py-5 pr-14 sm:px-6">
+                  <DialogTitle className="flex items-center gap-3 text-xl">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <FileText className="h-5 w-5" />
+                    </span>
+                    Letter Preview
+                  </DialogTitle>
+
                   <DialogDescription>
-                    Review your letter before printing or finalizing.
+                    Review the final letter before printing, exporting, or
+                    emailing.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="mt-4">
-                  <div className="bg-white p-8 border rounded-lg shadow-sm">
-                    <div className="font-serif leading-relaxed whitespace-pre-line text-gray-800">
-                      {generateLetterContent()}
+
+                <div className="max-h-[calc(92svh-170px)] overflow-y-auto bg-muted/30 px-4 py-5 sm:px-8">
+                  <div className="mx-auto max-w-3xl rounded-2xl border bg-white px-5 py-7 shadow-xl sm:px-12 sm:py-12">
+                    <div className="mb-8 border-b pb-5">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Orderly Affairs
+                      </p>
+
+                      <h3 className="mt-2 text-2xl font-semibold text-gray-950">
+                        Letter to Next of Kin
+                      </h3>
+
+                      {localData.nok_email && (
+                        <p className="mt-2 break-all text-sm text-gray-500">
+                          Prepared for {localData.nok_email}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="whitespace-pre-line font-serif text-[14px] leading-7 text-gray-800 sm:text-[15px] sm:leading-8">
+                      {letterPreview}
                     </div>
                   </div>
-                  <div className="flex justify-end gap-3 mt-6">
-                    <Button
-                      onClick={handlePrint}
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
-                      <Printer className="h-4 w-4" />
-                      Print
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 border-t bg-background px-4 py-3 sm:flex sm:justify-end">
+                  <Button
+                    onClick={handlePrint}
+                    variant="outline"
+                    className="rounded-2xl"
+                  >
+                    <Printer className="mr-2 h-4 w-4" />
+                    Print
+                  </Button>
+
+                  <Button
+                    onClick={handleExport}
+                    variant="outline"
+                    className="rounded-2xl"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                  </Button>
+
+                  {isValidEmail(localData.nok_email) && (
+                    <Button onClick={handleEmail} className="rounded-2xl">
+                      <Send className="mr-2 h-4 w-4" />
+                      Email
                     </Button>
-                    <Button
-                      onClick={handleExport}
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
-                      <Download className="h-4 w-4" />
-                      Export
-                    </Button>
-                    {isValidEmail(localData.nok_email) && (
-                      <Button
-                        onClick={handleEmail}
-                        variant="outline"
-                        className="flex items-center gap-2"
-                      >
-                        <Mail className="h-4 w-4" />
-                        Email
-                      </Button>
-                    )}
-                  </div>
+                  )}
                 </div>
               </DialogContent>
             </Dialog>
-
-            <Button
-              onClick={handlePrint}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <Printer className="h-4 w-4" />
-              Print Letter
-            </Button>
-            <Button
-              onClick={handleExport}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Export as Text
-            </Button>
-
-            {isValidEmail(localData.nok_email) ? (
-              <Button
-                onClick={handleEmail}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <Mail className="h-4 w-4" />
-                Email to {localData.nok_email}
-              </Button>
-            ) : (
-              <Button
-                disabled
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <Mail className="h-4 w-4" />
-                Email (No valid recipient)
-              </Button>
-            )}
           </div>
+        </div>
+      </div>
 
-          {localData.nok_email ? (
-            <p className="text-sm text-muted-foreground mt-3">
-              Email will be sent to: {localData.nok_email}
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground mt-3">
-              Email becomes available once you set Next of Kin in Access
-              Management.
-            </p>
+      {/* ================= STEP NAV ================= */}
+      <div className="rounded-[1.75rem] border border-border/60 bg-background p-2 shadow-sm">
+        <div className="flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-5 sm:overflow-visible sm:pb-0">
+          {EDITOR_STEPS.map(step => {
+            const Icon = step.icon;
+            const active = activeStep === step.id;
+
+            return (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => setActiveStep(step.id)}
+                className={`min-w-[150px] rounded-2xl px-3 py-3 text-left transition sm:min-w-0 ${
+                  active
+                    ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                    : 'bg-muted/40 text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="text-sm font-black">{step.label}</span>
+                </div>
+
+                <p
+                  className={`mt-1 line-clamp-1 text-[11px] ${
+                    active
+                      ? 'text-primary-foreground/75'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  {step.helper}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ================= MAIN ONE VIEW CONTENT ================= */}
+      <Card className="overflow-hidden rounded-[2rem] border-border/60 shadow-sm">
+        <CardHeader className="border-b border-border/60 bg-muted/20 p-5 sm:p-6">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              {currentStep && <currentStep.icon className="h-5 w-5" />}
+            </div>
+
+            <div>
+              <CardTitle className="text-xl font-black">
+                {currentStep?.label}
+              </CardTitle>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                {currentStep?.helper}
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4 p-4 sm:p-6">
+          {activeStep === 'recipient' && (
+            <>
+              <FieldBlock
+                label="Delivery Date"
+                description="Leave empty for upon-death delivery."
+                icon={<CalendarIcon className="h-4 w-4" />}
+              >
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="h-auto w-full justify-start rounded-2xl px-4 py-3 text-left"
+                    >
+                      <span className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <CalendarIcon className="h-5 w-5" />
+                      </span>
+
+                      <span className="flex min-w-0 flex-col">
+                        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                          Automatic delivery
+                        </span>
+                        <span className="truncate text-sm font-black text-foreground">
+                          {formatLetterDate(localData.letter_date) ||
+                            'Upon death'}
+                        </span>
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+
+                  <PopoverContent
+                    className="w-auto overflow-hidden rounded-3xl p-0"
+                    align="start"
+                  >
+                    <Calendar
+                      mode="single"
+                      selected={
+                        localData.letter_date
+                          ? new Date(localData.letter_date)
+                          : undefined
+                      }
+                      onSelect={date =>
+                        handleFieldChange(
+                          'letter_date',
+                          date ? (date.toISOString() as any) : (null as any),
+                        )
+                      }
+                      initialFocus
+                    />
+
+                    <div className="flex justify-between border-t px-4 py-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl"
+                        onClick={() =>
+                          handleFieldChange(
+                            'letter_date',
+                            new Date().toISOString() as any,
+                          )
+                        }
+                      >
+                        Today
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="rounded-xl"
+                        onClick={() =>
+                          handleFieldChange('letter_date', null as any)
+                        }
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </FieldBlock>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <FieldBlock
+                  label="To"
+                  description="Recipient name."
+                  icon={<UserRound className="h-4 w-4" />}
+                >
+                  <Input
+                    value={localData.letter_to || ''}
+                    onChange={e =>
+                      handleFieldChange('letter_to', e.target.value as any)
+                    }
+                    placeholder="Will auto-populate from Access Management"
+                    className="h-12 rounded-2xl"
+                  />
+                </FieldBlock>
+
+                <FieldBlock
+                  label="Greeting"
+                  description="Opening greeting."
+                  icon={<Mail className="h-4 w-4" />}
+                >
+                  <Input
+                    value={
+                      localData.letter_greeting || DEFAULTS.letter_greeting
+                    }
+                    onChange={e =>
+                      handleFieldChange(
+                        'letter_greeting',
+                        e.target.value as any,
+                      )
+                    }
+                    className="h-12 rounded-2xl"
+                  />
+                </FieldBlock>
+              </div>
+            </>
           )}
+
+          {activeStep === 'message' && (
+            <>
+              <FieldBlock label="Opening Message">
+                <Textarea
+                  value={localData.letter_opening || DEFAULTS.letter_opening}
+                  onChange={e =>
+                    handleFieldChange('letter_opening', e.target.value as any)
+                  }
+                  rows={7}
+                  className="min-h-[180px] rounded-2xl"
+                />
+              </FieldBlock>
+
+              <FieldBlock label="Kit Description">
+                <Textarea
+                  value={localData.kit_description || DEFAULTS.kit_description}
+                  onChange={e =>
+                    handleFieldChange('kit_description', e.target.value as any)
+                  }
+                  rows={6}
+                  className="min-h-[160px] rounded-2xl"
+                />
+              </FieldBlock>
+            </>
+          )}
+
+          {activeStep === 'access' && (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                <FieldBlock
+                  label="Access URL"
+                  icon={<ShieldCheck className="h-4 w-4" />}
+                >
+                  <Input
+                    value={localData.access_url || DEFAULTS.access_url}
+                    onChange={e =>
+                      handleFieldChange('access_url', e.target.value as any)
+                    }
+                    className="h-12 rounded-2xl"
+                  />
+                </FieldBlock>
+
+                <FieldBlock
+                  label="Password Card Location"
+                  description="Auto-filled from Access Management."
+                  icon={<KeyRound className="h-4 w-4" />}
+                >
+                  <Input
+                    value={localData.password_card_location || ''}
+                    readOnly
+                    placeholder="Will auto-populate"
+                    className="h-12 rounded-2xl bg-muted/60"
+                  />
+                </FieldBlock>
+              </div>
+
+              <FieldBlock label="Login Credentials Information">
+                <Textarea
+                  value={loginCredentialsText}
+                  onChange={e =>
+                    handleFieldChange(
+                      'login_credentials_text',
+                      e.target.value as any,
+                    )
+                  }
+                  rows={5}
+                  className="min-h-[150px] rounded-2xl"
+                />
+              </FieldBlock>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <FieldBlock
+                  label="Next of Kin Email"
+                  icon={<Mail className="h-4 w-4" />}
+                >
+                  <Input
+                    value={localData.nok_email || ''}
+                    readOnly
+                    placeholder="Will auto-populate"
+                    className="h-12 rounded-2xl bg-muted/60"
+                  />
+                </FieldBlock>
+
+                <FieldBlock
+                  label="Next of Kin Phone"
+                  icon={<Users className="h-4 w-4" />}
+                >
+                  <Input
+                    value={localData.nok_phone || ''}
+                    readOnly
+                    placeholder="Will auto-populate"
+                    className="h-12 rounded-2xl bg-muted/60"
+                  />
+                </FieldBlock>
+              </div>
+
+              <FieldBlock label="Accessible Sections">
+                <Textarea
+                  value={
+                    localData.accessible_sections ||
+                    DEFAULTS.accessible_sections
+                  }
+                  onChange={e =>
+                    handleFieldChange(
+                      'accessible_sections',
+                      e.target.value as any,
+                    )
+                  }
+                  rows={7}
+                  className="min-h-[180px] rounded-2xl"
+                />
+              </FieldBlock>
+            </>
+          )}
+
+          {activeStep === 'items' && (
+            <>
+              <FieldBlock
+                label="Key Bag Information"
+                icon={<KeyRound className="h-4 w-4" />}
+              >
+                <Textarea
+                  value={localData.key_bag_info || DEFAULTS.key_bag_info}
+                  onChange={e =>
+                    handleFieldChange('key_bag_info', e.target.value as any)
+                  }
+                  rows={5}
+                  className="min-h-[150px] rounded-2xl"
+                />
+              </FieldBlock>
+
+              <FieldBlock
+                label="Key Bag Location"
+                icon={<MapPin className="h-4 w-4" />}
+              >
+                <Input
+                  value={localData.key_bag_location || ''}
+                  onChange={e =>
+                    handleFieldChange('key_bag_location', e.target.value as any)
+                  }
+                  placeholder="Where the key bag is located"
+                  className="h-12 rounded-2xl"
+                />
+              </FieldBlock>
+
+              <FieldBlock
+                label="Documents Bag Information"
+                icon={<FileText className="h-4 w-4" />}
+              >
+                <Textarea
+                  value={
+                    localData.documents_bag_info || DEFAULTS.documents_bag_info
+                  }
+                  onChange={e =>
+                    handleFieldChange(
+                      'documents_bag_info',
+                      e.target.value as any,
+                    )
+                  }
+                  rows={5}
+                  className="min-h-[150px] rounded-2xl"
+                />
+              </FieldBlock>
+
+              <FieldBlock
+                label="Documents Bag Location"
+                icon={<MapPin className="h-4 w-4" />}
+              >
+                <Input
+                  value={localData.documents_bag_location || ''}
+                  onChange={e =>
+                    handleFieldChange(
+                      'documents_bag_location',
+                      e.target.value as any,
+                    )
+                  }
+                  placeholder="Where the documents bag is located"
+                  className="h-12 rounded-2xl"
+                />
+              </FieldBlock>
+            </>
+          )}
+
+          {activeStep === 'closing' && (
+            <>
+              <FieldBlock label="Incomplete Kit Message">
+                <Textarea
+                  value={
+                    localData.incomplete_kit_message ||
+                    DEFAULTS.incomplete_kit_message
+                  }
+                  onChange={e =>
+                    handleFieldChange(
+                      'incomplete_kit_message',
+                      e.target.value as any,
+                    )
+                  }
+                  rows={5}
+                  className="min-h-[150px] rounded-2xl"
+                />
+              </FieldBlock>
+
+              <FieldBlock label="Closing Message">
+                <Textarea
+                  value={localData.closing_message || DEFAULTS.closing_message}
+                  onChange={e =>
+                    handleFieldChange('closing_message', e.target.value as any)
+                  }
+                  rows={5}
+                  className="min-h-[150px] rounded-2xl"
+                />
+              </FieldBlock>
+
+              <FieldBlock label="Signature">
+                <Input
+                  value={
+                    localData.letter_signature || DEFAULTS.letter_signature
+                  }
+                  onChange={e =>
+                    handleFieldChange('letter_signature', e.target.value as any)
+                  }
+                  className="h-12 rounded-2xl"
+                />
+              </FieldBlock>
+            </>
+          )}
+
+          {/* Desktop action footer */}
+          <div className="hidden items-center justify-between gap-3 border-t border-border/60 pt-5 sm:flex">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-2xl"
+              disabled={activeStep === 'recipient'}
+              onClick={() => {
+                const index = EDITOR_STEPS.findIndex(
+                  step => step.id === activeStep,
+                );
+                const previous = EDITOR_STEPS[index - 1];
+                if (previous) setActiveStep(previous.id);
+              }}
+            >
+              Previous
+            </Button>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-2xl"
+                onClick={handlePrint}
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Print
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-2xl"
+                onClick={handleExport}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
+
+              {isValidEmail(localData.nok_email) && (
+                <Button
+                  type="button"
+                  className="rounded-2xl"
+                  onClick={handleEmail}
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  Email
+                </Button>
+              )}
+            </div>
+
+            <Button
+              type="button"
+              className="rounded-2xl"
+              disabled={activeStep === 'closing'}
+              onClick={() => {
+                const index = EDITOR_STEPS.findIndex(
+                  step => step.id === activeStep,
+                );
+                const next = EDITOR_STEPS[index + 1];
+                if (next) setActiveStep(next.id);
+              }}
+            >
+              Next
+            </Button>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Mobile sticky actions */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-background/95 px-3 py-3 shadow-2xl backdrop-blur-xl sm:hidden">
+        <div className="mx-auto grid max-w-md grid-cols-4 gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 rounded-2xl text-xs"
+            disabled={activeStep === 'recipient'}
+            onClick={() => {
+              const index = EDITOR_STEPS.findIndex(
+                step => step.id === activeStep,
+              );
+              const previous = EDITOR_STEPS[index - 1];
+              if (previous) setActiveStep(previous.id);
+            }}
+          >
+            Back
+          </Button>
+
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 rounded-2xl text-xs"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+
+            <DialogContent className="max-h-[92svh] w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-3xl p-0">
+              <DialogHeader className="border-b bg-muted/30 px-5 py-5 pr-14">
+                <DialogTitle>Letter Preview</DialogTitle>
+                <DialogDescription>
+                  Review the generated letter.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="max-h-[calc(92svh-120px)] overflow-y-auto bg-muted/30 px-4 py-5">
+                <div className="rounded-2xl border bg-white px-5 py-7 shadow-xl">
+                  <div className="whitespace-pre-line font-serif text-[14px] leading-7 text-gray-800">
+                    {letterPreview}
+                  </div>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 rounded-2xl text-xs"
+            onClick={handleExport}
+          >
+            Export
+          </Button>
+
+          <Button
+            type="button"
+            className="h-11 rounded-2xl text-xs"
+            disabled={activeStep === 'closing'}
+            onClick={() => {
+              const index = EDITOR_STEPS.findIndex(
+                step => step.id === activeStep,
+              );
+              const next = EDITOR_STEPS[index + 1];
+              if (next) setActiveStep(next.id);
+            }}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
-

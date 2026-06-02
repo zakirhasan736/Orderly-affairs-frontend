@@ -16,47 +16,50 @@ function Calendar({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      className={cn('p-3', className)}
+      navLayout="around"
+      className={cn('rounded-2xl bg-background p-4', className)}
       classNames={{
-        months: 'flex flex-col sm:flex-row gap-2',
-        month: 'flex flex-col gap-4',
-        caption: 'flex justify-center pt-1 relative items-center w-full',
-        caption_label: 'text-sm font-medium',
-        nav: 'flex items-center gap-1',
-        nav_button: cn(
+        months: 'flex w-full flex-col gap-4 sm:flex-row',
+        month:
+          'grid w-[300px] grid-cols-[2.25rem_1fr_2.25rem] items-center gap-2',
+        month_caption:
+          'col-start-2 flex h-11 items-center justify-center rounded-2xl border bg-muted/40 px-4',
+        caption_label: 'text-sm font-semibold text-foreground',
+        nav: 'contents',
+        button_previous: cn(
           buttonVariants({ variant: 'outline' }),
-          'size-7 bg-transparent p-0 opacity-50 hover:opacity-100',
+          'col-start-1 size-9 rounded-2xl border-border/70 bg-background/90 p-0 shadow-sm transition hover:bg-muted/60 disabled:opacity-40 aria-disabled:opacity-40',
         ),
-        nav_button_previous: 'absolute left-1',
-        nav_button_next: 'absolute right-1',
-        table: 'w-full border-collapse space-x-1',
-        head_row: 'flex',
-        head_cell:
-          'text-muted-foreground rounded-md w-8 font-normal text-[0.8rem]',
-        row: 'flex w-full mt-2',
-        cell: cn(
-          'relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-accent [&:has([aria-selected].day-range-end)]:rounded-r-md',
-          props.mode === 'range'
-            ? '[&:has(>.day-range-end)]:rounded-r-md [&:has(>.day-range-start)]:rounded-l-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md'
-            : '[&:has([aria-selected])]:rounded-md',
+        button_next: cn(
+          buttonVariants({ variant: 'outline' }),
+          'col-start-3 size-9 rounded-2xl border-border/70 bg-background/90 p-0 shadow-sm transition hover:bg-muted/60 disabled:opacity-40 aria-disabled:opacity-40',
         ),
+        month_grid:
+          'col-span-3 w-full table-fixed border-separate border-spacing-y-1',
+        weekdays: '',
+        weekday:
+          'h-9 w-10 text-center align-middle text-[0.72rem] font-semibold uppercase text-muted-foreground',
+        weeks: '',
+        week: '',
         day: cn(
-          buttonVariants({ variant: 'ghost' }),
-          'size-8 p-0 font-normal aria-selected:opacity-100',
+          'h-10 w-10 p-0 text-center align-middle text-sm focus-within:relative focus-within:z-20',
+          props.mode === 'range'
+            ? 'first:rounded-l-xl last:rounded-r-xl'
+            : 'rounded-xl',
         ),
-        day_range_start:
-          'day-range-start aria-selected:bg-primary aria-selected:text-primary-foreground',
-        day_range_end:
-          'day-range-end aria-selected:bg-primary aria-selected:text-primary-foreground',
-        day_selected:
-          'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground',
-        day_today: 'bg-accent text-accent-foreground',
-        day_outside:
-          'day-outside text-muted-foreground aria-selected:text-muted-foreground',
-        day_disabled: 'text-muted-foreground opacity-50',
-        day_range_middle:
-          'aria-selected:bg-accent aria-selected:text-accent-foreground',
-        day_hidden: 'invisible',
+        day_button: cn(
+          buttonVariants({ variant: 'ghost' }),
+          'mx-auto flex size-9 items-center justify-center rounded-xl p-0 text-sm font-medium transition hover:bg-primary/10 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 aria-selected:opacity-100',
+        ),
+        selected:
+          'bg-primary text-primary-foreground shadow-lg shadow-primary/20',
+        today: 'border border-primary/30 bg-primary/5 text-primary',
+        outside: 'text-muted-foreground/45',
+        disabled: 'text-muted-foreground opacity-50',
+        range_start: 'rounded-l-xl bg-primary text-primary-foreground',
+        range_end: 'rounded-r-xl bg-primary text-primary-foreground',
+        range_middle: 'bg-accent text-accent-foreground',
+        hidden: 'invisible',
         ...classNames,
       }}
       components={{

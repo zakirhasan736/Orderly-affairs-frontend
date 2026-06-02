@@ -47,6 +47,8 @@ import {
   createMessage,
   updateMessage,
   deleteMessage,
+  deleteMessageMedia,
+  deleteUploadedMessageMedia,
   getMessages,
   uploadMessageMedia,
 } from '@/libs/api/lettersOfNaxtKinMessage';
@@ -214,6 +216,7 @@ export function Letters({
   const [isLoading, setIsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isDelivering, setIsDelivering] = useState(false);
+  const [deletingMedia, setDeletingMedia] = useState(false);
 
   const [showTemplates, setShowTemplates] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -339,14 +342,45 @@ export function Letters({
     setShowSuggestions(false);
   };
 
-  const closeEditor = () => {
+  const getSavedMediaForLetter = (letter?: Letter | null) =>
+    letters.find(item => item.id === letter?.id)?.media;
+
+  const deleteStandaloneMedia = async (media?: LetterMedia) => {
+    if (!token || !media?.public_id) return;
+
+    await deleteUploadedMessageMedia(token, media.public_id);
+  };
+
+  const cleanupUnsavedMedia = (letter?: Letter | null) => {
+    const currentMedia = letter?.media;
+    const savedMedia = getSavedMediaForLetter(letter);
+
+    if (
+      currentMedia?.public_id &&
+      currentMedia.public_id !== savedMedia?.public_id
+    ) {
+      void deleteStandaloneMedia(currentMedia).catch(error => {
+        console.error('Failed to delete unsaved message media:', error);
+      });
+    }
+  };
+
+  const closeEditor = ({
+    cleanupMedia = true,
+  }: {
+    cleanupMedia?: boolean;
+  } = {}) => {
+    if (cleanupMedia) cleanupUnsavedMedia(currentLetter);
+
     setIsWriting(false);
     setCurrentLetter(null);
     setShowVideoRecorder(false);
     setShowAudioRecorder(false);
   };
 
-  const handleMediaUploaded = (media: any) => {
+  const attachMedia = (media: LetterMedia) => {
+    cleanupUnsavedMedia(currentLetter);
+
     setCurrentLetter(prev => {
       if (!prev) return prev;
       return {
@@ -354,6 +388,10 @@ export function Letters({
         media,
       };
     });
+  };
+
+  const handleMediaUploaded = (media: LetterMedia) => {
+    attachMedia(media);
 
     setShowVideoRecorder(false);
     setShowAudioRecorder(false);
@@ -371,18 +409,89 @@ export function Letters({
     try {
       const media = await uploadMessageMedia(token, file);
 
-      setCurrentLetter(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          media,
-        };
-      });
+      attachMedia(media);
 
       toast.success('Media uploaded successfully');
     } catch {
       toast.error('Media upload failed');
     }
+  };
+
+  const removeAttachedMedia = async () => {
+    if (!currentLetter?.media) return;
+
+    if (!token) {
+      toast.error('You are not logged in');
+      return;
+    }
+
+    const media = currentLetter.media;
+    const savedMedia = getSavedMediaForLetter(currentLetter);
+    const isSavedAttachment =
+      Boolean(savedMedia?.public_id) &&
+      savedMedia?.public_id === media.public_id;
+
+    try {
+      setDeletingMedia(true);
+
+      if (isSavedAttachment) {
+        await deleteMessageMedia(token, currentLetter.id);
+
+        setLetters(prev =>
+          prev.map(item =>
+            item.id === currentLetter.id
+              ? {
+                  ...item,
+                  media: undefined,
+                  lastModified: new Date(),
+                }
+              : item,
+          ),
+        );
+
+        setCurrentLetter(prev =>
+          prev
+            ? {
+                ...prev,
+                media: undefined,
+              }
+            : prev,
+        );
+      } else {
+        await deleteStandaloneMedia(media);
+
+        setCurrentLetter(prev =>
+          prev
+            ? {
+                ...prev,
+                media: savedMedia,
+              }
+            : prev,
+        );
+      }
+
+      toast.success('Media deleted');
+    } catch {
+      toast.error('Media delete failed');
+    } finally {
+      setDeletingMedia(false);
+    }
+  };
+
+  const changeMessageType = (messageType: MessageType) => {
+    if (currentLetter?.messageType !== messageType) {
+      cleanupUnsavedMedia(currentLetter);
+    }
+
+    setCurrentLetter(prev =>
+      prev
+        ? {
+            ...prev,
+            messageType,
+            media: prev.messageType === messageType ? prev.media : undefined,
+          }
+        : prev,
+    );
   };
 
   const validateBeforeSave = (message: Letter) => {
@@ -444,7 +553,7 @@ export function Letters({
         toast.success('Message saved');
       }
 
-      closeEditor();
+      closeEditor({ cleanupMedia: false });
       await refreshMessages();
     } catch {
       toast.error('Save failed');
@@ -709,20 +818,7 @@ export function Letters({
                 <CardContent className="space-y-7 p-4 sm:p-6">
                   <TypeSelector
                     value={currentLetter.messageType}
-                    onChange={messageType =>
-                      setCurrentLetter(prev =>
-                        prev
-                          ? {
-                              ...prev,
-                              messageType,
-                              media:
-                                prev.messageType === messageType
-                                  ? prev.media
-                                  : undefined,
-                            }
-                          : prev,
-                      )
-                    }
+                    onChange={changeMessageType}
                   />
 
                   <BasicDetails
@@ -779,6 +875,8 @@ export function Letters({
                         }
                       }}
                       onUpload={handleFileUpload}
+                      onDeleteMedia={removeAttachedMedia}
+                      deletingMedia={deletingMedia}
                       onChange={patch =>
                         setCurrentLetter(prev =>
                           prev
@@ -1322,11 +1420,15 @@ function MediaEditor({
   letter,
   onRecord,
   onUpload,
+  onDeleteMedia,
+  deletingMedia,
   onChange,
 }: {
   letter: Letter;
   onRecord: () => void;
   onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onDeleteMedia: () => void;
+  deletingMedia: boolean;
   onChange: (patch: Partial<Letter>) => void;
 }) {
   return (
@@ -1336,6 +1438,8 @@ function MediaEditor({
         media={letter.media}
         onRecord={onRecord}
         onUpload={onUpload}
+        onDelete={onDeleteMedia}
+        deleting={deletingMedia}
       />
 
       <FieldBlock label="Message Description">
@@ -1564,11 +1668,15 @@ function MediaUploadPanel({
   media,
   onRecord,
   onUpload,
+  onDelete,
+  deleting,
 }: {
   type: 'video' | 'audio';
   media?: LetterMedia;
   onRecord: () => void;
   onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onDelete: () => void;
+  deleting: boolean;
 }) {
   const reactId = React.useId();
   const inputId = `${type}-upload-${reactId}`;
@@ -1645,11 +1753,25 @@ function MediaUploadPanel({
               </p>
             </div>
 
-            {media.size && (
-              <Badge variant="outline" className="rounded-full">
-                {formatFileSize(media.size)}
-              </Badge>
-            )}
+            <div className="flex shrink-0 items-center gap-2">
+              {media.size && (
+                <Badge variant="outline" className="rounded-full">
+                  {formatFileSize(media.size)}
+                </Badge>
+              )}
+
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={deleting}
+                onClick={onDelete}
+                className="h-9 rounded-xl"
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                {deleting ? 'Deleting...' : 'Delete'}
+              </Button>
+            </div>
           </div>
 
           {isVideo ? (

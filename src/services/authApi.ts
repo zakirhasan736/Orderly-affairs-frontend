@@ -9,6 +9,7 @@ export interface NextKinCreatePayload {
   access_level?: string;
   authorized_sections?: string[];
   immediate_access?: boolean;
+  nok_letter_received?: boolean;
   master_password?: string | null;
   password_card_generated?: boolean;
   card_storage_location?: string | null;
@@ -44,6 +45,7 @@ export interface NextKinAccessResponse {
   authorized_sections: 'all' | string[];
   access_level: string;
   immediate_access: boolean;
+  nok_letter_received?: boolean;
   owner_id: string;
   nextkin: {
     id: string;
@@ -79,20 +81,26 @@ export interface VerifySmsOtpRequest {
 export interface SmsOtpResponse {
   message: string;
   phone_number?: string;
+  phone?: string;
+  requires_phone?: boolean;
+}
+export type MFAMethod = 'authenticator' | 'email' | 'sms';
+
+export type MFAMethods = Record<MFAMethod, boolean>;
+
+export interface OwnerMeResponse {
+  email: string;
+  phone?: string | null;
+  role: string;
+  mfa_enabled: boolean;
+  primary_mfa?: MFAMethod | null;
+  mfa_methods: Partial<MFAMethods>;
 }
 const NOK_SECURED = new Set(['getMyNextKinAccess', 'nextkinLogout']);
 const PUBLIC = new Set([
   'signup',
   'login',
   'nextkinLogin',
-  'sendEmailOtp',
-  'verifyEmailCode',
-  'generateMfa',
-  'linkAuthenticator',
-  'verifyTotp',
-  //
-  'sendSmsOtp',
-  'verifySmsOtp',
 ]);
 
 export const authApi = createApi({
@@ -169,6 +177,23 @@ export const authApi = createApi({
         body,
       }),
     }),
+    startSmsMfa: builder.mutation<
+      SmsOtpResponse,
+      { email: string; phoneNumber?: string }
+    >({
+      query: body => ({
+        url: '/start-sms-mfa',
+        method: 'POST',
+        body,
+      }),
+    }),
+    resendSmsMfa: builder.mutation<SmsOtpResponse, { email: string }>({
+      query: body => ({
+        url: '/resend-sms-mfa',
+        method: 'POST',
+        body,
+      }),
+    }),
     // NOK auth
     nextkinLogin: builder.mutation({
       query: b => ({ url: '/nextkin-login', method: 'POST', body: b }),
@@ -217,7 +242,7 @@ export const authApi = createApi({
         body,
       }: {
         nextkinId: string;
-        body: Record<string, any>;
+        body: object;
       }) => ({
         url: `/update-nextkin/${nextkinId}`,
         method: 'PUT',
@@ -249,12 +274,25 @@ export const authApi = createApi({
     verifyEmailCode: builder.mutation({
       query: b => ({ url: '/verify-email', method: 'POST', body: b }),
     }),
+    disableMfaMethod: builder.mutation<
+      {
+        message: string;
+        mfa_enabled: boolean;
+        primary_mfa?: MFAMethod | null;
+        mfa_methods: MFAMethods;
+      },
+      { method: MFAMethod }
+    >({
+      query: b => ({ url: '/mfa/disable', method: 'POST', body: b }),
+    }),
 
     // Session helpers
     refreshToken: builder.mutation({
       query: () => ({ url: '/refresh-token', method: 'POST' }),
     }),
-    getMe: builder.query({ query: () => ({ url: '/me', method: 'GET' }) }),
+    getMe: builder.query<OwnerMeResponse, void>({
+      query: () => ({ url: '/me', method: 'GET' }),
+    }),
 
     // NOK self access
     getMyNextKinAccess: builder.query<NextKinAccessResponse, void>({
@@ -290,5 +328,8 @@ export const {
   useResetPasswordMutation,
   useSendSmsOtpMutation,
   useVerifySmsOtpMutation,
+  useStartSmsMfaMutation,
+  useResendSmsMfaMutation,
   useResumePendingSignupMutation,
+  useDisableMfaMethodMutation,
 } = authApi;

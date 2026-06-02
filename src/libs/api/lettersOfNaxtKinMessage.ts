@@ -51,6 +51,16 @@ export async function deleteMessage(token: string, id: string) {
   return res.json();
 }
 
+export async function deleteMessageMedia(token: string, id: string) {
+  const res = await fetch(`${API_BASE}/message/${id}/media`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function uploadMessageMedia(token: string, file: File | Blob) {
   const formData = new FormData();
   formData.append('file', file);
@@ -67,5 +77,22 @@ export async function uploadMessageMedia(token: string, file: File | Blob) {
     throw new Error('Media upload failed');
   }
 
+  return res.json();
+}
+
+export async function deleteUploadedMessageMedia(
+  token: string,
+  publicId: string,
+) {
+  const res = await fetch(`${API_BASE}/message/media/delete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ public_id: publicId }),
+  });
+
+  if (!res.ok) throw new Error(await res.text());
   return res.json();
 }

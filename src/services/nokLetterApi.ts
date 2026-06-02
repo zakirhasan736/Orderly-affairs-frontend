@@ -5,7 +5,7 @@ import Cookies from 'js-cookie';
 export type NOKLetter = {
   id: string;
   owner_id: string;
-  letter_date?: string;
+  letter_date?: string | null;
   letter_to?: string;
   letter_greeting?: string;
   letter_opening?: string;
@@ -23,6 +23,10 @@ export type NOKLetter = {
   incomplete_kit_message?: string;
   closing_message?: string;
   letter_signature?: string;
+  delivery_trigger?: 'death' | 'date';
+  delivery_status?: 'pending' | 'processing' | 'scheduled' | 'sent';
+  scheduled_send_at?: string | null;
+  sent_at?: string | null;
   created_at: string;
   updated_at: string;
 };
