@@ -55,6 +55,7 @@ export const nokLetterApi = createApi({
           method: 'GET',
         };
       },
+      keepUnusedDataFor: 0,
     }),
     saveNokLetter: b.mutation<NOKLetter, { body: any; nokId?: string }>({
       query: ({ body, nokId }) => ({

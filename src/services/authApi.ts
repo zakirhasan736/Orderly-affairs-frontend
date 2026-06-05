@@ -1,5 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import Cookies from 'js-cookie';
+import { otpSessionHeaders } from '@/utils/otpSession';
 
 export interface NextKinCreatePayload {
   email: string;
@@ -13,6 +14,8 @@ export interface NextKinCreatePayload {
   master_password?: string | null;
   password_card_generated?: boolean;
   card_storage_location?: string | null;
+  key_bag_location?: string | null;
+  documents_bag_location?: string | null;
   special_instructions?: string | null;
 }
 export interface CreateNextKinSingleResponse {
@@ -55,6 +58,8 @@ export interface NextKinAccessResponse {
   };
   password_card_generated?: boolean;
   card_storage_location?: string | null;
+  key_bag_location?: string | null;
+  documents_bag_location?: string | null;
   special_instructions?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -83,6 +88,42 @@ export interface SmsOtpResponse {
   phone_number?: string;
   phone?: string;
   requires_phone?: boolean;
+  cooldown_seconds?: number;
+}
+
+export interface OtpSecurityPayload {
+  captcha_token?: string;
+  otp_session_id?: string;
+}
+
+export interface SendEmailOtpRequest {
+  email: string;
+  captcha_token?: string;
+  otp_session_id?: string;
+}
+
+export interface EmailOtpResponse {
+  message: string;
+  cooldown_seconds?: number;
+}
+
+export interface LoginResponse {
+  message?: string;
+  access_token?: string;
+  mfa_required?: boolean;
+  method?: MFAMethod;
+  mfa_methods?: Partial<MFAMethods>;
+  otp_sent?: boolean;
+  otp_error?: string;
+  cooldown_seconds?: number;
+  mfa_challenge_token?: string;
+  phone?: string;
+}
+
+export interface VerifyEmailCodeRequest {
+  email: string;
+  code: number;
+  otp_session_id?: string;
 }
 export type MFAMethod = 'authenticator' | 'email' | 'sms';
 
@@ -116,6 +157,10 @@ export const authApi = createApi({
         if (token) headers.set('Authorization', `Bearer ${token}`);
       }
       headers.set('Content-Type', 'application/json');
+      const sessionHeaders = otpSessionHeaders();
+      Object.entries(sessionHeaders).forEach(([key, value]) => {
+        headers.set(key, value);
+      });
       return headers;
     },
   }),
@@ -128,7 +173,7 @@ export const authApi = createApi({
     resumePendingSignup: builder.mutation({
       query: b => ({ url: '/resume-pending-signup', method: 'POST', body: b }),
     }),
-    login: builder.mutation({
+    login: builder.mutation<LoginResponse, { email: string; password: string }>({
       query: b => ({ url: '/login', method: 'POST', body: b }),
     }),
     ownerLogout: builder.mutation({
@@ -169,7 +214,7 @@ export const authApi = createApi({
 
     verifySmsOtp: builder.mutation<
       { access_token: string; message: string },
-      VerifySmsOtpRequest
+      VerifySmsOtpRequest & OtpSecurityPayload
     >({
       query: body => ({
         url: '/verify-sms-otp',
@@ -179,7 +224,9 @@ export const authApi = createApi({
     }),
     startSmsMfa: builder.mutation<
       SmsOtpResponse,
-      { email: string; phoneNumber?: string }
+      { email: string; phoneNumber?: string } & OtpSecurityPayload & {
+          mfa_challenge_token?: string;
+        }
     >({
       query: body => ({
         url: '/start-sms-mfa',
@@ -187,7 +234,20 @@ export const authApi = createApi({
         body,
       }),
     }),
-    resendSmsMfa: builder.mutation<SmsOtpResponse, { email: string }>({
+    startEmailMfa: builder.mutation<
+      EmailOtpResponse,
+      SendEmailOtpRequest & { mfa_challenge_token?: string }
+    >({
+      query: body => ({
+        url: '/start-email-mfa',
+        method: 'POST',
+        body,
+      }),
+    }),
+    resendSmsMfa: builder.mutation<
+      SmsOtpResponse,
+      { email: string } & OtpSecurityPayload
+    >({
       query: body => ({
         url: '/resend-sms-mfa',
         method: 'POST',
@@ -268,10 +328,13 @@ export const authApi = createApi({
     linkAuthenticator: builder.mutation({
       query: b => ({ url: '/link-authenticator', method: 'POST', body: b }),
     }),
-    sendEmailOtp: builder.mutation({
+    sendEmailOtp: builder.mutation<EmailOtpResponse, SendEmailOtpRequest>({
       query: b => ({ url: '/send-email', method: 'POST', body: b }),
     }),
-    verifyEmailCode: builder.mutation({
+    verifyEmailCode: builder.mutation<
+      { access_token: string; message: string },
+      VerifyEmailCodeRequest
+    >({
       query: b => ({ url: '/verify-email', method: 'POST', body: b }),
     }),
     disableMfaMethod: builder.mutation<
@@ -329,6 +392,7 @@ export const {
   useSendSmsOtpMutation,
   useVerifySmsOtpMutation,
   useStartSmsMfaMutation,
+  useStartEmailMfaMutation,
   useResendSmsMfaMutation,
   useResumePendingSignupMutation,
   useDisableMfaMethodMutation,

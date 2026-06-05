@@ -51,6 +51,16 @@ export async function deleteMessage(token: string, id: string) {
   return res.json();
 }
 
+export async function clearAllMessages(token: string) {
+  const res = await fetch(`${API_BASE}/message`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function deleteMessageMedia(token: string, id: string) {
   const res = await fetch(`${API_BASE}/message/${id}/media`, {
     method: 'DELETE',
@@ -83,6 +93,7 @@ export async function uploadMessageMedia(token: string, file: File | Blob) {
 export async function deleteUploadedMessageMedia(
   token: string,
   publicId: string,
+  resourceType?: string,
 ) {
   const res = await fetch(`${API_BASE}/message/media/delete`, {
     method: 'POST',
@@ -90,7 +101,10 @@ export async function deleteUploadedMessageMedia(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ public_id: publicId }),
+    body: JSON.stringify({
+      public_id: publicId,
+      resource_type: resourceType,
+    }),
   });
 
   if (!res.ok) throw new Error(await res.text());

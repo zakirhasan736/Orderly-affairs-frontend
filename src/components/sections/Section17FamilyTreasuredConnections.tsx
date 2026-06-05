@@ -29,6 +29,10 @@ import {
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  getTopicCardProps,
+  useScrollToVaultTopic,
+} from '@/utils/vaultTopicNavigation';
 
 /* ============================================================
    CONFIG — 17A
@@ -654,6 +658,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 }
 
 type SubsectionId = '17A' | '17B' | '17C' | '17D' | '17E' | '17F' | '17G';
@@ -901,6 +906,7 @@ export default function Section17FamilyTreasuredConnections({
   data = {},
   onChange = () => {},
   activeSubsection,
+  activeTopicId,
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -914,6 +920,8 @@ export default function Section17FamilyTreasuredConnections({
 
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
+
+  useScrollToVaultTopic(activeTopicId, JSON.stringify(data));
 
   useEffect(() => {
     const next = { ...data };
@@ -1380,11 +1388,17 @@ export default function Section17FamilyTreasuredConnections({
             {items.map((item: any, index: number) => {
               const rowId = item?.__rowId || `${subsection}-${index}`;
               const scope = `${subsection}-${rowId}`;
+              const topicProps = getTopicCardProps(
+                subsection,
+                index,
+                activeTopicId,
+              );
 
               return (
                 <Card
                   key={rowId}
-                  className="overflow-hidden border-slate-200 shadow-sm"
+                  id={topicProps.id}
+                  className={topicProps.className}
                 >
                   <CardHeader className="border-b bg-slate-50/70">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

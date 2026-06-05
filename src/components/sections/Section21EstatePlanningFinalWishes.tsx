@@ -622,6 +622,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 }
 
 type SubsectionId = '21A' | '21B' | '21C';
@@ -748,6 +749,7 @@ export default function Section21EstatePlanningFinalWishes({
   data = {},
   onChange = () => {},
   activeSubsection,
+  activeTopicId,
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');

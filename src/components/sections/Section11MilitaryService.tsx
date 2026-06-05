@@ -23,6 +23,11 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  getTopicCardProps,
+  useScrollToVaultTopic,
+} from '@/utils/vaultTopicNavigation';
+import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -150,6 +155,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 }
 
 type UploadScope = 'full' | `service:${number}`;
@@ -186,6 +192,7 @@ export default function Section11MilitaryService({
   data = {},
   onChange = () => {},
   activeSubsection,
+  activeTopicId,
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -206,11 +213,13 @@ export default function Section11MilitaryService({
   const servicePeriods: any[] = Array.isArray(data['11A']) ? data['11A'] : [];
   const show11A = !activeSubsection || activeSubsection === '11A';
 
+  useScrollToVaultTopic(activeTopicId, servicePeriods.length);
+
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
 
   const createEmptyServicePeriod = () => {
-    return Object.fromEntries(SECTION_11A.fields.map(field => [field.key, '']));
+    return createEmptyItemFromFields(SECTION_11A.fields);
   };
 
   const updateServicePeriods = (next: any[]) => {
@@ -534,7 +543,10 @@ export default function Section11MilitaryService({
         </div>
       )}
 
-      <Card className="overflow-hidden border-slate-200 shadow-sm">
+      <Card
+        id="subsection-11A"
+        className="overflow-hidden border-slate-200 shadow-sm"
+      >
         <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-indigo-50/70">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -584,11 +596,13 @@ export default function Section11MilitaryService({
           {servicePeriods.map((item, index) => {
             const itemScope = `service:${index}` as UploadScope;
             const itemLabel = `${SECTION_11A.itemLabel} #${index + 1}`;
+            const topicProps = getTopicCardProps('11A', index, activeTopicId);
 
             return (
               <Card
                 key={`${itemScope}-${index}`}
-                className="overflow-hidden border-slate-200 shadow-sm"
+                id={topicProps.id}
+                className={topicProps.className}
               >
                 <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>

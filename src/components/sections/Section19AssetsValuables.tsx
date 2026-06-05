@@ -24,6 +24,10 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  getTopicCardProps,
+  useScrollToVaultTopic,
+} from '@/utils/vaultTopicNavigation';
 
 /* ============================================================
    REPEATABLE SECTION FACTORY
@@ -261,6 +265,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 }
 
 type SubsectionId = '19A' | '19B';
@@ -307,6 +312,7 @@ export default function Section19AssetsValuables({
   data = {},
   onChange = () => {},
   activeSubsection,
+  activeTopicId,
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -324,6 +330,11 @@ export default function Section19AssetsValuables({
 
   const valuableItems: any[] = Array.isArray(data['19A']) ? data['19A'] : [];
   const properties: any[] = Array.isArray(data['19B']) ? data['19B'] : [];
+
+  useScrollToVaultTopic(
+    activeTopicId,
+    valuableItems.length + properties.length,
+  );
 
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
@@ -775,11 +786,17 @@ export default function Section19AssetsValuables({
             {items.map((item, index) => {
               const itemScope = `${subsection}:${index}` as UploadScope;
               const itemLabel = `${config.itemLabel} #${index + 1}`;
+              const topicProps = getTopicCardProps(
+                subsection,
+                index,
+                activeTopicId,
+              );
 
               return (
                 <Card
                   key={item.__rowId || `${subsection}-${index}`}
-                  className="overflow-hidden border-slate-200 shadow-sm"
+                  id={topicProps.id}
+                  className={topicProps.className}
                 >
                   <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>

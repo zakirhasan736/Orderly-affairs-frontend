@@ -1,6 +1,10 @@
 // src/api/section13.ts
 
+import { sanitizeSectionPayload } from '@/utils/sectionUploadFields';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+const UPLOAD_KEYS = ['account_documents'] as const;
 
 export async function saveSection13(token: string, payload: any) {
   const res = await fetch(
@@ -11,7 +15,9 @@ export async function saveSection13(token: string, payload: any) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(
+        sanitizeSectionPayload(payload, '13A', UPLOAD_KEYS),
+      ),
     },
   );
 

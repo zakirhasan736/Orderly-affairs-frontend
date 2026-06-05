@@ -18,8 +18,9 @@ import {
 } from 'lucide-react';
 
 interface VideoRecorderProps {
-  onVideoRecorded: (blob: Blob) => void;
+  onVideoRecorded: (blob: Blob) => Promise<boolean> | boolean;
   onClose: () => void;
+  uploading?: boolean;
 }
 
 type RecorderStatus =
@@ -34,10 +35,11 @@ function getSupportedVideoMimeType() {
   if (typeof MediaRecorder === 'undefined') return '';
 
   const types = [
+    'video/mp4',
+    'video/mp4;codecs=avc1,mp4a',
     'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
     'video/webm',
-    'video/mp4',
   ];
 
   return types.find(type => MediaRecorder.isTypeSupported(type)) || '';
@@ -60,12 +62,14 @@ function formatBytes(bytes: number) {
 export function VideoRecorder({
   onVideoRecorded,
   onClose,
+  uploading = false,
 }: VideoRecorderProps) {
   const [status, setStatus] = useState<RecorderStatus>('loading');
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const liveVideoRef = useRef<HTMLVideoElement | null>(null);
   const recordedVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -135,6 +139,40 @@ export function VideoRecorder({
     }
   };
 
+  const attachLiveStream = async (
+    videoEl: HTMLVideoElement,
+    mediaStream: MediaStream,
+  ) => {
+    videoEl.setAttribute('playsinline', 'true');
+    videoEl.setAttribute('webkit-playsinline', 'true');
+    videoEl.setAttribute('autoplay', 'true');
+    videoEl.setAttribute('muted', 'true');
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.autoplay = true;
+    videoEl.srcObject = mediaStream;
+
+    await new Promise<void>(resolve => {
+      const handleReady = () => {
+        videoEl.removeEventListener('loadedmetadata', handleReady);
+        resolve();
+      };
+
+      if (videoEl.readyState >= 1) {
+        resolve();
+        return;
+      }
+
+      videoEl.addEventListener('loadedmetadata', handleReady);
+    });
+
+    try {
+      await videoEl.play();
+    } catch {
+      // iOS may block until user gesture; preview usually still works after play().
+    }
+  };
+
   const cleanupRecorder = () => {
     try {
       const recorder = recorderRef.current;
@@ -180,9 +218,7 @@ export function VideoRecorder({
       streamRef.current = mediaStream;
 
       if (liveVideoRef.current) {
-        liveVideoRef.current.srcObject = mediaStream;
-        liveVideoRef.current.muted = true;
-        await liveVideoRef.current.play().catch(() => {});
+        await attachLiveStream(liveVideoRef.current, mediaStream);
       }
 
       setStatus('idle');
@@ -209,6 +245,16 @@ export function VideoRecorder({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const videoEl = liveVideoRef.current;
+    const stream = streamRef.current;
+
+    if (!videoEl || !stream || previewUrl || recordedBlob) return;
+
+    void attachLiveStream(videoEl, stream);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, previewUrl, recordedBlob]);
 
   useEffect(() => {
     if (!previewUrl || !recordedVideoRef.current) return;
@@ -352,9 +398,18 @@ export function VideoRecorder({
     await startCamera();
   };
 
-  const handleSaveRecording = () => {
-    if (!recordedBlob) return;
-    onVideoRecorded(recordedBlob);
+  const handleSaveRecording = async () => {
+    if (!recordedBlob || saving || uploading) return;
+
+    setSaving(true);
+    try {
+      const success = await onVideoRecorded(recordedBlob);
+      if (!success) {
+        setError('Upload failed. Your recording is still here — try Save again.');
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleClose = () => {
@@ -365,9 +420,20 @@ export function VideoRecorder({
   const isRecordedPreview = Boolean(previewUrl && recordedBlob);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 backdrop-blur-md sm:p-4">
-      <Card className="max-h-[94vh] w-full max-w-4xl overflow-hidden rounded-[28px] border border-white/10 bg-white shadow-2xl">
-        <CardContent className="flex max-h-[94vh] flex-col p-0">
+    <Card className="relative w-full rounded-[28px] border border-white/10 bg-white shadow-2xl">
+      {(uploading || saving) && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-[28px] bg-white/90 px-6 text-center backdrop-blur-sm">
+          <div className="mb-3 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm font-semibold text-slate-900">
+            {uploading ? 'Uploading your video...' : 'Saving...'}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Please keep this screen open.
+          </p>
+        </div>
+      )}
+
+      <CardContent className="flex max-h-[min(92dvh,900px)] flex-col p-0">
           {/* Header */}
           <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-4 py-4 sm:px-6">
             <div className="flex items-center gap-3">
@@ -402,7 +468,7 @@ export function VideoRecorder({
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
               {/* Video Preview Area */}
               <div className="space-y-4">
-                <div className="relative overflow-hidden rounded-[28px] bg-black shadow-xl">
+                <div className="relative rounded-[28px] bg-black shadow-xl">
                   {isRecordedPreview ? (
                     <video
                       key={previewUrl}
@@ -412,6 +478,7 @@ export function VideoRecorder({
                       preload="metadata"
                       src={previewUrl || undefined}
                       className="aspect-video w-full bg-black object-contain"
+                      style={{ WebkitTransform: 'translateZ(0)' }}
                     />
                   ) : (
                     <video
@@ -419,7 +486,8 @@ export function VideoRecorder({
                       autoPlay
                       muted
                       playsInline
-                      className="aspect-video w-full bg-black object-cover"
+                      className="aspect-video w-full bg-black object-contain"
+                      style={{ WebkitTransform: 'translateZ(0)' }}
                     />
                   )}
 
@@ -586,10 +654,11 @@ export function VideoRecorder({
                       <Button
                         type="button"
                         onClick={handleSaveRecording}
+                        disabled={uploading || saving}
                         className="h-12 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700"
                       >
                         <Download className="mr-2 h-4 w-4" />
-                        Save Recording
+                        {uploading || saving ? 'Uploading...' : 'Save Recording'}
                       </Button>
 
                       <Button
@@ -628,6 +697,5 @@ export function VideoRecorder({
           </div>
         </CardContent>
       </Card>
-    </div>
   );
 }

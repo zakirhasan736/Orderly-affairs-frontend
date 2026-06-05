@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@common/ui/badge';
 import { Button } from '@common/ui/button';
+import { cn } from '@common/ui/utils';
 import { Calendar } from '@common/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@common/ui/card';
 import {
@@ -34,8 +35,16 @@ import {
   Sparkles,
   UserRound,
   Users,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+
+import {
+  MOBILE_SHEET_SCROLL_PADDING,
+  MobileBottomSheet,
+  MobileSheetHandle,
+  useIsMobile,
+} from '@/components/MobileBottomSheet';
 
 import {
   type NOKLetter,
@@ -43,6 +52,10 @@ import {
   useGetNokLetterQuery,
   useSaveNokLetterMutation,
 } from '@/services/nokLetterApi';
+import {
+  type NextKinAccessResponse,
+  useGetMyNextKinQuery,
+} from '@/services/authApi';
 
 type LetterData = Partial<NOKLetter & NOKLetterIn>;
 
@@ -51,6 +64,37 @@ interface NextOfKinLetterFieldProps {
   onChange: (data: LetterData) => void;
   formData?: Record<string, unknown>;
   selectedNokId?: string;
+  /** When true, optimizes layout for a mobile bottom sheet container */
+  embeddedInSheet?: boolean;
+}
+
+function LetterPreviewBody({
+  letterPreview,
+  nokEmail,
+}: {
+  letterPreview: string;
+  nokEmail?: string;
+}) {
+  return (
+    <div className="mx-auto max-w-3xl rounded-2xl border bg-white px-5 py-7 shadow-xl sm:px-12 sm:py-12">
+      <div className="mb-8 border-b pb-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Orderly Affairs
+        </p>
+        <h3 className="mt-2 text-2xl font-semibold text-gray-950">
+          Letter to Next of Kin
+        </h3>
+        {nokEmail && (
+          <p className="mt-2 break-all text-sm text-gray-500">
+            Prepared for {nokEmail}
+          </p>
+        )}
+      </div>
+      <div className="whitespace-pre-line font-serif text-[14px] leading-7 text-gray-800 sm:text-[15px] sm:leading-8">
+        {letterPreview}
+      </div>
+    </div>
+  );
 }
 
 const DEFAULTS = {
@@ -107,6 +151,25 @@ const EDITOR_STEPS = [
 ] as const;
 
 type EditorStep = (typeof EDITOR_STEPS)[number]['id'];
+
+function mergeAccessManagementAutofill(
+  letter: LetterData,
+  person?: NextKinAccessResponse | null,
+): LetterData {
+  if (!person) return letter;
+
+  return {
+    ...letter,
+    letter_to: person.full_name || letter.letter_to,
+    nok_email: person.email || letter.nok_email,
+    nok_phone: person.phone_number || letter.nok_phone,
+    password_card_location:
+      person.card_storage_location || letter.password_card_location,
+    key_bag_location: person.key_bag_location || letter.key_bag_location,
+    documents_bag_location:
+      person.documents_bag_location || letter.documents_bag_location,
+  };
+}
 
 function isValidEmail(value?: string) {
   if (!value) return false;
@@ -172,8 +235,11 @@ export function NextOfKinLetterField({
   data,
   onChange,
   selectedNokId,
+  embeddedInSheet = false,
 }: NextOfKinLetterFieldProps) {
+  const isMobile = useIsMobile();
   const [activeStep, setActiveStep] = useState<EditorStep>('recipient');
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const {
     data: serverData,
@@ -182,6 +248,14 @@ export function NextOfKinLetterField({
     refetch,
   } = useGetNokLetterQuery(
     selectedNokId ? { nokId: selectedNokId } : undefined,
+    { refetchOnMountOrArgChange: true },
+  );
+
+  const { data: nextKinPeople = [] } = useGetMyNextKinQuery(undefined);
+
+  const selectedPerson = useMemo(
+    () => nextKinPeople.find(person => person.id === selectedNokId),
+    [nextKinPeople, selectedNokId],
   );
 
   const [saveLetter, { isLoading: isSaving }] = useSaveNokLetterMutation();
@@ -199,21 +273,32 @@ export function NextOfKinLetterField({
   useEffect(() => {
     if (!serverData) return;
 
-    setLocalData(serverData);
-    onChange(serverData);
+    const merged = mergeAccessManagementAutofill(serverData, selectedPerson);
+    setLocalData(merged);
+    onChange(merged);
     hydratedRef.current = true;
-  }, [serverData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [serverData, selectedPerson]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!data) return;
+    if (!selectedPerson || !hydratedRef.current) return;
 
-    const incoming = JSON.stringify(data);
-    const current = JSON.stringify(localData);
+    setLocalData(prev => {
+      const merged = mergeAccessManagementAutofill(prev, selectedPerson);
 
-    if (incoming !== current) {
-      setLocalData(data);
-    }
-  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+      if (JSON.stringify(prev) === JSON.stringify(merged)) {
+        return prev;
+      }
+
+      onChange(merged);
+      return merged;
+    });
+  }, [selectedPerson]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!data || hydratedRef.current) return;
+
+    setLocalData(mergeAccessManagementAutofill(data, selectedPerson));
+  }, [data, selectedPerson]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!mountedRef.current) {
@@ -440,13 +525,99 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
   };
 
   const currentStep = EDITOR_STEPS.find(step => step.id === activeStep);
+  const showMobileSheetChrome = isMobile && embeddedInSheet;
+  const showMobileStickyBar = isMobile && !embeddedInSheet;
+
+  const goToPreviousStep = () => {
+    const index = EDITOR_STEPS.findIndex(step => step.id === activeStep);
+    const previous = EDITOR_STEPS[index - 1];
+    if (previous) setActiveStep(previous.id);
+  };
+
+  const goToNextStep = () => {
+    const index = EDITOR_STEPS.findIndex(step => step.id === activeStep);
+    const next = EDITOR_STEPS[index + 1];
+    if (next) setActiveStep(next.id);
+  };
+
+  const previewActions = (
+    <>
+      <Button onClick={handlePrint} variant="outline" className="rounded-2xl">
+        <Printer className="mr-2 h-4 w-4" />
+        Print
+      </Button>
+      <Button onClick={handleExport} variant="outline" className="rounded-2xl">
+        <Download className="mr-2 h-4 w-4" />
+        Export
+      </Button>
+      {isValidEmail(localData.nok_email) && (
+        <Button onClick={handleEmail} className="rounded-2xl">
+          <Send className="mr-2 h-4 w-4" />
+          Email
+        </Button>
+      )}
+    </>
+  );
+
+  const mobileStepFooter = (
+    <div
+      className={cn(
+        'grid grid-cols-4 gap-2',
+        showMobileSheetChrome &&
+          'sticky bottom-0 border-t bg-background/95 px-1 py-3 backdrop-blur pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+      )}
+    >
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 rounded-2xl text-xs"
+        disabled={activeStep === 'recipient'}
+        onClick={goToPreviousStep}
+      >
+        Back
+      </Button>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 rounded-2xl text-xs"
+        onClick={() => setPreviewOpen(true)}
+      >
+        <Eye className="h-4 w-4" />
+      </Button>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 rounded-2xl text-xs"
+        onClick={handleExport}
+      >
+        Export
+      </Button>
+
+      <Button
+        type="button"
+        className="h-11 rounded-2xl text-xs"
+        disabled={activeStep === 'closing'}
+        onClick={goToNextStep}
+      >
+        Next
+      </Button>
+    </div>
+  );
 
   return (
     <div
-      className="mx-auto w-full max-w-5xl space-y-5 pb-24 xl:pb-8"
+      className={cn(
+        'mx-auto w-full max-w-5xl space-y-5',
+        showMobileStickyBar && 'pb-24',
+        !isMobile && 'xl:pb-8',
+        embeddedInSheet && 'max-w-none space-y-4',
+      )}
       data-field-type="NextOfKinLetter"
     >
       {/* ================= TOP STATUS ================= */}
+      {!showMobileSheetChrome && (
       <div className="rounded-[1.75rem] border border-border/60 bg-gradient-to-br from-background via-background to-muted/40 p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3">
@@ -492,87 +663,82 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
               </Button>
             )}
 
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="rounded-2xl">
-                  <Eye className="mr-2 h-4 w-4" />
-                  Preview
-                </Button>
-              </DialogTrigger>
+            {!isMobile ? (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="rounded-2xl">
+                    <Eye className="mr-2 h-4 w-4" />
+                    Preview
+                  </Button>
+                </DialogTrigger>
 
-              <DialogContent className="max-h-[92svh] w-[calc(100vw-1rem)] max-w-4xl gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl">
-                <DialogHeader className="border-b bg-muted/30 px-5 py-5 pr-14 sm:px-6">
-                  <DialogTitle className="flex items-center gap-3 text-xl">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                      <FileText className="h-5 w-5" />
-                    </span>
-                    Letter Preview
-                  </DialogTitle>
+                <DialogContent className="max-h-[92svh] w-[calc(100vw-1rem)] max-w-4xl gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl">
+                  <DialogHeader className="border-b bg-muted/30 px-5 py-5 pr-14 sm:px-6">
+                    <DialogTitle className="flex items-center gap-3 text-xl">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                        <FileText className="h-5 w-5" />
+                      </span>
+                      Letter Preview
+                    </DialogTitle>
 
-                  <DialogDescription>
-                    Review the final letter before printing, exporting, or
-                    emailing.
-                  </DialogDescription>
-                </DialogHeader>
+                    <DialogDescription>
+                      Review the final letter before printing, exporting, or
+                      emailing.
+                    </DialogDescription>
+                  </DialogHeader>
 
-                <div className="max-h-[calc(92svh-170px)] overflow-y-auto bg-muted/30 px-4 py-5 sm:px-8">
-                  <div className="mx-auto max-w-3xl rounded-2xl border bg-white px-5 py-7 shadow-xl sm:px-12 sm:py-12">
-                    <div className="mb-8 border-b pb-5">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Orderly Affairs
-                      </p>
-
-                      <h3 className="mt-2 text-2xl font-semibold text-gray-950">
-                        Letter to Next of Kin
-                      </h3>
-
-                      {localData.nok_email && (
-                        <p className="mt-2 break-all text-sm text-gray-500">
-                          Prepared for {localData.nok_email}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="whitespace-pre-line font-serif text-[14px] leading-7 text-gray-800 sm:text-[15px] sm:leading-8">
-                      {letterPreview}
-                    </div>
+                  <div className="max-h-[calc(92svh-170px)] overflow-y-auto bg-muted/30 px-4 py-5 sm:px-8">
+                    <LetterPreviewBody
+                      letterPreview={letterPreview}
+                      nokEmail={localData.nok_email}
+                    />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-2 border-t bg-background px-4 py-3 sm:flex sm:justify-end">
-                  <Button
-                    onClick={handlePrint}
-                    variant="outline"
-                    className="rounded-2xl"
-                  >
-                    <Printer className="mr-2 h-4 w-4" />
-                    Print
-                  </Button>
-
-                  <Button
-                    onClick={handleExport}
-                    variant="outline"
-                    className="rounded-2xl"
-                  >
-                    <Download className="mr-2 h-4 w-4" />
-                    Export
-                  </Button>
-
-                  {isValidEmail(localData.nok_email) && (
-                    <Button onClick={handleEmail} className="rounded-2xl">
-                      <Send className="mr-2 h-4 w-4" />
-                      Email
-                    </Button>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
+                  <div className="grid grid-cols-2 gap-2 border-t bg-background px-4 py-3 sm:flex sm:justify-end">
+                    {previewActions}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            ) : (
+              <Button
+                variant="outline"
+                className="rounded-2xl"
+                onClick={() => setPreviewOpen(true)}
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                Preview
+              </Button>
+            )}
           </div>
         </div>
       </div>
+      )}
+
+      {showMobileSheetChrome && (
+        <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-muted/30 px-3 py-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            {isFetching || isSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Letter editor</p>
+            <p className="text-xs text-muted-foreground">
+              {isFetching ? 'Loading' : isSaving ? 'Saving' : 'Auto-saved'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ================= STEP NAV ================= */}
-      <div className="rounded-[1.75rem] border border-border/60 bg-background p-2 shadow-sm">
+      <div
+        className={cn(
+          'rounded-[1.75rem] border border-border/60 bg-background p-2 shadow-sm',
+          embeddedInSheet && 'rounded-2xl',
+        )}
+      >
         <div className="flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-5 sm:overflow-visible sm:pb-0">
           {EDITOR_STEPS.map(step => {
             const Icon = step.icon;
@@ -610,8 +776,18 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
       </div>
 
       {/* ================= MAIN ONE VIEW CONTENT ================= */}
-      <Card className="overflow-hidden rounded-[2rem] border-border/60 shadow-sm">
-        <CardHeader className="border-b border-border/60 bg-muted/20 p-5 sm:p-6">
+      <Card
+        className={cn(
+          'overflow-hidden rounded-[2rem] border-border/60 shadow-sm',
+          embeddedInSheet && 'rounded-2xl',
+        )}
+      >
+        <CardHeader
+          className={cn(
+            'border-b border-border/60 bg-muted/20 p-5 sm:p-6',
+            embeddedInSheet && 'p-4',
+          )}
+        >
           <div className="flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               {currentStep && <currentStep.icon className="h-5 w-5" />}
@@ -628,7 +804,12 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4 p-4 sm:p-6">
+        <CardContent
+          className={cn(
+            'space-y-4 p-4 sm:p-6',
+            embeddedInSheet && 'p-3 sm:p-4',
+          )}
+        >
           {activeStep === 'recipient' && (
             <>
               <FieldBlock
@@ -881,15 +1062,14 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
 
               <FieldBlock
                 label="Key Bag Location"
+                description="Auto-filled from Access Management."
                 icon={<MapPin className="h-4 w-4" />}
               >
                 <Input
                   value={localData.key_bag_location || ''}
-                  onChange={e =>
-                    handleFieldChange('key_bag_location', e.target.value as any)
-                  }
-                  placeholder="Where the key bag is located"
-                  className="h-12 rounded-2xl"
+                  readOnly
+                  placeholder="Will auto-populate"
+                  className="h-12 rounded-2xl bg-muted/60"
                 />
               </FieldBlock>
 
@@ -914,18 +1094,14 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
 
               <FieldBlock
                 label="Documents Bag Location"
+                description="Auto-filled from Access Management."
                 icon={<MapPin className="h-4 w-4" />}
               >
                 <Input
                   value={localData.documents_bag_location || ''}
-                  onChange={e =>
-                    handleFieldChange(
-                      'documents_bag_location',
-                      e.target.value as any,
-                    )
-                  }
-                  placeholder="Where the documents bag is located"
-                  className="h-12 rounded-2xl"
+                  readOnly
+                  placeholder="Will auto-populate"
+                  className="h-12 rounded-2xl bg-muted/60"
                 />
               </FieldBlock>
             </>
@@ -1041,82 +1217,67 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
               Next
             </Button>
           </div>
+          {showMobileSheetChrome && mobileStepFooter}
         </CardContent>
       </Card>
 
-      {/* Mobile sticky actions */}
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-background/95 px-3 py-3 shadow-2xl backdrop-blur-xl sm:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-4 gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 rounded-2xl text-xs"
-            disabled={activeStep === 'recipient'}
-            onClick={() => {
-              const index = EDITOR_STEPS.findIndex(
-                step => step.id === activeStep,
-              );
-              const previous = EDITOR_STEPS[index - 1];
-              if (previous) setActiveStep(previous.id);
-            }}
-          >
-            Back
-          </Button>
+      {/* Mobile sticky actions (inline page only) */}
+      {showMobileStickyBar && (
+        <div className="fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 border-t border-border/60 bg-background/95 px-3 py-3 shadow-2xl backdrop-blur-xl sm:hidden">
+          <div className="mx-auto max-w-md">{mobileStepFooter}</div>
+        </div>
+      )}
 
-          <Dialog>
-            <DialogTrigger asChild>
+      {/* Mobile preview bottom sheet */}
+      {isMobile && (
+        <MobileBottomSheet
+          open={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          className="max-h-[92dvh]"
+          labelledBy="nok-letter-preview-title"
+          zClassName="z-[80]"
+        >
+          <div className="flex h-full min-h-0 flex-col">
+            <MobileSheetHandle />
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-4 pt-1">
+              <div>
+                <h3 id="nok-letter-preview-title" className="text-lg font-semibold">
+                  Letter Preview
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Review before printing, exporting, or emailing.
+                </p>
+              </div>
               <Button
                 type="button"
-                variant="outline"
-                className="h-11 rounded-2xl text-xs"
+                variant="ghost"
+                size="icon"
+                onClick={() => setPreviewOpen(false)}
+                className="h-10 w-10 shrink-0 rounded-full"
+                aria-label="Close preview"
               >
-                <Eye className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </Button>
-            </DialogTrigger>
+            </div>
 
-            <DialogContent className="max-h-[92svh] w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-3xl p-0">
-              <DialogHeader className="border-b bg-muted/30 px-5 py-5 pr-14">
-                <DialogTitle>Letter Preview</DialogTitle>
-                <DialogDescription>
-                  Review the generated letter.
-                </DialogDescription>
-              </DialogHeader>
+            <div
+              className={cn(
+                'min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/30 px-4 py-4',
+                MOBILE_SHEET_SCROLL_PADDING,
+              )}
+            >
+              <LetterPreviewBody
+                letterPreview={letterPreview}
+                nokEmail={localData.nok_email}
+              />
+            </div>
 
-              <div className="max-h-[calc(92svh-120px)] overflow-y-auto bg-muted/30 px-4 py-5">
-                <div className="rounded-2xl border bg-white px-5 py-7 shadow-xl">
-                  <div className="whitespace-pre-line font-serif text-[14px] leading-7 text-gray-800">
-                    {letterPreview}
-                  </div>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 rounded-2xl text-xs"
-            onClick={handleExport}
-          >
-            Export
-          </Button>
-
-          <Button
-            type="button"
-            className="h-11 rounded-2xl text-xs"
-            disabled={activeStep === 'closing'}
-            onClick={() => {
-              const index = EDITOR_STEPS.findIndex(
-                step => step.id === activeStep,
-              );
-              const next = EDITOR_STEPS[index + 1];
-              if (next) setActiveStep(next.id);
-            }}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
+            <div className="grid shrink-0 grid-cols-2 gap-2 border-t bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              {previewActions}
+            </div>
+          </div>
+        </MobileBottomSheet>
+      )}
     </div>
   );
 }

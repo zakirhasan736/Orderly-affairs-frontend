@@ -23,6 +23,10 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  getTopicCardProps,
+  useScrollToVaultTopic,
+} from '@/utils/vaultTopicNavigation';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -128,6 +132,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 }
 
 type UploadScope = 'full' | `vehicle:${number}`;
@@ -164,6 +169,7 @@ export default function Section5Vehicles({
   data = {},
   onChange = () => {},
   activeSubsection,
+  activeTopicId,
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -184,6 +190,8 @@ export default function Section5Vehicles({
   const vehicles: any[] = Array.isArray(data['5A']) ? data['5A'] : [];
 
   const show5A = !activeSubsection || activeSubsection === '5A';
+
+  useScrollToVaultTopic(activeTopicId, vehicles.length);
 
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
@@ -510,7 +518,10 @@ export default function Section5Vehicles({
         </div>
       )}
 
-      <Card className="overflow-hidden border-slate-200 shadow-sm">
+      <Card
+        id="subsection-5A"
+        className="overflow-hidden border-slate-200 shadow-sm"
+      >
         <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-blue-50/70">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -560,11 +571,13 @@ export default function Section5Vehicles({
           {vehicles.map((vehicle, index) => {
             const itemScope = `vehicle:${index}` as UploadScope;
             const itemLabel = `${SECTION_5.itemLabel} #${index + 1}`;
+            const topicProps = getTopicCardProps('5A', index, activeTopicId);
 
             return (
               <Card
                 key={`${itemScope}-${index}`}
-                className="overflow-hidden border-slate-200 shadow-sm"
+                id={topicProps.id}
+                className={topicProps.className}
               >
                 <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>

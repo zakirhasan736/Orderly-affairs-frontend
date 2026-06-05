@@ -19,6 +19,10 @@ import {
 } from 'lucide-react';
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
+import {
+  getTopicCardProps,
+  useScrollToVaultTopic,
+} from '@/utils/vaultTopicNavigation';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
@@ -488,6 +492,7 @@ interface Props {
    * "vital_info", "next_of_kin", "executor_trustee", "additional_contacts".
    */
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 
   /**
    * Optional old parent-level document support.
@@ -546,6 +551,7 @@ export default function Section1VitalInformation({
   data = {},
   onChange = () => {},
   activeSubsection = null,
+  activeTopicId = null,
   // selectedDocumentUrl: selectedDocumentUrlFromParent = null,
   // selectedDocumentMimeType: selectedDocumentMimeTypeFromParent = null,
 }: Props) {
@@ -596,6 +602,13 @@ const [uploadedFiles, setUploadedFiles] = useState<
   const getGroupArray = (key: string) => {
     return Array.isArray(data[key]) ? data[key] : [];
   };
+
+  const contactTopicWatchKey =
+    getGroupArray('next_of_kin').length +
+    getGroupArray('executor_trustee').length +
+    getGroupArray('additional_contacts').length;
+
+  useScrollToVaultTopic(activeTopicId, contactTopicWatchKey);
 
   const updateGroup = (key: string, value: any[]) => {
     onChange({
@@ -1034,11 +1047,18 @@ const [uploadedFiles, setUploadedFiles] = useState<
                   {items.map((item: any, index: number) => {
                     const itemScope = `${groupKey}:${index}` as UploadScope;
                     const itemLabel = `${group.title} #${index + 1}`;
+                    const topicProps = getTopicCardProps(
+                      '1C',
+                      index,
+                      activeTopicId,
+                      groupKey,
+                    );
 
                     return (
                       <Card
                         key={`${group.key}-${index}`}
-                        className="overflow-hidden border-slate-200 shadow-sm"
+                        id={topicProps.id}
+                        className={topicProps.className}
                       >
                         <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                           <div>

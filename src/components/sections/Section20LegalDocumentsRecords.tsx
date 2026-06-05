@@ -23,6 +23,10 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  getTopicCardProps,
+  useScrollToVaultTopic,
+} from '@/utils/vaultTopicNavigation';
 
 /* ============================================================
    STATIC SUBSECTIONS — 20A, 20B
@@ -272,6 +276,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 }
 
 type StaticSubsectionId = '20A' | '20B';
@@ -347,6 +352,7 @@ export default function Section20LegalDocumentsRecords({
   data = {},
   onChange = () => {},
   activeSubsection,
+  activeTopicId,
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -363,6 +369,8 @@ export default function Section20LegalDocumentsRecords({
   >({});
 
   const documents: any[] = Array.isArray(data['20C']) ? data['20C'] : [];
+
+  useScrollToVaultTopic(activeTopicId, documents.length);
 
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
@@ -932,11 +940,13 @@ export default function Section20LegalDocumentsRecords({
             {documents.map((item, index) => {
               const itemScope = `20C:${index}` as UploadScope;
               const itemLabel = `${SECTION_20C.itemLabel} #${index + 1}`;
+              const topicProps = getTopicCardProps('20C', index, activeTopicId);
 
               return (
                 <Card
                   key={item.__rowId || `${itemScope}-${index}`}
-                  className="overflow-hidden border-slate-200 shadow-sm"
+                  id={topicProps.id}
+                  className={topicProps.className}
                 >
                   <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>

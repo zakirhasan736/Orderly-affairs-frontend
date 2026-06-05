@@ -24,6 +24,10 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  getTopicCardProps,
+  useScrollToVaultTopic,
+} from '@/utils/vaultTopicNavigation';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -146,7 +150,7 @@ const SECTION_12A = {
 
 const SECTION_12B = {
   subsectionId: '12B',
-  title: 'Digital Payment Services',
+  title: '12B- Digital payment app',
   itemLabel: 'Digital Payment Account',
   fields: [
     {
@@ -243,6 +247,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 }
 
 type SubsectionId = '12A' | '12B';
@@ -289,6 +294,7 @@ export default function Section12BankingFinancialAccounts({
   data = {},
   onChange = () => {},
   activeSubsection,
+  activeTopicId,
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -306,6 +312,11 @@ export default function Section12BankingFinancialAccounts({
 
   const bankAccounts: any[] = Array.isArray(data['12A']) ? data['12A'] : [];
   const digitalAccounts: any[] = Array.isArray(data['12B']) ? data['12B'] : [];
+
+  useScrollToVaultTopic(
+    activeTopicId,
+    bankAccounts.length + digitalAccounts.length,
+  );
 
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
@@ -771,11 +782,17 @@ export default function Section12BankingFinancialAccounts({
             {items.map((item, index) => {
               const itemScope = `${subsection}:${index}` as UploadScope;
               const itemLabel = `${config.itemLabel} #${index + 1}`;
+              const topicProps = getTopicCardProps(
+                subsection,
+                index,
+                activeTopicId,
+              );
 
               return (
                 <Card
                   key={item.__rowId || `${subsection}-${index}`}
-                  className="overflow-hidden border-slate-200 shadow-sm"
+                  id={topicProps.id}
+                  className={topicProps.className}
                 >
                   <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>

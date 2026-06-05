@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@common/ui/button';
 import { Card, CardContent } from '@common/ui/card';
 import {
@@ -8,13 +8,14 @@ import {
   Upload,
   Video,
   Mic,
-  Loader2,
   X,
   FileUp,
 } from 'lucide-react';
 import { VideoRecorder } from './VideoRecorder';
 import { AudioRecorder } from './AudioRecorder';
+import { MediaModalPortal } from './MediaModalPortal';
 import { uploadMessageMedia } from '@/libs/api/lettersOfNaxtKinMessage';
+import { blobToMediaFile, isAllowedMediaFile } from '@/utils/mediaUpload';
 import { toast } from 'sonner';
 
 interface SafeMediaRecorderProps {
@@ -50,7 +51,7 @@ export function SafeMediaRecorder({
   const mediaLabel = isVideo ? 'Video' : 'Audio';
 
   const validateFile = (file: File) => {
-    if (!file.type.startsWith(`${type}/`)) {
+    if (!isAllowedMediaFile(file, type)) {
       toast.error(`Please upload a valid ${type} file.`);
       return false;
     }
@@ -84,39 +85,34 @@ export function SafeMediaRecorder({
     } catch (error) {
       console.error(error);
       toast.error(`${mediaLabel} upload failed`);
+      return false;
     } finally {
       setUploading(false);
     }
+
+    return true;
   };
 
   const handleRecorded = async (blob: Blob) => {
     if (!token) {
       toast.error('Authentication expired. Please log in again.');
-      return;
+      return false;
     }
 
     try {
       setUploading(true);
 
-      const fallbackExt = isVideo ? 'webm' : 'webm';
-      const mimeExt = blob.type?.split('/')[1]?.split(';')[0] || fallbackExt;
-
-      const file = new File(
-        [blob],
-        `${type}-message-${Date.now()}.${mimeExt}`,
-        {
-          type: blob.type || (isVideo ? 'video/webm' : 'audio/webm'),
-        },
-      );
-
+      const file = blobToMediaFile(blob, type);
       const media = await uploadMessageMedia(token, file);
 
       onUploaded(media);
       toast.success(`${mediaLabel} uploaded successfully`);
       onClose();
+      return true;
     } catch (error) {
       console.error(error);
-      toast.error(`${mediaLabel} upload failed`);
+      toast.error(`${mediaLabel} upload failed. Please try again.`);
+      return false;
     } finally {
       setUploading(false);
     }
@@ -129,7 +125,6 @@ export function SafeMediaRecorder({
         return;
       }
 
-      // Quick permission check. Actual recorder will request stream again.
       const constraints = isVideo
         ? { video: true, audio: true }
         : { audio: true };
@@ -138,6 +133,7 @@ export function SafeMediaRecorder({
       stream.getTracks().forEach(track => track.stop());
 
       setPermissionError(false);
+      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
       setShowRecorder(true);
     } catch (error) {
       console.error(error);
@@ -191,33 +187,28 @@ export function SafeMediaRecorder({
     );
   }
 
-  if (uploading) {
-    return (
-      <ModalShell>
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-
-        <div>
-          <h3 className="text-lg font-semibold">Uploading {mediaLabel}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Please wait while your message is attached.
-          </p>
-        </div>
-      </ModalShell>
-    );
-  }
-
   if (showRecorder) {
-    return isVideo ? (
-      <VideoRecorder onVideoRecorded={handleRecorded} onClose={onClose} />
-    ) : (
-      <AudioRecorder onAudioRecorded={handleRecorded} onClose={onClose} />
+    return (
+      <MediaModalPortal>
+        {isVideo ? (
+          <VideoRecorder
+            onVideoRecorded={handleRecorded}
+            onClose={onClose}
+            uploading={uploading}
+          />
+        ) : (
+          <AudioRecorder
+            onAudioRecorded={handleRecorded}
+            onClose={onClose}
+            uploading={uploading}
+          />
+        )}
+      </MediaModalPortal>
     );
   }
 
   return (
-    <ModalShell wide>
+    <ModalShell wide uploading={uploading}>
       <div className="flex items-start justify-between gap-4 border-b pb-4">
         <div className="flex items-center gap-3">
           <div
@@ -334,21 +325,29 @@ export function SafeMediaRecorder({
 function ModalShell({
   children,
   wide = false,
+  uploading = false,
 }: {
   children: React.ReactNode;
   wide?: boolean;
+  uploading?: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <MediaModalPortal>
       <Card
-        className={`w-full overflow-hidden rounded-3xl border border-border/70 shadow-2xl ${
+        className={`relative w-full overflow-hidden rounded-3xl border border-border/70 shadow-2xl ${
           wide ? 'max-w-2xl' : 'max-w-md'
         }`}
       >
+        {uploading && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/90 px-6 text-center backdrop-blur-sm">
+            <div className="mb-3 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <p className="text-sm font-semibold text-slate-900">Uploading...</p>
+          </div>
+        )}
         <CardContent className="space-y-5 p-5 text-center sm:p-6">
           {children}
         </CardContent>
       </Card>
-    </div>
+    </MediaModalPortal>
   );
 }

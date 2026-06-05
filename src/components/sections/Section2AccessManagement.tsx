@@ -113,7 +113,7 @@ function MobileSetupGuide() {
   return (
     <div className="space-y-4 lg:hidden">
       <div className="rounded-3xl border bg-gradient-to-br from-primary/10 via-background to-background p-4">
-        <div className="flex items-start gap-3">
+        <div className="flex sm:flex-row flex-col items-start gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
             <ShieldCheck className="h-5 w-5" />
           </div>
@@ -333,8 +333,8 @@ function SecurityNotice() {
         className="flex w-full items-start justify-between gap-3 p-4 text-left sm:p-5"
       >
         <div className="flex gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
-            <AlertTriangle className="h-5 w-5" />
+          <div className="flex h-6 w-6 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+            <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
 
           <div>
@@ -396,19 +396,19 @@ export default function Section2AccessManagement({ isActive = false }: Props) {
               <span>{SECTION_2A.title}</span>
             </CardTitle>
 
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            <p className="mt-2 max-w-2xl text-sm sm:leading-6 text-muted-foreground">
               Manage who can access your kit, what sections they can view, and
               how their emergency access works.
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-nowrap gap-1 sm:gap-2">
             <StatusPill>
-              <Users className="mr-1.5 h-3.5 w-3.5" />
+              <Users className="mr-.7 sm:mr-1.5 h-3 w-3 sm:h-3.5 sm:w-3.5" />
               Trusted people
             </StatusPill>
             <StatusPill tone="warning">
-              <KeyRound className="mr-1.5 h-3.5 w-3.5" />
+              <KeyRound className="mr-.7 sm:mr-1.5 h-3 w-3 sm:h-3.5 sm:w-3.5" />
               Password cards
             </StatusPill>
           </div>
@@ -461,7 +461,7 @@ export default function Section2AccessManagement({ isActive = false }: Props) {
                 </div>
               </div>
 
-              <div className="p-3 sm:p-5">
+              <div className="px-3 pt-5 sm:p-5">
                 <AccessManagement />
               </div>
             </div>

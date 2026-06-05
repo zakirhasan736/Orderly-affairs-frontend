@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Cookies from 'js-cookie';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
   Calendar,
   CheckCircle2,
+  ChevronRight,
   Clock,
   Edit2,
   FileText,
@@ -17,13 +18,19 @@ import {
   Printer,
   Sparkles,
   Trash2,
-  Upload,
   Users,
   Video,
   X,
   AlertTriangle,
   Save,
 } from 'lucide-react';
+
+import {
+  MOBILE_SHEET_SCROLL_PADDING,
+  MobileBottomSheet,
+  MobileSheetHandle,
+  useIsMobile,
+} from '@/components/MobileBottomSheet';
 
 import { Button } from '@common/ui/button';
 import { Card, CardContent } from '@common/ui/card';
@@ -50,7 +57,6 @@ import {
   deleteMessageMedia,
   deleteUploadedMessageMedia,
   getMessages,
-  uploadMessageMedia,
 } from '@/libs/api/lettersOfNaxtKinMessage';
 
 /* ============================================================
@@ -68,6 +74,9 @@ interface LettersProps {
   onChange?: (value: any) => void;
   isNextOfKin?: boolean;
   formData?: any;
+  clearNonce?: number;
+  /** When rendered inside a dashboard section on mobile */
+  embeddedInSection?: boolean;
 }
 
 interface LetterMedia {
@@ -204,7 +213,10 @@ export function Letters({
   onChange,
   isNextOfKin = false,
   formData,
+  clearNonce = 0,
+  embeddedInSection = false,
 }: LettersProps) {
+  const isMobile = useIsMobile();
   const token = isNextOfKin
     ? Cookies.get('nok_auth_token')
     : Cookies.get('auth_token');
@@ -222,6 +234,7 @@ export function Letters({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
+  const [detailLetterId, setDetailLetterId] = useState<string | null>(null);
 
   const showHeader = Boolean(onBack);
 
@@ -270,19 +283,22 @@ export function Letters({
     item => item.messageType === 'audio',
   ).length;
 
-  useEffect(() => {
-    if (!onChange) return;
-    onChange(letters);
-  }, [letters, onChange]);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const lastNotifiedLettersRef = useRef('');
 
   useEffect(() => {
-    const next = normalizeValue(value);
+    if (!onChangeRef.current) return;
 
-    setLetters(prev => {
-      if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
-      return next;
-    });
-  }, [value]);
+    const serialized = JSON.stringify(letters, (_, value) =>
+      value instanceof Date ? value.toISOString() : value,
+    );
+
+    if (serialized === lastNotifiedLettersRef.current) return;
+
+    lastNotifiedLettersRef.current = serialized;
+    onChangeRef.current(letters);
+  }, [letters]);
 
   useEffect(() => {
     if (!token) return;
@@ -301,6 +317,18 @@ export function Letters({
       });
   }, [token]);
 
+  useEffect(() => {
+    if (!clearNonce) return;
+
+    setLetters([]);
+    setCurrentLetter(null);
+    setIsWriting(false);
+    setShowVideoRecorder(false);
+    setShowAudioRecorder(false);
+    lastNotifiedLettersRef.current = '[]';
+    onChangeRef.current?.([]);
+  }, [clearNonce]);
+
   const refreshMessages = async () => {
     if (!token) return;
 
@@ -309,6 +337,7 @@ export function Letters({
   };
 
   const openNewMessage = (type: MessageType = 'letter') => {
+    setDetailLetterId(null);
     setCurrentLetter({
       ...emptyLetter(),
       messageType: type,
@@ -348,7 +377,7 @@ export function Letters({
   const deleteStandaloneMedia = async (media?: LetterMedia) => {
     if (!token || !media?.public_id) return;
 
-    await deleteUploadedMessageMedia(token, media.public_id);
+    await deleteUploadedMessageMedia(token, media.public_id, media.type);
   };
 
   const cleanupUnsavedMedia = (letter?: Letter | null) => {
@@ -398,22 +427,16 @@ export function Letters({
     toast.success('Media attached successfully');
   };
 
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
+  const openMediaRecorder = () => {
+    if (!currentLetter) return;
 
-    if (!file || !token) return;
+    if (currentLetter.messageType === 'video') {
+      setShowVideoRecorder(true);
+      return;
+    }
 
-    try {
-      const media = await uploadMessageMedia(token, file);
-
-      attachMedia(media);
-
-      toast.success('Media uploaded successfully');
-    } catch {
-      toast.error('Media upload failed');
+    if (currentLetter.messageType === 'audio') {
+      setShowAudioRecorder(true);
     }
   };
 
@@ -565,21 +588,52 @@ export function Letters({
   const editMessage = (letter: Letter) => {
     setCurrentLetter(letter);
     setIsWriting(true);
+    setDetailLetterId(null);
 
-    setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 50);
+    if (!isMobile) {
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 50);
+    }
+  };
+
+  const patchCurrentLetter = (patch: Partial<Letter>) => {
+    setCurrentLetter(prev => (prev ? { ...prev, ...patch } : prev));
+  };
+
+  const detailLetter = useMemo(
+    () => letters.find(item => item.id === detailLetterId) || null,
+    [letters, detailLetterId],
+  );
+
+  const openMessageDetail = (letter: Letter) => {
+    if (isMobile) {
+      setDetailLetterId(letter.id);
+      return;
+    }
+    editMessage(letter);
   };
 
   const removeMessage = async (id: string) => {
-    if (!token) return;
+    if (!token) {
+      toast.error('You are not logged in');
+      return;
+    }
+
     if (!confirm('Delete this message?')) return;
+
+    if (id.startsWith('local-')) {
+      setLetters(prev => prev.filter(item => item.id !== id));
+      toast.success('Message removed');
+      return;
+    }
 
     try {
       await deleteMessage(token, id);
-      setLetters(prev => prev.filter(item => item.id !== id));
+      await refreshMessages();
       toast.success('Message deleted');
-    } catch {
+    } catch (error) {
+      console.error('Failed to delete message:', error);
       toast.error('Delete failed');
     }
   };
@@ -684,7 +738,7 @@ export function Letters({
 
   return (
     <div
-      className={cn(
+      className={cn( 
         'w-full max-w-none',
         showHeader && 'min-h-screen bg-slate-50/70',
       )}
@@ -723,17 +777,39 @@ export function Letters({
         </div>
       )}
 
-      <div className={cn(showHeader ? 'mx-auto max-w-7xl p-4 sm:p-6' : '')}>
+      <div
+        className={cn(
+          showHeader ? 'mx-auto max-w-7xl p-4 sm:p-6' : '',
+          embeddedInSection && isMobile && 'p-0',
+        )}
+      >
         {!isWriting && (
-          <div className="space-y-5">
-            <HeroPanel
-              pendingCount={pendingCount}
-              letterCount={letterCount}
-              videoCount={videoCount}
-              audioCount={audioCount}
-              onCreate={() => openNewMessage()}
-              onTemplates={() => setShowTemplates(prev => !prev)}
-            />
+          <div className={cn('space-y-5', embeddedInSection && isMobile && 'space-y-3')}>
+            {(!embeddedInSection || !isMobile) && (
+              <HeroPanel
+                pendingCount={pendingCount}
+                letterCount={letterCount}
+                videoCount={videoCount}
+                audioCount={audioCount}
+                onCreate={() => openNewMessage()}
+                onTemplates={() => setShowTemplates(prev => !prev)}
+              />
+            )}
+
+            {embeddedInSection && isMobile && (
+              <div className="flex items-center justify-between gap-3 rounded-2xl border bg-card px-3 py-3 shadow-sm">
+                <div>
+                  <p className="text-sm font-semibold">Personal messages</p>
+                  <p className="text-xs text-muted-foreground">
+                    {letters.length} saved · {pendingCount} pending
+                  </p>
+                </div>
+                <Button type="button" size="sm" onClick={() => openNewMessage()}>
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  New
+                </Button>
+              </div>
+            )}
 
             {isLoading && (
               <Card className="border-dashed">
@@ -760,16 +836,24 @@ export function Letters({
             )}
 
             {!isLoading && letters.length > 0 && (
-              <div className="grid gap-4">
-                {letters.map(letter => (
-                  <MessageCard
-                    key={letter.id}
-                    letter={letter}
-                    onEdit={() => editMessage(letter)}
-                    onDelete={() => removeMessage(letter.id)}
-                    onPrint={() => printMessage(letter)}
-                  />
-                ))}
+              <div className={cn(isMobile ? 'space-y-2' : 'grid gap-4')}>
+                {letters.map(letter =>
+                  isMobile ? (
+                    <MessageListItem
+                      key={letter.id}
+                      letter={letter}
+                      onOpen={() => openMessageDetail(letter)}
+                    />
+                  ) : (
+                    <MessageCard
+                      key={letter.id}
+                      letter={letter}
+                      onEdit={() => editMessage(letter)}
+                      onDelete={() => removeMessage(letter.id)}
+                      onPrint={() => printMessage(letter)}
+                    />
+                  ),
+                )}
               </div>
             )}
 
@@ -806,120 +890,151 @@ export function Letters({
           </div>
         )}
 
-        {isWriting && currentLetter && (
-          <div className="space-y-5">
-            <EditorHeader
-              isEditing={letters.some(item => item.id === currentLetter.id)}
-              onClose={() => closeEditor()}
-            />
-
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <Card className="overflow-hidden rounded-[28px]">
-                <CardContent className="space-y-7 p-4 sm:p-6">
-                  <TypeSelector
-                    value={currentLetter.messageType}
-                    onChange={changeMessageType}
-                  />
-
-                  <BasicDetails
-                    letter={currentLetter}
-                    recipients={recipientOptions}
-                    onChange={patch =>
-                      setCurrentLetter(prev =>
-                        prev
-                          ? {
-                              ...prev,
-                              ...patch,
-                            }
-                          : prev,
-                      )
-                    }
-                  />
-
-                  <DeliverySection
-                    letter={currentLetter}
-                    onChange={patch =>
-                      setCurrentLetter(prev =>
-                        prev
-                          ? {
-                              ...prev,
-                              ...patch,
-                            }
-                          : prev,
-                      )
-                    }
-                  />
-
-                  {currentLetter.messageType === 'letter' ? (
-                    <LetterEditor
-                      letter={currentLetter}
-                      onChange={patch =>
-                        setCurrentLetter(prev =>
-                          prev
-                            ? {
-                                ...prev,
-                                ...patch,
-                              }
-                            : prev,
-                        )
-                      }
-                    />
-                  ) : (
-                    <MediaEditor
-                      letter={currentLetter}
-                      onRecord={() => {
-                        if (currentLetter.messageType === 'video') {
-                          setShowVideoRecorder(true);
-                        } else {
-                          setShowAudioRecorder(true);
-                        }
-                      }}
-                      onUpload={handleFileUpload}
-                      onDeleteMedia={removeAttachedMedia}
-                      deletingMedia={deletingMedia}
-                      onChange={patch =>
-                        setCurrentLetter(prev =>
-                          prev
-                            ? {
-                                ...prev,
-                                ...patch,
-                              }
-                            : prev,
-                        )
-                      }
-                    />
-                  )}
-
-                  <div className="sticky bottom-0 z-10 -mx-4 -mb-4 border-t bg-background/95 p-4 backdrop-blur sm:static sm:m-0 sm:border-t sm:bg-transparent sm:p-0">
-                    <div className="flex flex-col gap-3 sm:flex-row">
-                      <Button
-                        type="button"
-                        disabled={saving}
-                        onClick={saveMessage}
-                        className="h-11 flex-1 rounded-xl"
-                      >
-                        <Save className="mr-2 h-4 w-4" />
-                        {saving ? 'Saving...' : 'Save Message'}
-                      </Button>
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => closeEditor()}
-                        className="h-11 rounded-xl"
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <PreviewSidebar letter={currentLetter} />
-            </div>
-          </div>
+        {isWriting && currentLetter && !isMobile && (
+          <MessageEditorPanel
+            currentLetter={currentLetter}
+            letters={letters}
+            recipientOptions={recipientOptions}
+            saving={saving}
+            deletingMedia={deletingMedia}
+            onPatch={patchCurrentLetter}
+            onChangeMessageType={changeMessageType}
+            onOpenMedia={openMediaRecorder}
+            onDeleteMedia={removeAttachedMedia}
+            onSave={saveMessage}
+            onClose={() => closeEditor()}
+          />
         )}
       </div>
+
+      {/* Mobile message detail sheet */}
+      {isMobile && detailLetter && (
+        <MobileBottomSheet
+          open={detailLetterId !== null}
+          onClose={() => setDetailLetterId(null)}
+          className="max-h-[92dvh]"
+          labelledBy="message-detail-title"
+        >
+          <div className="flex h-full min-h-0 flex-col">
+            <MobileSheetHandle />
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-4 pt-1">
+              <div className="min-w-0">
+                <h3 id="message-detail-title" className="text-lg font-semibold">
+                  Personal Message
+                </h3>
+                <p className="truncate text-sm text-muted-foreground">
+                  {detailLetter.title || 'Untitled message'}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setDetailLetterId(null)}
+                className="h-10 w-10 shrink-0 rounded-full"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <div
+              className={cn(
+                'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4',
+                MOBILE_SHEET_SCROLL_PADDING,
+              )}
+            >
+              <MessageMobileDetails
+                letter={detailLetter}
+                onEdit={() => editMessage(detailLetter)}
+                onPrint={() => printMessage(detailLetter)}
+                onDelete={() => {
+                  setDetailLetterId(null);
+                  void removeMessage(detailLetter.id);
+                }}
+              />
+            </div>
+          </div>
+        </MobileBottomSheet>
+      )}
+
+      {/* Mobile editor sheet */}
+      {isMobile && isWriting && currentLetter && (
+        <MobileBottomSheet
+          open={isWriting}
+          onClose={() => closeEditor()}
+          className="h-[96dvh]"
+          labelledBy="message-editor-title"
+        >
+          <div className="flex h-full min-h-0 flex-col">
+            <MobileSheetHandle />
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-4 pt-1">
+              <div className="min-w-0">
+                <h3 id="message-editor-title" className="text-lg font-semibold">
+                  {letters.some(item => item.id === currentLetter.id)
+                    ? 'Edit Message'
+                    : 'New Message'}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Add recipient, delivery, and content
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => closeEditor()}
+                className="h-10 w-10 shrink-0 rounded-full"
+                aria-label="Close editor"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <div
+              className={cn(
+                'min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-3',
+                MOBILE_SHEET_SCROLL_PADDING,
+              )}
+            >
+              <MessageEditorPanel
+                currentLetter={currentLetter}
+                letters={letters}
+                recipientOptions={recipientOptions}
+                saving={saving}
+                deletingMedia={deletingMedia}
+                embeddedInSheet
+                onPatch={patchCurrentLetter}
+                onChangeMessageType={changeMessageType}
+                onOpenMedia={openMediaRecorder}
+                onDeleteMedia={removeAttachedMedia}
+                onSave={saveMessage}
+                onClose={() => closeEditor()}
+              />
+            </div>
+
+            <div className="grid shrink-0 grid-cols-2 gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => closeEditor()}
+                className="h-11 rounded-xl"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={saving}
+                onClick={saveMessage}
+                className="h-11 rounded-xl"
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {saving ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
+          </div>
+        </MobileBottomSheet>
+      )}
 
       {showVideoRecorder && (
         <SafeMediaRecorder
@@ -1160,8 +1275,307 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 }
 
 /* ============================================================
+   MOBILE LIST + DETAIL
+============================================================ */
+
+function MessageListItem({
+  letter,
+  onOpen,
+}: {
+  letter: Letter;
+  onOpen: () => void;
+}) {
+  const isVideo = letter.messageType === 'video';
+  const isAudio = letter.messageType === 'audio';
+  const Icon = isVideo ? Video : isAudio ? Mic : FileText;
+  const deliveryLabel =
+    letter.deliveryTrigger === 'death' ? 'Upon death' : 'Specific date';
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-3 rounded-2xl border bg-card p-3 text-left shadow-sm transition active:scale-[0.99] active:bg-muted/30"
+    >
+      <div
+        className={cn(
+          'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white',
+          isVideo ? 'bg-rose-600' : isAudio ? 'bg-blue-600' : 'bg-primary',
+        )}
+      >
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 truncate text-base font-semibold">
+            {letter.title || 'Untitled message'}
+          </span>
+          {letter.status === 'sent' && (
+            <Badge className="shrink-0 rounded-full bg-green-600 text-[10px]">
+              Sent
+            </Badge>
+          )}
+        </div>
+        <p className="mt-0.5 truncate text-sm text-muted-foreground">
+          {letter.recipient || 'No recipient'} · {deliveryLabel}
+        </p>
+      </div>
+      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+    </button>
+  );
+}
+
+function MessageMobileDetails({
+  letter,
+  onEdit,
+  onPrint,
+  onDelete,
+}: {
+  letter: Letter;
+  onEdit: () => void;
+  onPrint: () => void;
+  onDelete: () => void;
+}) {
+  const isVideo = letter.messageType === 'video';
+  const isAudio = letter.messageType === 'audio';
+  const Icon = isVideo ? Video : isAudio ? Mic : FileText;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="secondary" className="rounded-full capitalize">
+          <Icon className="mr-1 h-3 w-3" />
+          {letter.messageType}
+        </Badge>
+        <Badge variant="outline" className="rounded-full">
+          {letter.deliveryTrigger === 'death'
+            ? 'Upon death'
+            : 'Specific date'}
+        </Badge>
+        {letter.status === 'sent' && (
+          <Badge className="rounded-full bg-green-600">Delivered</Badge>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className="rounded-2xl border bg-muted/30 px-3 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Recipient
+          </p>
+          <p className="mt-1 truncate text-sm font-semibold">
+            {letter.recipient || 'Not set'}
+          </p>
+        </div>
+        <div className="rounded-2xl border bg-muted/30 px-3 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Delivery
+          </p>
+          <p className="mt-1 text-sm font-semibold">
+            {letter.deliveryTrigger === 'death'
+              ? 'Upon death'
+              : letter.deliveryDate
+                ? new Date(letter.deliveryDate).toLocaleDateString()
+                : 'Date not set'}
+          </p>
+        </div>
+      </div>
+
+      {letter.recipientEmail && (
+        <div className="rounded-2xl border bg-background px-3 py-3">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Email
+          </p>
+          <p className="mt-1 break-words text-sm [overflow-wrap:anywhere]">
+            {letter.recipientEmail}
+          </p>
+        </div>
+      )}
+
+      {letter.messageType === 'letter' && letter.content && (
+        <div className="rounded-2xl border bg-muted/25 p-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            Preview
+          </p>
+          <p className="line-clamp-6 text-sm leading-6 text-muted-foreground">
+            {stripHtml(letter.content)}
+          </p>
+        </div>
+      )}
+
+      {letter.media?.url && (
+        <div className="rounded-2xl border bg-muted/25 p-3">
+          {isVideo ? (
+            <video
+              controls
+              src={letter.media.url}
+              className="h-44 w-full rounded-xl bg-black object-cover"
+            />
+          ) : (
+            <audio controls src={letter.media.url} className="w-full" />
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-1 rounded-2xl border bg-muted/20 p-1">
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-auto min-h-[72px] flex-col gap-1.5 rounded-2xl py-2"
+          onClick={onEdit}
+        >
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-muted/60">
+            <Edit2 className="h-5 w-5" />
+          </span>
+          <span className="text-[11px] font-medium text-muted-foreground">
+            Edit
+          </span>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-auto min-h-[72px] flex-col gap-1.5 rounded-2xl py-2"
+          onClick={onPrint}
+        >
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Printer className="h-5 w-5" />
+          </span>
+          <span className="text-[11px] font-medium text-muted-foreground">
+            Print
+          </span>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-auto min-h-[72px] flex-col gap-1.5 rounded-2xl py-2"
+          onClick={onDelete}
+        >
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+            <Trash2 className="h-5 w-5" />
+          </span>
+          <span className="text-[11px] font-medium text-muted-foreground">
+            Delete
+          </span>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
    EDITOR
 ============================================================ */
+
+function MessageEditorPanel({
+  currentLetter,
+  letters,
+  recipientOptions,
+  saving,
+  deletingMedia,
+  embeddedInSheet = false,
+  onPatch,
+  onChangeMessageType,
+  onOpenMedia,
+  onDeleteMedia,
+  onSave,
+  onClose,
+}: {
+  currentLetter: Letter;
+  letters: Letter[];
+  recipientOptions: RecipientOption[];
+  saving: boolean;
+  deletingMedia: boolean;
+  embeddedInSheet?: boolean;
+  onPatch: (patch: Partial<Letter>) => void;
+  onChangeMessageType: (type: MessageType) => void;
+  onOpenMedia: () => void;
+  onDeleteMedia: () => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className={cn('space-y-5', embeddedInSheet && 'space-y-4')}>
+      {!embeddedInSheet && (
+        <EditorHeader
+          isEditing={letters.some(item => item.id === currentLetter.id)}
+          onClose={onClose}
+        />
+      )}
+
+      <div
+        className={cn(
+          'grid gap-5',
+          !embeddedInSheet && 'xl:grid-cols-[minmax(0,1fr)_360px]',
+        )}
+      >
+        <Card
+          className={cn(
+            'overflow-hidden rounded-[28px]',
+            embeddedInSheet && 'rounded-2xl border-0 shadow-none',
+          )}
+        >
+          <CardContent
+            className={cn(
+              'space-y-7 p-4 sm:p-6',
+              embeddedInSheet && 'space-y-5 p-0',
+            )}
+          >
+            <TypeSelector
+              value={currentLetter.messageType}
+              onChange={onChangeMessageType}
+            />
+
+            <BasicDetails
+              letter={currentLetter}
+              recipients={recipientOptions}
+              onChange={onPatch}
+            />
+
+            <DeliverySection letter={currentLetter} onChange={onPatch} />
+
+            {currentLetter.messageType === 'letter' ? (
+              <LetterEditor letter={currentLetter} onChange={onPatch} />
+            ) : (
+              <MediaEditor
+                letter={currentLetter}
+                onAddMedia={onOpenMedia}
+                onDeleteMedia={onDeleteMedia}
+                deletingMedia={deletingMedia}
+                onChange={onPatch}
+              />
+            )}
+
+            {!embeddedInSheet && (
+              <div className="sticky bottom-0 z-10 -mx-4 -mb-4 border-t bg-background/95 p-4 backdrop-blur sm:static sm:m-0 sm:border-t sm:bg-transparent sm:p-0">
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    type="button"
+                    disabled={saving}
+                    onClick={onSave}
+                    className="h-11 flex-1 rounded-xl"
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    {saving ? 'Saving...' : 'Save Message'}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={onClose}
+                    className="h-11 rounded-xl"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <PreviewSidebar letter={currentLetter} embeddedInSheet={embeddedInSheet} />
+      </div>
+    </div>
+  );
+}
 
 function EditorHeader({
   isEditing,
@@ -1209,7 +1623,7 @@ function TypeSelector({
 }) {
   return (
     <div className="space-y-3">
-      <Label>Message Type</Label>
+      <Label className='pl-2 sm:pl-0'>Message Type</Label>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <TypeCard
@@ -1418,15 +1832,13 @@ function LetterEditor({
 
 function MediaEditor({
   letter,
-  onRecord,
-  onUpload,
+  onAddMedia,
   onDeleteMedia,
   deletingMedia,
   onChange,
 }: {
   letter: Letter;
-  onRecord: () => void;
-  onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onAddMedia: () => void;
   onDeleteMedia: () => void;
   deletingMedia: boolean;
   onChange: (patch: Partial<Letter>) => void;
@@ -1436,8 +1848,7 @@ function MediaEditor({
       <MediaUploadPanel
         type={letter.messageType as 'video' | 'audio'}
         media={letter.media}
-        onRecord={onRecord}
-        onUpload={onUpload}
+        onAddMedia={onAddMedia}
         onDelete={onDeleteMedia}
         deleting={deletingMedia}
       />
@@ -1455,10 +1866,25 @@ function MediaEditor({
   );
 }
 
-function PreviewSidebar({ letter }: { letter: Letter }) {
+function PreviewSidebar({
+  letter,
+  embeddedInSheet = false,
+}: {
+  letter: Letter;
+  embeddedInSheet?: boolean;
+}) {
   return (
-    <div className="xl:sticky xl:top-6 xl:self-start">
-      <Card className="overflow-hidden rounded-[28px]">
+    <div
+      className={cn(
+        !embeddedInSheet && 'xl:sticky xl:top-6 xl:self-start',
+      )}
+    >
+      <Card
+        className={cn(
+          'overflow-hidden rounded-[28px]',
+          embeddedInSheet && 'rounded-2xl',
+        )}
+      >
         <CardContent className="p-5">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -1666,20 +2092,16 @@ function DeliveryCard({
 function MediaUploadPanel({
   type,
   media,
-  onRecord,
-  onUpload,
+  onAddMedia,
   onDelete,
   deleting,
 }: {
   type: 'video' | 'audio';
   media?: LetterMedia;
-  onRecord: () => void;
-  onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onAddMedia: () => void;
   onDelete: () => void;
   deleting: boolean;
 }) {
-  const reactId = React.useId();
-  const inputId = `${type}-upload-${reactId}`;
   const isVideo = type === 'video';
 
   return (
@@ -1705,42 +2127,22 @@ function MediaUploadPanel({
             </h3>
             <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
               {isVideo
-                ? 'Record a personal video or upload an existing video file.'
-                : 'Record your voice or upload an existing audio file.'}
+                ? 'Add a personal video by recording or uploading a file.'
+                : 'Add a voice message by recording or uploading a file.'}
             </p>
           </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[280px]">
-          <Button type="button" onClick={onRecord} className="h-11 rounded-xl">
-            {isVideo ? (
-              <Video className="mr-2 h-4 w-4" />
-            ) : (
-              <Mic className="mr-2 h-4 w-4" />
-            )}
-            Record
+        {!media?.url && (
+          <Button
+            type="button"
+            onClick={onAddMedia}
+            className="h-11 rounded-xl lg:min-w-[200px]"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {isVideo ? 'Add Video' : 'Add Audio'}
           </Button>
-
-          <div>
-            <input
-              id={inputId}
-              type="file"
-              accept={isVideo ? 'video/*' : 'audio/*'}
-              onChange={onUpload}
-              className="hidden"
-            />
-
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full rounded-xl"
-              onClick={() => document.getElementById(inputId)?.click()}
-            >
-              <Upload className="mr-2 h-4 w-4" />
-              Upload
-            </Button>
-          </div>
-        </div>
+        )}
       </div>
 
       {media?.url && (

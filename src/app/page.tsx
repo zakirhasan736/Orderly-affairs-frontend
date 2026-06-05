@@ -33,11 +33,16 @@ import {
   useResetPasswordMutation,
   useVerifySmsOtpMutation,
   useStartSmsMfaMutation,
+  useStartEmailMfaMutation,
   useResendSmsMfaMutation,
   useResumePendingSignupMutation,
 } from '@/services/authApi';
 import { Card, CardContent } from '@/components/common/ui/card';
 import { Input } from '@/components/common/ui/input';
+import { PhoneNumberInput } from '@/components/PhoneNumberInput';
+import { TurnstileCaptcha } from '@/components/TurnstileCaptcha';
+import { isValidE164PhoneNumber } from '@/utils/phoneCountries';
+import { getOtpSessionId } from '@/utils/otpSession';
 import { Label } from '@/components/common/ui/label';
 import { Button } from '@/components/common/ui/button';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
@@ -101,6 +106,18 @@ const getApiErrorMessage = (err: unknown, fallback: string) => {
   if (err instanceof Error) return err.message;
 
   return fallback;
+};
+
+const persistAuthToken = (accessToken: string | undefined) => {
+  if (!accessToken) {
+    throw new Error('Authentication token missing');
+  }
+
+  Cookies.set('auth_token', accessToken, {
+    secure: true,
+    sameSite: 'strict',
+    path: '/',
+  });
 };
 
 const MFA_METHODS: MFAMethod[] = ['authenticator', 'email', 'sms'];
@@ -280,6 +297,7 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   const [resetPassword] = useResetPasswordMutation();
   const [verifySmsOtp] = useVerifySmsOtpMutation();
   const [startSmsMfa] = useStartSmsMfaMutation();
+  const [startEmailMfa] = useStartEmailMfaMutation();
   const [resendSmsMfa] = useResendSmsMfaMutation();
 
   const [resetEmail, setResetEmail] = useState('');
@@ -297,6 +315,7 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   const [selectedMFAMethod, setSelectedMFAMethod] =
     useState<MFAMethod>('authenticator');
   const [isLoginMfaChallenge, setIsLoginMfaChallenge] = useState(false);
+  const [mfaChallengeToken, setMfaChallengeToken] = useState('');
   const [loginMFAMethods, setLoginMFAMethods] = useState(emptyMfaMethods);
   const [loginPrimaryMFAMethod, setLoginPrimaryMFAMethod] =
     useState<MFAMethod | null>(null);
@@ -306,6 +325,8 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [showPhoneValidation, setShowPhoneValidation] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState('');
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -329,30 +350,6 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   const autoSmsVerifyKey = useRef('');
 
 useEffect(() => {
-  const autoSendEmailOtp = async () => {
-    if (step !== 'verifyEmail') return;
-
-    // Signup/login already sent email OTP from backend.
-    if (verificationSent) return;
-
-    // Only auto-send for existing-user manual email setup.
-    if (isNewUser) return;
-
-    try {
-      setLoading(true);
-      await sendEmailOtp({ email }).unwrap();
-      setVerificationSent(true);
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Failed to send verification code'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  autoSendEmailOtp();
-}, [step, verificationSent, email, sendEmailOtp, isNewUser]);
-
-useEffect(() => {
   if (cooldown <= 0) return;
 
   const timer = setInterval(() => {
@@ -361,6 +358,34 @@ useEffect(() => {
 
   return () => clearInterval(timer);
 }, [cooldown]);
+
+const handleSendEmailCode = async () => {
+  if (!captchaToken) {
+    setError('Complete the CAPTCHA before requesting an OTP');
+    return;
+  }
+
+  setError('');
+  setLoading(true);
+
+  try {
+    const res = await sendEmailOtp({
+      email,
+      captcha_token: captchaToken,
+      otp_session_id: getOtpSessionId(),
+    }).unwrap();
+
+    setVerificationSent(true);
+    setEmailCode('');
+    setAttempts(0);
+    setCooldown(res.cooldown_seconds ?? 60);
+    setCaptchaToken('');
+  } catch (err: unknown) {
+    setError(getApiErrorMessage(err, 'Failed to send verification code'));
+  } finally {
+    setLoading(false);
+  }
+};
 
 const handleOtpChange = (value: string, index: number) => {
   if (!/^\d?$/.test(value)) return;
@@ -464,9 +489,20 @@ const handleResetPassword = async () => {
   }
 };
 
-const beginLinkedLoginMfa = async (method: MFAMethod) => {
+const beginLinkedLoginMfa = async (
+  method: MFAMethod,
+  options?: {
+    otpAlreadySent?: boolean;
+    cooldownSeconds?: number;
+    loginChallenge?: boolean;
+    challengeToken?: string;
+  },
+) => {
   setSelectedMFAMethod(method);
   setError('');
+
+  const useLoginChallenge = options?.loginChallenge ?? isLoginMfaChallenge;
+  const challengeToken = options?.challengeToken ?? mfaChallengeToken;
 
   if (method === 'authenticator') {
     setHasLinkedAuthenticator(true);
@@ -476,19 +512,69 @@ const beginLinkedLoginMfa = async (method: MFAMethod) => {
   }
 
   if (method === 'email') {
-    setVerificationSent(false);
     setEmailCode('');
+    setAttempts(0);
+
+    if (options?.otpAlreadySent) {
+      setVerificationSent(true);
+      setCooldown(options.cooldownSeconds ?? 60);
+      setStep('verifyEmail');
+      return;
+    }
+
+    if (useLoginChallenge && challengeToken) {
+      setLoading(true);
+      try {
+        const res = await startEmailMfa({
+          email,
+          mfa_challenge_token: challengeToken,
+        }).unwrap();
+        setVerificationSent(true);
+        setCooldown(res.cooldown_seconds ?? 60);
+      } catch (err: unknown) {
+        setVerificationSent(false);
+        setError(getApiErrorMessage(err, 'Failed to send verification code'));
+      } finally {
+        setLoading(false);
+      }
+      setStep('verifyEmail');
+      return;
+    }
+
+    setVerificationSent(false);
+    setCooldown(0);
     setStep('verifyEmail');
     return;
   }
 
-  const smsRes = await startSmsMfa({ email }).unwrap();
-  if (smsRes.phone) setPhoneNumber(smsRes.phone);
-  setSmsSent(true);
-  setOtp(Array(OTP_LENGTH).fill(''));
-  setAttempts(0);
-  setCooldown(30);
-  setStep('verifySms');
+  if (options?.otpAlreadySent) {
+    setSmsSent(true);
+    setOtp(Array(OTP_LENGTH).fill(''));
+    setAttempts(0);
+    setCooldown(options.cooldownSeconds ?? 60);
+    setStep('verifySms');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const smsRes = await startSmsMfa({
+      email,
+      ...(useLoginChallenge && challengeToken
+        ? { mfa_challenge_token: challengeToken }
+        : {}),
+    }).unwrap();
+    if (smsRes.phone) setPhoneNumber(smsRes.phone);
+    setSmsSent(true);
+    setOtp(Array(OTP_LENGTH).fill(''));
+    setAttempts(0);
+    setCooldown(smsRes.cooldown_seconds ?? 60);
+    setStep('verifySms');
+  } catch (err: unknown) {
+    setError(getApiErrorMessage(err, 'Failed to send SMS code'));
+  } finally {
+    setLoading(false);
+  }
 };
 
   // ------------------------------
@@ -554,6 +640,7 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
   setError('');
   setIsLoginMfaChallenge(false);
   setLoginPrimaryMFAMethod(null);
+  setMfaChallengeToken('');
 
   try {
     if (!isValidEmail(email)) throw new Error('Enter a valid email');
@@ -592,19 +679,26 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
       setLoginPrimaryMFAMethod(preferredMethod);
       setIsLoginMfaChallenge(true);
       setSelectedMFAMethod(preferredMethod);
+      setMfaChallengeToken(res.mfa_challenge_token ?? '');
       setVerificationSent(false);
       setSmsSent(false);
       setOtp(Array(OTP_LENGTH).fill(''));
       setAttempts(0);
-      await beginLinkedLoginMfa(preferredMethod);
+
+      if (res.otp_error) {
+        setError(String(res.otp_error));
+      }
+
+      await beginLinkedLoginMfa(preferredMethod, {
+        otpAlreadySent: Boolean(res.otp_sent),
+        cooldownSeconds: res.cooldown_seconds,
+        loginChallenge: true,
+        challengeToken: res.mfa_challenge_token ?? '',
+      });
       return;
     }
 
-    Cookies.set('auth_token', res.access_token, {
-      secure: true,
-      sameSite: 'strict',
-      path: '/',
-    });
+    persistAuthToken(res.access_token);
 
     router.push('/dashboard');
   } catch (err: unknown) {
@@ -624,10 +718,16 @@ const handleMFAMethodSelection = async () => {
     }
 
     if (isNewUser) {
+      if (selectedMFAMethod === 'sms') {
+        setShowPhoneValidation(true);
+      }
+
       if (selectedMFAMethod === 'sms' && !phoneNumber.trim()) {
-        throw new Error(
-          'Phone number is required for SMS MFA. Use format like +8801XXXXXXXXX',
-        );
+        throw new Error('Phone number is required for SMS MFA');
+      }
+
+      if (selectedMFAMethod === 'sms' && !isValidE164PhoneNumber(phoneNumber.trim())) {
+        throw new Error('Enter a valid phone number for the selected country');
       }
 
       const signupPayload: {
@@ -635,14 +735,28 @@ const handleMFAMethodSelection = async () => {
         password: string;
         mfa_method: MFAMethod;
         phone_number?: string;
+        captcha_token?: string;
+        otp_session_id?: string;
       } = {
         email,
         password,
         mfa_method: selectedMFAMethod,
+        otp_session_id: getOtpSessionId(),
       };
 
       if (selectedMFAMethod === 'sms') {
+        if (!captchaToken) {
+          throw new Error('Complete the CAPTCHA before requesting an OTP');
+        }
         signupPayload.phone_number = phoneNumber.trim();
+        signupPayload.captcha_token = captchaToken;
+      }
+
+      if (selectedMFAMethod === 'email') {
+        if (!captchaToken) {
+          throw new Error('Complete the CAPTCHA before requesting an OTP');
+        }
+        signupPayload.captcha_token = captchaToken;
       }
 
       const signupRes = await signup(signupPayload).unwrap();
@@ -659,8 +773,10 @@ const handleMFAMethodSelection = async () => {
 
       // ✅ NEW USER → EMAIL
       if (selectedMFAMethod === 'email') {
-        setVerificationSent(true); // backend already sent it during signup
+        setVerificationSent(true);
         setEmailCode('');
+        setAttempts(0);
+        setCooldown(signupRes.cooldown_seconds ?? 60);
         setStep('verifyEmail');
         return;
       }
@@ -670,7 +786,7 @@ const handleMFAMethodSelection = async () => {
         setSmsSent(true); // backend already sent it during signup
         setOtp(Array(OTP_LENGTH).fill(''));
         setAttempts(0);
-        setCooldown(30);
+        setCooldown(signupRes.cooldown_seconds ?? 60);
         setStep('verifySms');
         return;
       }
@@ -685,7 +801,10 @@ const handleMFAMethodSelection = async () => {
         );
       }
 
-      await beginLinkedLoginMfa(selectedMFAMethod);
+      await beginLinkedLoginMfa(selectedMFAMethod, {
+        loginChallenge: true,
+        challengeToken: mfaChallengeToken,
+      });
       return;
     }
 
@@ -705,14 +824,32 @@ const handleMFAMethodSelection = async () => {
     if (selectedMFAMethod === 'email') {
       setVerificationSent(false);
       setEmailCode('');
+      setAttempts(0);
+      setCooldown(0);
       setStep('verifyEmail');
       return;
     }
 
     if (selectedMFAMethod === 'sms') {
+      setShowPhoneValidation(true);
+
+      if (!phoneNumber.trim()) {
+        throw new Error('Enter a phone number to enable SMS MFA');
+      }
+
+      if (!isValidE164PhoneNumber(phoneNumber.trim())) {
+        throw new Error('Enter a valid phone number for the selected country');
+      }
+
+      if (!captchaToken) {
+        throw new Error('Complete the CAPTCHA before requesting an OTP');
+      }
+
       const smsRes = await startSmsMfa({
         email,
-        phoneNumber: phoneNumber.trim() || undefined,
+        phoneNumber: phoneNumber.trim(),
+        captcha_token: captchaToken,
+        otp_session_id: getOtpSessionId(),
       }).unwrap();
 
       if (smsRes.requires_phone) {
@@ -723,7 +860,7 @@ const handleMFAMethodSelection = async () => {
       setSmsSent(true);
       setOtp(Array(OTP_LENGTH).fill(''));
       setAttempts(0);
-      setCooldown(30);
+      setCooldown(smsRes.cooldown_seconds ?? 60);
       setStep('verifySms');
       return;
     }
@@ -801,11 +938,7 @@ const verifyMfaCode = useCallback(async () => {
       }).unwrap();
     }
 
-    Cookies.set('auth_token', res.access_token, {
-      secure: true,
-      sameSite: 'strict',
-      path: '/',
-    });
+    persistAuthToken(res.access_token);
 
     if (isNewUser) {
       setStep('plan_selection');
@@ -835,19 +968,27 @@ const handleVerifyMfa = async (e: React.FormEvent) => {
 
 const verifyEmailOtpCode = useCallback(async () => {
   setError('');
+
+  if (attempts >= MAX_ATTEMPTS) {
+    setError('Too many failed attempts. Try again later.');
+    return;
+  }
+
   setLoading(true);
 
   try {
     const code = parseInt(emailCode);
     if (isNaN(code)) throw new Error('Enter valid code');
 
-    const res = await verifyEmailCode({ email, code }).unwrap();
+    const res = await verifyEmailCode({
+      email,
+      code,
+      otp_session_id: getOtpSessionId(),
+    }).unwrap();
 
-    Cookies.set('auth_token', res.access_token, {
-      secure: true,
-      sameSite: 'strict',
-      path: '/',
-    });
+    setAttempts(0);
+
+    persistAuthToken(res.access_token);
 
     if (isNewUser) {
       setStep('plan_selection');
@@ -855,11 +996,18 @@ const verifyEmailOtpCode = useCallback(async () => {
       router.push('/dashboard');
     }
   } catch (err: unknown) {
-    setError(getApiErrorMessage(err, 'Verification failed'));
+    const nextAttempts = attempts + 1;
+    setAttempts(nextAttempts);
+
+    setError(
+      nextAttempts >= MAX_ATTEMPTS
+        ? 'Too many failed attempts. Try again later.'
+        : getApiErrorMessage(err, 'Verification failed'),
+    );
   } finally {
     setLoading(false);
   }
-}, [emailCode, verifyEmailCode, email, isNewUser, router]);
+}, [emailCode, verifyEmailCode, email, isNewUser, router, attempts]);
 
 const handleVerifyEmail = async (e: React.FormEvent) => {
   e.preventDefault();
@@ -887,15 +1035,12 @@ const verifySmsOtpCode = useCallback(async () => {
     const res = await verifySmsOtp({
       email,
       code: smsCode,
+      otp_session_id: getOtpSessionId(),
     }).unwrap();
 
     setAttempts(0);
 
-    Cookies.set('auth_token', res.access_token, {
-      secure: true,
-      sameSite: 'strict',
-      path: '/',
-    });
+    persistAuthToken(res.access_token);
 
     if (isNewUser) {
       setStep('plan_selection');
@@ -945,7 +1090,12 @@ useEffect(() => {
 }, [step, mfaCode, loading, hasLinkedAuthenticator, mfaSecret, verifyMfaCode]);
 
 useEffect(() => {
-  if (step !== 'verifyEmail' || emailCode.length !== 6 || !verificationSent) {
+  if (
+    step !== 'verifyEmail' ||
+    emailCode.length !== 6 ||
+    !verificationSent ||
+    attempts >= MAX_ATTEMPTS
+  ) {
     autoEmailVerifyKey.current = '';
     return;
   }
@@ -970,7 +1120,34 @@ useEffect(() => {
   email,
   isNewUser,
   verifyEmailOtpCode,
+  attempts,
 ]);
+
+const handleResendEmail = async () => {
+  if (cooldown > 0) return;
+
+  if (!captchaToken) {
+    setError('Complete the CAPTCHA before resending the OTP');
+    return;
+  }
+
+  try {
+    setError('');
+
+    const res = await sendEmailOtp({
+      email,
+      captcha_token: captchaToken,
+      otp_session_id: getOtpSessionId(),
+    }).unwrap();
+
+    setCooldown(res.cooldown_seconds ?? 60);
+    setEmailCode('');
+    setCaptchaToken('');
+    setVerificationSent(true);
+  } catch (err: unknown) {
+    setError(getApiErrorMessage(err, 'Failed to resend OTP'));
+  }
+};
 
 useEffect(() => {
   const smsCode = otp.join('');
@@ -1006,13 +1183,23 @@ useEffect(() => {
 const handleResendSms = async () => {
   if (cooldown > 0) return;
 
+  if (!captchaToken) {
+    setError('Complete the CAPTCHA before resending the OTP');
+    return;
+  }
+
   try {
     setError('');
 
-    await resendSmsMfa({ email }).unwrap();
+    const res = await resendSmsMfa({
+      email,
+      captcha_token: captchaToken,
+      otp_session_id: getOtpSessionId(),
+    }).unwrap();
 
-    setCooldown(30);
+    setCooldown(res.cooldown_seconds ?? 60);
     setOtp(Array(OTP_LENGTH).fill(''));
+    setCaptchaToken('');
   } catch (err: unknown) {
     setError(getApiErrorMessage(err, 'Failed to resend OTP'));
   }
@@ -1066,6 +1253,10 @@ const getMethodBadge = (method: MFAMethod) => {
 
 const showSmsPhoneInput =
   selectedMFAMethod === 'sms' &&
+  (isNewUser || (!isLoginMfaChallenge && !isNewUser));
+
+const showEmailCaptcha =
+  selectedMFAMethod === 'email' &&
   (isNewUser || (!isLoginMfaChallenge && !isNewUser));
 
 const orderedMfaMethods =
@@ -1455,25 +1646,29 @@ const backButtonLabel =
                     </div>
 
                     {showSmsPhoneInput && (
-                      <div className="space-y-2">
-                        <Label htmlFor="phoneNumber">Mobile Number</Label>
-                        <Input
-                          id="phoneNumber"
-                          type="tel"
+                      <>
+                        <PhoneNumberInput
                           value={phoneNumber}
-                          onChange={e => setPhoneNumber(e.target.value)}
-                          placeholder="+8801XXXXXXXXX"
+                          onChange={setPhoneNumber}
+                          label="Mobile Number"
+                          showValidation={showPhoneValidation}
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Use full international format with country code.
-                        </p>
-                      </div>
+                        <TurnstileCaptcha onTokenChange={setCaptchaToken} />
+                      </>
+                    )}
+
+                    {showEmailCaptcha && (
+                      <TurnstileCaptcha onTokenChange={setCaptchaToken} />
                     )}
 
                     <Button
                       onClick={handleMFAMethodSelection}
                       className="w-full btn-primary"
-                      disabled={loading}
+                      disabled={
+                        loading ||
+                        (showSmsPhoneInput && !captchaToken) ||
+                        (showEmailCaptcha && !captchaToken)
+                      }
                     >
                       {loading
                         ? isLoginMfaChallenge
@@ -1604,19 +1799,25 @@ const backButtonLabel =
                     </Alert>
 
                     {!verificationSent ? (
-                      // <Button
-                      //   onClick={handleSendEmailCode}
-                      //   className="w-full btn-primary"
-                      //   disabled={loading}
-                      // >
-                      //   Send Verification Code
-                      // </Button>
-                      <div className="flex items-center justify-center py-4">
-                        <span className="h-5 w-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></span>
-                        <span className="ml-2 text-sm text-muted-foreground">
-                          Sending verification code...
-                        </span>
-                      </div>
+                      isLoginMfaChallenge && loading ? (
+                        <div className="flex items-center justify-center py-4">
+                          <span className="h-5 w-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></span>
+                          <span className="ml-2 text-sm text-muted-foreground">
+                            Sending verification code...
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <TurnstileCaptcha onTokenChange={setCaptchaToken} />
+                          <Button
+                            onClick={handleSendEmailCode}
+                            className="w-full btn-primary"
+                            disabled={loading || !captchaToken}
+                          >
+                            {loading ? 'Sending…' : 'Send Verification Code'}
+                          </Button>
+                        </div>
+                      )
                     ) : (
                       <form onSubmit={handleVerifyEmail} className="space-y-3">
                         <Input
@@ -1635,11 +1836,37 @@ const backButtonLabel =
                         <Button
                           type="submit"
                           className="w-full btn-primary"
-                          disabled={loading || emailCode.length !== 6}
+                          disabled={
+                            loading ||
+                            emailCode.length !== 6 ||
+                            attempts >= MAX_ATTEMPTS
+                          }
                         >
                           {loading ? 'Verifying…' : 'Verify & Continue'}
                         </Button>
                       </form>
+                    )}
+
+                    {verificationSent && (
+                      <>
+                        <Button
+                          variant="link"
+                          disabled={cooldown > 0 || !captchaToken}
+                          onClick={handleResendEmail}
+                        >
+                          {cooldown > 0
+                            ? `Resend in ${cooldown}s`
+                            : 'Resend Code'}
+                        </Button>
+
+                        <TurnstileCaptcha onTokenChange={setCaptchaToken} />
+
+                        {attempts > 0 && attempts < MAX_ATTEMPTS && (
+                          <p className="text-xs text-muted-foreground">
+                            Failed attempts: {attempts} / {MAX_ATTEMPTS}
+                          </p>
+                        )}
+                      </>
                     )}
                     <Button
                       variant="link"
@@ -1702,11 +1929,13 @@ const backButtonLabel =
 
                     <Button
                       variant="link"
-                      disabled={cooldown > 0}
+                      disabled={cooldown > 0 || !captchaToken}
                       onClick={handleResendSms}
                     >
                       {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend Code'}
                     </Button>
+
+                    <TurnstileCaptcha onTokenChange={setCaptchaToken} />
 
                     <Button
                       type="button"

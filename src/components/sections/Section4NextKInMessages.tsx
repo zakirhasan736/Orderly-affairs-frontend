@@ -7,8 +7,9 @@ import {
   CardTitle,
   CardContent,
 } from '@/components/common/ui/card';
-import { Button } from '@/components/common/ui/button';
 import { Badge } from '@/components/common/ui/badge';
+import { cn } from '@common/ui/utils';
+import { useIsMobile } from '@/components/MobileBottomSheet';
 import {
   ChevronDown,
   ChevronUp,
@@ -42,6 +43,7 @@ interface Props {
   onChange?: (data: any) => void;
   isActive?: boolean;
   fullFormData?: any;
+  messagesClearNonce?: number;
 }
 
 export default function Section4NextOfKinMessages({
@@ -49,7 +51,9 @@ export default function Section4NextOfKinMessages({
   onChange = () => {},
   isActive = false,
   fullFormData,
+  messagesClearNonce = 0,
 }: Props) {
+  const isMobile = useIsMobile();
   const [showGuide, setShowGuide] = useState(false);
 
   const subsectionData = data['4A'] || {};
@@ -179,8 +183,18 @@ export default function Section4NextOfKinMessages({
           </div>
         </CardHeader>
 
-        <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0 lg:p-8 lg:pt-0">
-          <div className="rounded-[24px] border bg-card p-3 shadow-sm sm:p-5">
+        <CardContent
+          className={cn(
+            'pt-0 sm:p-6 sm:pt-0 lg:p-8 lg:pt-0',
+            isMobile ? 'p-0' : 'p-3',
+          )}
+        >
+          <div
+            className={cn(
+              'rounded-[24px] border bg-card shadow-sm sm:p-5',
+              isMobile ? 'rounded-2xl border-0 bg-transparent p-0 shadow-none' : 'p-3',
+            )}
+          >
             {SECTION_4A.fields.map(field => (
               <DynamicFormField
                 key={field.key}
@@ -188,6 +202,7 @@ export default function Section4NextOfKinMessages({
                 value={subsectionData[field.key]}
                 formData={fullFormData}
                 onChange={value => updateSubsection(field.key, value)}
+                lettersClearNonce={messagesClearNonce}
               />
             ))}
           </div>

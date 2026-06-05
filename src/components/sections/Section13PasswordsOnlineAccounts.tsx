@@ -23,6 +23,11 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  getTopicCardProps,
+  useScrollToVaultTopic,
+} from '@/utils/vaultTopicNavigation';
+import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -137,6 +142,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 }
 
 type UploadScope = 'full' | `account:${number}`;
@@ -181,6 +187,7 @@ export default function Section13PasswordsOnlineAccounts({
   data = {},
   onChange = () => {},
   activeSubsection,
+  activeTopicId,
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -201,12 +208,14 @@ export default function Section13PasswordsOnlineAccounts({
   const accounts: any[] = Array.isArray(data['13A']) ? data['13A'] : [];
   const show13A = !activeSubsection || activeSubsection === '13A';
 
+  useScrollToVaultTopic(activeTopicId, accounts.length);
+
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
 
   const createEmptyAccount = () => {
     return {
-      ...Object.fromEntries(SECTION_13A.fields.map(field => [field.key, ''])),
+      ...createEmptyItemFromFields(SECTION_13A.fields),
       __rowId: createRowId(),
     };
   };
@@ -592,11 +601,13 @@ export default function Section13PasswordsOnlineAccounts({
             {accounts.map((account, index) => {
               const itemScope = `account:${index}` as UploadScope;
               const itemLabel = `${SECTION_13A.itemLabel} #${index + 1}`;
+              const topicProps = getTopicCardProps('13A', index, activeTopicId);
 
               return (
                 <Card
                   key={account.__rowId || `${itemScope}-${index}`}
-                  className="overflow-hidden border-slate-200 shadow-sm"
+                  id={topicProps.id}
+                  className={topicProps.className}
                 >
                   <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>

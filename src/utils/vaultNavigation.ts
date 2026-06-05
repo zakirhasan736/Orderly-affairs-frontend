@@ -146,7 +146,7 @@ export const VAULT_NAVIGATION: VaultSection[] = [
   },
   {
     id: '20',
-    title: 'Documents & Records',
+    title: 'Legal Documents & Records',
     subsections: [
       { id: '20A', title: 'Legal & Tax Documents' },
       { id: '20B', title: 'Tax Documents' },

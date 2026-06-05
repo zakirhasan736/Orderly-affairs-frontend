@@ -24,6 +24,10 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  getTopicCardProps,
+  useScrollToVaultTopic,
+} from '@/utils/vaultTopicNavigation';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG — 15A                                                        */
@@ -201,6 +205,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 }
 
 type UploadScope = '15A-full' | '15B-full' | `15B:${number}`;
@@ -245,6 +250,7 @@ export default function Section15HealthInformation({
   data = {},
   onChange = () => {},
   activeSubsection,
+  activeTopicId,
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -262,6 +268,8 @@ export default function Section15HealthInformation({
 
   const section15A = data['15A'] || {};
   const providers: any[] = Array.isArray(data['15B']) ? data['15B'] : [];
+
+  useScrollToVaultTopic(activeTopicId, providers.length);
 
   const show15A = !activeSubsection || activeSubsection === '15A';
   const show15B = !activeSubsection || activeSubsection === '15B';
@@ -792,11 +800,13 @@ export default function Section15HealthInformation({
             {providers.map((provider, index) => {
               const itemScope = `15B:${index}` as UploadScope;
               const itemLabel = `${SECTION_15B.itemLabel} #${index + 1}`;
+              const topicProps = getTopicCardProps('15B', index, activeTopicId);
 
               return (
                 <Card
                   key={provider.__rowId || `${itemScope}-${index}`}
-                  className="overflow-hidden border-slate-200 shadow-sm"
+                  id={topicProps.id}
+                  className={topicProps.className}
                 >
                   <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>

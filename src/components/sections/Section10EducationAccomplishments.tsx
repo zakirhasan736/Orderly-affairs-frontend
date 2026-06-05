@@ -23,6 +23,10 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  getTopicCardProps,
+  useScrollToVaultTopic,
+} from '@/utils/vaultTopicNavigation';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -99,6 +103,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 }
 
 type UploadScope = 'full' | `education:${number}`;
@@ -135,6 +140,7 @@ export default function Section10EducationAccomplishments({
   data = {},
   onChange = () => {},
   activeSubsection,
+  activeTopicId,
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -155,11 +161,24 @@ export default function Section10EducationAccomplishments({
   const educationItems: any[] = Array.isArray(data['10A']) ? data['10A'] : [];
   const show10A = !activeSubsection || activeSubsection === '10A';
 
+  useScrollToVaultTopic(activeTopicId, educationItems.length);
+
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
 
+  const createEmptyUploadField = () => ({
+    text: '',
+    files: [] as unknown[],
+    _deleted_files: [] as string[],
+  });
+
   const createEmptyEducation = () => {
-    return Object.fromEntries(SECTION_10A.fields.map(field => [field.key, '']));
+    return Object.fromEntries(
+      SECTION_10A.fields.map(field => [
+        field.key,
+        field.type === 'TextInputWithUpload' ? createEmptyUploadField() : '',
+      ]),
+    );
   };
 
   const updateEducation = (next: any[]) => {
@@ -482,7 +501,10 @@ export default function Section10EducationAccomplishments({
         </div>
       )}
 
-      <Card className="overflow-hidden border-slate-200 shadow-sm">
+      <Card
+        id="subsection-10A"
+        className="overflow-hidden border-slate-200 shadow-sm"
+      >
         <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-sky-50/70">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -532,11 +554,13 @@ export default function Section10EducationAccomplishments({
           {educationItems.map((item, index) => {
             const itemScope = `education:${index}` as UploadScope;
             const itemLabel = `${SECTION_10A.itemLabel} #${index + 1}`;
+            const topicProps = getTopicCardProps('10A', index, activeTopicId);
 
             return (
               <Card
                 key={`${itemScope}-${index}`}
-                className="overflow-hidden border-slate-200 shadow-sm"
+                id={topicProps.id}
+                className={topicProps.className}
               >
                 <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>

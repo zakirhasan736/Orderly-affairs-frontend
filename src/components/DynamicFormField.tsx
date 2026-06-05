@@ -23,9 +23,10 @@ interface DynamicFormFieldProps {
   isVisible?: boolean; // Allow parent to control visibility
   rowId?: string;
   className?: string; // Allow custom CSS classes
+  lettersClearNonce?: number;
 }
 
-export function DynamicFormField({ field, value, onChange, formData, rowId, isVisible = true, className }: DynamicFormFieldProps) {
+export function DynamicFormField({ field, value, onChange, formData, rowId, isVisible = true, className, lettersClearNonce }: DynamicFormFieldProps) {
   // Initialize value with default if no value is set
   const currentValue = value !== undefined && value !== null ? value : (field.defaultValue || '');
   const isPassword = field.inputType === 'password';
@@ -333,6 +334,7 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
               onChange={onChange}
               helperText={field.helperText}
               formData={formData}
+              clearNonce={lettersClearNonce}
             />
           </div>
         );

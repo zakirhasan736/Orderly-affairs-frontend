@@ -565,22 +565,22 @@
   }
 
   /* Force Letters component to break out of container constraints */
-  [data-field-type="LettersToNextOfKin"] {
+  /* [data-field-type="LettersToNextOfKin"] {
     margin-left: calc(-1rem) !important;
     margin-right: calc(-1rem) !important;
     padding-left: 1rem !important;
     padding-right: 1rem !important;
-  }
+  } */
 
   /* On larger screens, use more margin */
-  @media (min-width: 768px) {
+  /* @media (min-width: 768px) {
     [data-field-type="LettersToNextOfKin"] {
       margin-left: calc(-2rem) !important;
       margin-right: calc(-2rem) !important;
       padding-left: 2rem !important;
       padding-right: 2rem !important;
     }
-  }
+  } */
 
   /* Ensure message cards in Letters have proper spacing and layout */
   [data-field-type="LettersToNextOfKin"] .card .flex.gap-4 {

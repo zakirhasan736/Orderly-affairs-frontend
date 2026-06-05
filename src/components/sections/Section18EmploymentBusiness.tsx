@@ -26,6 +26,10 @@ import {
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  getTopicCardProps,
+  useScrollToVaultTopic,
+} from '@/utils/vaultTopicNavigation';
 
 /* ============================================================
    SECTION 18A — CURRENT EMPLOYMENT
@@ -396,6 +400,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 }
 
 type SubsectionId = '18A' | '18B' | '18C' | '18D';
@@ -584,6 +589,7 @@ export default function Section18EmploymentBusiness({
   data = {},
   onChange = () => {},
   activeSubsection,
+  activeTopicId,
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -597,6 +603,8 @@ export default function Section18EmploymentBusiness({
 
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
+
+  useScrollToVaultTopic(activeTopicId, JSON.stringify(data));
 
   useEffect(() => {
     const next = { ...data };
@@ -1025,7 +1033,7 @@ export default function Section18EmploymentBusiness({
                 type="button"
                 size="sm"
                 onClick={() => addItem(section)}
-                className="w-full rounded-xl sm:w-auto"
+                className="w-auto rounded-xl sm:w-auto"
               >
                 <Plus className="mr-1 h-4 w-4" />
                 Add {section.itemLabel}
@@ -1048,7 +1056,7 @@ export default function Section18EmploymentBusiness({
                   type="button"
                   size="sm"
                   onClick={() => addItem(section)}
-                  className="mt-4 rounded-xl"
+                  className="w-auto  mt-4 rounded-xl"
                 >
                   <Plus className="mr-1 h-4 w-4" />
                   Add {section.itemLabel}
@@ -1059,11 +1067,17 @@ export default function Section18EmploymentBusiness({
             {items.map((item: any, index: number) => {
               const rowId = item?.__rowId || `${subsection}-${index}`;
               const scope = `${subsection}-${rowId}`;
+              const topicProps = getTopicCardProps(
+                subsection,
+                index,
+                activeTopicId,
+              );
 
               return (
                 <Card
                   key={rowId}
-                  className="overflow-hidden border-slate-200 shadow-sm"
+                  id={topicProps.id}
+                  className={topicProps.className}
                 >
                   <CardHeader className="border-b bg-slate-50/70">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1081,7 +1095,7 @@ export default function Section18EmploymentBusiness({
                         size="sm"
                         variant="destructive"
                         onClick={() => removeItem(subsection, index)}
-                        className="w-full rounded-xl sm:w-auto"
+                        className="w-auto rounded-xl sm:w-auto"
                       >
                         <Minus className="mr-1 h-4 w-4" />
                         Remove

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Button } from '@common/ui/button';
 import { Calendar } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@common/ui/popover';
@@ -34,8 +34,33 @@ export function DatePicker({
   error = false,
   errorMessage,
 }: DatePickerProps) {
-  // Convert value to Date object for consistent handling
-  const selectedDate = value ? new Date(value) : undefined;
+  const [open, setOpen] = useState(false);
+
+  const selectedDate = useMemo(() => {
+    if (!value) return undefined;
+    const parsed = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  }, [value]);
+
+  const handleSelect = (date: Date | undefined) => {
+    if (!date) {
+      onChange(undefined);
+      setOpen(false);
+      return;
+    }
+
+    const nextValue = date.toISOString();
+    const currentValue =
+      value instanceof Date ? value.toISOString() : String(value || '');
+
+    if (currentValue.slice(0, 10) === nextValue.slice(0, 10)) {
+      setOpen(false);
+      return;
+    }
+
+    onChange(nextValue);
+    setOpen(false);
+  };
   
   // Format date for display
   const formatDate = (date: Date) => {
@@ -102,7 +127,7 @@ export function DatePicker({
 
   return (
     <div className="space-y-1">
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen} modal>
         <PopoverTrigger asChild>
           <Button
             type="button"
@@ -124,13 +149,14 @@ export function DatePicker({
           </Button>
         </PopoverTrigger>
         <PopoverContent 
-          className="w-auto p-0 border-0 shadow-none bg-transparent datepicker-calendar-popup" 
+          className="w-auto max-w-[calc(100vw-2rem)] p-0 border-0 shadow-none bg-transparent datepicker-calendar-popup z-[120]" 
           align="start"
+          sideOffset={8}
         >
           <EnhancedCalendar
             mode="single"
             selected={selectedDate}
-            onSelect={(date) => onChange(date?.toISOString())}
+            onSelect={handleSelect}
             className="datepicker-calendar-popup"
           />
         </PopoverContent>

@@ -16,8 +16,9 @@ import {
 } from 'lucide-react';
 
 interface AudioRecorderProps {
-  onAudioRecorded: (blob: Blob) => void;
+  onAudioRecorded: (blob: Blob) => Promise<boolean> | boolean;
   onClose: () => void;
+  uploading?: boolean;
 }
 
 type RecorderStatus = 'idle' | 'recording' | 'paused' | 'stopped' | 'error';
@@ -26,9 +27,9 @@ function getSupportedAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return '';
 
   const types = [
+    'audio/mp4',
     'audio/webm;codecs=opus',
     'audio/webm',
-    'audio/mp4',
     'audio/mpeg',
   ];
 
@@ -52,12 +53,14 @@ function formatBytes(bytes: number) {
 export function AudioRecorder({
   onAudioRecorded,
   onClose,
+  uploading = false,
 }: AudioRecorderProps) {
   const [status, setStatus] = useState<RecorderStatus>('idle');
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -268,16 +271,32 @@ export function AudioRecorder({
     setStatus('idle');
   };
 
-  const handleSaveRecording = () => {
-    if (recordedBlob) {
-      onAudioRecorded(recordedBlob);
+  const handleSaveRecording = async () => {
+    if (!recordedBlob || saving || uploading) return;
+
+    setSaving(true);
+    try {
+      const success = await onAudioRecorded(recordedBlob);
+      if (!success) {
+        setError('Upload failed. Your recording is still here — try Save again.');
+      }
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 p-4 backdrop-blur-sm">
-      <Card className="w-full max-w-xl overflow-hidden rounded-3xl border border-border/70 shadow-2xl">
-        <CardContent className="space-y-6 p-5 sm:p-6">
+    <Card className="relative w-full max-w-xl overflow-hidden rounded-3xl border border-border/70 shadow-2xl">
+      {(uploading || saving) && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-3xl bg-white/90 px-6 text-center backdrop-blur-sm">
+          <div className="mb-3 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm font-semibold text-slate-900">
+            {uploading ? 'Uploading your audio...' : 'Saving...'}
+          </p>
+        </div>
+      )}
+
+      <CardContent className="space-y-6 p-5 sm:p-6">
           <div className="flex items-start justify-between gap-4 border-b pb-4">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600">
@@ -468,6 +487,5 @@ export function AudioRecorder({
           </div>
         </CardContent>
       </Card>
-    </div>
   );
 }

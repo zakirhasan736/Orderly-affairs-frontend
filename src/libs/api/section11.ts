@@ -1,4 +1,8 @@
+import { sanitizeSectionPayload } from '@/utils/sectionUploadFields';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+const UPLOAD_KEYS = ['military_documents', 'veteran_contacts'] as const;
 
 export async function saveSection11(token: string, payload: any) {
   const res = await fetch(`${API_BASE}/sections/section11-military-service`, {
@@ -7,7 +11,9 @@ export async function saveSection11(token: string, payload: any) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(
+      sanitizeSectionPayload(payload, '11A', UPLOAD_KEYS),
+    ),
   });
 
   if (!res.ok) throw new Error('Failed to save Section 11');

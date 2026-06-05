@@ -23,6 +23,10 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  getTopicCardProps,
+  useScrollToVaultTopic,
+} from '@/utils/vaultTopicNavigation';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -140,6 +144,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 }
 
 type UploadScope = 'full' | `charity:${number}`;
@@ -176,6 +181,7 @@ export default function Section9CharitableGiving({
   data = {},
   onChange = () => {},
   activeSubsection,
+  activeTopicId,
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -196,12 +202,31 @@ export default function Section9CharitableGiving({
   const charities: any[] = Array.isArray(data['9A']) ? data['9A'] : [];
   const show9A = !activeSubsection || activeSubsection === '9A';
 
+  useScrollToVaultTopic(activeTopicId, charities.length);
+
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
 
-  const createEmptyCharity = () => {
-    return Object.fromEntries(SECTION_9A.fields.map(field => [field.key, '']));
-  };
+const UPLOAD_FIELD_KEYS = new Set([
+  'account_info',
+  'contact_details',
+  'tax_documents',
+]);
+
+const createEmptyUploadField = () => ({
+  text: '',
+  files: [] as unknown[],
+  _deleted_files: [] as string[],
+});
+
+const createEmptyCharity = () => {
+  return Object.fromEntries(
+    SECTION_9A.fields.map(field => [
+      field.key,
+      field.type === 'TextInputWithUpload' ? createEmptyUploadField() : '',
+    ]),
+  );
+};
 
   const updateCharities = (next: any[]) => {
     onChange({
@@ -523,7 +548,10 @@ export default function Section9CharitableGiving({
         </div>
       )}
 
-      <Card className="overflow-hidden border-slate-200 shadow-sm">
+      <Card
+        id="subsection-9A"
+        className="overflow-hidden border-slate-200 shadow-sm"
+      >
         <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-rose-50/70">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -573,11 +601,13 @@ export default function Section9CharitableGiving({
           {charities.map((charity, index) => {
             const itemScope = `charity:${index}` as UploadScope;
             const itemLabel = `${SECTION_9A.itemLabel} #${index + 1}`;
+            const topicProps = getTopicCardProps('9A', index, activeTopicId);
 
             return (
               <Card
                 key={`${itemScope}-${index}`}
-                className="overflow-hidden border-slate-200 shadow-sm"
+                id={topicProps.id}
+                className={topicProps.className}
               >
                 <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>

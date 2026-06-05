@@ -12,6 +12,12 @@ import { useOnboarding } from '@/onboarding/components/OnboardingProvider';
 
 import { deleteUpload } from '@/libs/api/upload';
 import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
+import {
+  findDynamicTopic,
+  getDynamicTopicsForSubsection,
+  getTopicElementId,
+  subsectionHasDynamicTopics,
+} from '@/utils/dynamicVaultTopics';
 
 import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
@@ -94,6 +100,7 @@ import { getSection18, saveSection18 } from '@/libs/api/section18';
 import { getSection19, saveSection19 } from '@/libs/api/section19';
 import { getSection20, saveSection20 } from '@/libs/api/section20';
 import { getSection21, saveSection21 } from '@/libs/api/section21';
+import { clearAllMessages } from '@/libs/api/lettersOfNaxtKinMessage';
 
 import {
   mapUIToSection1Payload,
@@ -209,6 +216,8 @@ export default function DashboardPage() {
   // Existing owner app state
   const [activeSection, setActiveSection] = useState('dashboard');
   const [activeSubsection, setActiveSubsection] = useState<string | null>(null);
+  const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
+  const [messagesClearNonce, setMessagesClearNonce] = useState(0);
   const skipInitialContextualNavigation = useRef(true);
   type DashboardFormData = Record<string, any>;
 
@@ -528,6 +537,7 @@ export default function DashboardPage() {
           setCurrentUser({ email: d.sub });
           setActiveSection('dashboard');
           setActiveSubsection(null);
+          setActiveTopicId(null);
           setSidebarOpen(false);
           setMobileMoreOpen(false);
           skipInitialContextualNavigation.current = true;
@@ -808,16 +818,27 @@ export default function DashboardPage() {
         (ss: any) => ss.id === activeSubsection,
       );
       if (sub) {
+        const activeTopic = findDynamicTopic(
+          activeSection,
+          formData[activeSection],
+          activeTopicId,
+        );
+
+        if (activeTopic) {
+          return `${sub.id}. ${sub.title} · ${activeTopic.label}`;
+        }
+
         return `${sub.id}. ${sub.title}`;
       }
     }
 
     return `${section.id}. ${section.title}`;
-  }, [activeSection, activeSubsection, allSections]);
+  }, [activeSection, activeSubsection, activeTopicId, allSections, formData]);
   useEffect(() => {
     if (appMode === 'owner') {
       setActiveSection('dashboard');
       setActiveSubsection(null);
+      setActiveTopicId(null);
       setSidebarOpen(false);
       setMobileMoreOpen(false);
       skipInitialContextualNavigation.current = true;
@@ -1017,65 +1038,84 @@ export default function DashboardPage() {
   }, [formData, disabledSections, disabledSubsections]);
 
   const clearSectionData = useCallback(
-    (sectionId: string, subsectionId?: string) => {
+    async (sectionId: string, subsectionId?: string) => {
       const confirmed = window.confirm(
         subsectionId
           ? `Are you sure you want to clear all data from subsection ${subsectionId}? This action cannot be undone.`
           : `Are you sure you want to clear all data from section ${sectionId}? This action cannot be undone.`,
       );
 
-      if (confirmed) {
-        // Clear from React state
-        setFormData(prev => {
-          const newData = { ...prev };
+      if (!confirmed) return;
 
-          if (subsectionId) {
-            // Clear specific subsection
-            if (newData[sectionId]) {
-              const { [subsectionId]: _, ...rest } = newData[sectionId];
-              if (Object.keys(rest).length === 0) {
-                // If this was the only subsection, remove the entire section
-                const { [sectionId]: __, ...sectionRest } = newData;
-                return sectionRest;
-              } else {
-                newData[sectionId] = rest;
-              }
-            }
-          } else {
-            // Clear entire section
-            const { [sectionId]: _, ...rest } = newData;
-            return rest;
-          }
-
-          return newData;
-        });
-
-        // Clear from localStorage
-        try {
-          const currentData = JSON.parse(
-            localStorage.getItem('orderlyAffairsData') || '{}',
-          );
-          if (subsectionId) {
-            if (
-              currentData[sectionId] &&
-              currentData[sectionId][subsectionId]
-            ) {
-              delete currentData[sectionId][subsectionId];
-              if (Object.keys(currentData[sectionId]).length === 0) {
-                delete currentData[sectionId];
-              }
-            }
-          } else {
-            delete currentData[sectionId];
-          }
-          localStorage.setItem(
-            'orderlyAffairsData',
-            JSON.stringify(currentData),
-          );
-        } catch (error) {
-          console.error('Error clearing localStorage:', error);
+      if (sectionId === '4' && subsectionId === '4A') {
+        const token = Cookies.get('auth_token');
+        if (!token) {
+          toast.error('You must be logged in to clear messages.');
+          return;
         }
 
+        try {
+          const result = await clearAllMessages(token);
+          setMessagesClearNonce(prev => prev + 1);
+          toast.success(
+            result?.count
+              ? `Cleared ${result.count} personal message${result.count === 1 ? '' : 's'}.`
+              : 'Personal messages cleared.',
+          );
+        } catch (error) {
+          console.error('Failed to clear personal messages:', error);
+          toast.error('Failed to clear messages. Please try again.');
+          return;
+        }
+      }
+
+      setFormData(prev => {
+        const newData = { ...prev };
+
+        if (subsectionId) {
+          if (newData[sectionId]) {
+            const { [subsectionId]: _, ...rest } = newData[sectionId];
+            if (Object.keys(rest).length === 0) {
+              const { [sectionId]: __, ...sectionRest } = newData;
+              return sectionRest;
+            }
+
+            newData[sectionId] = rest;
+          }
+        } else {
+          const { [sectionId]: _, ...rest } = newData;
+          return rest;
+        }
+
+        return newData;
+      });
+
+      try {
+        const currentData = JSON.parse(
+          localStorage.getItem('orderlyAffairsData') || '{}',
+        );
+        if (subsectionId) {
+          if (
+            currentData[sectionId] &&
+            currentData[sectionId][subsectionId]
+          ) {
+            delete currentData[sectionId][subsectionId];
+            if (Object.keys(currentData[sectionId]).length === 0) {
+              delete currentData[sectionId];
+            }
+          }
+        } else {
+          delete currentData[sectionId];
+        }
+        localStorage.setItem(
+          'orderlyAffairsData',
+          JSON.stringify(currentData),
+        );
+      } catch (error) {
+        console.error('Error clearing localStorage:', error);
+      }
+
+      if (!(sectionId === '4' && subsectionId === '4A')) {
         toast.success(
           subsectionId
             ? `Subsection ${subsectionId} data cleared!`
@@ -1265,6 +1305,7 @@ export default function DashboardPage() {
             data={formData['1'] || {}}
             onChange={data => updateSectionData('1', data)}
             activeSubsection={activeSubsection as any}
+            activeTopicId={activeTopicId}
           />
         );
       case '2':
@@ -1288,6 +1329,7 @@ export default function DashboardPage() {
             fullFormData={formData}
             onChange={data => updateSectionData('4', data)}
             isActive={!activeSubsection || activeSubsection === '4A'}
+            messagesClearNonce={messagesClearNonce}
           />
         );
 
@@ -1297,6 +1339,7 @@ export default function DashboardPage() {
             data={formData['5'] || {}}
             onChange={data => updateSectionData('5', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '6':
@@ -1305,6 +1348,7 @@ export default function DashboardPage() {
             data={formData['6'] || {}}
             onChange={data => updateSectionData('6', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '7':
@@ -1313,6 +1357,7 @@ export default function DashboardPage() {
             data={formData['7'] || {}}
             onChange={data => updateSectionData('7', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '8':
@@ -1321,14 +1366,7 @@ export default function DashboardPage() {
             data={formData['8'] || {}}
             onChange={data => updateSectionData('8', data)}
             activeSubsection={activeSubsection}
-          />
-        );
-      case '8':
-        return (
-          <Section8CommunityMembership
-            data={formData['8'] || {}}
-            onChange={data => updateSectionData('8', data)}
-            activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '9':
@@ -1337,6 +1375,7 @@ export default function DashboardPage() {
             data={formData['9'] || {}}
             onChange={data => updateSectionData('9', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '10':
@@ -1345,6 +1384,7 @@ export default function DashboardPage() {
             data={formData['10'] || {}}
             onChange={data => updateSectionData('10', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '11':
@@ -1353,6 +1393,7 @@ export default function DashboardPage() {
             data={formData['11'] || {}}
             onChange={data => updateSectionData('11', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '12':
@@ -1361,6 +1402,7 @@ export default function DashboardPage() {
             data={formData['12'] || {}}
             onChange={data => updateSectionData('12', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '13':
@@ -1369,6 +1411,7 @@ export default function DashboardPage() {
             data={formData['13'] || {}}
             onChange={data => updateSectionData('13', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '14':
@@ -1377,6 +1420,7 @@ export default function DashboardPage() {
             data={formData['14'] || {}}
             onChange={data => updateSectionData('14', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '15':
@@ -1385,6 +1429,7 @@ export default function DashboardPage() {
             data={formData['15'] || {}}
             onChange={data => updateSectionData('15', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '16':
@@ -1393,6 +1438,7 @@ export default function DashboardPage() {
             data={formData['16'] || {}}
             onChange={data => updateSectionData('16', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '17':
@@ -1401,6 +1447,7 @@ export default function DashboardPage() {
             data={formData['17'] || {}}
             onChange={data => updateSectionData('17', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '18':
@@ -1409,6 +1456,7 @@ export default function DashboardPage() {
             data={formData['18'] || {}}
             onChange={data => updateSectionData('18', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '19':
@@ -1417,6 +1465,7 @@ export default function DashboardPage() {
             data={formData['19'] || {}}
             onChange={data => updateSectionData('19', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '20':
@@ -1425,6 +1474,7 @@ export default function DashboardPage() {
             data={formData['20'] || {}}
             onChange={data => updateSectionData('20', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       case '21':
@@ -1433,6 +1483,7 @@ export default function DashboardPage() {
             data={formData['21'] || {}}
             onChange={data => updateSectionData('21', data)}
             activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
           />
         );
       default:
@@ -1521,6 +1572,7 @@ export default function DashboardPage() {
   const goToDashboard = () => {
     setActiveSection('dashboard');
     setActiveSubsection(null);
+    setActiveTopicId(null);
     setSidebarOpen(false);
     setMobileMoreOpen(false);
   };
@@ -1528,6 +1580,7 @@ export default function DashboardPage() {
   const goToSection = (sectionId: string) => {
     setActiveSection(sectionId);
     setActiveSubsection(null);
+    setActiveTopicId(null);
     setSidebarOpen(false);
     setMobileMoreOpen(false);
   };
@@ -1535,6 +1588,7 @@ export default function DashboardPage() {
   const goToSubsection = (sectionId: string, subsectionId: string) => {
     setActiveSection(sectionId);
     setActiveSubsection(subsectionId);
+    setActiveTopicId(null);
     setSidebarOpen(false);
     setMobileMoreOpen(false);
 
@@ -1544,6 +1598,25 @@ export default function DashboardPage() {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }, 100);
+  };
+
+  const goToTopic = (
+    sectionId: string,
+    subsectionId: string,
+    topicId: string,
+  ) => {
+    setActiveSection(sectionId);
+    setActiveSubsection(subsectionId);
+    setActiveTopicId(topicId);
+    setSidebarOpen(false);
+    setMobileMoreOpen(false);
+
+    setTimeout(() => {
+      const element = document.getElementById(getTopicElementId(topicId));
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 120);
   };
 
   return (
@@ -1835,29 +1908,82 @@ export default function DashboardPage() {
 
                         {section.subsections && isExpanded && (
                           <div className="ml-4 space-y-1 border-l border-slate-100 pl-3">
-                            {section.subsections.map((subsection: any) => (
-                              <button
-                                key={`section-${section.id}-subsection-${subsection.id}`}
-                                type="button"
-                                onClick={() =>
-                                  goToSubsection(section.id, subsection.id)
-                                }
-                                className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${
-                                  activeSubsection === subsection.id
-                                    ? 'bg-slate-100 font-semibold text-[#10213f]'
-                                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                                } ${disabledSubsections[subsection.id] ? 'opacity-50' : ''}`}
-                              >
-                                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
-                                <span className="min-w-0 flex-1 truncate">
-                                  {(obituarySubsections.has(subsection.id) ||
-                                    hasDoveTag(section.id, subsection.id)) && (
-                                    <span className="mr-1">🕊️</span>
+                            {section.subsections.map((subsection: any) => {
+                              const dynamicTopics = subsectionHasDynamicTopics(
+                                section.id,
+                                subsection.id,
+                              )
+                                ? getDynamicTopicsForSubsection(
+                                    section.id,
+                                    subsection.id,
+                                    formData[section.id],
+                                  )
+                                : [];
+
+                              const isSubsectionActive =
+                                activeSubsection === subsection.id &&
+                                !activeTopicId;
+
+                              return (
+                                <div
+                                  key={`section-${section.id}-subsection-${subsection.id}`}
+                                  className="space-y-1"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      goToSubsection(section.id, subsection.id)
+                                    }
+                                    className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${
+                                      isSubsectionActive ||
+                                      (activeSubsection === subsection.id &&
+                                        dynamicTopics.length === 0)
+                                        ? 'bg-slate-100 font-semibold text-[#10213f]'
+                                        : activeSubsection === subsection.id
+                                          ? 'font-semibold text-[#10213f]'
+                                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                                    } ${disabledSubsections[subsection.id] ? 'opacity-50' : ''}`}
+                                  >
+                                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
+                                    <span className="min-w-0 flex-1 truncate">
+                                      {(obituarySubsections.has(subsection.id) ||
+                                        hasDoveTag(section.id, subsection.id)) && (
+                                        <span className="mr-1">🕊️</span>
+                                      )}
+                                      {subsection.id}. {subsection.title}
+                                    </span>
+                                  </button>
+
+                                  {dynamicTopics.length > 0 && (
+                                    <div className="ml-3 space-y-1 border-l border-slate-100 pl-3">
+                                      {dynamicTopics.map(topic => (
+                                        <button
+                                          key={`topic-${topic.id}`}
+                                          type="button"
+                                          onClick={() =>
+                                            goToTopic(
+                                              section.id,
+                                              subsection.id,
+                                              topic.id,
+                                            )
+                                          }
+                                          className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs transition ${
+                                            activeTopicId === topic.id
+                                              ? 'bg-blue-50 font-semibold text-[#10213f]'
+                                              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                                          }`}
+                                        >
+                                          <span className="h-1 w-1 shrink-0 rounded-full bg-current opacity-50" />
+                                          <span className="min-w-0 flex-1 truncate">
+                                            {topic.label}
+                                          </span>
+                                        </button>
+                                      ))}
+                                    </div>
                                   )}
-                                  {subsection.id}. {subsection.title}
-                                </span>
-                              </button>
-                            ))}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -2056,7 +2182,7 @@ export default function DashboardPage() {
                     </label>
                   )}
 
-                  {activeSection === '4' && formData['4']?.['4A'] && (
+                  {activeSection === '4' && (
                     <div className="flex flex-col gap-3 rounded-[24px] border border-rose-100 bg-rose-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <h3 className="text-sm font-semibold text-rose-700">

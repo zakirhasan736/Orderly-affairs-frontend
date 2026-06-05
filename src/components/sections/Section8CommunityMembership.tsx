@@ -23,6 +23,10 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  getTopicCardProps,
+  useScrollToVaultTopic,
+} from '@/utils/vaultTopicNavigation';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -106,6 +110,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
+  activeTopicId?: string | null;
 }
 
 type UploadScope = 'full' | `group:${number}`;
@@ -142,6 +147,7 @@ export default function Section8CommunityMembership({
   data = {},
   onChange = () => {},
   activeSubsection,
+  activeTopicId,
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -162,11 +168,24 @@ export default function Section8CommunityMembership({
   const groups: any[] = Array.isArray(data['8A']) ? data['8A'] : [];
   const show8A = !activeSubsection || activeSubsection === '8A';
 
+  useScrollToVaultTopic(activeTopicId, groups.length);
+
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
 
+  const createEmptyUploadField = () => ({
+    text: '',
+    files: [] as unknown[],
+    _deleted_files: [] as string[],
+  });
+
   const createEmptyGroup = () => {
-    return Object.fromEntries(SECTION_8A.fields.map(field => [field.key, '']));
+    return Object.fromEntries(
+      SECTION_8A.fields.map(field => [
+        field.key,
+        field.type === 'TextInputWithUpload' ? createEmptyUploadField() : '',
+      ]),
+    );
   };
 
   const updateGroups = (next: any[]) => {
@@ -487,7 +506,10 @@ export default function Section8CommunityMembership({
         </div>
       )}
 
-      <Card className="overflow-hidden border-slate-200 shadow-sm">
+      <Card
+        id="subsection-8A"
+        className="overflow-hidden border-slate-200 shadow-sm"
+      >
         <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-orange-50/70">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -537,11 +559,13 @@ export default function Section8CommunityMembership({
           {groups.map((group, index) => {
             const itemScope = `group:${index}` as UploadScope;
             const itemLabel = `${SECTION_8A.itemLabel} #${index + 1}`;
+            const topicProps = getTopicCardProps('8A', index, activeTopicId);
 
             return (
               <Card
                 key={`${itemScope}-${index}`}
-                className="overflow-hidden border-slate-200 shadow-sm"
+                id={topicProps.id}
+                className={topicProps.className}
               >
                 <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
