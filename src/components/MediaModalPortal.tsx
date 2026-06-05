@@ -43,8 +43,8 @@ export function MediaModalPortal({
         className="absolute inset-0 bg-black/65 backdrop-blur-sm"
         onClick={onBackdropClick}
       />
-      <div className="relative z-[201] flex min-h-[100dvh] items-start justify-center overflow-y-auto px-3 py-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:px-4 sm:py-6">
-        <div className="w-full max-w-4xl">{children}</div>
+      <div className="relative z-[201] flex min-h-[100dvh] items-start justify-center overflow-y-auto overscroll-contain px-2 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:items-center sm:px-4 sm:py-6">
+        <div className="w-full max-w-4xl sm:max-w-3xl">{children}</div>
       </div>
     </div>,
     document.body,

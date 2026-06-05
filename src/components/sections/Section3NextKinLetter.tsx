@@ -497,26 +497,7 @@ export default function Section3NextOfKinLetter({
           className="h-[96dvh]"
           labelledBy="nok-letter-wizard-title"
         >
-          {selectedNokId && selectedPerson && (
-            <NextOfKinLetterField
-              data={(data.next_of_kin_letter_data || {}) as any}
-              onChange={value => updateLetterData(value as LetterData)}
-              selectedNokId={selectedNokId}
-              embeddedInSheet
-              onClose={() => setLetterSheetOpen(false)}
-              recipientName={getDisplayName(selectedPerson)}
-            />
-          )}
-        </MobileBottomSheet>
-      ) : (
-        <Sheet
-          open={letterSheetOpen && !!selectedNokId && !!selectedPerson}
-          onOpenChange={open => !open && setLetterSheetOpen(false)}
-        >
-          <SheetContent
-            side="right"
-            className="flex h-full w-full max-w-xl flex-col gap-0 p-0 sm:max-w-2xl"
-          >
+          <div className="flex h-full min-h-0 flex-col">
             {selectedNokId && selectedPerson && (
               <NextOfKinLetterField
                 data={(data.next_of_kin_letter_data || {}) as any}
@@ -527,6 +508,29 @@ export default function Section3NextOfKinLetter({
                 recipientName={getDisplayName(selectedPerson)}
               />
             )}
+          </div>
+        </MobileBottomSheet>
+      ) : (
+        <Sheet
+          open={letterSheetOpen && !!selectedNokId && !!selectedPerson}
+          onOpenChange={open => !open && setLetterSheetOpen(false)}
+        >
+          <SheetContent
+            side="right"
+            className="flex h-full max-w-lg flex-col gap-0 p-0 sm:max-w-xl"
+          >
+            <div className="flex h-full min-h-0 flex-col">
+              {selectedNokId && selectedPerson && (
+                <NextOfKinLetterField
+                  data={(data.next_of_kin_letter_data || {}) as any}
+                  onChange={value => updateLetterData(value as LetterData)}
+                  selectedNokId={selectedNokId}
+                  embeddedInSheet
+                  onClose={() => setLetterSheetOpen(false)}
+                  recipientName={getDisplayName(selectedPerson)}
+                />
+              )}
+            </div>
           </SheetContent>
         </Sheet>
       )}

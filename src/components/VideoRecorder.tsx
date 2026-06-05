@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@common/ui/button';
 import { Card, CardContent } from '@common/ui/card';
+import { cn } from '@common/ui/utils';
+import { useIsMobile } from '@/components/MobileBottomSheet';
 import {
   Video,
   Square,
@@ -418,6 +420,17 @@ export function VideoRecorder({
   };
 
   const isRecordedPreview = Boolean(previewUrl && recordedBlob);
+  const isMobile = useIsMobile();
+
+  const statusLabel = isRecordedPreview
+    ? 'Preview Ready'
+    : status === 'recording'
+      ? 'Recording'
+      : status === 'paused'
+        ? 'Paused'
+        : status === 'loading'
+          ? 'Loading'
+          : 'Ready';
 
   return (
     <Card className="relative w-full rounded-[28px] border border-white/10 bg-white shadow-2xl">
@@ -433,9 +446,19 @@ export function VideoRecorder({
         </div>
       )}
 
-      <CardContent className="flex max-h-[min(92dvh,900px)] flex-col p-0">
+      <CardContent
+        className={cn(
+          'flex flex-col p-0',
+          isMobile ? 'max-h-[94dvh]' : 'max-h-[min(92dvh,900px)]',
+        )}
+      >
           {/* Header */}
-          <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-4 py-4 sm:px-6">
+          <div
+            className={cn(
+              'flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 py-4',
+              isMobile ? 'px-4' : 'px-4 sm:px-6',
+            )}
+          >
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600">
                 <Video className="h-6 w-6" />
@@ -464,11 +487,26 @@ export function VideoRecorder({
           </div>
 
           {/* Body */}
-          <div className="overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
+          <div
+            className={cn(
+              'min-h-0 flex-1 overflow-y-auto overscroll-contain',
+              isMobile ? 'px-3 py-3' : 'px-4 py-4 sm:px-6 sm:py-5',
+            )}
+          >
+            <div
+              className={cn(
+                'grid gap-4',
+                !isMobile && 'gap-5 lg:grid-cols-[minmax(0,1fr)_260px]',
+              )}
+            >
               {/* Video Preview Area */}
-              <div className="space-y-4">
-                <div className="relative rounded-[28px] bg-black shadow-xl">
+              <div className="space-y-3 sm:space-y-4">
+                <div
+                  className={cn(
+                    'relative overflow-hidden rounded-[24px] bg-black shadow-xl sm:rounded-[28px]',
+                    isMobile ? 'h-[min(32dvh,440px)]' : '',
+                  )}
+                >
                   {isRecordedPreview ? (
                     <video
                       key={previewUrl}
@@ -477,7 +515,12 @@ export function VideoRecorder({
                       playsInline
                       preload="metadata"
                       src={previewUrl || undefined}
-                      className="aspect-video w-full bg-black object-contain"
+                      className={cn(
+                        'w-full bg-black',
+                        isMobile
+                          ? 'h-full object-contain'
+                          : 'aspect-video object-contain',
+                      )}
                       style={{ WebkitTransform: 'translateZ(0)' }}
                     />
                   ) : (
@@ -486,13 +529,23 @@ export function VideoRecorder({
                       autoPlay
                       muted
                       playsInline
-                      className="aspect-video w-full bg-black object-contain"
+                      className={cn(
+                        'w-full bg-black',
+                        isMobile
+                          ? 'h-full object-cover'
+                          : 'aspect-video object-contain',
+                      )}
                       style={{ WebkitTransform: 'translateZ(0)' }}
                     />
                   )}
 
                   {/* Top status badge */}
-                  <div className="absolute left-4 top-4">
+                  <div
+                    className={cn(
+                      'absolute top-3',
+                      isMobile ? 'left-3' : 'left-4 top-4',
+                    )}
+                  >
                     {isRecordedPreview ? (
                       <div className="flex items-center gap-2 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg">
                         <CheckCircle2 className="h-4 w-4" />
@@ -557,22 +610,14 @@ export function VideoRecorder({
               </div>
 
               {/* Side Controls */}
-              <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 sm:rounded-[28px]">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
                     Recording Status
                   </p>
 
                   <h4 className="mt-2 text-xl font-black text-slate-950">
-                    {isRecordedPreview
-                      ? 'Preview Ready'
-                      : status === 'recording'
-                        ? 'Recording'
-                        : status === 'paused'
-                          ? 'Paused'
-                          : status === 'loading'
-                            ? 'Loading'
-                            : 'Ready'}
+                    {statusLabel}
                   </h4>
 
                   <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
@@ -595,7 +640,10 @@ export function VideoRecorder({
                       <Button
                         type="button"
                         onClick={startRecording}
-                        className="h-12 rounded-2xl bg-red-600 text-white hover:bg-red-700"
+                        className={cn(
+                          'h-12 rounded-2xl bg-red-600 text-white hover:bg-red-700',
+                          isMobile && 'w-full',
+                        )}
                       >
                         <Video className="mr-2 h-4 w-4" />
                         Start Recording
@@ -687,7 +735,10 @@ export function VideoRecorder({
                     type="button"
                     variant="ghost"
                     onClick={handleClose}
-                    className="h-11 rounded-2xl text-slate-500 hover:text-slate-900"
+                    className={cn(
+                      'h-11 rounded-2xl text-slate-500 hover:text-slate-900',
+                      isMobile && 'w-full',
+                    )}
                   >
                     Cancel
                   </Button>

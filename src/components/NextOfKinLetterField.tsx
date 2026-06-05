@@ -219,65 +219,85 @@ function LetterSelectableCard({
 function LetterWizardStepper({
   currentIndex,
   onStepClick,
+  compact = false,
 }: {
   currentIndex: number;
   onStepClick?: (index: number) => void;
+  compact?: boolean;
 }) {
   return (
-    <nav aria-label="Letter editor progress" className="flex items-center gap-0">
-      {EDITOR_STEPS.map((step, index) => {
-        const isActive = index === currentIndex;
-        const isComplete = index < currentIndex;
-        const canNavigate = isComplete && !!onStepClick;
+    <div
+      className={cn(
+        compact && 'overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+      )}
+    >
+      <nav
+        aria-label="Letter editor progress"
+        className={cn(
+          'flex items-center gap-0',
+          compact && 'min-w-[min(100%,22rem)]',
+        )}
+      >
+        {EDITOR_STEPS.map((step, index) => {
+          const isActive = index === currentIndex;
+          const isComplete = index < currentIndex;
+          const canNavigate = isComplete && !!onStepClick;
 
-        return (
-          <React.Fragment key={step.id}>
-            {index > 0 && (
-              <div
-                className={cn(
-                  'h-0.5 min-w-3 flex-1 rounded-full transition-colors',
-                  index <= currentIndex ? 'bg-primary/40' : 'bg-muted',
-                )}
-                aria-hidden
-              />
-            )}
-            <button
-              type="button"
-              disabled={!canNavigate}
-              onClick={() => canNavigate && onStepClick?.(index)}
-              aria-current={isActive ? 'step' : undefined}
-              aria-label={`${step.label}${isComplete ? ', completed' : isActive ? ', current' : ''}`}
-              className={cn(
-                'flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-xl px-1 py-1 transition',
-                canNavigate &&
-                  'cursor-pointer hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
-                !canNavigate && !isActive && 'cursor-default',
+          return (
+            <React.Fragment key={step.id}>
+              {index > 0 && (
+                <div
+                  className={cn(
+                    'h-0.5 min-w-2 flex-1 rounded-full transition-colors sm:min-w-3',
+                    index <= currentIndex ? 'bg-primary/40' : 'bg-muted',
+                  )}
+                  aria-hidden
+                />
               )}
-            >
-              <div
+              <button
+                type="button"
+                disabled={!canNavigate}
+                onClick={() => canNavigate && onStepClick?.(index)}
+                aria-current={isActive ? 'step' : undefined}
+                aria-label={`${step.label}${isComplete ? ', completed' : isActive ? ', current' : ''}`}
                 className={cn(
-                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition',
-                  isActive && 'bg-primary text-primary-foreground shadow-sm',
-                  isComplete && 'bg-primary/15 text-primary',
-                  !isActive && !isComplete && 'bg-muted text-muted-foreground',
+                  'flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-0.5 py-1 transition sm:gap-1.5 sm:px-1',
+                  canNavigate &&
+                    'cursor-pointer hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+                  !canNavigate && !isActive && 'cursor-default',
                 )}
               >
-                {isComplete ? <Check className="h-4 w-4" /> : index + 1}
-              </div>
-              <span
-                className={cn(
-                  'truncate text-center text-[10px] font-medium sm:text-xs',
-                  isActive ? 'text-foreground' : 'text-muted-foreground',
-                  canNavigate && 'underline-offset-2 hover:underline',
-                )}
-              >
-                {step.label}
-              </span>
-            </button>
-          </React.Fragment>
-        );
-      })}
-    </nav>
+                <div
+                  className={cn(
+                    'flex shrink-0 items-center justify-center rounded-full text-xs font-semibold transition',
+                    compact ? 'h-8 w-8' : 'h-9 w-9',
+                    isActive && 'bg-primary text-primary-foreground shadow-sm',
+                    isComplete && 'bg-primary/15 text-primary',
+                    !isActive && !isComplete && 'bg-muted text-muted-foreground',
+                  )}
+                >
+                  {isComplete ? (
+                    <Check className={cn(compact ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
+                  ) : (
+                    index + 1
+                  )}
+                </div>
+                <span
+                  className={cn(
+                    'w-full truncate text-center font-medium leading-tight',
+                    compact ? 'text-[9px] sm:text-[10px]' : 'text-[10px] sm:text-xs',
+                    isActive ? 'text-foreground' : 'text-muted-foreground',
+                    canNavigate && 'underline-offset-2 hover:underline',
+                  )}
+                >
+                  {step.label}
+                </span>
+              </button>
+            </React.Fragment>
+          );
+        })}
+      </nav>
+    </div>
   );
 }
 
@@ -1138,7 +1158,81 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
     </>
   );
 
-  const wizardFooter = (
+  const sheetFooter = (
+    <div
+      className={cn(
+        'flex w-full gap-2',
+        isMobile
+          ? 'flex-col-reverse'
+          : 'flex-col-reverse sm:flex-row sm:justify-between',
+      )}
+    >
+      {wizardStep === 0 ? (
+        onClose ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            className={cn(
+              'rounded-2xl',
+              MIN_TOUCH,
+              isMobile && embeddedInSheet ? 'w-full' : 'w-full sm:w-auto',
+            )}
+          >
+            Cancel
+          </Button>
+        ) : (
+          <div className="hidden sm:block" />
+        )
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={goToPreviousStep}
+          className={cn(
+            'rounded-2xl',
+            MIN_TOUCH,
+            isMobile && embeddedInSheet ? 'w-full' : 'w-full sm:w-auto',
+          )}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+      )}
+
+      {!isLastStep ? (
+        <Button
+          type="button"
+          onClick={goToNextStep}
+          className={cn(
+            'rounded-2xl',
+            MIN_TOUCH,
+            isMobile && embeddedInSheet ? 'w-full' : 'w-full sm:w-auto',
+          )}
+        >
+          Next
+          <ArrowRight className="ml-2 h-4 w-4" />
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          onClick={handleExport}
+          className={cn(
+            'rounded-2xl',
+            MIN_TOUCH,
+            isMobile && embeddedInSheet ? 'w-full' : 'w-full sm:w-auto',
+          )}
+        >
+          <Download className="mr-2 h-4 w-4" />
+          Export Letter
+        </Button>
+      )}
+    </div>
+  );
+
+  const wizardFooter = embeddedInSheet ? (
+    sheetFooter
+  ) : (
     <div
       className={cn(
         'flex w-full gap-2',
@@ -1148,18 +1242,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
       )}
     >
       {wizardStep === 0 ? (
-        onClose ? (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            className={cn('rounded-2xl', MIN_TOUCH, 'w-full sm:w-auto')}
-          >
-            Cancel
-          </Button>
-        ) : (
-          <div className="hidden sm:block" />
-        )
+        <div className="hidden sm:block" />
       ) : (
         <Button
           type="button"
@@ -1172,12 +1255,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
         </Button>
       )}
 
-      <div
-        className={cn(
-          'flex gap-2',
-          isMobile ? 'grid grid-cols-2' : 'flex-wrap sm:justify-end',
-        )}
-      >
+      <div className="flex flex-wrap justify-end gap-2">
         {!isMobile && (
           <Dialog>
             <DialogTrigger asChild>
@@ -1204,18 +1282,6 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
               </div>
             </DialogContent>
           </Dialog>
-        )}
-
-        {isMobile && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setPreviewOpen(true)}
-            className={cn('rounded-2xl', MIN_TOUCH)}
-          >
-            <Eye className="mr-2 h-4 w-4" />
-            Preview
-          </Button>
         )}
 
         {!isLastStep ? (
@@ -1362,7 +1428,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
         <div
           className={cn(
             'shrink-0 space-y-0 border-b px-4 pb-4 sm:px-6',
-            isMobile && embeddedInSheet ? 'pt-1' : 'pt-4 sm:pt-5',
+            embeddedInSheet && isMobile ? 'pt-1' : 'pt-4 sm:pt-5',
           )}
         >
           <div className="flex items-start justify-between gap-3">
@@ -1374,48 +1440,68 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
                 Next of Kin Letter
               </h2>
               <p className="text-left text-sm text-muted-foreground">
-                {recipientName
-                  ? `Editing for ${recipientName}`
-                  : `Step ${wizardStep + 1} of ${EDITOR_STEPS.length}`}
+                Step {wizardStep + 1} of {EDITOR_STEPS.length}
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge
-                  variant="outline"
-                  className="rounded-full border-primary/20 bg-primary/5 px-2.5 py-0.5 text-xs text-primary"
-                >
-                  {isFetching ? 'Loading' : isSaving ? 'Saving' : 'Auto-saved'}
-                </Badge>
-                {isError && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => refetch()}
-                    className="h-8 rounded-xl px-2 text-xs"
+              {embeddedInSheet && recipientName && (
+                <p className="mt-0.5 truncate text-left text-xs text-muted-foreground">
+                  {recipientName}
+                </p>
+              )}
+              {!embeddedInSheet && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="rounded-full border-primary/20 bg-primary/5 px-2.5 py-0.5 text-xs text-primary"
                   >
-                    <RefreshCw className="mr-1 h-3.5 w-3.5" />
-                    Retry
-                  </Button>
-                )}
-              </div>
+                    {isFetching ? 'Loading' : isSaving ? 'Saving' : 'Auto-saved'}
+                  </Badge>
+                  {isError && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => refetch()}
+                      className="h-8 rounded-xl px-2 text-xs"
+                    >
+                      <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                      Retry
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
-            {onClose && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-                className="h-10 w-10 shrink-0 rounded-full"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            )}
+            <div className="flex shrink-0 items-center gap-1">
+              {embeddedInSheet && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setPreviewOpen(true)}
+                  className="h-10 w-10 rounded-full"
+                  aria-label="Preview letter"
+                >
+                  <Eye className="h-5 w-5" />
+                </Button>
+              )}
+              {embeddedInSheet && isMobile && onClose && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onClose}
+                  className="h-10 w-10 rounded-full"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              )}
+            </div>
           </div>
           <div className="mt-4">
             <LetterWizardStepper
               currentIndex={wizardStep}
               onStepClick={goToWizardStep}
+              compact={isMobile}
             />
           </div>
         </div>
@@ -1461,7 +1547,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
       </div>
     </div>
 
-    {isMobile && (
+    {isMobile ? (
       <MobileBottomSheet
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
@@ -1509,6 +1595,33 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
           </div>
         </div>
       </MobileBottomSheet>
+    ) : (
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-h-[92svh] w-[calc(100vw-2rem)] max-w-4xl gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl">
+          <DialogHeader className="border-b bg-muted/30 px-5 py-5 pr-14 sm:px-6">
+            <DialogTitle className="flex items-center gap-3 text-xl">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <FileText className="h-5 w-5" />
+              </span>
+              Letter Preview
+            </DialogTitle>
+            <DialogDescription>
+              Review the final letter before printing, exporting, or emailing.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[calc(92svh-170px)] overflow-y-auto bg-muted/30 px-4 py-5 sm:px-8">
+            <LetterPreviewBody
+              letterPreview={letterPreview}
+              nokEmail={localData.nok_email}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 border-t bg-background px-4 py-3 sm:flex sm:justify-end">
+            {previewActions}
+          </div>
+        </DialogContent>
+      </Dialog>
     )}
     </>
   );

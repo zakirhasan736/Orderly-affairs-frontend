@@ -40,6 +40,7 @@ import {
 import { Card, CardContent } from '@/components/common/ui/card';
 import { Input } from '@/components/common/ui/input';
 import { PhoneNumberInput } from '@/components/PhoneNumberInput';
+import { SixDigitOtpInput } from '@/components/SixDigitOtpInput';
 import { TurnstileCaptcha } from '@/components/TurnstileCaptcha';
 import { isValidE164PhoneNumber } from '@/utils/phoneCountries';
 import { getOtpSessionId } from '@/utils/otpSession';
@@ -146,6 +147,31 @@ const firstAvailableMfaMethod = (
   methods: Record<MFAMethod, boolean>,
   fallback: MFAMethod = 'email',
 ) => MFA_METHODS.find(method => methods[method]) || fallback;
+
+const AUTH_OTP_INPUT_CLASS =
+  'auth-otp-input h-12 sm:h-14 text-center text-lg tracking-[0.35em] enhanced-field-frame';
+
+function AuthStatusBanner({
+  icon,
+  children,
+}: {
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      role="status"
+      className="auth-status-banner flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3.5 text-left sm:p-4"
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/60 bg-white text-slate-500 shadow-sm">
+        {icon}
+      </div>
+      <p className="min-w-0 text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">
+        {children}
+      </p>
+    </div>
+  );
+}
 
 function PaymentForm({
   isTrial,
@@ -387,47 +413,6 @@ const handleSendEmailCode = async () => {
   }
 };
 
-const handleOtpChange = (value: string, index: number) => {
-  if (!/^\d?$/.test(value)) return;
-
-  const next = [...otp];
-  next[index] = value;
-  setOtp(next);
-
-  if (value && index < OTP_LENGTH - 1) {
-    const nextInput = document.getElementById(`otp-${index + 1}`);
-    nextInput?.focus();
-  }
-};
-
-const handleOtpKeyDown = (
-  e: React.KeyboardEvent<HTMLInputElement>,
-  index: number,
-) => {
-  if (e.key === 'Backspace' && !otp[index] && index > 0) {
-    const prevInput = document.getElementById(`otp-${index - 1}`);
-    prevInput?.focus();
-  }
-};
-
-const handleOtpPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-  const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-
-  if (!pasted) return;
-
-  e.preventDefault();
-
-  const next = Array(OTP_LENGTH).fill('');
-  pasted.split('').forEach((digit, i) => {
-    next[i] = digit;
-  });
-
-  setOtp(next);
-
-  const lastIndex = Math.min(pasted.length - 1, OTP_LENGTH - 1);
-  const lastInput = document.getElementById(`otp-${lastIndex}`);
-  lastInput?.focus();
-};
   // Inside LoginPage component
  const handleForgotPasswordClick = async () => {
    setError('');
@@ -1354,7 +1339,7 @@ const backButtonLabel =
           </p>
         </div>
         <Card className="glass-card shadow-[0_40px_80px_-20px_rgba(30,41,59,0.12)] border border-slate-100">
-          <CardContent className="px-6 pt-6 md:pt-9">
+          <CardContent className="px-0 sm:px-6 pt-6 md:pt-9">
             {error && (
               <Alert variant="destructive" className="mb-4">
                 <AlertCircle className="h-4 w-4" />
@@ -1892,27 +1877,17 @@ const backButtonLabel =
                     </Alert>
 
                     <form onSubmit={handleVerifySms} className="space-y-4">
-                      <div
-                        className="flex justify-center gap-2"
-                        onPaste={handleOtpPaste}
-                      >
-                        {otp.map((digit, index) => (
-                          <input
-                            key={index}
-                            id={`otp-${index}`}
-                            type="text"
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            maxLength={1}
-                            value={digit}
-                            onChange={e =>
-                              handleOtpChange(e.target.value, index)
-                            }
-                            onKeyDown={e => handleOtpKeyDown(e, index)}
-                            className="w-10 h-12 text-center text-lg border rounded-md"
-                          />
-                        ))}
-                      </div>
+                      <SixDigitOtpInput
+                        idPrefix="otp"
+                        value={otp.join('')}
+                        onChange={nextValue => {
+                          const next = Array.from({ length: 6 }, (_, index) =>
+                            nextValue[index] || '',
+                          );
+                          setOtp(next);
+                        }}
+                        disabled={loading || attempts >= MAX_ATTEMPTS}
+                      />
 
                       <Button
                         type="submit"

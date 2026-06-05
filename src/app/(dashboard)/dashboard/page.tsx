@@ -2046,12 +2046,12 @@ export default function DashboardPage() {
                   />
                 </div>
               ) : activeSection === 'vault-settings' ? (
-                <div className="space-y-5">
-                  <div className="rounded-[28px] border border-white/70 bg-white p-5 shadow-sm sm:p-6">
+                <div className="space-y-4 sm:space-y-5">
+                  <div className="rounded-[24px] border border-white/70 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-6">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
                       Secure Account
                     </p>
-                    <h2 className="mt-1 text-2xl font-semibold text-[#10213f] md:text-3xl">
+                    <h2 className="mt-1 text-xl font-semibold text-[#10213f] sm:text-2xl md:text-3xl">
                       Vault Settings
                     </h2>
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
