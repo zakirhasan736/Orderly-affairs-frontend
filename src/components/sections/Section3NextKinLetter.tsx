@@ -6,6 +6,10 @@ import { Badge } from '@common/ui/badge';
 import { Button } from '@common/ui/button';
 import { cn } from '@common/ui/utils';
 import {
+  Sheet,
+  SheetContent,
+} from '@common/ui/sheet';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -21,16 +25,12 @@ import {
   Phone,
   ShieldCheck,
   Sparkles,
-  UserCheck,
   Users,
-  X,
 } from 'lucide-react';
 
 import { NextOfKinLetterField } from '@/components/NextOfKinLetterField';
 import {
-  MOBILE_SHEET_SCROLL_PADDING,
   MobileBottomSheet,
-  MobileSheetHandle,
   useIsMobile,
 } from '@/components/MobileBottomSheet';
 import {
@@ -207,9 +207,7 @@ export default function Section3NextOfKinLetter({
 
   const openLetterForRecipient = (nokId: string) => {
     handleRecipientChange(nokId);
-    if (isMobile) {
-      setLetterSheetOpen(true);
-    }
+    setLetterSheetOpen(true);
   };
 
   return (
@@ -434,7 +432,7 @@ export default function Section3NextOfKinLetter({
                     <button
                       key={person.id}
                       type="button"
-                      onClick={() => handleRecipientChange(person.id)}
+                      onClick={() => openLetterForRecipient(person.id)}
                       className={`group rounded-[1.5rem] border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
                         isSelected
                           ? 'border-primary/40 bg-primary/5 shadow-md shadow-primary/10 ring-2 ring-primary/15'
@@ -491,94 +489,46 @@ export default function Section3NextOfKinLetter({
         </Card>
       )}
 
-      {/* ================= SELECTED LETTER EDITOR (desktop) ================= */}
-      {selectedNokId && selectedPerson && !isMobile && (
-        <div className="space-y-4">
-          <div className="rounded-[1.5rem] border border-primary/20 bg-primary/5 p-4 sm:rounded-[1.75rem] sm:p-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-                  <UserCheck className="h-5 w-5" />
-                </div>
-
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">
-                    Active letter
-                  </p>
-                  <h3 className="mt-1 text-base font-black text-foreground sm:text-lg">
-                    {getDisplayName(selectedPerson)}
-                  </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Review and customize this next-of-kin letter.
-                  </p>
-                </div>
-              </div>
-
-              <Badge
-                variant="outline"
-                className="w-fit rounded-full border-primary/20 bg-background px-3 py-1 text-primary"
-              >
-                Auto-saving enabled
-              </Badge>
-            </div>
-          </div>
-
-          <NextOfKinLetterField
-            data={(data.next_of_kin_letter_data || {}) as any}
-            onChange={value => updateLetterData(value as LetterData)}
-            selectedNokId={selectedNokId}
-          />
-        </div>
-      )}
-
       {/* ================= LETTER EDITOR (mobile bottom sheet) ================= */}
-      {isMobile && (
+      {isMobile ? (
         <MobileBottomSheet
           open={letterSheetOpen && !!selectedNokId && !!selectedPerson}
           onClose={() => setLetterSheetOpen(false)}
           className="h-[96dvh]"
-          labelledBy="nok-letter-sheet-title"
+          labelledBy="nok-letter-wizard-title"
         >
-          <div className="flex h-full min-h-0 flex-col">
-            <MobileSheetHandle />
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-4 pt-1">
-              <div className="min-w-0">
-                <h3 id="nok-letter-sheet-title" className="text-lg font-semibold">
-                  Next of Kin Letter
-                </h3>
-                <p className="truncate text-sm text-muted-foreground">
-                  {selectedPerson ? getDisplayName(selectedPerson) : ''}
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => setLetterSheetOpen(false)}
-                className="h-10 w-10 shrink-0 rounded-full"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-
-            {selectedNokId && selectedPerson && (
-              <div
-                className={cn(
-                  'min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-3',
-                  MOBILE_SHEET_SCROLL_PADDING,
-                )}
-              >
-                <NextOfKinLetterField
-                  data={(data.next_of_kin_letter_data || {}) as any}
-                  onChange={value => updateLetterData(value as LetterData)}
-                  selectedNokId={selectedNokId}
-                  embeddedInSheet
-                />
-              </div>
-            )}
-          </div>
+          {selectedNokId && selectedPerson && (
+            <NextOfKinLetterField
+              data={(data.next_of_kin_letter_data || {}) as any}
+              onChange={value => updateLetterData(value as LetterData)}
+              selectedNokId={selectedNokId}
+              embeddedInSheet
+              onClose={() => setLetterSheetOpen(false)}
+              recipientName={getDisplayName(selectedPerson)}
+            />
+          )}
         </MobileBottomSheet>
+      ) : (
+        <Sheet
+          open={letterSheetOpen && !!selectedNokId && !!selectedPerson}
+          onOpenChange={open => !open && setLetterSheetOpen(false)}
+        >
+          <SheetContent
+            side="right"
+            className="flex h-full w-full max-w-xl flex-col gap-0 p-0 sm:max-w-2xl"
+          >
+            {selectedNokId && selectedPerson && (
+              <NextOfKinLetterField
+                data={(data.next_of_kin_letter_data || {}) as any}
+                onChange={value => updateLetterData(value as LetterData)}
+                selectedNokId={selectedNokId}
+                embeddedInSheet
+                onClose={() => setLetterSheetOpen(false)}
+                recipientName={getDisplayName(selectedPerson)}
+              />
+            )}
+          </SheetContent>
+        </Sheet>
       )}
     </section>
   );
