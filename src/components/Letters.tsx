@@ -421,7 +421,6 @@ export function Letters({
 
   const handleMediaUploaded = (media: LetterMedia) => {
     attachMedia(media);
-
     setShowVideoRecorder(false);
     setShowAudioRecorder(false);
     toast.success('Media attached successfully');
@@ -2127,8 +2126,8 @@ function MediaUploadPanel({
             </h3>
             <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
               {isVideo
-                ? 'Add a personal video by recording or uploading a file.'
-                : 'Add a voice message by recording or uploading a file.'}
+                ? 'Record a personal video message using your camera.'
+                : 'Record a voice message using your microphone.'}
             </p>
           </div>
         </div>
@@ -2140,7 +2139,7 @@ function MediaUploadPanel({
             className="h-11 rounded-xl lg:min-w-[200px]"
           >
             <Plus className="mr-2 h-4 w-4" />
-            {isVideo ? 'Add Video' : 'Add Audio'}
+            {isVideo ? 'Record Video' : 'Record Audio'}
           </Button>
         )}
       </div>

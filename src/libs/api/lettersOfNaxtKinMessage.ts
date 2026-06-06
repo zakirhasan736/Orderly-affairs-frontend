@@ -84,7 +84,17 @@ export async function uploadMessageMedia(token: string, file: File | Blob) {
   });
 
   if (!res.ok) {
-    throw new Error('Media upload failed');
+    let detail = 'Media upload failed';
+
+    try {
+      const payload = await res.json();
+      detail = payload?.detail || payload?.message || detail;
+    } catch {
+      const text = await res.text();
+      if (text) detail = text;
+    }
+
+    throw new Error(detail);
   }
 
   return res.json();

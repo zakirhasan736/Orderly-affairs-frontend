@@ -959,7 +959,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
             disabled={!canChangePlan || disableActions}
             onClick={() => setShowUpgradeModal(true)}
             className={cn(
-              'w-auto whitespace-nowrap rounded-xl px-6 py-3.5 text-xs font-black uppercase sm:w-auto sm:px-10 sm:py-4',
+              'w-auto whitespace-nowrap cursor-pointer rounded-xl px-6 py-3.5 text-xs font-black uppercase sm:w-auto sm:px-10 sm:py-4',
               disableActions
                 ? 'cursor-not-allowed bg-slate-300'
                 : 'bg-[#1e293b] text-white',
@@ -974,7 +974,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
           {billing.status === 'active' && (
             <button
               onClick={pauseSubscription}
-              className="w-auto whitespace-nowrap rounded-xl bg-amber-600 px-6 py-3 text-xs font-black text-white sm:w-auto"
+              className="w-auto whitespace-nowrap cursor-pointer rounded-xl bg-amber-600 px-6 py-3 text-xs font-black text-white sm:w-auto"
             >
               Pause Subscription
             </button>
@@ -983,14 +983,14 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
           {billing.status === 'paused' && (
             <button
               onClick={resumeSubscription}
-              className="w-auto whitespace-nowrap rounded-xl bg-amber-600 px-6 py-3 text-xs font-black text-white sm:w-auto"
+              className="w-auto whitespace-nowrap cursor-pointer rounded-xl bg-amber-600 px-6 py-3 text-xs font-black text-white sm:w-auto"
             >
               Resume Subscription
             </button>
           )}
           <button
             onClick={openBillingPortal}
-            className="w-auto whitespace-nowrap rounded-xl bg-slate-800 px-6 py-3 text-xs uppercase font-black text-white sm:w-auto"
+            className="w-auto whitespace-nowrap cursor-pointer rounded-xl bg-slate-800 px-6 py-3 text-xs uppercase font-black text-white sm:w-auto"
           >
             Manage Billing
           </button>
