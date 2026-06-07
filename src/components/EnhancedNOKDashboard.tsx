@@ -32,6 +32,7 @@ import {
   isHiddenFromNokDashboard,
 } from '../config/nokConfig';
 import {
+  type NextKinOwnerSummary,
   useGetMyNextKinAccessQuery,
   useReportOwnerDeceasedMutation,
 } from '@/services/authApi';
@@ -47,10 +48,20 @@ interface KitSection {
 
 type Filter = 'all' | 'obituary' | 'checklists';
 
+type DashboardAccess = {
+  full_access: boolean;
+  authorized_sections: 'all' | string[];
+  nextkin: { full_name?: string; email?: string };
+  immediate_access?: boolean;
+  owner?: NextKinOwnerSummary;
+};
+
 interface PreviewAccess {
   full_access: boolean;
   authorized_sections: 'all' | string[];
   nextkin?: { full_name?: string; email?: string };
+  immediate_access?: boolean;
+  owner?: NextKinOwnerSummary;
 }
 
 interface EnhancedNOKDashboardProps {
@@ -93,13 +104,23 @@ export function EnhancedNOKDashboard({
     isLoading: accessLoading,
   } = useGetMyNextKinAccessQuery(undefined, { skip: isPreview });
 
-  const effectiveAccess = isPreview
+  const effectiveAccess: DashboardAccess | undefined = isPreview
     ? {
         full_access: previewAccess!.full_access,
         authorized_sections: previewAccess!.authorized_sections,
         nextkin: previewAccess!.nextkin ?? {},
+        immediate_access: previewAccess!.immediate_access,
+        owner: previewAccess!.owner,
       }
-    : access;
+    : access
+      ? {
+          full_access: access.full_access,
+          authorized_sections: access.authorized_sections,
+          nextkin: access.nextkin,
+          immediate_access: access.immediate_access,
+          owner: access.owner,
+        }
+      : undefined;
 
   // Sections source
 const allSections = useMemo(
