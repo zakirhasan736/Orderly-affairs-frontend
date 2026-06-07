@@ -17,8 +17,18 @@ import {
   CheckCircle2,
   Loader2,
   UsersRound,
+  Heart,
+  Bell,
 } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
+import {
+  type FieldGroup,
+  buildFieldMap,
+  VaultOverviewBox,
+  VaultEncryptedBadge,
+  VaultGroupCards,
+} from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
@@ -101,6 +111,54 @@ const SECTION_8A = {
     },
   ],
 };
+
+const FIELD_MAP_8A = buildFieldMap(SECTION_8A.fields);
+
+const SECTION_8A_GROUPS: FieldGroup[] = [
+  {
+    key: 'organization_basics',
+    title: 'Organization Basics',
+    subtitle: 'Name and type of group or organization',
+    icon: UsersRound,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'grid',
+    fieldKeys: [
+      'organization_name',
+      'organization_type',
+      'organization_type_other',
+    ],
+  },
+  {
+    key: 'membership_details',
+    title: 'Membership Details',
+    subtitle: 'Role, contact info, and personal significance',
+    icon: Heart,
+    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-rose-500/10 text-rose-700',
+    layout: 'stack',
+    fieldKeys: ['membership_details', 'contact_info', 'importance'],
+  },
+  {
+    key: 'notifications_documents',
+    title: 'Notifications & Documents',
+    subtitle: 'Notification wishes and membership records',
+    icon: Bell,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: ['notify_instructions', 'documents'],
+  },
+];
+
+const SUBSECTION_OVERVIEW = {
+  label: 'Community Memberships Overview',
+  content:
+    'Document clubs, religious groups, volunteer organizations, and other communities that matter to you. Add one card per organization with contact details and notification preferences.',
+};
+
+const SUBSECTION_SUBTITLE =
+  'Add each group membership with grouped details in a clean two-column layout on desktop and mobile.';
 
 /* ------------------------------------------------------------------ */
 /* TYPES                                                              */
@@ -506,30 +564,46 @@ export default function Section8CommunityMembership({
         </div>
       )}
 
-      <Card
+      <div
         id="subsection-8A"
-        className="overflow-hidden border-slate-200 shadow-sm"
+        className={cn(
+          'rounded-3xl',
+          activeSubsection === '8A' && 'border border-primary p-1',
+        )}
       >
-        <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-orange-50/70">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <UsersRound className="h-5 w-5 text-orange-600" />
-              8A. {SECTION_8A.title}
-            </CardTitle>
+        <Card className="overflow-hidden border-slate-200/80 shadow-sm">
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-indigo-50/60 px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
+                  <UsersRound className="h-5 w-5 text-orange-600" />
+                  8A. {SECTION_8A.title}
+                </CardTitle>
+                <p className="max-w-2xl text-sm leading-6 text-slate-600">
+                  {SUBSECTION_SUBTITLE}
+                </p>
+              </div>
 
-            <Button
-              type="button"
-              size="sm"
-              onClick={addGroup}
-              className="rounded-xl"
-            >
-              <Plus className="mr-1 h-4 w-4" />
-              Add {SECTION_8A.itemLabel}
-            </Button>
-          </div>
-        </CardHeader>
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                <VaultEncryptedBadge />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={addGroup}
+                  className="rounded-xl"
+                >
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add {SECTION_8A.itemLabel}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
 
-        <CardContent className="space-y-8 p-5">
+          <CardContent className="space-y-8 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
+            <VaultOverviewBox
+              label={SUBSECTION_OVERVIEW.label}
+              content={SUBSECTION_OVERVIEW.content}
+            />
           {/* {renderUploader({
             scope: 'full',
             title: 'Upload document for multiple memberships',
@@ -600,23 +674,27 @@ export default function Section8CommunityMembership({
                     onAutofill: () => handleAutofill(itemScope, index),
                   })}
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {SECTION_8A.fields.map(field => (
+                  <VaultGroupCards
+                    groups={SECTION_8A_GROUPS}
+                    fieldMap={FIELD_MAP_8A}
+                    renderField={fieldKey => (
                       <DynamicFormField
-                        key={field.key}
-                        field={field}
-                        value={group?.[field.key]}
+                        key={fieldKey}
+                        field={FIELD_MAP_8A[fieldKey]}
+                        value={group?.[fieldKey]}
                         formData={group}
-                        onChange={value => updateGroup(index, field.key, value)}
+                        onChange={value => updateGroup(index, fieldKey, value)}
+                        className="space-y-2"
                       />
-                    ))}
-                  </div>
+                    )}
+                  />
                 </CardContent>
               </Card>
             );
           })}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

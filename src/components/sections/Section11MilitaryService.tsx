@@ -17,8 +17,19 @@ import {
   CheckCircle2,
   Loader2,
   ShieldCheck,
+  Medal,
+  Heart,
+  Landmark,
 } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
+import {
+  type FieldGroup,
+  buildFieldMap,
+  VaultOverviewBox,
+  VaultEncryptedBadge,
+  VaultGroupCards,
+} from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
@@ -146,6 +157,71 @@ const SECTION_11A = {
     },
   ],
 };
+
+const FIELD_MAP_11A = buildFieldMap(SECTION_11A.fields);
+
+const SECTION_11A_GROUPS: FieldGroup[] = [
+  {
+    key: 'service_details',
+    title: 'Service Details',
+    subtitle: 'Branch, dates, rank, and occupational specialty',
+    icon: ShieldCheck,
+    accent: 'from-indigo-500/[0.07] to-blue-500/[0.03]',
+    iconWrap: 'bg-indigo-500/10 text-indigo-700',
+    layout: 'grid',
+    fieldKeys: [
+      'branch_of_service',
+      'branch_of_service_other',
+      'service_dates',
+      'rank_achieved',
+      'military_occupational_specialty',
+    ],
+  },
+  {
+    key: 'deployments_honors',
+    title: 'Deployments & Honors',
+    subtitle: 'Stations, combat service, awards, and discharge',
+    icon: Medal,
+    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
+    iconWrap: 'bg-amber-500/10 text-amber-700',
+    layout: 'stack',
+    fieldKeys: [
+      'deployments',
+      'combat_service',
+      'awards_decorations',
+      'discharge_type',
+    ],
+  },
+  {
+    key: 'benefits_records',
+    title: 'Benefits & Records',
+    subtitle: 'VA benefits and military service documents',
+    icon: Landmark,
+    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
+    iconWrap: 'bg-cyan-500/10 text-cyan-700',
+    layout: 'grid',
+    fieldKeys: ['va_benefits', 'military_documents'],
+  },
+  {
+    key: 'legacy_contacts',
+    title: 'Legacy Contacts',
+    subtitle: 'Burial preferences and veteran organization contacts',
+    icon: Heart,
+    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-rose-500/10 text-rose-700',
+    layout: 'stack',
+    fieldKeys: ['burial_preferences', 'veteran_contacts'],
+  },
+];
+
+const SUBSECTION_OVERVIEW = {
+  label: 'Military Service Overview',
+  content:
+    'Record your military service history, honors, VA benefits, and veteran contacts so your family can access benefits and honor your service. Add one card per service period.',
+};
+
+const SUBSECTION_SUBTITLE =
+  'Add each service period with grouped details for deployments, benefits, and legacy contacts in a mobile-friendly layout.';
 
 /* ------------------------------------------------------------------ */
 /* TYPES                                                              */
@@ -543,30 +619,46 @@ export default function Section11MilitaryService({
         </div>
       )}
 
-      <Card
+      <div
         id="subsection-11A"
-        className="overflow-hidden border-slate-200 shadow-sm"
+        className={cn(
+          'rounded-3xl',
+          activeSubsection === '11A' && 'border border-primary p-1',
+        )}
       >
-        <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-indigo-50/70">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-indigo-600" />
-              11A. {SECTION_11A.title}
-            </CardTitle>
+        <Card className="overflow-hidden border-slate-200/80 shadow-sm">
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-indigo-50/60 px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
+                  <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                  11A. {SECTION_11A.title}
+                </CardTitle>
+                <p className="max-w-2xl text-sm leading-6 text-slate-600">
+                  {SUBSECTION_SUBTITLE}
+                </p>
+              </div>
 
-            <Button
-              type="button"
-              size="sm"
-              onClick={addServicePeriod}
-              className="rounded-xl"
-            >
-              <Plus className="mr-1 h-4 w-4" />
-              Add {SECTION_11A.itemLabel}
-            </Button>
-          </div>
-        </CardHeader>
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                <VaultEncryptedBadge />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={addServicePeriod}
+                  className="rounded-xl"
+                >
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add {SECTION_11A.itemLabel}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
 
-        <CardContent className="space-y-8 p-5">
+          <CardContent className="space-y-8 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
+            <VaultOverviewBox
+              label={SUBSECTION_OVERVIEW.label}
+              content={SUBSECTION_OVERVIEW.content}
+            />
           {/* {renderUploader({
             scope: 'full',
             title: 'Upload document for multiple military service records',
@@ -637,25 +729,29 @@ export default function Section11MilitaryService({
                     onAutofill: () => handleAutofill(itemScope, index),
                   })}
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {SECTION_11A.fields.map(field => (
+                  <VaultGroupCards
+                    groups={SECTION_11A_GROUPS}
+                    fieldMap={FIELD_MAP_11A}
+                    renderField={fieldKey => (
                       <DynamicFormField
-                        key={field.key}
-                        field={field}
-                        value={item?.[field.key]}
+                        key={fieldKey}
+                        field={FIELD_MAP_11A[fieldKey]}
+                        value={item?.[fieldKey]}
                         formData={item}
                         onChange={value =>
-                          updateServicePeriod(index, field.key, value)
+                          updateServicePeriod(index, fieldKey, value)
                         }
+                        className="space-y-2"
                       />
-                    ))}
-                  </div>
+                    )}
+                  />
                 </CardContent>
               </Card>
             );
           })}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

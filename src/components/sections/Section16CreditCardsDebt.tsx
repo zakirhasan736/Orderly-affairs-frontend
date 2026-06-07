@@ -17,7 +17,14 @@ import {
   CheckCircle2,
   Loader2,
   CreditCard,
+  Landmark,
+  Receipt,
+  ShieldCheck,
+  Wallet,
+  ScrollText,
+  Users,
 } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
@@ -27,6 +34,13 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import {
+  type FieldGroup,
+  buildFieldMap,
+  VaultOverviewBox,
+  VaultEncryptedBadge,
+  VaultGroupCards,
+} from '@/utils/vaultGroupedFields';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG — 16A CREDIT CARDS                                           */
@@ -138,6 +152,75 @@ const SECTION_16A = {
         'Upload recent statements, terms and conditions, or card agreements',
     },
   ],
+};
+
+const FIELD_MAP_16A = buildFieldMap(SECTION_16A.fields);
+
+const SECTION_16A_GROUPS: FieldGroup[] = [
+  {
+    key: 'card_identity',
+    title: 'Card Identity',
+    subtitle: 'Bank name, card type, and identifying digits',
+    icon: CreditCard,
+    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-rose-500/10 text-rose-700',
+    layout: 'grid',
+    fieldKeys: ['card_name', 'card_type', 'card_type_other', 'card_number'],
+  },
+  {
+    key: 'account_balances',
+    title: 'Account & Balances',
+    subtitle: 'Full account number, limits, and current balances',
+    icon: Wallet,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'grid',
+    fieldKeys: [
+      'account_number',
+      'credit_limit',
+      'current_balance',
+      'monthly_payment',
+    ],
+  },
+  {
+    key: 'payments_benefits',
+    title: 'Payments & Benefits',
+    subtitle: 'Autopay setup and card rewards or perks',
+    icon: Receipt,
+    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
+    iconWrap: 'bg-emerald-500/10 text-emerald-700',
+    layout: 'stack',
+    fieldKeys: ['autopay_setup', 'card_benefits'],
+  },
+  {
+    key: 'access_support',
+    title: 'Access & Support',
+    subtitle: 'Customer service, online login, and authorized users',
+    icon: ShieldCheck,
+    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
+    iconWrap: 'bg-cyan-500/10 text-cyan-700',
+    layout: 'stack',
+    fieldKeys: ['customer_service', 'online_account', 'authorized_users'],
+  },
+  {
+    key: 'documentation',
+    title: 'Documentation',
+    subtitle: 'Statements, terms, and card agreements',
+    icon: FileText,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: ['card_documents'],
+  },
+];
+
+const SECTION_16A_SUBTITLE =
+  'Document each credit card with balances, autopay, benefits, and login details so your family can manage accounts and avoid missed payments.';
+
+const SECTION_16A_OVERVIEW = {
+  label: 'Credit Cards Overview',
+  content:
+    'Add one card per entry. Include the last four digits for identification, full account details stored securely, and customer service contacts so accounts can be closed or transferred promptly.',
 };
 
 /* ------------------------------------------------------------------ */

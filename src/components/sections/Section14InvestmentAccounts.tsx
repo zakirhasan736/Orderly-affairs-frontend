@@ -17,8 +17,19 @@ import {
   CheckCircle2,
   Loader2,
   PiggyBank,
+  Users,
+  KeyRound,
+  TrendingUp,
 } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
+import {
+  type FieldGroup,
+  buildFieldMap,
+  VaultOverviewBox,
+  VaultEncryptedBadge,
+  VaultGroupCards,
+} from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
@@ -127,6 +138,66 @@ const SECTION_14A = {
     },
   ],
 };
+
+const FIELD_MAP_14A = buildFieldMap(SECTION_14A.fields);
+
+const SECTION_14A_GROUPS: FieldGroup[] = [
+  {
+    key: 'account_basics',
+    title: 'Account Basics',
+    subtitle: 'Account type, institution, number, and value',
+    icon: PiggyBank,
+    accent: 'from-teal-500/[0.07] to-emerald-500/[0.03]',
+    iconWrap: 'bg-teal-500/10 text-teal-700',
+    layout: 'grid',
+    fieldKeys: [
+      'account_type',
+      'account_type_other',
+      'financial_institution',
+      'account_number',
+      'account_value',
+    ],
+  },
+  {
+    key: 'beneficiaries_advisor',
+    title: 'Beneficiaries & Advisor',
+    subtitle: 'Named beneficiaries, advisor contact, and employer link',
+    icon: Users,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'stack',
+    fieldKeys: ['beneficiaries', 'advisor_contact', 'employer_connection'],
+  },
+  {
+    key: 'access_distribution',
+    title: 'Access & Distribution',
+    subtitle: 'Online login credentials and distribution wishes',
+    icon: KeyRound,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'stack',
+    fieldKeys: ['login_credentials', 'distribution_instructions'],
+  },
+  {
+    key: 'documents',
+    title: 'Documents',
+    subtitle: 'Statements, beneficiary forms, and plan documents',
+    icon: FileText,
+    accent: 'from-slate-500/[0.07] to-gray-500/[0.03]',
+    iconWrap: 'bg-slate-500/10 text-slate-600',
+    layout: 'grid',
+    fieldKeys: ['account_documents'],
+  },
+];
+
+const SUBSECTION_OVERVIEW = {
+  label: 'Investment Accounts Overview',
+  content:
+    'Document retirement accounts, brokerage accounts, pensions, and other investments so your family can manage and distribute assets. Add one card per account.',
+};
+
+const SUBSECTION_SUBTITLE =
+  'Add each investment account with grouped basics, beneficiaries, access, and document details in a mobile-friendly layout.';
 
 /* ------------------------------------------------------------------ */
 /* TYPES                                                              */

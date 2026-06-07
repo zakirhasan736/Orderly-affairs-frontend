@@ -17,8 +17,19 @@ import {
   CheckCircle2,
   Loader2,
   Car,
+  MapPin,
+  Receipt,
+  ShieldCheck,
 } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
+import {
+  type FieldGroup,
+  buildFieldMap,
+  VaultOverviewBox,
+  VaultEncryptedBadge,
+  VaultGroupCards,
+} from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
@@ -123,6 +134,78 @@ const SECTION_5 = {
     },
   ],
 };
+
+const FIELD_MAP_5A = buildFieldMap(SECTION_5.fields);
+
+const SECTION_5A_GROUPS: FieldGroup[] = [
+  {
+    key: 'vehicle_details',
+    title: 'Vehicle Details',
+    subtitle: 'Year, make, model, VIN, and registration',
+    icon: Car,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'grid',
+    fieldKeys: [
+      'year',
+      'make',
+      'model',
+      'color',
+      'vin',
+      'license_plate',
+      'registration_expiry',
+    ],
+  },
+  {
+    key: 'insurance',
+    title: 'Insurance',
+    subtitle: 'Current provider and policy number',
+    icon: ShieldCheck,
+    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
+    iconWrap: 'bg-cyan-500/10 text-cyan-700',
+    layout: 'grid',
+    fieldKeys: ['insurance_company', 'insurance_policy'],
+  },
+  {
+    key: 'financing_maintenance',
+    title: 'Financing & Maintenance',
+    subtitle: 'Loan details and service records',
+    icon: Receipt,
+    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
+    iconWrap: 'bg-amber-500/10 text-amber-700',
+    layout: 'grid',
+    fieldKeys: ['financing', 'maintenance_records'],
+  },
+  {
+    key: 'location_keys',
+    title: 'Location & Keys',
+    subtitle: 'Parking location and spare key details',
+    icon: MapPin,
+    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
+    iconWrap: 'bg-emerald-500/10 text-emerald-700',
+    layout: 'grid',
+    fieldKeys: ['parking_location', 'spare_keys'],
+  },
+  {
+    key: 'notes',
+    title: 'Additional Notes',
+    subtitle: 'Any other important vehicle information',
+    icon: FileText,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'stack',
+    fieldKeys: ['notes'],
+  },
+];
+
+const SUBSECTION_OVERVIEW = {
+  label: 'Vehicles Overview',
+  content:
+    'Document each car, truck, motorcycle, or other vehicle your family should know about. Add one card per vehicle with registration, insurance, financing, and key location details.',
+};
+
+const SUBSECTION_SUBTITLE =
+  'Add vehicles one at a time with grouped details in a clean two-column layout on desktop and mobile.';
 
 /* ------------------------------------------------------------------ */
 /* TYPES                                                              */
@@ -525,30 +608,46 @@ export default function Section5Vehicles({
         </div>
       )}
 
-      <Card
+      <div
         id="subsection-5A"
-        className="overflow-hidden border-slate-200 shadow-sm"
+        className={cn(
+          'rounded-3xl',
+          activeSubsection === '5A' && 'border border-primary p-1',
+        )}
       >
-        <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-blue-50/70">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Car className="h-5 w-5 text-blue-600" />
-              5A. {SECTION_5.title}
-            </CardTitle>
+        <Card className="overflow-hidden border-slate-200/80 shadow-sm">
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-indigo-50/60 px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
+                  <Car className="h-5 w-5 text-blue-600" />
+                  5A. {SECTION_5.title}
+                </CardTitle>
+                <p className="max-w-2xl text-sm leading-6 text-slate-600">
+                  {SUBSECTION_SUBTITLE}
+                </p>
+              </div>
 
-            <Button
-              type="button"
-              size="sm"
-              onClick={addVehicle}
-              className="rounded-xl"
-            >
-              <Plus className="mr-1 h-4 w-4" />
-              Add {SECTION_5.itemLabel}
-            </Button>
-          </div>
-        </CardHeader>
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                <VaultEncryptedBadge />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={addVehicle}
+                  className="rounded-xl"
+                >
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add {SECTION_5.itemLabel}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
 
-        <CardContent className="space-y-8 p-5">
+          <CardContent className="space-y-8 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
+            <VaultOverviewBox
+              label={SUBSECTION_OVERVIEW.label}
+              content={SUBSECTION_OVERVIEW.content}
+            />
           {/* {renderUploader({
             scope: 'full',
             title: 'Upload document for multiple vehicles',
@@ -619,25 +718,27 @@ export default function Section5Vehicles({
                     onAutofill: () => handleAutofill(itemScope, index),
                   })}
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {SECTION_5.fields.map(field => (
+                  <VaultGroupCards
+                    groups={SECTION_5A_GROUPS}
+                    fieldMap={FIELD_MAP_5A}
+                    renderField={fieldKey => (
                       <DynamicFormField
-                        key={field.key}
-                        field={field}
-                        value={vehicle?.[field.key]}
+                        key={fieldKey}
+                        field={FIELD_MAP_5A[fieldKey]}
+                        value={vehicle?.[fieldKey]}
                         formData={vehicle}
-                        onChange={value =>
-                          updateVehicle(index, field.key, value)
-                        }
+                        onChange={value => updateVehicle(index, fieldKey, value)}
+                        className="space-y-2"
                       />
-                    ))}
-                  </div>
+                    )}
+                  />
                 </CardContent>
               </Card>
             );
           })}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

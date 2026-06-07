@@ -18,7 +18,13 @@ import {
   Loader2,
   HeartPulse,
   Stethoscope,
+  ShieldCheck,
+  ClipboardList,
+  CalendarDays,
+  Phone,
+  Pill,
 } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
@@ -28,6 +34,14 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import {
+  type FieldGroup,
+  buildFieldMap,
+  getInstructionOverview,
+  VaultOverviewBox,
+  VaultEncryptedBadge,
+  VaultGroupCards,
+} from '@/utils/vaultGroupedFields';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG — 15A                                                        */
@@ -114,6 +128,57 @@ const SECTION_15A = {
   ],
 };
 
+const FIELD_MAP_15A = buildFieldMap(SECTION_15A.fields);
+
+const SECTION_15A_GROUPS: FieldGroup[] = [
+  {
+    key: 'insurance_coverage',
+    title: 'Insurance Coverage',
+    subtitle: 'Primary, secondary, and Medicare/Medicaid details',
+    icon: ShieldCheck,
+    accent: 'from-red-500/[0.07] to-rose-500/[0.03]',
+    iconWrap: 'bg-red-500/10 text-red-600',
+    layout: 'grid',
+    fieldKeys: [
+      'primary_health_insurance',
+      'secondary_health_insurance',
+      'medicare_medicaid',
+    ],
+  },
+  {
+    key: 'medical_conditions',
+    title: 'Medical Conditions',
+    subtitle: 'Current conditions, allergies, medications, and devices',
+    icon: Pill,
+    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
+    iconWrap: 'bg-amber-500/10 text-amber-700',
+    layout: 'stack',
+    fieldKeys: [
+      'current_conditions',
+      'allergies',
+      'current_medications',
+      'medical_devices',
+    ],
+  },
+  {
+    key: 'emergency_contacts',
+    title: 'Emergency Contacts',
+    subtitle: 'Emergency contacts and medical power of attorney',
+    icon: Phone,
+    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
+    iconWrap: 'bg-cyan-500/10 text-cyan-700',
+    layout: 'grid',
+    fieldKeys: [
+      'emergency_contact_1',
+      'emergency_contact_2',
+      'medical_power_of_attorney',
+    ],
+  },
+];
+
+const SECTION_15A_SUBTITLE =
+  'Grouped health insurance, medical conditions, and emergency contacts so your next of kin can manage healthcare decisions without scrolling through one long form.';
+
 /* ------------------------------------------------------------------ */
 /* CONFIG — 15B                                                        */
 /* ------------------------------------------------------------------ */
@@ -195,6 +260,62 @@ const SECTION_15B = {
       type: 'TextArea',
     },
   ],
+};
+
+const FIELD_MAP_15B = buildFieldMap(SECTION_15B.fields);
+
+const SECTION_15B_GROUPS: FieldGroup[] = [
+  {
+    key: 'provider_basics',
+    title: 'Provider Basics',
+    subtitle: 'Practice name, specialty, doctor, and contact details',
+    icon: Stethoscope,
+    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
+    iconWrap: 'bg-cyan-500/10 text-cyan-700',
+    layout: 'grid',
+    fieldKeys: [
+      'provider_name',
+      'specialty',
+      'doctor_name',
+      'contact_info',
+      'patient_id',
+    ],
+  },
+  {
+    key: 'visit_details',
+    title: 'Visit Details',
+    subtitle: 'Visit frequency, insurance, and patient portal access',
+    icon: CalendarDays,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'grid',
+    fieldKeys: [
+      'frequency',
+      'last_visit',
+      'conditions_treated',
+      'insurance_accepted',
+      'portal_access',
+    ],
+  },
+  {
+    key: 'clinical_notes',
+    title: 'Clinical Notes',
+    subtitle: 'Important notes about this provider or your care',
+    icon: ClipboardList,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'stack',
+    fieldKeys: ['important_notes'],
+  },
+];
+
+const SECTION_15B_SUBTITLE =
+  'Document doctors, specialists, pharmacies, and other healthcare providers so your family knows who to contact and how to access your care.';
+
+const SECTION_15B_OVERVIEW = {
+  label: 'Healthcare Providers Overview',
+  content:
+    'Add each provider as its own card. Include contact details, visit history, insurance accepted, and patient portal access so your next of kin can coordinate ongoing care.',
 };
 
 /* ------------------------------------------------------------------ */
@@ -711,17 +832,29 @@ export default function Section15HealthInformation({
 
       <div
         id="subsection-15A"
-        className={`rounded-3xl ${show15A ? 'border border-primary p-1' : ''}`}
+        className={cn(
+          'rounded-3xl',
+          show15A && 'border border-primary p-1',
+        )}
       >
-        <Card className="overflow-hidden border-slate-200 shadow-sm">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-red-50/70">
-            <CardTitle className="flex items-center gap-2">
-              <HeartPulse className="h-5 w-5 text-red-600" />
-              15A. {SECTION_15A.title}
-            </CardTitle>
+        <Card className="overflow-hidden border-slate-200/80 shadow-sm">
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-red-50/60 px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
+                  <HeartPulse className="h-5 w-5 text-red-600" />
+                  15A. {SECTION_15A.title}
+                </CardTitle>
+                <p className="max-w-2xl text-sm leading-6 text-slate-600">
+                  {SECTION_15A_SUBTITLE}
+                </p>
+              </div>
+
+              <VaultEncryptedBadge />
+            </div>
           </CardHeader>
 
-          <CardContent className="space-y-6 p-5">
+          <CardContent className="space-y-6 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
             {/* {renderUploader({
               scope: '15A-full',
               title: 'Upload health insurance or medical document',
@@ -732,44 +865,82 @@ export default function Section15HealthInformation({
               onAutofill: handleAutofill15A,
             })} */}
 
-            {SECTION_15A.fields.map(field => (
-              <DynamicFormField
-                key={field.key}
-                field={field}
-                value={section15A[field.key]}
-                formData={section15A}
-                onChange={value => update15A(field.key, value)}
+            {getInstructionOverview(
+              SECTION_15A.fields,
+              'health_overview_instructions',
+            ) && (
+              <VaultOverviewBox
+                {...getInstructionOverview(
+                  SECTION_15A.fields,
+                  'health_overview_instructions',
+                )!}
               />
-            ))}
+            )}
+
+            <VaultGroupCards
+              groups={SECTION_15A_GROUPS}
+              fieldMap={FIELD_MAP_15A}
+              renderField={fieldKey => {
+                const field = FIELD_MAP_15A[fieldKey];
+                if (!field || field.type === 'Instructions') return null;
+
+                return (
+                  <DynamicFormField
+                    key={field.key}
+                    field={field}
+                    value={section15A[field.key]}
+                    formData={section15A}
+                    onChange={value => update15A(field.key, value)}
+                    className="space-y-2"
+                  />
+                );
+              }}
+            />
           </CardContent>
         </Card>
       </div>
 
       <div
         id="subsection-15B"
-        className={`rounded-3xl ${show15B ? 'border border-primary p-1' : ''}`}
+        className={cn(
+          'rounded-3xl',
+          show15B && 'border border-primary p-1',
+        )}
       >
-        <Card className="overflow-hidden border-slate-200 shadow-sm">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-cyan-50/70">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Stethoscope className="h-5 w-5 text-cyan-600" />
-                15B. {SECTION_15B.title}
-              </CardTitle>
+        <Card className="overflow-hidden border-slate-200/80 shadow-sm">
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-cyan-50/60 px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
+                  <Stethoscope className="h-5 w-5 text-cyan-600" />
+                  15B. {SECTION_15B.title}
+                </CardTitle>
+                <p className="max-w-2xl text-sm leading-6 text-slate-600">
+                  {SECTION_15B_SUBTITLE}
+                </p>
+              </div>
 
-              <Button
-                type="button"
-                size="sm"
-                onClick={addProvider}
-                className="rounded-xl"
-              >
-                <Plus className="mr-1 h-4 w-4" />
-                Add {SECTION_15B.itemLabel}
-              </Button>
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                <VaultEncryptedBadge />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={addProvider}
+                  className="rounded-xl"
+                >
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add {SECTION_15B.itemLabel}
+                </Button>
+              </div>
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-8 p-5">
+          <CardContent className="space-y-8 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
+            <VaultOverviewBox
+              label={SECTION_15B_OVERVIEW.label}
+              content={SECTION_15B_OVERVIEW.content}
+            />
+
             {renderUploader({
               scope: '15B-full',
               title: 'Upload document for multiple healthcare providers',
@@ -842,20 +1013,28 @@ export default function Section15HealthInformation({
                       onAutofill: () => handleAutofill15B(itemScope, index),
                     })}
 
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {SECTION_15B.fields.map(field => (
-                        <DynamicFormField
-                          key={`${field.key}-${provider.__rowId || index}`}
-                          field={field}
-                          value={provider?.[field.key]}
-                          formData={provider}
-                          rowId={provider.__rowId}
-                          onChange={value =>
-                            updateProvider(index, field.key, value)
-                          }
-                        />
-                      ))}
-                    </div>
+                    <VaultGroupCards
+                      groups={SECTION_15B_GROUPS}
+                      fieldMap={FIELD_MAP_15B}
+                      renderField={fieldKey => {
+                        const field = FIELD_MAP_15B[fieldKey];
+                        if (!field) return null;
+
+                        return (
+                          <DynamicFormField
+                            key={`${field.key}-${provider.__rowId || index}`}
+                            field={field}
+                            value={provider?.[field.key]}
+                            formData={provider}
+                            rowId={provider.__rowId}
+                            onChange={value =>
+                              updateProvider(index, field.key, value)
+                            }
+                            className="space-y-2"
+                          />
+                        );
+                      }}
+                    />
                   </CardContent>
                 </Card>
               );

@@ -12,23 +12,37 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 import { DynamicFormField } from '@/components/DynamicFormField';
 import {
   Baby,
+  Bell,
   Bone,
   CheckCircle2,
+  Dna,
   FileHeart,
   FileText,
   Gem,
   HeartHandshake,
   Loader2,
   Minus,
+  PawPrint,
   Plus,
+  Scale,
   Sparkles,
+  TreePine,
   UploadCloud,
+  User,
   Users,
   Heart,
 } from 'lucide-react';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  buildFieldMap,
+  FieldGroup,
+  getInstructionOverview,
+  VaultEncryptedBadge,
+  VaultGroupCards,
+  VaultOverviewBox,
+} from '@/utils/vaultGroupedFields';
 import {
   getTopicCardProps,
   useScrollToVaultTopic,
@@ -650,6 +664,354 @@ const REPEATABLE_SECTIONS = [
   SECTION_17G,
 ];
 
+type SubsectionId = '17A' | '17B' | '17C' | '17D' | '17E' | '17F' | '17G';
+
+/* ============================================================
+   FIELD GROUPS
+============================================================ */
+
+const SECTION_17A_GROUPS: FieldGroup[] = [
+  {
+    key: 'family_heritage',
+    title: 'Family Heritage',
+    subtitle: 'Lineage, origins, stories, and genealogy contacts',
+    icon: TreePine,
+    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
+    iconWrap: 'bg-emerald-500/10 text-emerald-700',
+    layout: 'stack',
+    fieldKeys: [
+      'family_tree_overview',
+      'genealogy_research',
+      'ancestral_origins',
+      'family_stories',
+      'genealogy_contacts',
+    ],
+  },
+  {
+    key: 'records_dna',
+    title: 'Records & DNA',
+    subtitle: 'Family documents and genetic genealogy results',
+    icon: Dna,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: ['family_records', 'dna_testing'],
+  },
+];
+
+const SECTION_17B_GROUPS: FieldGroup[] = [
+  {
+    key: 'identity_contact',
+    title: 'Identity & Contact',
+    subtitle: 'Name, relationship, birth date, and contact details',
+    icon: User,
+    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
+    iconWrap: 'bg-emerald-500/10 text-emerald-700',
+    layout: 'grid',
+    fieldKeys: ['person_name', 'relationship', 'birthdate', 'contact_info'],
+  },
+  {
+    key: 'relationship_notification',
+    title: 'Relationship & Notification',
+    subtitle: 'Why they matter and how urgently to contact them',
+    icon: Bell,
+    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
+    iconWrap: 'bg-amber-500/10 text-amber-700',
+    layout: 'stack',
+    fieldKeys: ['importance', 'notify_instructions', 'special_considerations'],
+  },
+  {
+    key: 'photos_mementos',
+    title: 'Photos & Mementos',
+    subtitle: 'Images and keepsakes related to this family member',
+    icon: FileHeart,
+    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-rose-500/10 text-rose-700',
+    layout: 'grid',
+    fieldKeys: ['photos_mementos'],
+  },
+];
+
+const SECTION_17C_GROUPS: FieldGroup[] = [
+  {
+    key: 'dependent_profile',
+    title: 'Dependent Profile',
+    subtitle: 'Who they are and how they depend on you',
+    icon: Baby,
+    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
+    iconWrap: 'bg-amber-500/10 text-amber-700',
+    layout: 'grid',
+    fieldKeys: ['dependent_name', 'relationship', 'birthdate', 'dependency_type'],
+  },
+  {
+    key: 'care_support',
+    title: 'Care & Support',
+    subtitle: 'Support provided, backup caregivers, and future plans',
+    icon: Heart,
+    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-rose-500/10 text-rose-700',
+    layout: 'stack',
+    fieldKeys: [
+      'support_details',
+      'backup_caregivers',
+      'special_needs',
+      'future_care_plans',
+    ],
+  },
+  {
+    key: 'legal_financial',
+    title: 'Legal & Financial',
+    subtitle: 'Guardianship documents and related accounts',
+    icon: Scale,
+    accent: 'from-indigo-500/[0.07] to-blue-500/[0.03]',
+    iconWrap: 'bg-indigo-500/10 text-indigo-700',
+    layout: 'grid',
+    fieldKeys: ['legal_documents', 'financial_accounts'],
+  },
+];
+
+const SECTION_17D_GROUPS: FieldGroup[] = [
+  {
+    key: 'friend_profile',
+    title: 'Friend Profile',
+    subtitle: 'Name, friendship type, and contact information',
+    icon: HeartHandshake,
+    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-rose-500/10 text-rose-700',
+    layout: 'grid',
+    fieldKeys: [
+      'friend_name',
+      'friendship_type',
+      'friendship_type_other',
+      'contact_info',
+    ],
+  },
+  {
+    key: 'friendship_story',
+    title: 'Friendship Story',
+    subtitle: 'How you met, what the friendship means, and shared memories',
+    icon: Sparkles,
+    accent: 'from-fuchsia-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-fuchsia-500/10 text-fuchsia-700',
+    layout: 'stack',
+    fieldKeys: ['how_we_met', 'friendship_significance', 'shared_memories'],
+  },
+  {
+    key: 'notification_mementos',
+    title: 'Notification & Mementos',
+    subtitle: 'Contact urgency and photos from this friendship',
+    icon: Bell,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: ['notify_instructions', 'photos_mementos'],
+  },
+];
+
+const SECTION_17E_GROUPS: FieldGroup[] = [
+  {
+    key: 'person_profile',
+    title: 'Person Profile',
+    subtitle: 'Name, relationship type, and contact details',
+    icon: User,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: [
+      'person_name',
+      'relationship_type',
+      'relationship_type_other',
+      'contact_info',
+    ],
+  },
+  {
+    key: 'relationship_details',
+    title: 'Relationship Details',
+    subtitle: 'Significance, notification preferences, and special notes',
+    icon: FileHeart,
+    accent: 'from-indigo-500/[0.07] to-blue-500/[0.03]',
+    iconWrap: 'bg-indigo-500/10 text-indigo-700',
+    layout: 'stack',
+    fieldKeys: [
+      'relationship_significance',
+      'notify_instructions',
+      'special_notes',
+    ],
+  },
+  {
+    key: 'related_documents',
+    title: 'Related Documents',
+    subtitle: 'Photos, letters, and documents for this relationship',
+    icon: FileText,
+    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
+    iconWrap: 'bg-cyan-500/10 text-cyan-700',
+    layout: 'grid',
+    fieldKeys: ['relationship_documents'],
+  },
+];
+
+const SECTION_17F_GROUPS: FieldGroup[] = [
+  {
+    key: 'item_basics',
+    title: 'Item Basics',
+    subtitle: 'Name, type, location, and estimated value',
+    icon: Gem,
+    accent: 'from-fuchsia-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-fuchsia-500/10 text-fuchsia-700',
+    layout: 'grid',
+    fieldKeys: [
+      'item_name',
+      'item_type',
+      'item_type_other',
+      'current_location',
+      'estimated_value',
+    ],
+  },
+  {
+    key: 'story_legacy',
+    title: 'Story & Legacy',
+    subtitle: 'Sentimental value, intended recipient, and care instructions',
+    icon: Heart,
+    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-rose-500/10 text-rose-700',
+    layout: 'stack',
+    fieldKeys: ['sentimental_value', 'intended_recipient', 'care_instructions'],
+  },
+  {
+    key: 'documentation',
+    title: 'Documentation',
+    subtitle: 'Photos and records for this sentimental item',
+    icon: FileText,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: ['documentation'],
+  },
+];
+
+const SECTION_17G_GROUPS: FieldGroup[] = [
+  {
+    key: 'pet_profile',
+    title: 'Pet Profile',
+    subtitle: 'Name, type, breed, and age',
+    icon: PawPrint,
+    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
+    iconWrap: 'bg-cyan-500/10 text-cyan-700',
+    layout: 'grid',
+    fieldKeys: ['pet_name', 'pet_type', 'pet_type_other', 'breed_age'],
+  },
+  {
+    key: 'health_daily_care',
+    title: 'Health & Daily Care',
+    subtitle: 'Veterinarian, medical history, feeding, and supplies',
+    icon: Bone,
+    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
+    iconWrap: 'bg-emerald-500/10 text-emerald-700',
+    layout: 'stack',
+    fieldKeys: [
+      'veterinarian',
+      'medical_history',
+      'feeding_care',
+      'pet_supplies',
+    ],
+  },
+  {
+    key: 'emergency_registration',
+    title: 'Emergency & Registration',
+    subtitle: 'Emergency contacts, long-term care, and microchip details',
+    icon: Bell,
+    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
+    iconWrap: 'bg-amber-500/10 text-amber-700',
+    layout: 'grid',
+    fieldKeys: ['emergency_contact', 'long_term_care', 'registration_microchip'],
+  },
+  {
+    key: 'veterinary_records',
+    title: 'Veterinary Records',
+    subtitle: 'Vaccination records, medical files, and pet photos',
+    icon: FileText,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: ['veterinary_records'],
+  },
+];
+
+const SUBSECTION_GROUPS: Record<SubsectionId, FieldGroup[]> = {
+  '17A': SECTION_17A_GROUPS,
+  '17B': SECTION_17B_GROUPS,
+  '17C': SECTION_17C_GROUPS,
+  '17D': SECTION_17D_GROUPS,
+  '17E': SECTION_17E_GROUPS,
+  '17F': SECTION_17F_GROUPS,
+  '17G': SECTION_17G_GROUPS,
+};
+
+const SUBSECTION_FIELD_MAP: Record<SubsectionId, Record<string, any>> = {
+  '17A': buildFieldMap(SECTION_17A.fields),
+  '17B': buildFieldMap(SECTION_17B.fields),
+  '17C': buildFieldMap(SECTION_17C.fields),
+  '17D': buildFieldMap(SECTION_17D.fields),
+  '17E': buildFieldMap(SECTION_17E.fields),
+  '17F': buildFieldMap(SECTION_17F.fields),
+  '17G': buildFieldMap(SECTION_17G.fields),
+};
+
+const SUBSECTION_SUBTITLE: Record<SubsectionId, string> = {
+  '17A':
+    'Document your ancestry, family heritage, genealogy research, and DNA records in grouped cards.',
+  '17B':
+    'Add family members one at a time with identity, notification, and memento details.',
+  '17C':
+    'Record dependents who rely on you for care, support, or guardianship.',
+  '17D':
+    'Capture close friends your loved ones should know about and how to reach them.',
+  '17E':
+    'Document mentors, caregivers, and other important people beyond immediate family.',
+  '17F':
+    'Preserve sentimental items with their stories, recipients, and care instructions.',
+  '17G':
+    'Keep pet care instructions, veterinary contacts, and records in one place.',
+};
+
+const INSTRUCTION_OVERVIEW_KEYS: Partial<Record<SubsectionId, string>> = {
+  '17A': 'documents_section',
+  '17C': 'dependency_documents',
+  '17F': 'item_documentation',
+  '17G': 'pet_documentation',
+};
+
+const SUBSECTION_OVERVIEW: Partial<
+  Record<SubsectionId, { label: string; content: string }>
+> = {
+  '17B': {
+    label: 'Family Members Overview',
+    content:
+      'Add each family member your loved ones should contact. Include relationship details, notification preferences, and any photos or mementos.',
+  },
+  '17D': {
+    label: 'Close Friends Overview',
+    content:
+      'Document close friends who should be notified, along with the stories and memories that matter to you.',
+  },
+  '17E': {
+    label: 'Important Relationships Overview',
+    content:
+      'Record mentors, caregivers, former partners, and other important people your family should know about.',
+  },
+};
+
+const getSubsectionOverview = (
+  subsection: SubsectionId,
+  fields?: any[],
+): { label: string; content: string } | null => {
+  const instructionKey = INSTRUCTION_OVERVIEW_KEYS[subsection];
+  if (instructionKey && fields) {
+    return getInstructionOverview(fields, instructionKey);
+  }
+  return SUBSECTION_OVERVIEW[subsection] ?? null;
+};
+
 /* ============================================================
    TYPES / CONFIG
 ============================================================ */
@@ -660,8 +1022,6 @@ interface Props {
   activeSubsection?: string | null;
   activeTopicId?: string | null;
 }
-
-type SubsectionId = '17A' | '17B' | '17C' | '17D' | '17E' | '17F' | '17G';
 
 type UploadedAIFile = {
   file_id: string;

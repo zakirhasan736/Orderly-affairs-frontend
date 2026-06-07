@@ -17,8 +17,17 @@ import {
   CheckCircle2,
   Loader2,
   GraduationCap,
+  Award,
 } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
+import {
+  type FieldGroup,
+  buildFieldMap,
+  VaultOverviewBox,
+  VaultEncryptedBadge,
+  VaultGroupCards,
+} from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
@@ -94,6 +103,46 @@ const SECTION_10A = {
     },
   ],
 };
+
+const FIELD_MAP_10A = buildFieldMap(SECTION_10A.fields);
+
+const SECTION_10A_GROUPS: FieldGroup[] = [
+  {
+    key: 'education_details',
+    title: 'Education Details',
+    subtitle: 'Institution, degree, field of study, and graduation year',
+    icon: GraduationCap,
+    accent: 'from-sky-500/[0.07] to-blue-500/[0.03]',
+    iconWrap: 'bg-sky-500/10 text-sky-700',
+    layout: 'grid',
+    fieldKeys: [
+      'institution_name',
+      'degree_type',
+      'degree_type_other',
+      'field_of_study',
+      'graduation_year',
+    ],
+  },
+  {
+    key: 'honors_documents',
+    title: 'Honors & Documents',
+    subtitle: 'Academic awards and supporting educational records',
+    icon: Award,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'stack',
+    fieldKeys: ['honors_awards', 'documents'],
+  },
+];
+
+const SUBSECTION_OVERVIEW = {
+  label: 'Educational Background Overview',
+  content:
+    'Document schools, degrees, certifications, and academic honors so your family has a complete record of your educational achievements. Add one card per institution or credential.',
+};
+
+const SUBSECTION_SUBTITLE =
+  'Add education records one at a time with grouped details in a clean two-column layout on desktop and mobile.';
 
 /* ------------------------------------------------------------------ */
 /* TYPES                                                              */
@@ -501,30 +550,46 @@ export default function Section10EducationAccomplishments({
         </div>
       )}
 
-      <Card
+      <div
         id="subsection-10A"
-        className="overflow-hidden border-slate-200 shadow-sm"
+        className={cn(
+          'rounded-3xl',
+          activeSubsection === '10A' && 'border border-primary p-1',
+        )}
       >
-        <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-sky-50/70">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <GraduationCap className="h-5 w-5 text-sky-600" />
-              10A. {SECTION_10A.title}
-            </CardTitle>
+        <Card className="overflow-hidden border-slate-200/80 shadow-sm">
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-indigo-50/60 px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
+                  <GraduationCap className="h-5 w-5 text-sky-600" />
+                  10A. {SECTION_10A.title}
+                </CardTitle>
+                <p className="max-w-2xl text-sm leading-6 text-slate-600">
+                  {SUBSECTION_SUBTITLE}
+                </p>
+              </div>
 
-            <Button
-              type="button"
-              size="sm"
-              onClick={addEducation}
-              className="rounded-xl"
-            >
-              <Plus className="mr-1 h-4 w-4" />
-              Add {SECTION_10A.itemLabel}
-            </Button>
-          </div>
-        </CardHeader>
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                <VaultEncryptedBadge />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={addEducation}
+                  className="rounded-xl"
+                >
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add {SECTION_10A.itemLabel}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
 
-        <CardContent className="space-y-8 p-5">
+          <CardContent className="space-y-8 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
+            <VaultOverviewBox
+              label={SUBSECTION_OVERVIEW.label}
+              content={SUBSECTION_OVERVIEW.content}
+            />
           {/* {renderUploader({
             scope: 'full',
             title: 'Upload document for multiple education records',
@@ -594,25 +659,29 @@ export default function Section10EducationAccomplishments({
                     onAutofill: () => handleAutofill(itemScope, index),
                   })}
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {SECTION_10A.fields.map(field => (
+                  <VaultGroupCards
+                    groups={SECTION_10A_GROUPS}
+                    fieldMap={FIELD_MAP_10A}
+                    renderField={fieldKey => (
                       <DynamicFormField
-                        key={field.key}
-                        field={field}
-                        value={item?.[field.key]}
+                        key={fieldKey}
+                        field={FIELD_MAP_10A[fieldKey]}
+                        value={item?.[fieldKey]}
                         formData={item}
                         onChange={value =>
-                          updateEducationItem(index, field.key, value)
+                          updateEducationItem(index, fieldKey, value)
                         }
+                        className="space-y-2"
                       />
-                    ))}
-                  </div>
+                    )}
+                  />
                 </CardContent>
               </Card>
             );
           })}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -18,8 +18,21 @@ import {
   Loader2,
   Landmark,
   WalletCards,
+  CreditCard,
+  Users,
+  KeyRound,
+  Smartphone,
+  Shield,
 } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
+import {
+  type FieldGroup,
+  buildFieldMap,
+  VaultOverviewBox,
+  VaultEncryptedBadge,
+  VaultGroupCards,
+} from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
@@ -237,6 +250,159 @@ const SECTION_12B = {
         'Upload account statements, transaction records, or screenshots',
     },
   ],
+};
+
+const FIELD_MAP_12A = buildFieldMap(SECTION_12A.fields);
+const FIELD_MAP_12B = buildFieldMap(SECTION_12B.fields);
+
+const SECTION_12A_GROUPS: FieldGroup[] = [
+  {
+    key: 'account_basics',
+    title: 'Account Basics',
+    subtitle: 'Bank name, account type, and account numbers',
+    icon: Landmark,
+    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
+    iconWrap: 'bg-emerald-500/10 text-emerald-700',
+    layout: 'grid',
+    fieldKeys: [
+      'bank_name',
+      'account_type',
+      'account_type_other',
+      'account_number',
+      'routing_number',
+    ],
+  },
+  {
+    key: 'account_access',
+    title: 'Account Access',
+    subtitle: 'Online banking credentials and bank contact info',
+    icon: KeyRound,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'grid',
+    fieldKeys: ['online_banking', 'online_banking_password', 'bank_contact'],
+  },
+  {
+    key: 'people_purpose',
+    title: 'People & Purpose',
+    subtitle: 'Account purpose, joint holders, and beneficiaries',
+    icon: Users,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'stack',
+    fieldKeys: [
+      'account_purpose',
+      'joint_account_holders',
+      'beneficiaries',
+      'safe_deposit_box',
+    ],
+  },
+  {
+    key: 'payments_cards',
+    title: 'Payments & Cards',
+    subtitle: 'Automatic payments and linked debit/ATM cards',
+    icon: CreditCard,
+    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
+    iconWrap: 'bg-amber-500/10 text-amber-700',
+    layout: 'grid',
+    fieldKeys: ['automatic_payments', 'debit_cards'],
+  },
+  {
+    key: 'documents',
+    title: 'Documents',
+    subtitle: 'Statements, signature cards, and account records',
+    icon: FileText,
+    accent: 'from-slate-500/[0.07] to-gray-500/[0.03]',
+    iconWrap: 'bg-slate-500/10 text-slate-600',
+    layout: 'grid',
+    fieldKeys: ['account_documents'],
+  },
+];
+
+const SECTION_12B_GROUPS: FieldGroup[] = [
+  {
+    key: 'service_identity',
+    title: 'Service Identity',
+    subtitle: 'Payment service, login email, and username',
+    icon: Smartphone,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'grid',
+    fieldKeys: [
+      'service_name',
+      'service_name_other',
+      'account_email_phone',
+      'username',
+    ],
+  },
+  {
+    key: 'account_profile',
+    title: 'Account Profile',
+    subtitle: 'Password, linked accounts, balance, and account type',
+    icon: WalletCards,
+    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
+    iconWrap: 'bg-cyan-500/10 text-cyan-700',
+    layout: 'grid',
+    fieldKeys: [
+      'password',
+      'linked_accounts',
+      'account_balance',
+      'business_personal',
+    ],
+  },
+  {
+    key: 'activity_security',
+    title: 'Activity & Security',
+    subtitle: 'Regular transactions and security settings',
+    icon: Shield,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: ['regular_transactions', 'security_info'],
+  },
+  {
+    key: 'documents',
+    title: 'Documents',
+    subtitle: 'Statements, screenshots, and transaction records',
+    icon: FileText,
+    accent: 'from-slate-500/[0.07] to-gray-500/[0.03]',
+    iconWrap: 'bg-slate-500/10 text-slate-600',
+    layout: 'grid',
+    fieldKeys: ['service_documents'],
+  },
+];
+
+const SUBSECTION_GROUPS: Record<SubsectionId, FieldGroup[]> = {
+  '12A': SECTION_12A_GROUPS,
+  '12B': SECTION_12B_GROUPS,
+};
+
+const SUBSECTION_FIELD_MAP: Record<SubsectionId, Record<string, any>> = {
+  '12A': FIELD_MAP_12A,
+  '12B': FIELD_MAP_12B,
+};
+
+const SUBSECTION_OVERVIEW: Record<
+  SubsectionId,
+  { label: string; content: string }
+> = {
+  '12A': {
+    label: 'Bank Accounts Overview',
+    content:
+      'Document checking, savings, and other bank accounts so your family can manage finances and access funds. Add one card per account with login details, beneficiaries, and linked cards.',
+  },
+  '12B': {
+    label: 'Digital Payment Apps Overview',
+    content:
+      'Record PayPal, Venmo, Cash App, and other digital payment accounts with login credentials and linked bank accounts. Add one card per service.',
+  },
+};
+
+const SUBSECTION_SUBTITLE: Record<SubsectionId, string> = {
+  '12A':
+    'Add each bank account with grouped access, people, payments, and document details in a mobile-friendly layout.',
+  '12B':
+    'Add each digital payment account with grouped identity, security, and document details in the same layout.',
 };
 
 /* ------------------------------------------------------------------ */

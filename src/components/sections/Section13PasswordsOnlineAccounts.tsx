@@ -17,8 +17,19 @@ import {
   CheckCircle2,
   Loader2,
   KeyRound,
+  Globe,
+  Mail,
+  ScrollText,
 } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
+import {
+  type FieldGroup,
+  buildFieldMap,
+  VaultOverviewBox,
+  VaultEncryptedBadge,
+  VaultGroupCards,
+} from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
@@ -133,6 +144,71 @@ const SECTION_13A = {
     },
   ],
 };
+
+const FIELD_MAP_13A = buildFieldMap(SECTION_13A.fields);
+
+const SECTION_13A_GROUPS: FieldGroup[] = [
+  {
+    key: 'account_identity',
+    title: 'Account Identity',
+    subtitle: 'Account type, service name, and login credentials',
+    icon: Globe,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: [
+      'account_type',
+      'account_type_other',
+      'service_name',
+      'account_username',
+      'account_password',
+    ],
+  },
+  {
+    key: 'contact_recovery',
+    title: 'Contact & Recovery',
+    subtitle: 'Associated email, phone, and recovery information',
+    icon: Mail,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'stack',
+    fieldKeys: [
+      'email_associated',
+      'phone_associated',
+      'recovery_info',
+      'two_factor_auth',
+    ],
+  },
+  {
+    key: 'value_closure',
+    title: 'Value & Closure',
+    subtitle: 'Account importance and closure instructions',
+    icon: ScrollText,
+    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
+    iconWrap: 'bg-amber-500/10 text-amber-700',
+    layout: 'stack',
+    fieldKeys: ['account_value', 'closure_instructions'],
+  },
+  {
+    key: 'documents',
+    title: 'Documents',
+    subtitle: 'Screenshots, statements, and account records',
+    icon: FileText,
+    accent: 'from-slate-500/[0.07] to-gray-500/[0.03]',
+    iconWrap: 'bg-slate-500/10 text-slate-600',
+    layout: 'grid',
+    fieldKeys: ['account_documents'],
+  },
+];
+
+const SUBSECTION_OVERVIEW = {
+  label: 'Online Accounts Overview',
+  content:
+    'Store usernames, passwords, recovery info, and closure instructions for your online accounts so your family can access or close them. Add one card per account.',
+};
+
+const SUBSECTION_SUBTITLE =
+  'Add each online account with grouped identity, recovery, and closure details in a mobile-friendly layout.';
 
 /* ------------------------------------------------------------------ */
 /* TYPES                                                              */
