@@ -17,7 +17,15 @@ import {
   CheckCircle2,
   Loader2,
   FolderOpen,
+  Globe,
+  Info,
+  Landmark,
+  Receipt,
+  ScrollText,
+  ShieldCheck,
+  Users,
 } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
@@ -191,6 +199,130 @@ const SECTION_20B_FIELDS = [
   },
 ];
 
+type StaticSubsectionId = '20A' | '20B';
+
+const FIELD_MAP_20A = Object.fromEntries(
+  SECTION_20A_FIELDS.map(field => [field.key, field]),
+);
+const FIELD_MAP_20B = Object.fromEntries(
+  SECTION_20B_FIELDS.map(field => [field.key, field]),
+);
+
+type FieldGroup = {
+  key: string;
+  title: string;
+  subtitle: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accent: string;
+  iconWrap: string;
+  layout: 'grid' | 'stack';
+  fieldKeys: string[];
+};
+
+const SECTION_20A_GROUPS: FieldGroup[] = [
+  {
+    key: 'identification_documents',
+    title: 'Identification Documents',
+    subtitle: 'Birth, SSN, passport, license, and marriage records',
+    icon: FileText,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'grid',
+    fieldKeys: [
+      'birth_certificate',
+      'social_security_card',
+      'passport',
+      'drivers_license',
+      'marriage_certificate',
+      'divorce_decree',
+      'name_change_documents',
+    ],
+  },
+  {
+    key: 'citizenship_documents',
+    title: 'Citizenship & Immigration',
+    subtitle: 'Naturalization and immigration paperwork',
+    icon: Globe,
+    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
+    iconWrap: 'bg-cyan-500/10 text-cyan-700',
+    layout: 'grid',
+    fieldKeys: ['naturalization_certificate', 'immigration_documents'],
+  },
+  {
+    key: 'family_documents',
+    title: 'Family Documents',
+    subtitle: 'Children, adoption, and custody records',
+    icon: Users,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: [
+      'children_birth_certificates',
+      'adoption_documents',
+      'custody_agreements',
+    ],
+  },
+];
+
+const SECTION_20B_GROUPS: FieldGroup[] = [
+  {
+    key: 'tax_returns',
+    title: 'Tax Returns',
+    subtitle: 'Current year and prior-year filings',
+    icon: ScrollText,
+    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
+    iconWrap: 'bg-emerald-500/10 text-emerald-700',
+    layout: 'grid',
+    fieldKeys: ['current_tax_year', 'previous_tax_years'],
+  },
+  {
+    key: 'preparer_access',
+    title: 'Preparer & Software',
+    subtitle: 'CPA contacts and tax software login details',
+    icon: Receipt,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'grid',
+    fieldKeys: ['tax_preparer_info', 'tax_software'],
+  },
+  {
+    key: 'business_tax_issues',
+    title: 'Business Taxes & Issues',
+    subtitle: 'Business returns, estimated payments, and IRS matters',
+    icon: Landmark,
+    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
+    iconWrap: 'bg-amber-500/10 text-amber-700',
+    layout: 'stack',
+    fieldKeys: [
+      'business_tax_documents',
+      'estimated_tax_payments',
+      'tax_debt_issues',
+    ],
+  },
+];
+
+const STATIC_SUBSECTION_GROUPS: Record<StaticSubsectionId, FieldGroup[]> = {
+  '20A': SECTION_20A_GROUPS,
+  '20B': SECTION_20B_GROUPS,
+};
+
+const STATIC_FIELD_MAP: Record<StaticSubsectionId, Record<string, any>> = {
+  '20A': FIELD_MAP_20A,
+  '20B': FIELD_MAP_20B,
+};
+
+const STATIC_OVERVIEW_KEY: Record<StaticSubsectionId, string> = {
+  '20A': 'legal_documents_instructions',
+  '20B': 'tax_documents_instructions',
+};
+
+const STATIC_SUBTITLE: Record<StaticSubsectionId, string> = {
+  '20A':
+    'Grouped personal legal records so you can fill identification, citizenship, and family documents without scrolling through one long form.',
+  '20B':
+    'Grouped tax records for returns, preparer details, and business tax matters in an easy mobile-friendly layout.',
+};
+
 /* ============================================================
    REPEATABLE SUBSECTION — 20C
 ============================================================ */
@@ -279,7 +411,6 @@ interface Props {
   activeTopicId?: string | null;
 }
 
-type StaticSubsectionId = '20A' | '20B';
 type SubsectionId = '20A' | '20B' | '20C';
 
 type UploadScope = '20A-full' | '20B-full' | '20C-full' | `20C:${number}`;
@@ -823,36 +954,120 @@ export default function Section20LegalDocumentsRecords({
     );
   };
 
+  const isFullWidthField = (field: any) =>
+    field?.type === 'TextArea' ||
+    field?.type === 'RadioButtons' ||
+    field?.type === 'Instructions';
+
+  const renderGroupField = (
+    subsection: StaticSubsectionId,
+    fieldKey: string,
+    sectionData: Record<string, any>,
+  ) => {
+    const field = STATIC_FIELD_MAP[subsection][fieldKey];
+    if (!field || field.type === 'Instructions') return null;
+
+    return (
+      <DynamicFormField
+        key={field.key}
+        field={field}
+        value={sectionData?.[field.key]}
+        formData={sectionData}
+        onChange={value => updateStaticField(subsection, field.key, value)}
+        className="space-y-2"
+      />
+    );
+  };
+
+  const renderGroupFields = (
+    subsection: StaticSubsectionId,
+    group: FieldGroup,
+    sectionData: Record<string, any>,
+  ) => {
+    if (group.layout === 'stack') {
+      return (
+        <div className="space-y-4">
+          {group.fieldKeys.map(fieldKey =>
+            renderGroupField(subsection, fieldKey, sectionData),
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid gap-4 md:grid-cols-2">
+        {group.fieldKeys.map(fieldKey => {
+          const field = STATIC_FIELD_MAP[subsection][fieldKey];
+          if (!field || field.type === 'Instructions') return null;
+
+          return (
+            <div
+              key={fieldKey}
+              className={cn(isFullWidthField(field) && 'md:col-span-2')}
+            >
+              {renderGroupField(subsection, fieldKey, sectionData)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderStaticSection = (subsection: StaticSubsectionId) => {
     const config = STATIC_CONFIG[subsection];
     const sectionData = data[subsection] || {};
     const show = showSubsection(subsection);
+    if (!show) return null;
+
     const scope = `${subsection}-full` as UploadScope;
+    const overviewField =
+      STATIC_FIELD_MAP[subsection][STATIC_OVERVIEW_KEY[subsection]];
+    const groups = STATIC_SUBSECTION_GROUPS[subsection];
 
     return (
       <div
         id={`subsection-${subsection}`}
-        className={`rounded-3xl ${show ? 'border border-primary p-1' : ''}`}
+        className={cn(
+          'rounded-3xl',
+          activeSubsection === subsection && 'border border-primary p-1',
+        )}
       >
-        <Card className="overflow-hidden border-slate-200 shadow-sm">
-          <CardHeader
-            className={[
-              'border-b bg-gradient-to-r from-slate-50',
-              subsection === '20A' ? 'to-blue-50/70' : 'to-emerald-50/70',
-            ].join(' ')}
-          >
-            <CardTitle className="flex items-center gap-2">
-              <FileText
-                className={[
-                  'h-5 w-5',
-                  subsection === '20A' ? 'text-blue-600' : 'text-emerald-600',
-                ].join(' ')}
-              />
-              {subsection}. {config.title}
-            </CardTitle>
+        <Card className="overflow-hidden border-slate-200/80 shadow-sm">
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-indigo-50/60 px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-xl tracking-tight text-slate-900">
+                  {subsection}. {config.title}
+                </CardTitle>
+                <p className="max-w-2xl text-sm leading-6 text-slate-600">
+                  {STATIC_SUBTITLE[subsection]}
+                </p>
+              </div>
+
+              <div className="inline-flex items-center gap-2 self-start rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                AES-256-GCM encrypted at rest
+              </div>
+            </div>
           </CardHeader>
 
-          <CardContent className="space-y-6 p-5">
+          <CardContent className="space-y-6 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
+            {overviewField?.content && (
+              <div className="flex gap-3 rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+                  <Info className="h-5 w-5" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {overviewField.label}
+                  </p>
+                  <p className="text-sm leading-6 text-slate-600">
+                    {overviewField.content}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {renderUploader({
               subsection,
               scope,
@@ -862,18 +1077,47 @@ export default function Section20LegalDocumentsRecords({
               onAutofill: () => handleAutofillStatic(subsection, scope),
             })}
 
-            <div className="grid grid-cols-1 gap-4">
-              {config.fields.map(field => (
-                <DynamicFormField
-                  key={field.key}
-                  field={field}
-                  value={sectionData?.[field.key]}
-                  formData={sectionData}
-                  onChange={value =>
-                    updateStaticField(subsection, field.key, value)
-                  }
-                />
-              ))}
+            <div className="grid gap-5 xl:grid-cols-2">
+              {groups.map(group => {
+                const GroupIcon = group.icon;
+
+                return (
+                  <section
+                    key={group.key}
+                    className={cn(
+                      'overflow-hidden rounded-[24px] border border-slate-200/80 bg-gradient-to-br shadow-sm',
+                      group.accent,
+                      group.layout === 'stack' && 'xl:col-span-2',
+                    )}
+                  >
+                    <div className="border-b border-white/60 bg-white/50 px-5 py-4 backdrop-blur-sm">
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={cn(
+                            'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl',
+                            group.iconWrap,
+                          )}
+                        >
+                          <GroupIcon className="h-5 w-5" />
+                        </div>
+
+                        <div className="min-w-0">
+                          <h3 className="text-base font-semibold text-slate-900">
+                            {group.title}
+                          </h3>
+                          <p className="mt-0.5 text-sm text-slate-600">
+                            {group.subtitle}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="px-3 py-5">
+                      {renderGroupFields(subsection, group, sectionData)}
+                    </div>
+                  </section>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
