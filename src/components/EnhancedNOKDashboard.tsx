@@ -10,20 +10,9 @@ import {
   Heart,
   FileText,
   List,
-  Loader2,
   Search,
   LogOut,
 } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@common/ui/alert-dialog';
 import { Input } from '@common/ui/input';
 import { formConfig } from '../config/formConfig';
 import {
@@ -34,9 +23,7 @@ import {
 import {
   type NextKinOwnerSummary,
   useGetMyNextKinAccessQuery,
-  useReportOwnerDeceasedMutation,
 } from '@/services/authApi';
-import { toast } from 'sonner';
 interface KitSection {
   id: string;
   data?: any;
@@ -91,10 +78,6 @@ export function EnhancedNOKDashboard({
 }: EnhancedNOKDashboardProps) {
   const [activeFilter, setActiveFilter] = useState<Filter>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showDeathReportDialog, setShowDeathReportDialog] = useState(false);
-  const [reportOwnerDeceased, { isLoading: isReportingDeath }] =
-    useReportOwnerDeceasedMutation();
-
   const isPreview = !!previewAccess;
 
   // Either use live API or preview access
@@ -215,28 +198,6 @@ const allSections = useMemo(
     effectiveAccess?.owner?.email ||
     'the kit owner';
   const ownerIsDeceased = ownerStatus === 'deceased';
-  const canReportOwnerPassing =
-    !isPreview && effectiveAccess?.immediate_access && !ownerIsDeceased;
-
-  const handleReportOwnerPassing = async () => {
-    try {
-      const result = await reportOwnerDeceased().unwrap();
-      setShowDeathReportDialog(false);
-
-      if (result.already_reported) {
-        toast.info('This passing has already been recorded.');
-      } else {
-        toast.success(
-          result.message ||
-            'Passing recorded. Death letters and upon-death access notifications have been sent.',
-        );
-      }
-    } catch (error: any) {
-      toast.error(
-        error?.data?.detail || 'Unable to record the passing right now.',
-      );
-    }
-  };
 
   // Loading (only when NOT preview)
   if (!isPreview && accessLoading) {
@@ -387,36 +348,6 @@ const allSections = useMemo(
                     personal letter and message delivery.
                   </p>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {canReportOwnerPassing && (
-            <Card className="border-slate-200">
-              <CardHeader>
-                <CardTitle className="text-brand-primary">
-                  Report a Passing
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm leading-6 text-muted-foreground">
-                  If {ownerName} has passed away, record it here to automatically
-                  send death-triggered letters and personal messages, and grant
-                  access to trusted people who were set to receive it upon death.
-                </p>
-                <Button
-                  variant="outline"
-                  className="border-amber-300 text-amber-900 hover:bg-amber-50"
-                  onClick={() => setShowDeathReportDialog(true)}
-                  disabled={isReportingDeath}
-                >
-                  {isReportingDeath ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <AlertTriangle className="mr-2 h-4 w-4" />
-                  )}
-                  Report Owner Passing
-                </Button>
               </CardContent>
             </Card>
           )}
@@ -601,41 +532,6 @@ const allSections = useMemo(
         </div>
       </div>
 
-      <AlertDialog
-        open={showDeathReportDialog}
-        onOpenChange={setShowDeathReportDialog}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Report owner passing?</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2 text-left">
-              <span className="block">
-                This will mark <strong>{ownerName}</strong> as deceased and
-                cannot be undone from your dashboard.
-              </span>
-              <span className="block">The system will automatically:</span>
-              <ul className="list-disc space-y-1 pl-5">
-                <li>Send death-triggered letters and personal messages</li>
-                <li>Email upon-death trusted people with login access</li>
-                <li>Keep letter and message actions available at the top</li>
-              </ul>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isReportingDeath}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={event => {
-                event.preventDefault();
-                void handleReportOwnerPassing();
-              }}
-              disabled={isReportingDeath}
-              className="bg-amber-700 hover:bg-amber-800"
-            >
-              {isReportingDeath ? 'Recording…' : 'Confirm Passing'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

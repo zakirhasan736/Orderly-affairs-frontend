@@ -25,6 +25,8 @@ import {
   getChecklistReference 
 } from '../config/nokConfig';
 import { NOKInstructions } from './NOKInstructions';
+import { isDeathSignalChecklistItem } from '../config/nokDeathSignals';
+import { toast } from 'sonner';
 interface Subsection {
   id: string;
   title: string;
@@ -58,6 +60,7 @@ interface ChecklistItem {
   description?: string;
   completed: boolean;
   important?: boolean;
+  deathSignal?: boolean;
 }
 
 export function EnhancedSectionView({
@@ -132,7 +135,7 @@ const getSubsectionData = (subsectionId: string) => {
 
     // Standard checklist items based on section type
     switch (sectionId) {
-      case '1': // Instructions
+      case '1': // Vital Information & Key Contacts
         return [
           {
             id: 'read_instructions',
@@ -146,13 +149,15 @@ const getSubsectionData = (subsectionId: string) => {
             label: 'Gather death certificates',
             description: 'Request at least 10 certified copies from funeral home',
             completed: false,
-            important: true
+            important: true,
+            deathSignal: true,
           },
           {
             id: 'notify_immediate',
             label: 'Notify immediate family and close friends',
             description: 'Contact those listed in Family & Friends sections',
-            completed: false
+            completed: false,
+            deathSignal: true,
           },
           {
             id: 'contact_attorney',
@@ -162,7 +167,7 @@ const getSubsectionData = (subsectionId: string) => {
           }
         ];
 
-      case '4': // Vehicles
+      case '5': // Vehicles
         return [
           {
             id: 'locate_titles',
@@ -175,7 +180,8 @@ const getSubsectionData = (subsectionId: string) => {
             id: 'contact_insurance',
             label: 'Contact insurance companies',
             description: 'Notify of death and determine coverage continuation',
-            completed: false
+            completed: false,
+            deathSignal: true,
           },
           {
             id: 'transfer_registration',
@@ -191,20 +197,22 @@ const getSubsectionData = (subsectionId: string) => {
           }
         ];
 
-      case '11': // Bank Accounts
+      case '12': // Banking & Financial Accounts
         return [
           {
             id: 'notify_banks',
             label: 'Notify all banks of death',
             description: 'Contact each bank with death certificate',
             completed: false,
-            important: true
+            important: true,
+            deathSignal: true,
           },
           {
             id: 'freeze_accounts',
             label: 'Understand account freezing',
             description: 'Learn which accounts are frozen and which continue',
-            completed: false
+            completed: false,
+            deathSignal: true,
           },
           {
             id: 'payable_on_death',
@@ -220,7 +228,7 @@ const getSubsectionData = (subsectionId: string) => {
           }
         ];
 
-      case '12': // Digital Assets
+      case '13': // Passwords & Online Accounts
         return [
           {
             id: 'inventory_accounts',
@@ -249,14 +257,15 @@ const getSubsectionData = (subsectionId: string) => {
           }
         ];
 
-      case '17': // Employment & Income
+      case '18': // Employment & Business
         return [
           {
             id: 'notify_employer',
             label: 'Notify current employer',
             description: 'Contact HR department with death certificate',
             completed: false,
-            important: true
+            important: true,
+            deathSignal: true,
           },
           {
             id: 'benefits_info',
@@ -278,14 +287,15 @@ const getSubsectionData = (subsectionId: string) => {
           }
         ];
 
-      case '20': // Estate Plans
+      case '21': // Estate Planning & Final Wishes
         return [
           {
             id: 'locate_will',
             label: 'Locate the will and trust documents',
             description: 'Find original documents in fireproof bag or safe',
             completed: false,
-            important: true
+            important: true,
+            deathSignal: true,
           },
           {
             id: 'contact_attorney',
@@ -305,7 +315,8 @@ const getSubsectionData = (subsectionId: string) => {
             label: 'Honor funeral and burial wishes',
             description: 'Follow documented end-of-life preferences',
             completed: false,
-            important: true
+            important: true,
+            deathSignal: true,
           }
         ];
 
@@ -319,7 +330,7 @@ const getSubsectionData = (subsectionId: string) => {
             completed: false
           },
           {
-            id: 'gather_documents',
+            id: 'gather_section_documents',
             label: 'Gather referenced documents',
             description: 'Collect any documents mentioned in this section',
             completed: false
@@ -339,23 +350,42 @@ const getSubsectionData = (subsectionId: string) => {
   const checklistProgress = checklist.length > 0 ? (completedItems / checklist.length) * 100 : 0;
 
 const saveChecklist = async (items: Record<string, boolean>) => {
-  await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/kit/checklist`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${Cookies.get('nok_auth_token')}`,
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}/kit/checklist`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${Cookies.get('nok_auth_token')}`,
+      },
+      body: JSON.stringify({
+        section_id: sectionId,
+        items,
+      }),
     },
-    body: JSON.stringify({
-      section_id: sectionId,
-      items,
-    }),
-  });
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to save checklist');
+  }
+
+  const data = (await response.json()) as {
+    owner_deceased_triggered?: boolean;
+  };
+
+  if (data.owner_deceased_triggered) {
+    toast.success(
+      'Passing recorded. Death letters, messages, and upon-death access have been sent.',
+    );
+  }
 };
 
 const toggleChecklistItem = (itemId: string) => {
   setChecklistState(prev => {
     const updated = { ...prev, [itemId]: !prev[itemId] };
-    saveChecklist(updated);
+    void saveChecklist(updated).catch(() => {
+      toast.error('Could not save checklist progress');
+    });
     return updated;
   });
 };
@@ -728,6 +758,16 @@ const sectionHasData = useMemo(() => {
                 </Badge>
               </div>
 
+              <p className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm leading-6 text-amber-900">
+                If you check at least two passing-related items (marked
+                &quot;Passing signal&quot;), the system will treat the owner as
+                deceased and send death letters, personal messages, and
+                upon-death access emails. Separately, if the owner has not
+                signed in for 90 days they receive a check-in email; if they do
+                not sign in within 15 more days, the same upon-death workflows
+                run automatically.
+              </p>
+
               <div className="space-y-3">
                 {checklist.map(item => (
                   <Card
@@ -759,6 +799,15 @@ const sectionHasData = useMemo(() => {
                             {item.important && (
                               <Badge variant="destructive" className="text-xs">
                                 Important
+                              </Badge>
+                            )}
+                            {(item.deathSignal ||
+                              isDeathSignalChecklistItem(item.id)) && (
+                              <Badge
+                                variant="outline"
+                                className="border-amber-300 text-xs text-amber-800"
+                              >
+                                Passing signal
                               </Badge>
                             )}
                           </label>
