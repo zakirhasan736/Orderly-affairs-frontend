@@ -15,8 +15,25 @@ import {
   CheckCircle2,
   Loader2,
   Home,
+  Building2,
+  Landmark,
+  Package,
+  Receipt,
+  ScrollText,
+  Users,
+  Wrench,
+  Zap,
 } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
+import {
+  type FieldGroup,
+  buildFieldMap,
+  getInstructionOverview,
+  VaultOverviewBox,
+  VaultEncryptedBadge,
+  VaultGroupCards,
+} from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
@@ -376,6 +393,163 @@ const SECTION_6A = {
   ],
 };
 
+const FIELD_MAP_6A = buildFieldMap(SECTION_6A.fields);
+
+const SECTION_6A_GROUPS: FieldGroup[] = [
+  {
+    key: 'property_identity',
+    title: 'Property Identity',
+    subtitle: 'Address, residence type, ownership, and county',
+    icon: Home,
+    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
+    iconWrap: 'bg-emerald-500/10 text-emerald-700',
+    layout: 'grid',
+    fieldKeys: [
+      'home_address',
+      'residence_type',
+      'custom_residence_type',
+      'ownership_status',
+      'ownership_type',
+      'custom_ownership_type',
+      'year_purchased_leased',
+      'joint_owners',
+      'county',
+    ],
+  },
+  {
+    key: 'property_details',
+    title: 'Property Details',
+    subtitle: 'Size, rooms, features, and major appliances',
+    icon: Building2,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'stack',
+    fieldKeys: [
+      'year_built',
+      'square_footage',
+      'lot_size',
+      'bedrooms',
+      'bathrooms',
+      'home_features',
+      'major_appliances',
+    ],
+  },
+  {
+    key: 'mortgage_payments',
+    title: 'Mortgage & Payments',
+    subtitle: 'Lender or landlord and payment methods',
+    icon: Receipt,
+    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
+    iconWrap: 'bg-amber-500/10 text-amber-700',
+    layout: 'grid',
+    fieldKeys: ['mortgage_lienholder_landlord', 'payment_methods'],
+  },
+  {
+    key: 'ownership_documents',
+    title: 'Ownership Documents',
+    subtitle: 'Deeds, titles, and proof of ownership',
+    icon: FileText,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: ['property_deeds_titles'],
+  },
+  {
+    key: 'current_financing',
+    title: 'Current Financing',
+    subtitle: 'Mortgage statements, HELOCs, and property taxes',
+    icon: Landmark,
+    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
+    iconWrap: 'bg-cyan-500/10 text-cyan-700',
+    layout: 'grid',
+    fieldKeys: [
+      'mortgage_lease_statement',
+      'second_mortgage_heloc',
+      'property_tax_bills',
+    ],
+  },
+  {
+    key: 'historical_documents',
+    title: 'Historical Documents',
+    subtitle: 'Closing records, paid-off liens, and reverse mortgages',
+    icon: ScrollText,
+    accent: 'from-slate-500/[0.07] to-gray-500/[0.03]',
+    iconWrap: 'bg-slate-500/10 text-slate-600',
+    layout: 'grid',
+    fieldKeys: [
+      'closing_refinancing_docs',
+      'paid_off_documentation',
+      'reverse_mortgage_info',
+    ],
+  },
+  {
+    key: 'professional_contacts',
+    title: 'Professional Contacts',
+    subtitle: 'Real estate agent or landlord contact details',
+    icon: Users,
+    accent: 'from-indigo-500/[0.07] to-blue-500/[0.03]',
+    iconWrap: 'bg-indigo-500/10 text-indigo-700',
+    layout: 'grid',
+    fieldKeys: ['realtor_landlord_contact'],
+  },
+  {
+    key: 'occupancy',
+    title: 'Current Occupancy',
+    subtitle: 'Who lives in the home and pets on the property',
+    icon: Users,
+    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-rose-500/10 text-rose-700',
+    layout: 'stack',
+    fieldKeys: ['residents', 'pets'],
+  },
+  {
+    key: 'home_inventory',
+    title: 'Home Inventory',
+    subtitle: 'Valuable items, furnishings, and inventory location',
+    icon: Package,
+    accent: 'from-teal-500/[0.07] to-emerald-500/[0.03]',
+    iconWrap: 'bg-teal-500/10 text-teal-700',
+    layout: 'stack',
+    fieldKeys: ['home_inventory', 'inventory_date_location'],
+  },
+  {
+    key: 'builder_warranty',
+    title: 'Builder & Warranty',
+    subtitle: 'New home builder, warranty, and appliance manuals',
+    icon: Wrench,
+    accent: 'from-orange-500/[0.07] to-amber-500/[0.03]',
+    iconWrap: 'bg-orange-500/10 text-orange-700',
+    layout: 'grid',
+    fieldKeys: ['builder_info', 'home_warranty', 'appliance_manuals'],
+  },
+  {
+    key: 'emergency_systems',
+    title: 'Emergency & Systems',
+    subtitle: 'Shut-offs, breaker panel, security, and smart home',
+    icon: Zap,
+    accent: 'from-yellow-500/[0.07] to-amber-500/[0.03]',
+    iconWrap: 'bg-yellow-500/10 text-yellow-700',
+    layout: 'stack',
+    fieldKeys: [
+      'utility_shutoffs',
+      'circuit_breaker',
+      'home_systems_notes',
+      'security_system',
+      'smart_home_devices',
+    ],
+  },
+];
+
+const INSTRUCTION_OVERVIEW =
+  getInstructionOverview(SECTION_6A.fields, 'inventory_instructions') ?? {
+    label: 'Home Information Overview',
+    content:
+      'Document your primary residence, ownership details, financing, inventory, and emergency information so your family can manage the home and insurance claims.',
+  };
+
+const SUBSECTION_SUBTITLE =
+  'Grouped home records for property details, financing, inventory, and emergency systems in a mobile-friendly layout.';
+
 /* ------------------------------------------------------------------ */
 /* TYPES                                                              */
 /* ------------------------------------------------------------------ */
@@ -687,28 +861,54 @@ export default function Section6MainResidence({
         </div>
       )}
 
-      <Card className="overflow-hidden border-slate-200 shadow-sm">
-        <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-emerald-50/70">
-          <CardTitle className="flex items-center gap-2">
-            <Home className="h-5 w-5 text-emerald-600" />
-            6A. {SECTION_6A.title}
-          </CardTitle>
-        </CardHeader>
+      <div
+        id="subsection-6A"
+        className={cn(
+          'rounded-3xl',
+          activeSubsection === '6A' && 'border border-primary p-1',
+        )}
+      >
+        <Card className="overflow-hidden border-slate-200/80 shadow-sm">
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-indigo-50/60 px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
+                  <Home className="h-5 w-5 text-emerald-600" />
+                  6A. {SECTION_6A.title}
+                </CardTitle>
+                <p className="max-w-2xl text-sm leading-6 text-slate-600">
+                  {SUBSECTION_SUBTITLE}
+                </p>
+              </div>
+              <VaultEncryptedBadge />
+            </div>
+          </CardHeader>
 
-        <CardContent className="space-y-6 p-5">
-          {renderUploader()}
-
-          {SECTION_6A.fields.map((field: any) => (
-            <DynamicFormField
-              key={field.key}
-              field={field}
-              value={subsectionData[field.key]}
-              formData={subsectionData}
-              onChange={(value: any) => updateField(field.key, value)}
+          <CardContent className="space-y-8 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
+            <VaultOverviewBox
+              label={INSTRUCTION_OVERVIEW.label}
+              content={INSTRUCTION_OVERVIEW.content}
             />
-          ))}
-        </CardContent>
-      </Card>
+
+            {renderUploader()}
+
+            <VaultGroupCards
+              groups={SECTION_6A_GROUPS}
+              fieldMap={FIELD_MAP_6A}
+              renderField={fieldKey => (
+                <DynamicFormField
+                  key={fieldKey}
+                  field={FIELD_MAP_6A[fieldKey]}
+                  value={subsectionData[fieldKey]}
+                  formData={subsectionData}
+                  onChange={(value: any) => updateField(fieldKey, value)}
+                  className="space-y-2"
+                />
+              )}
+            />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -18,15 +18,7 @@ import {
   Loader2,
   Gem,
   Building2,
-  Heart,
-  Info,
-  Landmark,
-  MapPin,
-  Receipt,
-  ScrollText,
-  ShieldCheck,
 } from 'lucide-react';
-import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
@@ -264,170 +256,6 @@ const SECTION_19B = createRepeatableSection(
     },
   ],
 );
-
-type FieldGroup = {
-  key: string;
-  title: string;
-  subtitle: string;
-  icon: React.ComponentType<{ className?: string }>;
-  accent: string;
-  iconWrap: string;
-  layout: 'grid' | 'stack';
-  fieldKeys: string[];
-};
-
-const SECTION_19A_GROUPS: FieldGroup[] = [
-  {
-    key: 'item_details',
-    title: 'Item Details',
-    subtitle: 'Type, description, and estimated value',
-    icon: Gem,
-    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
-    iconWrap: 'bg-amber-500/10 text-amber-700',
-    layout: 'grid',
-    fieldKeys: [
-      'item_type',
-      'item_type_other',
-      'item_description',
-      'estimated_value',
-    ],
-  },
-  {
-    key: 'purchase_location',
-    title: 'Purchase & Location',
-    subtitle: 'Where acquired and where the item is kept',
-    icon: MapPin,
-    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
-    iconWrap: 'bg-blue-500/10 text-blue-600',
-    layout: 'grid',
-    fieldKeys: ['purchase_info', 'current_location'],
-  },
-  {
-    key: 'insurance_appraisal',
-    title: 'Insurance & Appraisal',
-    subtitle: 'Coverage details and professional valuations',
-    icon: ShieldCheck,
-    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
-    iconWrap: 'bg-cyan-500/10 text-cyan-700',
-    layout: 'grid',
-    fieldKeys: ['insurance_info', 'appraisal_info'],
-  },
-  {
-    key: 'legacy_care',
-    title: 'Legacy & Care',
-    subtitle: 'Recipient wishes, care notes, and significance',
-    icon: Heart,
-    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
-    iconWrap: 'bg-rose-500/10 text-rose-700',
-    layout: 'stack',
-    fieldKeys: [
-      'intended_recipient',
-      'care_instructions',
-      'item_history',
-    ],
-  },
-  {
-    key: 'documentation',
-    title: 'Documentation',
-    subtitle: 'Photos, receipts, and supporting records',
-    icon: FileText,
-    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
-    iconWrap: 'bg-violet-500/10 text-violet-600',
-    layout: 'grid',
-    fieldKeys: ['item_documents'],
-  },
-];
-
-const SECTION_19B_GROUPS: FieldGroup[] = [
-  {
-    key: 'property_basics',
-    title: 'Property Basics',
-    subtitle: 'Type, address, and description',
-    icon: Building2,
-    accent: 'from-indigo-500/[0.07] to-blue-500/[0.03]',
-    iconWrap: 'bg-indigo-500/10 text-indigo-700',
-    layout: 'grid',
-    fieldKeys: [
-      'property_type',
-      'property_type_other',
-      'property_address',
-      'property_description',
-    ],
-  },
-  {
-    key: 'ownership_value',
-    title: 'Ownership & Value',
-    subtitle: 'How owned, purchase history, and market value',
-    icon: Landmark,
-    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
-    iconWrap: 'bg-emerald-500/10 text-emerald-700',
-    layout: 'grid',
-    fieldKeys: ['ownership_details', 'purchase_info', 'current_value'],
-  },
-  {
-    key: 'financing_management',
-    title: 'Financing & Management',
-    subtitle: 'Mortgage, rental income, and property manager',
-    icon: Receipt,
-    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
-    iconWrap: 'bg-amber-500/10 text-amber-700',
-    layout: 'stack',
-    fieldKeys: ['mortgage_info', 'rental_info', 'property_manager'],
-  },
-  {
-    key: 'taxes_insurance',
-    title: 'Taxes & Insurance',
-    subtitle: 'Property tax bills and insurance policies',
-    icon: ShieldCheck,
-    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
-    iconWrap: 'bg-cyan-500/10 text-cyan-700',
-    layout: 'grid',
-    fieldKeys: ['property_taxes', 'insurance_info'],
-  },
-  {
-    key: 'disposition_records',
-    title: 'Disposition & Records',
-    subtitle: 'Future wishes and property documents',
-    icon: ScrollText,
-    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
-    iconWrap: 'bg-violet-500/10 text-violet-600',
-    layout: 'stack',
-    fieldKeys: ['intended_disposition', 'property_documents'],
-  },
-];
-
-const SUBSECTION_GROUPS: Record<SubsectionId, FieldGroup[]> = {
-  '19A': SECTION_19A_GROUPS,
-  '19B': SECTION_19B_GROUPS,
-};
-
-const SUBSECTION_FIELD_MAP: Record<SubsectionId, Record<string, any>> = {
-  '19A': Object.fromEntries(SECTION_19A.fields.map(f => [f.key, f])),
-  '19B': Object.fromEntries(SECTION_19B.fields.map(f => [f.key, f])),
-};
-
-const SUBSECTION_OVERVIEW: Record<
-  SubsectionId,
-  { label: string; content: string }
-> = {
-  '19A': {
-    label: 'Valuable Items Overview',
-    content:
-      'Document jewelry, collectibles, artwork, and other valuables your next of kin should know about. Add one card per item and group details by type, location, insurance, and who should inherit each piece.',
-  },
-  '19B': {
-    label: 'Real Estate Overview',
-    content:
-      'Record rental properties, land, vacation homes, and other real estate you own outside your main residence. Add one card per property with ownership, financing, tax, and disposition details.',
-  },
-};
-
-const SUBSECTION_SUBTITLE: Record<SubsectionId, string> = {
-  '19A':
-    'Add valuable items one at a time with grouped details in a clean two-column layout on desktop and mobile.',
-  '19B':
-    'Add each property with grouped ownership, financing, tax, and document details in the same mobile-friendly layout.',
-};
 
 /* ============================================================
    TYPES / HELPERS
@@ -877,139 +705,52 @@ export default function Section19AssetsValuables({
     );
   };
 
-  const isFullWidthField = (field: any) =>
-    field?.type === 'TextArea' ||
-    field?.type === 'RadioButtons' ||
-    field?.type === 'Instructions';
-
-  const renderItemField = (
-    subsection: SubsectionId,
-    fieldKey: string,
-    item: Record<string, any>,
-    index: number,
-  ) => {
-    const field = SUBSECTION_FIELD_MAP[subsection][fieldKey];
-    if (!field) return null;
-
-    return (
-      <DynamicFormField
-        key={`${field.key}-${item.__rowId || index}`}
-        field={field}
-        value={item?.[field.key]}
-        formData={item}
-        rowId={item.__rowId}
-        onChange={(value: any) => updateItem(subsection, index, field.key, value)}
-        className="space-y-2"
-      />
-    );
-  };
-
-  const renderItemGroupFields = (
-    subsection: SubsectionId,
-    group: FieldGroup,
-    item: Record<string, any>,
-    index: number,
-  ) => {
-    if (group.layout === 'stack') {
-      return (
-        <div className="space-y-4">
-          {group.fieldKeys.map(fieldKey =>
-            renderItemField(subsection, fieldKey, item, index),
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <div className="grid gap-4 md:grid-cols-2">
-        {group.fieldKeys.map(fieldKey => {
-          const field = SUBSECTION_FIELD_MAP[subsection][fieldKey];
-          if (!field) return null;
-
-          return (
-            <div
-              key={fieldKey}
-              className={cn(isFullWidthField(field) && 'md:col-span-2')}
-            >
-              {renderItemField(subsection, fieldKey, item, index)}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
   const renderSubsection = (subsection: SubsectionId) => {
     const config = getConfig(subsection);
     const items = getItems(subsection);
     const isValuable = subsection === '19A';
     const fullScope = `${subsection}-full` as UploadScope;
     const Icon = isValuable ? Gem : Building2;
-    const overview = SUBSECTION_OVERVIEW[subsection];
-    const groups = SUBSECTION_GROUPS[subsection];
 
     const show = !activeSubsection || activeSubsection === subsection;
-    if (!show) return null;
 
     return (
       <div
         key={subsection}
         id={`subsection-${subsection}`}
-        className={cn(
-          'rounded-3xl',
-          activeSubsection === subsection && 'border border-primary p-1',
-        )}
+        className={`rounded-3xl ${show ? 'border border-primary p-1' : ''}`}
       >
-        <Card className="overflow-hidden border-slate-200/80 shadow-sm">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-indigo-50/60 px-5 py-5 sm:px-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
-                  <Icon
-                    className={cn(
-                      'h-5 w-5',
-                      isValuable ? 'text-amber-600' : 'text-indigo-600',
-                    )}
-                  />
-                  {subsection}. {config.title}
-                </CardTitle>
-                <p className="max-w-2xl text-sm leading-6 text-slate-600">
-                  {SUBSECTION_SUBTITLE[subsection]}
-                </p>
-              </div>
+        <Card className="overflow-hidden border-slate-200 shadow-sm">
+          <CardHeader
+            className={[
+              'border-b bg-gradient-to-r from-slate-50',
+              isValuable ? 'to-amber-50/70' : 'to-indigo-50/70',
+            ].join(' ')}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Icon
+                  className={[
+                    'h-5 w-5',
+                    isValuable ? 'text-amber-600' : 'text-indigo-600',
+                  ].join(' ')}
+                />
+                {subsection}. {config.title}
+              </CardTitle>
 
-              <div className="flex flex-col items-stretch gap-2 sm:items-end">
-                <div className="inline-flex items-center gap-2 self-start rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 sm:self-end">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  AES-256-GCM encrypted at rest
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => addItem(subsection)}
-                  className="rounded-xl"
-                >
-                  <Plus className="mr-1 h-4 w-4" />
-                  Add {config.itemLabel}
-                </Button>
-              </div>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => addItem(subsection)}
+                className="rounded-xl"
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Add {config.itemLabel}
+              </Button>
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-8 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
-            <div className="flex gap-3 rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
-                <Info className="h-5 w-5" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-slate-900">
-                  {overview.label}
-                </p>
-                <p className="text-sm leading-6 text-slate-600">
-                  {overview.content}
-                </p>
-              </div>
-            </div>
+          <CardContent className="space-y-8 p-5">
             {/* {renderUploader({
               subsection,
               scope: fullScope,
@@ -1092,52 +833,19 @@ export default function Section19AssetsValuables({
                         handleAutofill(subsection, itemScope, index),
                     })}
 
-                    <div className="grid gap-5 xl:grid-cols-2">
-                      {groups.map(group => {
-                        const GroupIcon = group.icon;
-
-                        return (
-                          <section
-                            key={group.key}
-                            className={cn(
-                              'overflow-hidden rounded-[24px] border border-slate-200/80 bg-gradient-to-br shadow-sm',
-                              group.accent,
-                              group.layout === 'stack' && 'xl:col-span-2',
-                            )}
-                          >
-                            <div className="border-b border-white/60 bg-white/50 px-5 py-4 backdrop-blur-sm">
-                              <div className="flex items-start gap-3">
-                                <div
-                                  className={cn(
-                                    'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl',
-                                    group.iconWrap,
-                                  )}
-                                >
-                                  <GroupIcon className="h-5 w-5" />
-                                </div>
-
-                                <div className="min-w-0">
-                                  <h3 className="text-base font-semibold text-slate-900">
-                                    {group.title}
-                                  </h3>
-                                  <p className="mt-0.5 text-sm text-slate-600">
-                                    {group.subtitle}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="px-3 py-5">
-                              {renderItemGroupFields(
-                                subsection,
-                                group,
-                                item,
-                                index,
-                              )}
-                            </div>
-                          </section>
-                        );
-                      })}
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {config.fields.map((field: any) => (
+                        <DynamicFormField
+                          key={`${field.key}-${item.__rowId || index}`}
+                          field={field}
+                          value={item?.[field.key]}
+                          formData={item}
+                          rowId={item.__rowId}
+                          onChange={(value: any) =>
+                            updateItem(subsection, index, field.key, value)
+                          }
+                        />
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
