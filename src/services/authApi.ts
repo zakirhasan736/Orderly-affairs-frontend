@@ -38,6 +38,13 @@ export interface CreateNextKinBulkItem {
 }
 export interface CreateNextKinBulkResponse { results: CreateNextKinBulkItem[] }
 
+export interface NextKinOwnerSummary {
+  id: string;
+  email?: string;
+  full_name?: string;
+  status: 'alive' | 'deceased' | string;
+}
+
 export interface NextKinAccessResponse {
   id: string;
   email: string;
@@ -48,8 +55,10 @@ export interface NextKinAccessResponse {
   authorized_sections: 'all' | string[];
   access_level: string;
   immediate_access: boolean;
+  access_timing?: 'immediate' | 'upon_death' | string;
   nok_letter_received?: boolean;
   owner_id: string;
+  owner?: NextKinOwnerSummary;
   nextkin: {
     id: string;
     email: string;
@@ -71,6 +80,13 @@ export interface AccessActionResponse {
   updated?: number;
   emailed?: number;
   owner_id?: string;
+}
+
+export interface ReportOwnerDeceasedResponse {
+  status: 'deceased';
+  already_reported: boolean;
+  message: string;
+  upon_death_granted?: number;
 }
 // SMS OTP
 export interface SendSmsOtpRequest {
@@ -137,7 +153,11 @@ export interface OwnerMeResponse {
   primary_mfa?: MFAMethod | null;
   mfa_methods: Partial<MFAMethods>;
 }
-const NOK_SECURED = new Set(['getMyNextKinAccess', 'nextkinLogout']);
+const NOK_SECURED = new Set([
+  'getMyNextKinAccess',
+  'nextkinLogout',
+  'reportOwnerDeceased',
+]);
 const PUBLIC = new Set([
   'signup',
   'login',
@@ -362,6 +382,13 @@ export const authApi = createApi({
       query: () => ({ url: '/nextkin-access', method: 'GET' }),
       providesTags: ['NextKinAccess'],
     }),
+    reportOwnerDeceased: builder.mutation<ReportOwnerDeceasedResponse, void>({
+      query: () => ({
+        url: '/nextkin/report-owner-deceased',
+        method: 'POST',
+      }),
+      invalidatesTags: ['NextKinAccess'],
+    }),
   }),
 });
 
@@ -387,6 +414,7 @@ export const {
   useRevokeAllNextKinAccessMutation,
   useApproveAllNextKinAccessMutation,
   useGetMyNextKinAccessQuery,
+  useReportOwnerDeceasedMutation,
   useRequestPasswordResetMutation,
   useResetPasswordMutation,
   useSendSmsOtpMutation,

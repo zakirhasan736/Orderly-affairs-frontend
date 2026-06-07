@@ -32,7 +32,7 @@ console.log('👤 KIT.NEXTKIN:', kit?.nextkin);
 
   useEffect(() => {
     if (!token) {
-      router.replace('/next-kin/login');
+      router.replace('/next-kin');
     }
   }, [token, router]);
 

@@ -16,7 +16,7 @@ export default function NextKinLetterPage() {
   // const { data: letters, isLoading } = useGetNokLetterQuery();
 
   useEffect(() => {
-    if (!token) router.replace('/next-kin/login');
+    if (!token) router.replace('/next-kin');
   }, [token, router]);
 
 const { data: letter, isLoading } = useGetNokLetterQuery();

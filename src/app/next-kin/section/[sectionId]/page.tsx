@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { useGetKitForNokQuery } from '@/services/kitApi';
 import { useGetMyNextKinAccessQuery } from '@/services/authApi';
 import { EnhancedSectionView } from '@/components/EnhancedSectionView';
+import { isHiddenFromNokDashboard } from '@/config/nokConfig';
 
 export default function NextKinSectionPage() {
   const router = useRouter();
@@ -18,8 +19,14 @@ export default function NextKinSectionPage() {
   const { data: kit, isLoading } = useGetKitForNokQuery();
 
   useEffect(() => {
-    if (!token) router.replace('/next-kin/login');
+    if (!token) router.replace('/next-kin');
   }, [token, router]);
+
+  useEffect(() => {
+    if (sectionId && isHiddenFromNokDashboard(sectionId)) {
+      router.replace('/next-kin/dashboard');
+    }
+  }, [sectionId, router]);
 
   if (!token || isLoading || !kit) {
     return <div className="p-8 text-muted-foreground">Loading section…</div>;

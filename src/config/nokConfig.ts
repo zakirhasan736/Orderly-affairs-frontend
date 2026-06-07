@@ -13,7 +13,7 @@ export const nokConfig = {
       can_export: true,
       can_edit: false,
       can_manage_access: false,
-      hidden_sections: ['2'],
+      hidden_sections: ['2', '3', '4'],
     },
   },
   ui: {
@@ -690,6 +690,13 @@ export const nokConfig = {
     },
   ],
 };
+
+export const NOK_HIDDEN_SECTION_IDS = new Set(
+  nokConfig.roles.nok.hidden_sections,
+);
+
+export const isHiddenFromNokDashboard = (sectionId: string) =>
+  NOK_HIDDEN_SECTION_IDS.has(sectionId);
 
 // Helper functions for NOK configuration
 export const getNOKSectionConfig = (sectionId: string) => {
