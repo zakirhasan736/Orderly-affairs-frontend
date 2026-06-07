@@ -11,15 +11,24 @@ import { DynamicFormField } from '@/components/DynamicFormField';
 import { Button } from '@/components/common/ui/button';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 import {
+  Baby,
   CheckCircle2,
+  Church,
   FileText,
   HeartHandshake,
+  HeartPulse,
+  Info,
+  Landmark,
   Loader2,
+  Scale,
   ScrollText,
   ShieldCheck,
   Sparkles,
   UploadCloud,
+  UserCheck,
+  Users,
 } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
@@ -614,6 +623,302 @@ const SECTION_21C_FIELDS = [
   },
 ];
 
+type SubsectionId = '21A' | '21B' | '21C';
+
+const FIELD_MAP_21A = Object.fromEntries(
+  SECTION_21A_FIELDS.map(field => [field.key, field]),
+);
+const FIELD_MAP_21B = Object.fromEntries(
+  SECTION_21B_FIELDS.map(field => [field.key, field]),
+);
+const FIELD_MAP_21C = Object.fromEntries(
+  SECTION_21C_FIELDS.map(field => [field.key, field]),
+);
+
+type FieldGroup = {
+  key: string;
+  title: string;
+  subtitle: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accent: string;
+  iconWrap: string;
+  layout: 'grid' | 'stack';
+  fieldKeys: string[];
+};
+
+const SECTION_21A_GROUPS: FieldGroup[] = [
+  {
+    key: 'will_testament',
+    title: 'Will & Testament',
+    subtitle: 'Location, executor details, and estate attorney',
+    icon: ScrollText,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'grid',
+    fieldKeys: [
+      'will_location',
+      'will_date',
+      'executor_info',
+      'alternate_executor',
+      'will_attorney',
+    ],
+  },
+  {
+    key: 'trust_documents',
+    title: 'Trust Documents',
+    subtitle: 'Trusts, trustees, and trust attorney contacts',
+    icon: Landmark,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: [
+      'trust_info',
+      'trustee_info',
+      'successor_trustee',
+      'trust_attorney',
+    ],
+  },
+  {
+    key: 'power_of_attorney',
+    title: 'Powers of Attorney',
+    subtitle: 'Financial and medical decision authority',
+    icon: Scale,
+    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
+    iconWrap: 'bg-cyan-500/10 text-cyan-700',
+    layout: 'grid',
+    fieldKeys: ['financial_poa', 'medical_poa'],
+  },
+  {
+    key: 'healthcare_directives',
+    title: 'Healthcare Directives',
+    subtitle: 'Living wills, DNR orders, and donation wishes',
+    icon: HeartPulse,
+    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-rose-500/10 text-rose-700',
+    layout: 'grid',
+    fieldKeys: ['living_will', 'dnr_orders', 'organ_donation'],
+  },
+  {
+    key: 'beneficiary_info',
+    title: 'Beneficiary Information',
+    subtitle: 'Primary, contingent, and special bequests',
+    icon: Users,
+    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
+    iconWrap: 'bg-emerald-500/10 text-emerald-700',
+    layout: 'stack',
+    fieldKeys: [
+      'primary_beneficiaries',
+      'contingent_beneficiaries',
+      'special_bequests',
+      'charitable_bequests',
+    ],
+  },
+];
+
+const SECTION_21B_GROUPS: FieldGroup[] = [
+  {
+    key: 'funeral_preferences',
+    title: 'Funeral / Memorial Preferences',
+    subtitle: 'Service type, location, and officiant details',
+    icon: Church,
+    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-rose-500/10 text-rose-700',
+    layout: 'grid',
+    fieldKeys: [
+      'funeral_type',
+      'funeral_type_other',
+      'service_location',
+      'funeral_home',
+      'clergy_officiant',
+      'service_preferences',
+    ],
+  },
+  {
+    key: 'disposition_preferences',
+    title: 'Body Disposition Preferences',
+    subtitle: 'Burial, cremation, or donation arrangements',
+    icon: HeartHandshake,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: [
+      'disposition_type',
+      'disposition_type_other',
+      'burial_location',
+      'cremation_preferences',
+      'body_donation_info',
+    ],
+  },
+  {
+    key: 'memorial_preferences',
+    title: 'Memorial Preferences',
+    subtitle: 'Headstone, donations, and special requests',
+    icon: FileText,
+    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
+    iconWrap: 'bg-amber-500/10 text-amber-700',
+    layout: 'stack',
+    fieldKeys: ['headstone_marker', 'memorial_donations', 'special_requests'],
+  },
+  {
+    key: 'obituary_information',
+    title: 'Obituary Information',
+    subtitle: 'Details and photo for your obituary',
+    icon: ScrollText,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'grid',
+    fieldKeys: ['obituary_details', 'photo_for_obituary'],
+  },
+  {
+    key: 'prepaid_arrangements',
+    title: 'Prepaid Arrangements',
+    subtitle: 'Funeral contracts, plots, and insurance',
+    icon: ShieldCheck,
+    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
+    iconWrap: 'bg-emerald-500/10 text-emerald-700',
+    layout: 'grid',
+    fieldKeys: ['prepaid_funeral', 'cemetery_plot', 'funeral_insurance'],
+  },
+];
+
+const SECTION_21C_GROUPS: FieldGroup[] = [
+  {
+    key: 'minor_children',
+    title: 'Minor Children Information',
+    subtitle: 'Names, birthdates, and current ages',
+    icon: Baby,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'stack',
+    fieldKeys: ['minor_children_info'],
+  },
+  {
+    key: 'primary_guardian',
+    title: 'Primary Guardian',
+    subtitle: 'First choice to care for your children',
+    icon: UserCheck,
+    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
+    iconWrap: 'bg-emerald-500/10 text-emerald-700',
+    layout: 'grid',
+    fieldKeys: [
+      'primary_guardian_name',
+      'primary_guardian_relationship',
+      'primary_guardian_contact',
+      'primary_guardian_consent',
+    ],
+  },
+  {
+    key: 'alternate_guardian',
+    title: 'Alternate Guardian',
+    subtitle: 'Backup guardian if primary cannot serve',
+    icon: UserCheck,
+    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
+    iconWrap: 'bg-cyan-500/10 text-cyan-700',
+    layout: 'grid',
+    fieldKeys: [
+      'alternate_guardian_name',
+      'alternate_guardian_relationship',
+      'alternate_guardian_contact',
+      'alternate_guardian_consent',
+    ],
+  },
+  {
+    key: 'guardian_instructions',
+    title: 'Instructions for Guardians',
+    subtitle: 'Values, education, health, and activities',
+    icon: HeartHandshake,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'stack',
+    fieldKeys: [
+      'parenting_philosophy',
+      'education_preferences',
+      'religious_preferences',
+      'healthcare_instructions',
+      'special_needs',
+      'extracurricular_activities',
+      'relationship_maintenance',
+    ],
+  },
+  {
+    key: 'financial_provisions',
+    title: 'Financial Provisions',
+    subtitle: 'Trusts, insurance, and education funding',
+    icon: Landmark,
+    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
+    iconWrap: 'bg-amber-500/10 text-amber-700',
+    layout: 'stack',
+    fieldKeys: [
+      'trust_arrangements',
+      'life_insurance',
+      'education_funding',
+      'guardian_compensation',
+    ],
+  },
+  {
+    key: 'legal_documents',
+    title: 'Legal Documentation',
+    subtitle: 'Wills, letters, custody, and attorney contacts',
+    icon: Scale,
+    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-rose-500/10 text-rose-700',
+    layout: 'grid',
+    fieldKeys: [
+      'guardianship_will',
+      'guardian_letters',
+      'custody_agreements',
+      'guardianship_attorney',
+    ],
+  },
+  {
+    key: 'exclusions',
+    title: 'Exclusions',
+    subtitle: 'People you do not want as guardians',
+    icon: ShieldCheck,
+    accent: 'from-slate-500/[0.07] to-slate-400/[0.03]',
+    iconWrap: 'bg-slate-500/10 text-slate-700',
+    layout: 'stack',
+    fieldKeys: ['excluded_persons'],
+  },
+  {
+    key: 'emergency_contacts',
+    title: 'Emergency Contacts',
+    subtitle: 'Temporary care, school, and medical authorization',
+    icon: Users,
+    accent: 'from-indigo-500/[0.07] to-blue-500/[0.03]',
+    iconWrap: 'bg-indigo-500/10 text-indigo-700',
+    layout: 'stack',
+    fieldKeys: ['temporary_caregivers', 'school_contacts', 'medical_contacts'],
+  },
+];
+
+const SUBSECTION_GROUPS: Record<SubsectionId, FieldGroup[]> = {
+  '21A': SECTION_21A_GROUPS,
+  '21B': SECTION_21B_GROUPS,
+  '21C': SECTION_21C_GROUPS,
+};
+
+const SUBSECTION_FIELD_MAP: Record<SubsectionId, Record<string, any>> = {
+  '21A': FIELD_MAP_21A,
+  '21B': FIELD_MAP_21B,
+  '21C': FIELD_MAP_21C,
+};
+
+const SUBSECTION_OVERVIEW_KEY: Record<SubsectionId, string> = {
+  '21A': 'estate_planning_instructions',
+  '21B': 'final_arrangements_instructions',
+  '21C': 'guardianship_instructions',
+};
+
+const SUBSECTION_SUBTITLE: Record<SubsectionId, string> = {
+  '21A':
+    'Grouped legal documents so you can fill wills, trusts, powers of attorney, and beneficiary details without scrolling through one long form.',
+  '21B':
+    'Grouped final wishes for services, disposition, memorials, and prepaid arrangements in an easy mobile-friendly layout.',
+  '21C':
+    'Grouped guardianship choices, care instructions, financial provisions, and emergency contacts for your children.',
+};
+
 /* ============================================================
    TYPES / HELPERS
 ============================================================ */
@@ -625,7 +930,6 @@ interface Props {
   activeTopicId?: string | null;
 }
 
-type SubsectionId = '21A' | '21B' | '21C';
 type UploadScope = '21A-full' | '21B-full' | '21C-full';
 
 type UploadedAIFile = {
@@ -1041,43 +1345,162 @@ export default function Section21EstatePlanningFinalWishes({
     );
   };
 
+  const isFullWidthField = (field: any) =>
+    field?.type === 'TextArea' ||
+    field?.type === 'RadioButtons' ||
+    field?.type === 'Instructions';
+
+  const renderGroupField = (
+    sectionId: SubsectionId,
+    fieldKey: string,
+    sectionData: Record<string, any>,
+  ) => {
+    const field = SUBSECTION_FIELD_MAP[sectionId][fieldKey];
+    if (!field || field.type === 'Instructions') return null;
+
+    return (
+      <DynamicFormField
+        key={field.key}
+        field={field}
+        value={sectionData?.[field.key]}
+        formData={sectionData}
+        onChange={value => updateField(sectionId, field.key, value)}
+        className="space-y-2"
+      />
+    );
+  };
+
+  const renderGroupFields = (
+    sectionId: SubsectionId,
+    group: FieldGroup,
+    sectionData: Record<string, any>,
+  ) => {
+    if (group.layout === 'stack') {
+      return (
+        <div className="space-y-4">
+          {group.fieldKeys.map(fieldKey =>
+            renderGroupField(sectionId, fieldKey, sectionData),
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid gap-4 md:grid-cols-2">
+        {group.fieldKeys.map(fieldKey => {
+          const field = SUBSECTION_FIELD_MAP[sectionId][fieldKey];
+          if (!field || field.type === 'Instructions') return null;
+
+          return (
+            <div
+              key={fieldKey}
+              className={cn(isFullWidthField(field) && 'md:col-span-2')}
+            >
+              {renderGroupField(sectionId, fieldKey, sectionData)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderSection = (id: SubsectionId) => {
     const config = SECTION_CONFIG[id];
     const show = !activeSubsection || activeSubsection === id;
+    if (!show) return null;
+
     const sectionData = data[id] || {};
-    const Icon = config.icon;
+    const overviewField =
+      SUBSECTION_FIELD_MAP[id][SUBSECTION_OVERVIEW_KEY[id]];
+    const groups = SUBSECTION_GROUPS[id];
 
     return (
       <div
         id={`subsection-${id}`}
-        className={`rounded-3xl ${show ? 'border border-primary p-1' : ''}`}
+        className={cn(
+          'rounded-3xl',
+          activeSubsection === id && 'border border-primary p-1',
+        )}
       >
-        <Card className="overflow-hidden border-slate-200 shadow-sm">
-          <CardHeader
-            className={[
-              'border-b bg-gradient-to-r from-slate-50',
-              config.tone.header,
-            ].join(' ')}
-          >
-            <CardTitle className="flex items-center gap-2">
-              <Icon className={`h-5 w-5 ${config.tone.icon}`} />
-              {id}. {config.title}
-            </CardTitle>
+        <Card className="overflow-hidden border-slate-200/80 shadow-sm">
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-indigo-50/60 px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-xl tracking-tight text-slate-900">
+                  {id}. {config.title}
+                </CardTitle>
+                <p className="max-w-2xl text-sm leading-6 text-slate-600">
+                  {SUBSECTION_SUBTITLE[id]}
+                </p>
+              </div>
+
+              <div className="inline-flex items-center gap-2 self-start rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                AES-256-GCM encrypted at rest
+              </div>
+            </div>
           </CardHeader>
 
-          <CardContent className="space-y-6 p-5">
+          <CardContent className="space-y-6 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
+            {overviewField?.content && (
+              <div className="flex gap-3 rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+                  <Info className="h-5 w-5" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {overviewField.label}
+                  </p>
+                  <p className="text-sm leading-6 text-slate-600">
+                    {overviewField.content}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {renderUploader(id)}
 
-            <div className="grid grid-cols-1 gap-4">
-              {config.fields.map(field => (
-                <DynamicFormField
-                  key={field.key}
-                  field={field}
-                  value={sectionData?.[field.key]}
-                  formData={sectionData}
-                  onChange={value => updateField(id, field.key, value)}
-                />
-              ))}
+            <div className="grid gap-5 xl:grid-cols-2">
+              {groups.map(group => {
+                const GroupIcon = group.icon;
+
+                return (
+                  <section
+                    key={group.key}
+                    className={cn(
+                      'overflow-hidden rounded-[24px] border border-slate-200/80 bg-gradient-to-br shadow-sm',
+                      group.accent,
+                      group.layout === 'stack' && 'xl:col-span-2',
+                    )}
+                  >
+                    <div className="border-b border-white/60 bg-white/50 px-5 py-4 backdrop-blur-sm">
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={cn(
+                            'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl',
+                            group.iconWrap,
+                          )}
+                        >
+                          <GroupIcon className="h-5 w-5" />
+                        </div>
+
+                        <div className="min-w-0">
+                          <h3 className="text-base font-semibold text-slate-900">
+                            {group.title}
+                          </h3>
+                          <p className="mt-0.5 text-sm text-slate-600">
+                            {group.subtitle}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="px-3 py-5">
+                      {renderGroupFields(id, group, sectionData)}
+                    </div>
+                  </section>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
