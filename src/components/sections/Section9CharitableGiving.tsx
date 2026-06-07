@@ -17,19 +17,8 @@ import {
   CheckCircle2,
   Loader2,
   HeartHandshake,
-  Gift,
-  ScrollText,
-  Wallet,
 } from 'lucide-react';
-import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
-import {
-  type FieldGroup,
-  buildFieldMap,
-  VaultOverviewBox,
-  VaultEncryptedBadge,
-  VaultGroupCards,
-} from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
@@ -146,75 +135,6 @@ const SECTION_9A = {
     },
   ],
 };
-
-const FIELD_MAP_9A = buildFieldMap(SECTION_9A.fields);
-
-const SECTION_9A_GROUPS: FieldGroup[] = [
-  {
-    key: 'charity_identity',
-    title: 'Charity Identity',
-    subtitle: 'Organization name and cause category',
-    icon: HeartHandshake,
-    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
-    iconWrap: 'bg-rose-500/10 text-rose-700',
-    layout: 'grid',
-    fieldKeys: ['charity_name', 'cause_type', 'cause_type_other'],
-  },
-  {
-    key: 'contribution_details',
-    title: 'Contribution Details',
-    subtitle: 'How, how much, and how often you give',
-    icon: Gift,
-    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
-    iconWrap: 'bg-amber-500/10 text-amber-700',
-    layout: 'grid',
-    fieldKeys: [
-      'contribution_type',
-      'contribution_type_other',
-      'contribution_amount',
-      'payment_method',
-    ],
-  },
-  {
-    key: 'account_contact',
-    title: 'Account & Contact',
-    subtitle: 'Donor account info and charity contacts',
-    icon: Wallet,
-    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
-    iconWrap: 'bg-blue-500/10 text-blue-600',
-    layout: 'grid',
-    fieldKeys: ['account_info', 'contact_details'],
-  },
-  {
-    key: 'instructions_estate',
-    title: 'Instructions & Estate',
-    subtitle: 'Giving wishes and will or trust provisions',
-    icon: ScrollText,
-    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
-    iconWrap: 'bg-violet-500/10 text-violet-600',
-    layout: 'stack',
-    fieldKeys: ['special_instructions', 'will_trust_provision'],
-  },
-  {
-    key: 'tax_documents',
-    title: 'Tax Documents',
-    subtitle: 'Donation receipts and tax records',
-    icon: FileText,
-    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
-    iconWrap: 'bg-emerald-500/10 text-emerald-700',
-    layout: 'grid',
-    fieldKeys: ['tax_documents'],
-  },
-];
-
-const SUBSECTION_OVERVIEW = {
-  label: 'Charitable Giving Overview',
-  content:
-    'Record ongoing donations, annual gifts, and planned charitable bequests so your family can honor your giving wishes. Add one card per charity or cause with payment and contact details.',
-};
-
-const SUBSECTION_SUBTITLE =
-  'Add each charitable contribution with grouped giving, contact, and document details in a mobile-friendly layout.';
 
 /* ------------------------------------------------------------------ */
 /* TYPES                                                              */
@@ -628,46 +548,30 @@ const createEmptyCharity = () => {
         </div>
       )}
 
-      <div
+      <Card
         id="subsection-9A"
-        className={cn(
-          'rounded-3xl',
-          activeSubsection === '9A' && 'border border-primary p-1',
-        )}
+        className="overflow-hidden border-slate-200 shadow-sm"
       >
-        <Card className="overflow-hidden border-slate-200/80 shadow-sm">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-indigo-50/60 px-5 py-5 sm:px-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
-                  <HeartHandshake className="h-5 w-5 text-rose-600" />
-                  9A. {SECTION_9A.title}
-                </CardTitle>
-                <p className="max-w-2xl text-sm leading-6 text-slate-600">
-                  {SUBSECTION_SUBTITLE}
-                </p>
-              </div>
+        <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-rose-50/70">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <HeartHandshake className="h-5 w-5 text-rose-600" />
+              9A. {SECTION_9A.title}
+            </CardTitle>
 
-              <div className="flex flex-col items-stretch gap-2 sm:items-end">
-                <VaultEncryptedBadge />
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={addCharity}
-                  className="rounded-xl"
-                >
-                  <Plus className="mr-1 h-4 w-4" />
-                  Add {SECTION_9A.itemLabel}
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
+            <Button
+              type="button"
+              size="sm"
+              onClick={addCharity}
+              className="rounded-xl"
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              Add {SECTION_9A.itemLabel}
+            </Button>
+          </div>
+        </CardHeader>
 
-          <CardContent className="space-y-8 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
-            <VaultOverviewBox
-              label={SUBSECTION_OVERVIEW.label}
-              content={SUBSECTION_OVERVIEW.content}
-            />
+        <CardContent className="space-y-8 p-5">
           {/* {renderUploader({
             scope: 'full',
             title: 'Upload document for multiple charitable contributions',
@@ -738,27 +642,25 @@ const createEmptyCharity = () => {
                     onAutofill: () => handleAutofill(itemScope, index),
                   })}
 
-                  <VaultGroupCards
-                    groups={SECTION_9A_GROUPS}
-                    fieldMap={FIELD_MAP_9A}
-                    renderField={fieldKey => (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {SECTION_9A.fields.map(field => (
                       <DynamicFormField
-                        key={fieldKey}
-                        field={FIELD_MAP_9A[fieldKey]}
-                        value={charity?.[fieldKey]}
+                        key={field.key}
+                        field={field}
+                        value={charity?.[field.key]}
                         formData={charity}
-                        onChange={value => updateCharity(index, fieldKey, value)}
-                        className="space-y-2"
+                        onChange={value =>
+                          updateCharity(index, field.key, value)
+                        }
                       />
-                    )}
-                  />
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             );
           })}
-          </CardContent>
-        </Card>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

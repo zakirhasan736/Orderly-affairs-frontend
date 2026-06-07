@@ -17,18 +17,8 @@ import {
   CheckCircle2,
   Loader2,
   ShieldCheck,
-  Users,
-  Receipt,
 } from 'lucide-react';
-import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
-import {
-  type FieldGroup,
-  buildFieldMap,
-  VaultOverviewBox,
-  VaultEncryptedBadge,
-  VaultGroupCards,
-} from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
@@ -134,66 +124,6 @@ const SECTION_7A = {
     },
   ],
 };
-
-const FIELD_MAP_7A = buildFieldMap(SECTION_7A.fields);
-
-const SECTION_7A_GROUPS: FieldGroup[] = [
-  {
-    key: 'policy_identity',
-    title: 'Policy Identity',
-    subtitle: 'Type, company, policy number, and life insurance documents',
-    icon: ShieldCheck,
-    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
-    iconWrap: 'bg-blue-500/10 text-blue-600',
-    layout: 'grid',
-    fieldKeys: [
-      'policy_type',
-      'policy_type_other',
-      'policy_company',
-      'policy_number',
-      'policy_documents_life',
-    ],
-  },
-  {
-    key: 'coverage_benefits',
-    title: 'Coverage & Benefits',
-    subtitle: 'Coverage amount, beneficiaries, and premium details',
-    icon: Receipt,
-    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
-    iconWrap: 'bg-emerald-500/10 text-emerald-700',
-    layout: 'stack',
-    fieldKeys: ['coverage_amount', 'beneficiaries', 'premium_info'],
-  },
-  {
-    key: 'contact_documents',
-    title: 'Contact & Documents',
-    subtitle: 'Agent contacts and policy paperwork',
-    icon: Users,
-    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
-    iconWrap: 'bg-cyan-500/10 text-cyan-700',
-    layout: 'grid',
-    fieldKeys: ['policy_contact', 'policy_documents'],
-  },
-  {
-    key: 'notes',
-    title: 'Additional Notes',
-    subtitle: 'Any other important policy information',
-    icon: FileText,
-    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
-    iconWrap: 'bg-violet-500/10 text-violet-600',
-    layout: 'stack',
-    fieldKeys: ['notes'],
-  },
-];
-
-const SUBSECTION_OVERVIEW = {
-  label: 'Insurance Policies Overview',
-  content:
-    'Record life, home, auto, health, and other insurance policies so your family can file claims and contact agents. Add one card per policy with coverage, beneficiaries, and document details.',
-};
-
-const SUBSECTION_SUBTITLE =
-  'Add each insurance policy with grouped coverage, contact, and document details in a mobile-friendly layout.';
 
 /* ------------------------------------------------------------------ */
 /* TYPES                                                              */
@@ -586,46 +516,30 @@ export default function Section7InsurancePolicies({
         </div>
       )}
 
-      <div
+      <Card
         id="subsection-7A"
-        className={cn(
-          'rounded-3xl',
-          activeSubsection === '7A' && 'border border-primary p-1',
-        )}
+        className="overflow-hidden border-slate-200 shadow-sm"
       >
-        <Card className="overflow-hidden border-slate-200/80 shadow-sm">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-indigo-50/60 px-5 py-5 sm:px-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
-                  <ShieldCheck className="h-5 w-5 text-purple-600" />
-                  7A. {SECTION_7A.title}
-                </CardTitle>
-                <p className="max-w-2xl text-sm leading-6 text-slate-600">
-                  {SUBSECTION_SUBTITLE}
-                </p>
-              </div>
+        <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-purple-50/70">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-purple-600" />
+              7A. {SECTION_7A.title}
+            </CardTitle>
 
-              <div className="flex flex-col items-stretch gap-2 sm:items-end">
-                <VaultEncryptedBadge />
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={addPolicy}
-                  className="rounded-xl"
-                >
-                  <Plus className="mr-1 h-4 w-4" />
-                  Add {SECTION_7A.itemLabel}
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
+            <Button
+              type="button"
+              size="sm"
+              onClick={addPolicy}
+              className="rounded-xl"
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              Add {SECTION_7A.itemLabel}
+            </Button>
+          </div>
+        </CardHeader>
 
-          <CardContent className="space-y-8 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
-            <VaultOverviewBox
-              label={SUBSECTION_OVERVIEW.label}
-              content={SUBSECTION_OVERVIEW.content}
-            />
+        <CardContent className="space-y-8 p-5">
           {/* {renderUploader({
             scope: 'full',
             title: 'Upload document for multiple insurance policies',
@@ -696,27 +610,25 @@ export default function Section7InsurancePolicies({
                     onAutofill: () => handleAutofill(itemScope, index),
                   })}
 
-                  <VaultGroupCards
-                    groups={SECTION_7A_GROUPS}
-                    fieldMap={FIELD_MAP_7A}
-                    renderField={fieldKey => (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {SECTION_7A.fields.map(field => (
                       <DynamicFormField
-                        key={fieldKey}
-                        field={FIELD_MAP_7A[fieldKey]}
-                        value={policy?.[fieldKey]}
+                        key={field.key}
+                        field={field}
+                        value={policy?.[field.key]}
                         formData={policy}
-                        onChange={value => updatePolicy(index, fieldKey, value)}
-                        className="space-y-2"
+                        onChange={value =>
+                          updatePolicy(index, field.key, value)
+                        }
                       />
-                    )}
-                  />
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             );
           })}
-          </CardContent>
-        </Card>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
