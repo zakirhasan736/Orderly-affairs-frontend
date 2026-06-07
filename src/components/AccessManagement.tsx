@@ -1342,8 +1342,7 @@ export function AccessManagement() {
         'saving',
   );
 
-  function WizardShell() {
-    return (
+  const renderWizardShell = () => (
       <>
         {isMobile && <MobileSheetHandle />}
 
@@ -1390,19 +1389,7 @@ export function AccessManagement() {
 
         {draft && (
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={wizardStep}
-                initial={{ opacity: 0, y: isMobile ? 16 : 0, x: isMobile ? 0 : 12 }}
-                animate={{ opacity: 1, y: 0, x: 0 }}
-                exit={{ opacity: 0, y: isMobile ? -8 : 0, x: isMobile ? 0 : -12 }}
-                transition={
-                  isMobile
-                    ? { type: 'spring', damping: 28, stiffness: 340 }
-                    : { duration: 0.2 }
-                }
-                className="space-y-6"
-              >
+            <div className="space-y-6">
 {wizardStep === 0 && (
                     <>
                       <div>
@@ -1827,8 +1814,7 @@ export function AccessManagement() {
                       />
                     </>
                   )}
-                </motion.div>
-              </AnimatePresence>
+            </div>
             </div>
           )}
 
@@ -1894,8 +1880,7 @@ export function AccessManagement() {
             </div>
           </div>
       </>
-    );
-  }
+  );
 
   if (isLoading) {
     return (
@@ -2079,7 +2064,7 @@ export function AccessManagement() {
           labelledBy="wizard-sheet-title"
         >
           <div className="flex h-full min-h-0 flex-col">
-            <WizardShell />
+            {renderWizardShell()}
           </div>
         </MobileBottomSheet>
       ) : (
@@ -2089,7 +2074,7 @@ export function AccessManagement() {
             className="flex h-full max-w-lg flex-col gap-0 p-0 sm:max-w-xl"
           >
             <div className="flex h-full min-h-0 flex-col">
-              <WizardShell />
+              {renderWizardShell()}
             </div>
           </SheetContent>
         </Sheet>
