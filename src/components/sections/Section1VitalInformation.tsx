@@ -16,7 +16,15 @@ import {
   FileText,
   CheckCircle2,
   Loader2,
+  UserCircle,
+  Smartphone,
+  Mail,
+  LockKeyhole,
+  Globe,
+  ShieldCheck,
+  Info,
 } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 import {
@@ -454,6 +462,113 @@ const SECTION_1 = {
   ],
 };
 
+const VITAL_FIELD_MAP = Object.fromEntries(
+  SECTION_1.vitalFields.map(field => [field.key, field]),
+);
+
+type VitalInfoGroup = {
+  key: string;
+  title: string;
+  subtitle: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accent: string;
+  iconWrap: string;
+  layout: 'grid' | 'pairs' | 'stack';
+  fieldKeys?: string[];
+  pairs?: Array<{ label: string; keys: [string, string] }>;
+};
+
+const VITAL_INFO_GROUPS: VitalInfoGroup[] = [
+  {
+    key: 'personal',
+    title: 'Personal Details',
+    subtitle: 'Legal identity your family may need first',
+    icon: UserCircle,
+    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
+    iconWrap: 'bg-blue-500/10 text-blue-600',
+    layout: 'grid',
+    fieldKeys: [
+      'full_legal_name',
+      'other_names',
+      'date_of_birth',
+      'social_security_number',
+    ],
+  },
+  {
+    key: 'phone_device',
+    title: 'Phone & Device Access',
+    subtitle: 'Unlock phones, voicemail, and computers',
+    icon: Smartphone,
+    accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
+    iconWrap: 'bg-violet-500/10 text-violet-600',
+    layout: 'grid',
+    fieldKeys: [
+      'phone_number',
+      'phone_password',
+      'voicemail_pin',
+      'computer_password',
+    ],
+  },
+  {
+    key: 'email',
+    title: 'Email Accounts',
+    subtitle: 'Primary and backup email credentials',
+    icon: Mail,
+    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
+    iconWrap: 'bg-cyan-500/10 text-cyan-700',
+    layout: 'pairs',
+    pairs: [
+      {
+        label: 'Primary Email',
+        keys: ['primary_email_username', 'primary_email_password'],
+      },
+      {
+        label: 'Secondary Email',
+        keys: ['secondary_email_username', 'secondary_email_password'],
+      },
+    ],
+  },
+  {
+    key: 'secure_locations',
+    title: 'Secure Locations',
+    subtitle: 'Safes, lockboxes, and where to find keys',
+    icon: LockKeyhole,
+    accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
+    iconWrap: 'bg-amber-500/10 text-amber-700',
+    layout: 'grid',
+    fieldKeys: ['safe_code', 'safe_location', 'safe_keys'],
+  },
+  {
+    key: 'digital_ids',
+    title: 'Digital IDs & Accounts',
+    subtitle: 'Google, Apple, and other core sign-ins',
+    icon: Globe,
+    accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
+    iconWrap: 'bg-emerald-500/10 text-emerald-700',
+    layout: 'pairs',
+    pairs: [
+      {
+        label: 'Google ID',
+        keys: ['google_id_username', 'google_id_password'],
+      },
+      {
+        label: 'Apple ID',
+        keys: ['apple_id_username', 'apple_id_password'],
+      },
+    ],
+  },
+  {
+    key: 'security',
+    title: 'Security Questions & PINs',
+    subtitle: 'Shared answers and frequently used PINs',
+    icon: ShieldCheck,
+    accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
+    iconWrap: 'bg-rose-500/10 text-rose-700',
+    layout: 'stack',
+    fieldKeys: ['security_question_answers', 'frequent_pins'],
+  },
+];
+
 /* ------------------------------------------------------------------ */
 /* TYPES                                                              */
 /* ------------------------------------------------------------------ */
@@ -646,6 +761,28 @@ const [uploadedFiles, setUploadedFiles] = useState<
         return itemIndex !== index;
       }),
     );
+  };
+
+  const getContactItemLabel = (
+    group: (typeof SECTION_1.contactGroups)[number],
+    item: Record<string, unknown>,
+    index: number,
+  ) => {
+    const labelFields =
+      group.key === 'next_of_kin'
+        ? ['contact_name', 'relationship']
+        : ['contact_name', 'role_title'];
+
+    const detail = labelFields
+      .map(field => String(item?.[field] ?? '').trim())
+      .filter(Boolean)
+      .join(' · ');
+
+    if (detail) {
+      return `${group.title} · ${detail}`;
+    }
+
+    return `${group.title} #${index + 1}`;
   };
 
   const cleanPatchObject = (patch: any) => {
@@ -927,6 +1064,70 @@ const [uploadedFiles, setUploadedFiles] = useState<
     );
   };
 
+  const renderVitalField = (fieldKey: string) => {
+    const field = VITAL_FIELD_MAP[fieldKey];
+    if (!field) return null;
+
+    return (
+      <DynamicFormField
+        key={field.key}
+        field={field}
+        value={vitalInfo[field.key]}
+        onChange={(value: any) => updateVital(field.key, value)}
+        className="space-y-2"
+      />
+    );
+  };
+
+  const renderVitalGroupFields = (group: VitalInfoGroup) => {
+    if (group.layout === 'pairs' && group.pairs) {
+      return (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {group.pairs.map(pair => (
+            <div
+              key={pair.label}
+              className="rounded-2xl border border-white/80 bg-white/70 p-4 shadow-sm backdrop-blur-sm"
+            >
+              <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                {pair.label}
+              </p>
+              <div className="space-y-4">{pair.keys.map(renderVitalField)}</div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (group.layout === 'stack' && group.fieldKeys) {
+      return (
+        <div className="space-y-4">{group.fieldKeys.map(renderVitalField)}</div>
+      );
+    }
+
+    const fullWidthFields = new Set([
+      'full_legal_name',
+      'social_security_number',
+      'safe_location',
+    ]);
+
+    return (
+      <div className="grid gap-4 md:grid-cols-2">
+        {group.fieldKeys?.map(fieldKey => (
+          <div
+            key={fieldKey}
+            className={cn(
+              fullWidthFields.has(fieldKey) && 'md:col-span-2',
+            )}
+          >
+            {renderVitalField(fieldKey)}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const overviewField = VITAL_FIELD_MAP.vital_info_instructions;
+
   return (
     <div className="space-y-8">
       {(aiNotice || aiError) && (
@@ -967,29 +1168,95 @@ const [uploadedFiles, setUploadedFiles] = useState<
       </Card>
 
       {showVitalInfo && (
-        <Card id="subsection-1A" className="border-slate-200 shadow-sm">
-          <CardHeader>
-            <CardTitle>1A. Vital Information</CardTitle>
+        <Card
+          id="subsection-1A"
+          className="overflow-hidden border-slate-200/80 shadow-sm"
+        >
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-indigo-50/60 px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-xl tracking-tight text-slate-900">
+                  1A. Vital Information
+                </CardTitle>
+                <p className="max-w-2xl text-sm leading-6 text-slate-600">
+                  Grouped essentials so you can fill personal, device, email, and
+                  security details without scrolling through one long form.
+                </p>
+              </div>
+
+              <div className="inline-flex items-center gap-2 self-start rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Private & encrypted
+              </div>
+            </div>
           </CardHeader>
 
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
+            {overviewField?.content && (
+              <div className="flex gap-3 rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+                  <Info className="h-5 w-5" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {overviewField.label}
+                  </p>
+                  <p className="text-sm leading-6 text-slate-600">
+                    {overviewField.content}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {renderUploader({
               scope: 'vital_info',
               title: 'Upload document for 1A Vital Information',
               description:
-                'Use this for personal details, phone/device access, email accounts, safe/lockbox details, digital IDs, security answers, or PIN notes.',
+                'Autofill personal details, device access, email accounts, safe locations, digital IDs, and security notes.',
               buttonLabel: 'Auto-fill 1A',
               onAutofill: () => handleAutofill('vital_info'),
             })}
 
-            {SECTION_1.vitalFields.map((field: any) => (
-              <DynamicFormField
-                key={field.key}
-                field={field}
-                value={vitalInfo[field.key]}
-                onChange={(value: any) => updateVital(field.key, value)}
-              />
-            ))}
+            <div className="grid gap-5 xl:grid-cols-2">
+              {VITAL_INFO_GROUPS.map(group => {
+                const Icon = group.icon;
+
+                return (
+                  <section
+                    key={group.key}
+                    className={cn(
+                      'overflow-hidden rounded-[24px] border border-slate-200/80 bg-gradient-to-br shadow-sm',
+                      group.accent,
+                      group.layout === 'stack' && 'xl:col-span-2',
+                    )}
+                  >
+                    <div className="border-b border-white/60 bg-white/50 px-5 py-4 backdrop-blur-sm">
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={cn(
+                            'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl',
+                            group.iconWrap,
+                          )}
+                        >
+                          <Icon className="h-5 w-5" />
+                        </div>
+
+                        <div className="min-w-0">
+                          <h3 className="text-base font-semibold text-slate-900">
+                            {group.title}
+                          </h3>
+                          <p className="mt-0.5 text-sm text-slate-600">
+                            {group.subtitle}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="px-3 py-5">{renderVitalGroupFields(group)}</div>
+                  </section>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -1046,7 +1313,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
 
                   {items.map((item: any, index: number) => {
                     const itemScope = `${groupKey}:${index}` as UploadScope;
-                    const itemLabel = `${group.title} #${index + 1}`;
+                    const itemLabel = getContactItemLabel(group, item, index);
                     const topicProps = getTopicCardProps(
                       '1C',
                       index,

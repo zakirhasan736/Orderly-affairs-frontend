@@ -46,6 +46,7 @@ import {
   SelectValue,
 } from '@common/ui/select';
 
+import { MediaMessagePicker } from '@/components/MediaMessagePicker';
 import { SafeMediaRecorder } from '@/components/SafeMediaRecorder';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { DatePicker } from '@/components/DatePicker';
@@ -57,7 +58,12 @@ import {
   deleteMessageMedia,
   deleteUploadedMessageMedia,
   getMessages,
+  uploadMessageMedia,
 } from '@/libs/api/lettersOfNaxtKinMessage';
+import {
+  inferMediaContentType,
+  isAllowedMediaFile,
+} from '@/utils/mediaUpload';
 
 /* ============================================================
    TYPES
@@ -232,6 +238,9 @@ export function Letters({
 
   const [showTemplates, setShowTemplates] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [showVideoPicker, setShowVideoPicker] = useState(false);
+  const [showAudioPicker, setShowAudioPicker] = useState(false);
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
   const [detailLetterId, setDetailLetterId] = useState<string | null>(null);
@@ -323,6 +332,9 @@ export function Letters({
     setLetters([]);
     setCurrentLetter(null);
     setIsWriting(false);
+    setUploadingMedia(false);
+    setShowVideoPicker(false);
+    setShowAudioPicker(false);
     setShowVideoRecorder(false);
     setShowAudioRecorder(false);
     lastNotifiedLettersRef.current = '[]';
@@ -403,6 +415,9 @@ export function Letters({
 
     setIsWriting(false);
     setCurrentLetter(null);
+    setUploadingMedia(false);
+    setShowVideoPicker(false);
+    setShowAudioPicker(false);
     setShowVideoRecorder(false);
     setShowAudioRecorder(false);
   };
@@ -421,21 +436,67 @@ export function Letters({
 
   const handleMediaUploaded = (media: LetterMedia) => {
     attachMedia(media);
+    setShowVideoPicker(false);
+    setShowAudioPicker(false);
     setShowVideoRecorder(false);
     setShowAudioRecorder(false);
     toast.success('Media attached successfully');
   };
 
+  const prepareMediaFile = (file: File, type: 'video' | 'audio') => {
+    if (file.type && file.type !== 'application/octet-stream') {
+      return file;
+    }
+
+    return new File([file], file.name, {
+      type: inferMediaContentType(
+        file.name,
+        type === 'video' ? 'video/mp4' : 'audio/mp4',
+      ),
+    });
+  };
+
+  const uploadSelectedMediaFile = async (
+    selectedFile: File,
+    type: 'video' | 'audio',
+  ) => {
+    if (!token) {
+      toast.error('You are not logged in');
+      return;
+    }
+
+    if (!isAllowedMediaFile(selectedFile, type)) {
+      toast.error(`Please select a valid ${type} file.`);
+      return;
+    }
+
+    const file = prepareMediaFile(selectedFile, type);
+    const mediaLabel = type === 'video' ? 'Video' : 'Audio';
+
+    try {
+      setUploadingMedia(true);
+      const media = await uploadMessageMedia(token, file);
+      handleMediaUploaded(media);
+    } catch (error) {
+      console.error(`${mediaLabel} upload failed:`, error);
+      const message =
+        error instanceof Error ? error.message : `${mediaLabel} upload failed`;
+      toast.error(message);
+    } finally {
+      setUploadingMedia(false);
+    }
+  };
+
   const openMediaRecorder = () => {
-    if (!currentLetter) return;
+    if (!currentLetter || uploadingMedia) return;
 
     if (currentLetter.messageType === 'video') {
-      setShowVideoRecorder(true);
+      setShowVideoPicker(true);
       return;
     }
 
     if (currentLetter.messageType === 'audio') {
-      setShowAudioRecorder(true);
+      setShowAudioPicker(true);
     }
   };
 
@@ -900,11 +961,48 @@ export function Letters({
             onChangeMessageType={changeMessageType}
             onOpenMedia={openMediaRecorder}
             onDeleteMedia={removeAttachedMedia}
+            uploadingMedia={uploadingMedia}
             onSave={saveMessage}
             onClose={() => closeEditor()}
           />
         )}
       </div>
+
+      <MediaMessagePicker
+        type="video"
+        open={showVideoPicker}
+        uploading={uploadingMedia}
+        onClose={() => setShowVideoPicker(false)}
+        onRecord={() => setShowVideoRecorder(true)}
+        onFileSelected={file => void uploadSelectedMediaFile(file, 'video')}
+      />
+
+      <MediaMessagePicker
+        type="audio"
+        open={showAudioPicker}
+        uploading={uploadingMedia}
+        onClose={() => setShowAudioPicker(false)}
+        onRecord={() => setShowAudioRecorder(true)}
+        onFileSelected={file => void uploadSelectedMediaFile(file, 'audio')}
+      />
+
+      {showVideoRecorder && (
+        <SafeMediaRecorder
+          type="video"
+          token={token}
+          onUploaded={handleMediaUploaded}
+          onClose={() => setShowVideoRecorder(false)}
+        />
+      )}
+
+      {showAudioRecorder && (
+        <SafeMediaRecorder
+          type="audio"
+          token={token}
+          onUploaded={handleMediaUploaded}
+          onClose={() => setShowAudioRecorder(false)}
+        />
+      )}
 
       {/* Mobile message detail sheet */}
       {isMobile && detailLetter && (
@@ -1007,6 +1105,7 @@ export function Letters({
                 onChangeMessageType={changeMessageType}
                 onOpenMedia={openMediaRecorder}
                 onDeleteMedia={removeAttachedMedia}
+                uploadingMedia={uploadingMedia}
                 onSave={saveMessage}
                 onClose={() => closeEditor()}
               />
@@ -1035,23 +1134,6 @@ export function Letters({
         </MobileBottomSheet>
       )}
 
-      {showVideoRecorder && (
-        <SafeMediaRecorder
-          type="video"
-          token={token}
-          onUploaded={handleMediaUploaded}
-          onClose={() => setShowVideoRecorder(false)}
-        />
-      )}
-
-      {showAudioRecorder && (
-        <SafeMediaRecorder
-          type="audio"
-          token={token}
-          onUploaded={handleMediaUploaded}
-          onClose={() => setShowAudioRecorder(false)}
-        />
-      )}
     </div>
   );
 }
@@ -1475,6 +1557,7 @@ function MessageEditorPanel({
   onChangeMessageType,
   onOpenMedia,
   onDeleteMedia,
+  uploadingMedia,
   onSave,
   onClose,
 }: {
@@ -1483,6 +1566,7 @@ function MessageEditorPanel({
   recipientOptions: RecipientOption[];
   saving: boolean;
   deletingMedia: boolean;
+  uploadingMedia: boolean;
   embeddedInSheet?: boolean;
   onPatch: (patch: Partial<Letter>) => void;
   onChangeMessageType: (type: MessageType) => void;
@@ -1539,6 +1623,7 @@ function MessageEditorPanel({
                 onAddMedia={onOpenMedia}
                 onDeleteMedia={onDeleteMedia}
                 deletingMedia={deletingMedia}
+                uploadingMedia={uploadingMedia}
                 onChange={onPatch}
               />
             )}
@@ -1834,12 +1919,14 @@ function MediaEditor({
   onAddMedia,
   onDeleteMedia,
   deletingMedia,
+  uploadingMedia,
   onChange,
 }: {
   letter: Letter;
   onAddMedia: () => void;
   onDeleteMedia: () => void;
   deletingMedia: boolean;
+  uploadingMedia: boolean;
   onChange: (patch: Partial<Letter>) => void;
 }) {
   return (
@@ -1850,6 +1937,7 @@ function MediaEditor({
         onAddMedia={onAddMedia}
         onDelete={onDeleteMedia}
         deleting={deletingMedia}
+        uploading={uploadingMedia}
       />
 
       <FieldBlock label="Message Description">
@@ -2094,12 +2182,14 @@ function MediaUploadPanel({
   onAddMedia,
   onDelete,
   deleting,
+  uploading,
 }: {
   type: 'video' | 'audio';
   media?: LetterMedia;
   onAddMedia: () => void;
   onDelete: () => void;
   deleting: boolean;
+  uploading: boolean;
 }) {
   const isVideo = type === 'video';
 
@@ -2126,8 +2216,8 @@ function MediaUploadPanel({
             </h3>
             <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
               {isVideo
-                ? 'Record a personal video message using your camera.'
-                : 'Record a voice message using your microphone.'}
+                ? 'Record a new video, choose from your gallery, or upload a file.'
+                : 'Record a new voice note, choose from your gallery, or upload a file.'}
             </p>
           </div>
         </div>
@@ -2136,10 +2226,15 @@ function MediaUploadPanel({
           <Button
             type="button"
             onClick={onAddMedia}
+            disabled={uploading}
             className="h-11 rounded-xl lg:min-w-[200px]"
           >
             <Plus className="mr-2 h-4 w-4" />
-            {isVideo ? 'Record Video' : 'Record Audio'}
+            {uploading
+              ? 'Uploading...'
+              : isVideo
+                ? 'Add Video'
+                : 'Add Audio'}
           </Button>
         )}
       </div>

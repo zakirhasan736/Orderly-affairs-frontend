@@ -1176,7 +1176,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
             className={cn(
               'rounded-2xl',
               MIN_TOUCH,
-              isMobile && embeddedInSheet ? 'w-full' : 'w-full sm:w-auto',
+              isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
             )}
           >
             Cancel
@@ -1192,7 +1192,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
           className={cn(
             'rounded-2xl',
             MIN_TOUCH,
-            isMobile && embeddedInSheet ? 'w-full' : 'w-full sm:w-auto',
+            isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
           )}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
@@ -1207,7 +1207,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
           className={cn(
             'rounded-2xl',
             MIN_TOUCH,
-            isMobile && embeddedInSheet ? 'w-full' : 'w-full sm:w-auto',
+            isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
           )}
         >
           Next
@@ -1220,7 +1220,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
           className={cn(
             'rounded-2xl',
             MIN_TOUCH,
-            isMobile && embeddedInSheet ? 'w-full' : 'w-full sm:w-auto',
+            isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
           )}
         >
           <Download className="mr-2 h-4 w-4" />

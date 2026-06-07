@@ -1,3 +1,5 @@
+export const MESSAGE_MEDIA_MAX_BYTES = 150 * 1024 * 1024; // 150 MB
+
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'm4v'];
 const AUDIO_EXTENSIONS = ['mp3', 'm4a', 'wav', 'webm', 'aac', 'ogg'];
 
@@ -42,6 +44,24 @@ export function isAllowedMediaFile(file: File, kind: 'video' | 'audio') {
   const allowedExtensions = kind === 'video' ? VIDEO_EXTENSIONS : AUDIO_EXTENSIONS;
 
   return allowedExtensions.includes(ext);
+}
+
+export function formatMediaFileSize(size?: number) {
+  if (!size) return '';
+
+  if (size >= 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  return `${(size / 1024).toFixed(0)} KB`;
+}
+
+export function validateMessageMediaSize(size: number) {
+  if (size > MESSAGE_MEDIA_MAX_BYTES) {
+    throw new Error(
+      `Recording is too large (${formatMediaFileSize(size)}). Maximum size is 150 MB.`,
+    );
+  }
 }
 
 export function inferMediaContentType(

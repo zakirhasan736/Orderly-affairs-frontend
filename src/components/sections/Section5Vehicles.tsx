@@ -197,7 +197,14 @@ export default function Section5Vehicles({
     uploadingScope !== null || aiLoadingScope !== null;
 
   const createEmptyVehicle = () => {
-    return Object.fromEntries(SECTION_5.fields.map(field => [field.key, '']));
+    return Object.fromEntries(
+      SECTION_5.fields.map(field => [
+        field.key,
+        field.type === 'TextInputWithUpload'
+          ? { text: '', files: [], _deleted_files: [] }
+          : '',
+      ]),
+    );
   };
 
   const updateVehicles = (next: any[]) => {

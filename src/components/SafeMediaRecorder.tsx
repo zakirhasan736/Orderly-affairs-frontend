@@ -8,7 +8,7 @@ import { VideoRecorder } from './VideoRecorder';
 import { AudioRecorder } from './AudioRecorder';
 import { MediaModalPortal } from './MediaModalPortal';
 import { uploadMessageMedia } from '@/libs/api/lettersOfNaxtKinMessage';
-import { blobToMediaFile } from '@/utils/mediaUpload';
+import { blobToMediaFile, validateMessageMediaSize } from '@/utils/mediaUpload';
 import { toast } from 'sonner';
 
 interface SafeMediaRecorderProps {
@@ -44,18 +44,24 @@ export function SafeMediaRecorder({
     }
 
     try {
+      validateMessageMediaSize(blob.size);
+
       setUploading(true);
 
       const file = blobToMediaFile(blob, type);
       const media = await uploadMessageMedia(token, file);
 
       onUploaded(media);
-      toast.success(`${mediaLabel} uploaded successfully`);
+      toast.success(`${mediaLabel} saved successfully`);
       onClose();
       return true;
     } catch (error) {
-      console.error(error);
-      toast.error(`${mediaLabel} upload failed. Please try again.`);
+      console.error(`${mediaLabel} upload failed:`, error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : `${mediaLabel} upload failed. Please try again.`;
+      toast.error(message);
       return false;
     } finally {
       setUploading(false);

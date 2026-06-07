@@ -160,7 +160,7 @@ const MULTI_GROUP_TOPIC_CONFIG: Record<
       },
       {
         groupKey: 'additional_contacts',
-        fallbackPrefix: 'Contact',
+        fallbackPrefix: 'Additional Contact',
         labelFields: ['contact_name', 'role_title'],
       },
     ],
@@ -173,6 +173,20 @@ function readTopicItems(
 ) {
   const raw = sectionData?.[config.dataKey];
   return Array.isArray(raw) ? raw : [];
+}
+
+function multiGroupTopicLabel(
+  item: Record<string, unknown>,
+  index: number,
+  group: MultiGroupTopicSource,
+) {
+  const detail = joinFields(item, group.labelFields);
+
+  if (detail) {
+    return `${group.fallbackPrefix} · ${detail}`;
+  }
+
+  return `${group.fallbackPrefix} #${index + 1}`;
 }
 
 function readMultiGroupTopics(
@@ -190,16 +204,14 @@ function readMultiGroupTopics(
       sectionId,
       subsectionId,
       index,
-      label:
-        topicLabel(
-          (item && typeof item === 'object' ? item : {}) as Record<
-            string,
-            unknown
-          >,
-          index,
-          group.labelFields,
-          group.fallbackPrefix,
-        ),
+      label: multiGroupTopicLabel(
+        (item && typeof item === 'object' ? item : {}) as Record<
+          string,
+          unknown
+        >,
+        index,
+        group,
+      ),
     }));
   });
 }

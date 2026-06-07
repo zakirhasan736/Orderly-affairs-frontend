@@ -10,7 +10,17 @@ export async function saveSection5(token: string, payload: any) {
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) throw new Error('Failed to save Section 5');
+  if (!res.ok) {
+    let detail = 'Failed to save Section 5';
+    try {
+      const payload = await res.json();
+      detail = payload?.detail ? JSON.stringify(payload.detail) : detail;
+    } catch {
+      const text = await res.text();
+      if (text) detail = text;
+    }
+    throw new Error(detail);
+  }
   return res.json();
 }
 
