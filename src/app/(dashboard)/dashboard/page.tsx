@@ -219,6 +219,7 @@ export default function DashboardPage() {
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
   const [messagesClearNonce, setMessagesClearNonce] = useState(0);
   const skipInitialContextualNavigation = useRef(true);
+  const sectionLoadedSnapshotRef = useRef<Record<string, string>>({});
   type DashboardFormData = Record<string, any>;
 
   const [formData, setFormData] = useState<DashboardFormData>({});
@@ -280,14 +281,17 @@ export default function DashboardPage() {
     if (!token) return;
 
     getSection1(token).then(res => {
+      const sectionData = mapSection1ResponseToUI(res);
+      sectionLoadedSnapshotRef.current['1'] = JSON.stringify(sectionData);
       setFormData(prev => ({
         ...prev,
-        '1': mapSection1ResponseToUI(res),
+        '1': sectionData,
       }));
     });
     getSection5(token)
       .then(res => {
         if (res?.data) {
+          sectionLoadedSnapshotRef.current['5'] = JSON.stringify(res.data);
           setFormData(prev => ({
             ...prev,
             '5': res.data,
@@ -297,122 +301,50 @@ export default function DashboardPage() {
       .catch(err => {
         console.error('Failed to load Section 5', err);
       });
-    getSection6(token).then(res => {
+    const recordLoadedSection = (sectionId: string, data: unknown) => {
+      sectionLoadedSnapshotRef.current[sectionId] = JSON.stringify(data);
       setFormData(prev => ({
         ...prev,
-        '6': res.data,
+        [sectionId]: data,
       }));
-    });
-    getSection7(token).then(res => {
-      setFormData(prev => ({
-        ...prev,
-        '7': res.data,
-      }));
-    });
-    getSection8(token).then(res => {
-      setFormData(prev => ({
-        ...prev,
-        '8': res.data,
-      }));
-    });
-    getSection9(token).then(res => {
-      setFormData(prev => ({
-        ...prev,
-        '9': res.data,
-      }));
-    });
-    getSection10(token).then(res => {
-      setFormData(prev => ({
-        ...prev,
-        '10': res.data,
-      }));
-    });
-    getSection11(token).then(res => {
-      setFormData(prev => ({
-        ...prev,
-        '11': res.data,
-      }));
-    });
+    };
+
+    getSection6(token).then(res => recordLoadedSection('6', res.data));
+    getSection7(token).then(res => recordLoadedSection('7', res.data));
+    getSection8(token).then(res => recordLoadedSection('8', res.data));
+    getSection9(token).then(res => recordLoadedSection('9', res.data));
+    getSection10(token).then(res => recordLoadedSection('10', res.data));
+    getSection11(token).then(res => recordLoadedSection('11', res.data));
     getSection12(token).then(res => {
-      if (res?.data) {
-        setFormData(prev => ({
-          ...prev,
-          '12': res.data,
-        }));
-      }
+      if (res?.data) recordLoadedSection('12', res.data);
     });
     getSection13(token).then(res => {
-      if (res?.data) {
-        setFormData(prev => ({
-          ...prev,
-          '13': res.data,
-        }));
-      }
+      if (res?.data) recordLoadedSection('13', res.data);
     });
     getSection14(token).then(res => {
-      if (res?.data) {
-        setFormData(prev => ({
-          ...prev,
-          '14': res.data,
-        }));
-      }
+      if (res?.data) recordLoadedSection('14', res.data);
     });
     getSection15(token).then(res => {
-      if (res?.data) {
-        setFormData(prev => ({
-          ...prev,
-          '15': res.data,
-        }));
-      }
+      if (res?.data) recordLoadedSection('15', res.data);
     });
     getSection16(token).then(res => {
-      if (res?.data) {
-        setFormData(prev => ({
-          ...prev,
-          '16': res.data,
-        }));
-      }
+      if (res?.data) recordLoadedSection('16', res.data);
     });
     getSection17(token).then(res => {
-      if (res?.data) {
-        setFormData(prev => ({
-          ...prev,
-          '17': res.data,
-        }));
-      }
+      if (res?.data) recordLoadedSection('17', res.data);
     });
     getSection18(token).then(res => {
-      if (res?.data) {
-        setFormData(prev => ({
-          ...prev,
-          '18': res.data,
-        }));
-      }
+      if (res?.data) recordLoadedSection('18', res.data);
     });
     getSection19(token).then(res => {
-      if (res?.data) {
-        setFormData(prev => ({
-          ...prev,
-          '19': res.data,
-        }));
-      }
+      if (res?.data) recordLoadedSection('19', res.data);
     });
     getSection20(token).then(res => {
-      if (res?.data) {
-        setFormData(prev => ({
-          ...prev,
-          '20': res.data,
-        }));
-      }
+      if (res?.data) recordLoadedSection('20', res.data);
     });
     getSection21(token)
       .then(res => {
-        if (res?.data) {
-          setFormData(prev => ({
-            ...prev,
-            '21': res.data,
-          }));
-        }
+        if (res?.data) recordLoadedSection('21', res.data);
       })
       .catch(err => {
         console.error('Failed to load Section 12', err);
@@ -482,8 +414,14 @@ export default function DashboardPage() {
         const sectionData = formData[activeSection];
         if (!sectionData) return;
 
+        const serialized = JSON.stringify(sectionData);
+        if (sectionLoadedSnapshotRef.current[activeSection] === serialized) {
+          return;
+        }
+
         await sectionSaveMap[activeSection](token, sectionData);
 
+        sectionLoadedSnapshotRef.current[activeSection] = serialized;
         setLastSaved(new Date());
       } catch (err) {
         console.error('Auto-save failed:', err);
