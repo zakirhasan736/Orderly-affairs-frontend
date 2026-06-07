@@ -404,6 +404,7 @@ const SECTION_6A_GROUPS: FieldGroup[] = [
     accent: 'from-emerald-500/[0.07] to-teal-500/[0.03]',
     iconWrap: 'bg-emerald-500/10 text-emerald-700',
     layout: 'grid',
+    span: 'full',
     fieldKeys: [
       'home_address',
       'residence_type',
@@ -493,6 +494,16 @@ const SECTION_6A_GROUPS: FieldGroup[] = [
     fieldKeys: ['realtor_landlord_contact'],
   },
   {
+    key: 'builder_warranty',
+    title: 'Builder & Warranty',
+    subtitle: 'New home builder, warranty, and appliance manuals',
+    icon: Wrench,
+    accent: 'from-orange-500/[0.07] to-amber-500/[0.03]',
+    iconWrap: 'bg-orange-500/10 text-orange-700',
+    layout: 'grid',
+    fieldKeys: ['builder_info', 'home_warranty', 'appliance_manuals'],
+  },
+  {
     key: 'occupancy',
     title: 'Current Occupancy',
     subtitle: 'Who lives in the home and pets on the property',
@@ -511,16 +522,6 @@ const SECTION_6A_GROUPS: FieldGroup[] = [
     iconWrap: 'bg-teal-500/10 text-teal-700',
     layout: 'stack',
     fieldKeys: ['home_inventory', 'inventory_date_location'],
-  },
-  {
-    key: 'builder_warranty',
-    title: 'Builder & Warranty',
-    subtitle: 'New home builder, warranty, and appliance manuals',
-    icon: Wrench,
-    accent: 'from-orange-500/[0.07] to-amber-500/[0.03]',
-    iconWrap: 'bg-orange-500/10 text-orange-700',
-    layout: 'grid',
-    fieldKeys: ['builder_info', 'home_warranty', 'appliance_manuals'],
   },
   {
     key: 'emergency_systems',

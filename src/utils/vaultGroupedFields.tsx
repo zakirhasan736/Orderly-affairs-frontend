@@ -12,7 +12,18 @@ export type FieldGroup = {
   accent: string;
   iconWrap: string;
   layout: 'grid' | 'stack';
+  /** Span both columns on xl; stack layout implies full width */
+  span?: 'full';
   fieldKeys: string[];
+};
+
+const isFullWidthGroup = (group: FieldGroup) =>
+  group.layout === 'stack' || group.span === 'full';
+
+const getOrphanHalfWidthKey = (groups: FieldGroup[]) => {
+  const halfWidthGroups = groups.filter(group => !isFullWidthGroup(group));
+  if (halfWidthGroups.length % 2 === 0) return null;
+  return halfWidthGroups[halfWidthGroups.length - 1]?.key ?? null;
 };
 
 export const isFullWidthField = (field: any) =>
@@ -103,10 +114,14 @@ export function VaultGroupCards({
   fieldMap: Record<string, any>;
   renderField: (fieldKey: string) => React.ReactNode;
 }) {
+  const orphanHalfWidthKey = getOrphanHalfWidthKey(groups);
+
   return (
-    <div className="grid gap-5 xl:grid-cols-2">
+    <div className="grid gap-4 sm:gap-5 xl:grid-cols-2 xl:items-start">
       {groups.map(group => {
         const GroupIcon = group.icon;
+        const spansFullWidth =
+          isFullWidthGroup(group) || group.key === orphanHalfWidthKey;
 
         return (
           <section
@@ -114,7 +129,7 @@ export function VaultGroupCards({
             className={cn(
               'overflow-hidden rounded-[24px] border border-slate-200/80 bg-gradient-to-br shadow-sm',
               group.accent,
-              group.layout === 'stack' && 'xl:col-span-2',
+              spansFullWidth && 'xl:col-span-2',
             )}
           >
             <div className="border-b border-white/60 bg-white/50 px-5 py-4 backdrop-blur-sm">
@@ -139,7 +154,7 @@ export function VaultGroupCards({
               </div>
             </div>
 
-            <div className="px-3 py-5">
+            <div className="p-4 sm:px-5 sm:py-5">
               {renderGroupInner(group, fieldMap, renderField)}
             </div>
           </section>
