@@ -1186,7 +1186,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
 
               <div className="inline-flex items-center gap-2 self-start rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                Private & encrypted
+                AES-256-GCM encrypted at rest
               </div>
             </div>
           </CardHeader>

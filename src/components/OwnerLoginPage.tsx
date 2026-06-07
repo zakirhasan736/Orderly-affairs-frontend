@@ -1039,8 +1039,8 @@ export function OwnerLoginPage({ onLoginSuccess }: OwnerLoginPageProps) {
         <Alert className="glass-card">
           <Shield className="h-4 w-4" />
           <AlertDescription className="text-xs">
-            Orderly Affairs uses bank-level security to protect your sensitive
-            information. Your data is encrypted and secure.
+            Orderly Affairs uses bank-level AES-256-GCM encryption at rest for
+            vault data, with secure HTTPS transport during authorized sessions.
           </AlertDescription>
         </Alert>
 

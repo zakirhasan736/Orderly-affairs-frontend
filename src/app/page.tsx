@@ -2117,9 +2117,9 @@ const backButtonLabel =
           </div>
           <p className="text-[9px] md:text-[10px] font-bold text-slate-500 leading-relaxed uppercase tracking-widest">
             Secured by{' '}
-            <span className="text-[#1e293b]">Bank-Level AES-256</span>{' '}
-            encryption. Your data is decrypted locally on your device only
-            during active vault sessions.
+            <span className="text-[#1e293b]">Bank-Level AES-256-GCM</span>{' '}
+            encryption at rest. Vault data is transmitted over TLS and decrypted
+            only during your authorized session.
           </p>
         </div>
       </div>
