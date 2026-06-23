@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 
 import {
+  MOBILE_SHEET_FOOTER_CLASS,
   MOBILE_SHEET_SCROLL_PADDING,
   MobileBottomSheet,
   MobileSheetHandle,
@@ -47,6 +48,7 @@ import {
 } from '@common/ui/select';
 
 import { MediaMessagePicker } from '@/components/MediaMessagePicker';
+import { PhotoCapture } from '@/components/PhotoCapture';
 import { SafeMediaRecorder } from '@/components/SafeMediaRecorder';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { DatePicker } from '@/components/DatePicker';
@@ -61,8 +63,10 @@ import {
   uploadMessageMedia,
 } from '@/libs/api/lettersOfNaxtKinMessage';
 import {
-  inferMediaContentType,
   isAllowedMediaFile,
+  isAllowedVideoMessageFile,
+  isImageMedia,
+  prepareMessageMediaFile,
 } from '@/utils/mediaUpload';
 
 /* ============================================================
@@ -199,6 +203,38 @@ function formatFileSize(size?: number) {
   return `${(size / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+function MessageMediaPreview({
+  messageType,
+  media,
+  className,
+}: {
+  messageType: MessageType;
+  media: LetterMedia;
+  className?: string;
+}) {
+  if (messageType === 'audio') {
+    return <audio controls src={media.url} className={className ?? 'w-full'} />;
+  }
+
+  if (isImageMedia(media)) {
+    return (
+      <img
+        src={media.url}
+        alt="Attached photo"
+        className={className ?? 'h-44 w-full rounded-xl object-cover'}
+      />
+    );
+  }
+
+  return (
+    <video
+      controls
+      src={media.url}
+      className={className ?? 'h-44 w-full rounded-xl bg-black object-cover'}
+    />
+  );
+}
+
 function escapeHtml(value?: string) {
   if (!value) return '';
   return value
@@ -242,6 +278,7 @@ export function Letters({
   const [showVideoPicker, setShowVideoPicker] = useState(false);
   const [showAudioPicker, setShowAudioPicker] = useState(false);
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
+  const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
   const [detailLetterId, setDetailLetterId] = useState<string | null>(null);
 
@@ -336,6 +373,7 @@ export function Letters({
     setShowVideoPicker(false);
     setShowAudioPicker(false);
     setShowVideoRecorder(false);
+    setShowPhotoCapture(false);
     setShowAudioRecorder(false);
     lastNotifiedLettersRef.current = '[]';
     onChangeRef.current?.([]);
@@ -419,6 +457,7 @@ export function Letters({
     setShowVideoPicker(false);
     setShowAudioPicker(false);
     setShowVideoRecorder(false);
+    setShowPhotoCapture(false);
     setShowAudioRecorder(false);
   };
 
@@ -439,21 +478,9 @@ export function Letters({
     setShowVideoPicker(false);
     setShowAudioPicker(false);
     setShowVideoRecorder(false);
+    setShowPhotoCapture(false);
     setShowAudioRecorder(false);
     toast.success('Media attached successfully');
-  };
-
-  const prepareMediaFile = (file: File, type: 'video' | 'audio') => {
-    if (file.type && file.type !== 'application/octet-stream') {
-      return file;
-    }
-
-    return new File([file], file.name, {
-      type: inferMediaContentType(
-        file.name,
-        type === 'video' ? 'video/mp4' : 'audio/mp4',
-      ),
-    });
   };
 
   const uploadSelectedMediaFile = async (
@@ -465,13 +492,23 @@ export function Letters({
       return;
     }
 
-    if (!isAllowedMediaFile(selectedFile, type)) {
+    if (type === 'video') {
+      if (!isAllowedVideoMessageFile(selectedFile)) {
+        toast.error('Please select a valid video or image file.');
+        return;
+      }
+    } else if (!isAllowedMediaFile(selectedFile, type)) {
       toast.error(`Please select a valid ${type} file.`);
       return;
     }
 
-    const file = prepareMediaFile(selectedFile, type);
-    const mediaLabel = type === 'video' ? 'Video' : 'Audio';
+    const file = prepareMessageMediaFile(selectedFile, type);
+    const mediaLabel =
+      type === 'video' && file.type.startsWith('image/')
+        ? 'Photo'
+        : type === 'video'
+          ? 'Video'
+          : 'Audio';
 
     try {
       setUploadingMedia(true);
@@ -798,9 +835,12 @@ export function Letters({
 
   return (
     <div
-      className={cn( 
+      className={cn(
         'w-full max-w-none',
         showHeader && 'min-h-screen bg-slate-50/70',
+        embeddedInSection &&
+          isMobile &&
+          'pb-[calc(5.5rem+env(safe-area-inset-bottom))]',
       )}
     >
       {showHeader && (
@@ -844,8 +884,22 @@ export function Letters({
         )}
       >
         {!isWriting && (
-          <div className={cn('space-y-5', embeddedInSection && isMobile && 'space-y-3')}>
-            {(!embeddedInSection || !isMobile) && (
+          <div
+            className={cn(
+              'space-y-5',
+              embeddedInSection && isMobile && 'space-y-2',
+            )}
+          >
+            {embeddedInSection ? (
+              <EmbeddedMessagesToolbar
+                pendingCount={pendingCount}
+                letterCount={letterCount}
+                videoCount={videoCount}
+                audioCount={audioCount}
+                onCreate={() => openNewMessage()}
+                onTemplates={() => setShowTemplates(prev => !prev)}
+              />
+            ) : (
               <HeroPanel
                 pendingCount={pendingCount}
                 letterCount={letterCount}
@@ -856,27 +910,22 @@ export function Letters({
               />
             )}
 
-            {embeddedInSection && isMobile && (
-              <div className="flex items-center justify-between gap-3 rounded-2xl border bg-card px-3 py-3 shadow-sm">
-                <div>
-                  <p className="text-sm font-semibold">Personal messages</p>
-                  <p className="text-xs text-muted-foreground">
-                    {letters.length} saved · {pendingCount} pending
-                  </p>
-                </div>
-                <Button type="button" size="sm" onClick={() => openNewMessage()}>
-                  <Plus className="mr-1.5 h-4 w-4" />
-                  New
-                </Button>
-              </div>
-            )}
-
             {isLoading && (
-              <Card className="border-dashed">
-                <CardContent className="flex items-center justify-center gap-3 p-8">
+              <Card
+                className={cn(
+                  'border-dashed',
+                  embeddedInSection && isMobile && 'border-0 bg-transparent shadow-none',
+                )}
+              >
+                <CardContent
+                  className={cn(
+                    'flex items-center justify-center gap-3 p-8',
+                    embeddedInSection && isMobile && 'p-4',
+                  )}
+                >
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                   <p className="text-sm text-muted-foreground">
-                    Loading personal messages...
+                    Loading messages...
                   </p>
                 </CardContent>
               </Card>
@@ -888,15 +937,16 @@ export function Letters({
                 open={showSuggestions}
                 onToggle={() => setShowSuggestions(prev => !prev)}
                 onCreate={createSuggestedMessage}
+                compact={embeddedInSection && isMobile}
               />
             )}
 
-            {showTemplates && (
+            {showTemplates && (!embeddedInSection || !isMobile) && (
               <TemplateGrid templates={letterTemplates} onUse={useTemplate} />
             )}
 
             {!isLoading && letters.length > 0 && (
-              <div className={cn(isMobile ? 'space-y-2' : 'grid gap-4')}>
+              <div className={cn(isMobile ? 'space-y-2.5' : 'space-y-3')}>
                 {letters.map(letter =>
                   isMobile ? (
                     <MessageListItem
@@ -918,7 +968,11 @@ export function Letters({
             )}
 
             {!isLoading && letters.length === 0 && (
-              <EmptyState onCreate={() => openNewMessage()} />
+              <EmptyState
+                onCreate={() => openNewMessage()}
+                compact={embeddedInSection && isMobile}
+                embedded={embeddedInSection}
+              />
             )}
 
             {isNextOfKin && (
@@ -974,6 +1028,7 @@ export function Letters({
         uploading={uploadingMedia}
         onClose={() => setShowVideoPicker(false)}
         onRecord={() => setShowVideoRecorder(true)}
+        onTakePhoto={() => setShowPhotoCapture(true)}
         onFileSelected={file => void uploadSelectedMediaFile(file, 'video')}
       />
 
@@ -995,6 +1050,15 @@ export function Letters({
         />
       )}
 
+      <PhotoCapture
+        open={showPhotoCapture}
+        uploading={uploadingMedia}
+        onClose={() => setShowPhotoCapture(false)}
+        onPhotoCaptured={file => {
+          void uploadSelectedMediaFile(file, 'video');
+        }}
+      />
+
       {showAudioRecorder && (
         <SafeMediaRecorder
           type="audio"
@@ -1014,7 +1078,7 @@ export function Letters({
         >
           <div className="flex h-full min-h-0 flex-col">
             <MobileSheetHandle />
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-4 pt-1">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-3 pt-1">
               <div className="min-w-0">
                 <h3 id="message-detail-title" className="text-lg font-semibold">
                   Personal Message
@@ -1037,12 +1101,29 @@ export function Letters({
 
             <div
               className={cn(
-                'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4',
+                'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3',
                 MOBILE_SHEET_SCROLL_PADDING,
               )}
             >
               <MessageMobileDetails
                 letter={detailLetter}
+                hideActions
+                onEdit={() => editMessage(detailLetter)}
+                onPrint={() => printMessage(detailLetter)}
+                onDelete={() => {
+                  setDetailLetterId(null);
+                  void removeMessage(detailLetter.id);
+                }}
+              />
+            </div>
+
+            <div
+              className={cn(
+                MOBILE_SHEET_FOOTER_CLASS,
+                'shrink-0 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+              )}
+            >
+              <MessageMobileActionBar
                 onEdit={() => editMessage(detailLetter)}
                 onPrint={() => printMessage(detailLetter)}
                 onDelete={() => {
@@ -1065,16 +1146,13 @@ export function Letters({
         >
           <div className="flex h-full min-h-0 flex-col">
             <MobileSheetHandle />
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-4 pt-1">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-3 pt-1">
               <div className="min-w-0">
-                <h3 id="message-editor-title" className="text-lg font-semibold">
+                <h3 id="message-editor-title" className="text-base font-semibold">
                   {letters.some(item => item.id === currentLetter.id)
                     ? 'Edit Message'
                     : 'New Message'}
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                  Add recipient, delivery, and content
-                </p>
               </div>
               <Button
                 type="button"
@@ -1111,7 +1189,12 @@ export function Letters({
               />
             </div>
 
-            <div className="grid shrink-0 grid-cols-2 gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div
+              className={cn(
+                'grid shrink-0 grid-cols-2 gap-2 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+                MOBILE_SHEET_FOOTER_CLASS,
+              )}
+            >
               <Button
                 type="button"
                 variant="outline"
@@ -1134,6 +1217,22 @@ export function Letters({
         </MobileBottomSheet>
       )}
 
+      {isMobile &&
+        embeddedInSection &&
+        !isWriting &&
+        detailLetterId === null && (
+          <div className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 md:hidden">
+            <Button
+              type="button"
+              onClick={() => openNewMessage()}
+              className="h-12 w-full rounded-2xl shadow-lg shadow-primary/20"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              New Message
+            </Button>
+          </div>
+        )}
+
     </div>
   );
 }
@@ -1141,6 +1240,120 @@ export function Letters({
 /* ============================================================
    MAIN UI SECTIONS
 ============================================================ */
+
+function EmbeddedMessagesToolbar({
+  pendingCount,
+  letterCount,
+  videoCount,
+  audioCount,
+  onCreate,
+  onTemplates,
+}: {
+  pendingCount: number;
+  letterCount: number;
+  videoCount: number;
+  audioCount: number;
+  onCreate: () => void;
+  onTemplates: () => void;
+}) {
+  const total = letterCount + videoCount + audioCount;
+
+  return (
+    <div className="mb-5 overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-background to-background shadow-sm">
+      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
+          <StatPill
+            icon={<FileText className="h-3.5 w-3.5" />}
+            label="Letters"
+            value={letterCount}
+            tone="neutral"
+          />
+          <StatPill
+            icon={<Video className="h-3.5 w-3.5" />}
+            label="Video"
+            value={videoCount}
+            tone="rose"
+          />
+          <StatPill
+            icon={<Mic className="h-3.5 w-3.5" />}
+            label="Audio"
+            value={audioCount}
+            tone="blue"
+          />
+          <StatPill
+            icon={<Clock className="h-3.5 w-3.5" />}
+            label="Pending"
+            value={pendingCount}
+            tone="amber"
+          />
+        </div>
+
+        <div className="flex shrink-0 gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onTemplates}
+          className="h-10 flex-1 rounded-xl sm:flex-none"
+        >
+          <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+          Templates
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={onCreate}
+          className="h-10 flex-1 rounded-xl sm:flex-none"
+        >
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            New Message
+          </Button>
+        </div>
+      </div>
+      {total === 0 && (
+        <p className="border-t border-slate-100 px-4 py-2.5 text-center text-xs text-muted-foreground">
+          Create a letter, video, or audio message for someone you love
+        </p>
+      )}
+    </div>
+  );
+}
+
+function StatPill({
+  icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  tone: 'neutral' | 'rose' | 'blue' | 'amber';
+}) {
+  const tones = {
+    neutral: 'bg-background text-foreground ring-slate-200/80',
+    rose: 'bg-rose-50/80 text-rose-800 ring-rose-200/60',
+    blue: 'bg-blue-50/80 text-blue-800 ring-blue-200/60',
+    amber: 'bg-amber-50/80 text-amber-900 ring-amber-200/60',
+  };
+
+  return (
+    <div
+      className={cn(
+        'flex min-w-[5.5rem] items-center gap-2 rounded-xl px-2.5 py-2 ring-1',
+        tones[tone],
+      )}
+    >
+      <span className="shrink-0 opacity-80">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold leading-none tabular-nums">{value}</p>
+        <p className="mt-0.5 truncate text-[10px] font-medium uppercase tracking-wide opacity-70">
+          {label}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function HeroPanel({
   pendingCount,
@@ -1236,12 +1449,68 @@ function SuggestedPanel({
   open,
   onToggle,
   onCreate,
+  compact = false,
 }: {
   recipients: RecipientOption[];
   open: boolean;
   onToggle: () => void;
   onCreate: (recipient: RecipientOption) => void;
+  compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <div className="rounded-2xl border bg-primary/5">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+        >
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Users className="h-4 w-4 shrink-0 text-primary" />
+            <p className="truncate text-sm font-medium">
+              {recipients.length} suggested recipient
+              {recipients.length === 1 ? '' : 's'}
+            </p>
+          </div>
+          <ChevronRight
+            className={cn(
+              'h-4 w-4 shrink-0 text-muted-foreground transition',
+              open && 'rotate-90',
+            )}
+          />
+        </button>
+
+        {open && (
+          <div className="space-y-2 border-t px-3 pb-3 pt-2">
+            {recipients.map((recipient, index) => (
+              <div
+                key={`${recipient.name}-${index}`}
+                className="flex items-center justify-between gap-2 rounded-xl border bg-background px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {recipient.name}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {recipient.email || recipient.source}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onCreate(recipient)}
+                  className="h-8 shrink-0 rounded-lg px-2.5 text-xs"
+                >
+                  Create
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <Card className="border-primary/20 bg-primary/5">
       <CardContent className="p-4 sm:p-5">
@@ -1332,7 +1601,50 @@ function TemplateGrid({
   );
 }
 
-function EmptyState({ onCreate }: { onCreate: () => void }) {
+function EmptyState({
+  onCreate,
+  compact = false,
+  embedded = false,
+}: {
+  onCreate: () => void;
+  compact?: boolean;
+  embedded?: boolean;
+}) {
+  if (compact) {
+    return (
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <Heart className="h-6 w-6" />
+        </div>
+        <p className="mt-3 text-sm font-semibold">No messages yet</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Tap New Message below to get started.
+        </p>
+      </div>
+    );
+  }
+
+  if (embedded) {
+    return (
+      <div className="rounded-3xl border border-dashed border-slate-200/90 bg-gradient-to-b from-slate-50/80 to-background px-6 py-12 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm">
+          <Heart className="h-7 w-7" />
+        </div>
+        <h3 className="mt-5 text-lg font-semibold tracking-tight">
+          Your messages will appear here
+        </h3>
+        <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+          Write a letter, record video, or capture audio — each one is saved
+          for the right person at the right time.
+        </p>
+        <Button type="button" className="mt-6 rounded-xl" onClick={onCreate}>
+          <Plus className="mr-2 h-4 w-4" />
+          Create First Message
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <Card className="border-dashed">
       <CardContent className="p-8 text-center sm:p-12">
@@ -1359,6 +1671,60 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
    MOBILE LIST + DETAIL
 ============================================================ */
 
+function MessageMobileActionBar({
+  onEdit,
+  onPrint,
+  onDelete,
+}: {
+  onEdit: () => void;
+  onPrint: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-1">
+      <Button
+        type="button"
+        variant="ghost"
+        className="h-auto min-h-[68px] flex-col gap-1.5 rounded-2xl py-2"
+        onClick={onEdit}
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted/60">
+          <Edit2 className="h-5 w-5" />
+        </span>
+        <span className="text-[11px] font-medium text-muted-foreground">
+          Edit
+        </span>
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        className="h-auto min-h-[68px] flex-col gap-1.5 rounded-2xl py-2"
+        onClick={onPrint}
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <Printer className="h-5 w-5" />
+        </span>
+        <span className="text-[11px] font-medium text-muted-foreground">
+          Print
+        </span>
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        className="h-auto min-h-[68px] flex-col gap-1.5 rounded-2xl py-2"
+        onClick={onDelete}
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+          <Trash2 className="h-5 w-5" />
+        </span>
+        <span className="text-[11px] font-medium text-muted-foreground">
+          Delete
+        </span>
+      </Button>
+    </div>
+  );
+}
+
 function MessageListItem({
   letter,
   onOpen,
@@ -1366,42 +1732,45 @@ function MessageListItem({
   letter: Letter;
   onOpen: () => void;
 }) {
-  const isVideo = letter.messageType === 'video';
-  const isAudio = letter.messageType === 'audio';
-  const Icon = isVideo ? Video : isAudio ? Mic : FileText;
-  const deliveryLabel =
-    letter.deliveryTrigger === 'death' ? 'Upon death' : 'Specific date';
+  const meta = getMessageTypeMeta(letter.messageType);
+  const { Icon, shortLabel, iconBg } = meta;
+  const isDelivered = letter.status === 'sent';
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-center gap-3 rounded-2xl border bg-card p-3 text-left shadow-sm transition active:scale-[0.99] active:bg-muted/30"
+      className="flex w-full items-stretch overflow-hidden rounded-2xl border border-slate-200/80 bg-card text-left shadow-sm transition active:scale-[0.99] hover:border-slate-300 hover:shadow-md"
     >
       <div
-        className={cn(
-          'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white',
-          isVideo ? 'bg-rose-600' : isAudio ? 'bg-blue-600' : 'bg-primary',
-        )}
-      >
-        <Icon className="h-5 w-5" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="min-w-0 truncate text-base font-semibold">
-            {letter.title || 'Untitled message'}
-          </span>
-          {letter.status === 'sent' && (
-            <Badge className="shrink-0 rounded-full bg-green-600 text-[10px]">
-              Sent
-            </Badge>
+        className={cn('w-1 shrink-0 bg-gradient-to-b', meta.gradient)}
+        aria-hidden
+      />
+      <div className="flex min-w-0 flex-1 items-center gap-3 p-4">
+        <div
+          className={cn(
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm',
+            iconBg,
           )}
+        >
+          <Icon className="h-5 w-5" />
         </div>
-        <p className="mt-0.5 truncate text-sm text-muted-foreground">
-          {letter.recipient || 'No recipient'} · {deliveryLabel}
-        </p>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="min-w-0 truncate text-base font-semibold">
+              {letter.title || 'Untitled message'}
+            </span>
+            <MessageStatusPill delivered={isDelivered} />
+          </div>
+          <p className="mt-1 truncate text-sm text-muted-foreground">
+            {letter.recipient || 'No recipient'}
+          </p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {shortLabel} · {formatDeliverySummary(letter)}
+          </p>
+        </div>
+        <ChevronRight className="h-5 w-5 shrink-0 self-center text-muted-foreground" />
       </div>
-      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
     </button>
   );
 }
@@ -1411,11 +1780,13 @@ function MessageMobileDetails({
   onEdit,
   onPrint,
   onDelete,
+  hideActions = false,
 }: {
   letter: Letter;
   onEdit: () => void;
   onPrint: () => void;
   onDelete: () => void;
+  hideActions?: boolean;
 }) {
   const isVideo = letter.messageType === 'video';
   const isAudio = letter.messageType === 'audio';
@@ -1485,59 +1856,20 @@ function MessageMobileDetails({
 
       {letter.media?.url && (
         <div className="rounded-2xl border bg-muted/25 p-3">
-          {isVideo ? (
-            <video
-              controls
-              src={letter.media.url}
-              className="h-44 w-full rounded-xl bg-black object-cover"
-            />
-          ) : (
-            <audio controls src={letter.media.url} className="w-full" />
-          )}
+          <MessageMediaPreview
+            messageType={letter.messageType}
+            media={letter.media}
+          />
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-1 rounded-2xl border bg-muted/20 p-1">
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-auto min-h-[72px] flex-col gap-1.5 rounded-2xl py-2"
-          onClick={onEdit}
-        >
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-muted/60">
-            <Edit2 className="h-5 w-5" />
-          </span>
-          <span className="text-[11px] font-medium text-muted-foreground">
-            Edit
-          </span>
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-auto min-h-[72px] flex-col gap-1.5 rounded-2xl py-2"
-          onClick={onPrint}
-        >
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <Printer className="h-5 w-5" />
-          </span>
-          <span className="text-[11px] font-medium text-muted-foreground">
-            Print
-          </span>
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-auto min-h-[72px] flex-col gap-1.5 rounded-2xl py-2"
-          onClick={onDelete}
-        >
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
-            <Trash2 className="h-5 w-5" />
-          </span>
-          <span className="text-[11px] font-medium text-muted-foreground">
-            Delete
-          </span>
-        </Button>
-      </div>
+      {!hideActions && (
+        <MessageMobileActionBar
+          onEdit={onEdit}
+          onPrint={onPrint}
+          onDelete={onDelete}
+        />
+      )}
     </div>
   );
 }
@@ -1593,7 +1925,8 @@ function MessageEditorPanel({
         <Card
           className={cn(
             'overflow-hidden rounded-[28px]',
-            embeddedInSheet && 'rounded-2xl border-0 shadow-none',
+            embeddedInSheet &&
+              'rounded-2xl border-0 bg-[var(--mobile-sheet-solid)] shadow-none',
           )}
         >
           <CardContent
@@ -1655,7 +1988,9 @@ function MessageEditorPanel({
           </CardContent>
         </Card>
 
-        <PreviewSidebar letter={currentLetter} embeddedInSheet={embeddedInSheet} />
+        {!embeddedInSheet && (
+          <PreviewSidebar letter={currentLetter} embeddedInSheet={embeddedInSheet} />
+        )}
       </div>
     </div>
   );
@@ -1788,7 +2123,7 @@ function BasicDetails({
                 <SelectValue placeholder="Select from Access Management" />
               </SelectTrigger>
 
-              <SelectContent>
+              <SelectContent className="z-[200] max-h-[min(60dvh,320px)]">
                 {recipients.map((recipient, index) => (
                   <SelectItem
                     key={`${recipient.name}-${index}`}
@@ -1863,6 +2198,7 @@ function DeliverySection({
               value={letter.deliveryDate || ''}
               onChange={value => onChange({ deliveryDate: value || '' })}
               placeholder="Select delivery date"
+              sheetTitle="Choose delivery date"
             />
           </FieldBlock>
 
@@ -2022,15 +2358,13 @@ function PreviewSidebar({
                   Attached media {formatFileSize(letter.media.size)}
                 </p>
 
-                {letter.messageType === 'video' ? (
-                  <video
-                    controls
-                    src={letter.media.url}
+                {letter.messageType === 'video' || letter.messageType === 'audio' ? (
+                  <MessageMediaPreview
+                    messageType={letter.messageType}
+                    media={letter.media}
                     className="h-40 w-full rounded-xl bg-black object-cover"
                   />
-                ) : (
-                  <audio controls src={letter.media.url} className="w-full" />
-                )}
+                ) : null}
               </div>
             )}
 
@@ -2216,7 +2550,7 @@ function MediaUploadPanel({
             </h3>
             <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
               {isVideo
-                ? 'Record a new video, choose from your gallery, or upload a file.'
+                ? 'Record a new video, take a photo, choose from your gallery, or upload a file.'
                 : 'Record a new voice note, choose from your gallery, or upload a file.'}
             </p>
           </div>
@@ -2271,9 +2605,9 @@ function MediaUploadPanel({
           </div>
 
           {isVideo ? (
-            <video
-              controls
-              src={media.url}
+            <MessageMediaPreview
+              messageType="video"
+              media={media}
               className="h-56 w-full rounded-xl bg-black object-cover sm:h-72"
             />
           ) : (
@@ -2298,6 +2632,128 @@ function PreviewRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function getRecipientInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return parts
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() || '')
+    .join('');
+}
+
+function getMessageTypeMeta(messageType: MessageType) {
+  switch (messageType) {
+    case 'video':
+      return {
+        Icon: Video,
+        label: 'Video message',
+        shortLabel: 'Video',
+        gradient: 'from-rose-500 via-rose-400 to-rose-300',
+        iconBg: 'bg-gradient-to-br from-rose-600 to-rose-500',
+        chip: 'bg-rose-50 text-rose-800 ring-rose-200/70',
+        previewAccent: 'border-rose-400/60',
+      };
+    case 'audio':
+      return {
+        Icon: Mic,
+        label: 'Audio message',
+        shortLabel: 'Audio',
+        gradient: 'from-blue-600 via-blue-500 to-blue-400',
+        iconBg: 'bg-gradient-to-br from-blue-600 to-blue-500',
+        chip: 'bg-blue-50 text-blue-800 ring-blue-200/70',
+        previewAccent: 'border-blue-400/60',
+      };
+    default:
+      return {
+        Icon: FileText,
+        label: 'Written letter',
+        shortLabel: 'Letter',
+        gradient: 'from-slate-700 via-slate-600 to-slate-500',
+        iconBg: 'bg-gradient-to-br from-slate-800 to-slate-600',
+        chip: 'bg-slate-100 text-slate-800 ring-slate-200/80',
+        previewAccent: 'border-slate-400/60',
+      };
+  }
+}
+
+function formatDeliverySummary(letter: Letter) {
+  if (letter.deliveryTrigger === 'death') {
+    return 'Upon death';
+  }
+  const datePart = letter.deliveryDate
+    ? new Date(letter.deliveryDate).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : 'Date not set';
+  return letter.deliveryOccasion
+    ? `${datePart} · ${letter.deliveryOccasion}`
+    : datePart;
+}
+
+function MessageStatusPill({ delivered }: { delivered: boolean }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1',
+        delivered
+          ? 'bg-emerald-50 text-emerald-700 ring-emerald-200/80'
+          : 'bg-amber-50 text-amber-800 ring-amber-200/70',
+      )}
+    >
+      {delivered ? (
+        <>
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+          Delivered
+        </>
+      ) : (
+        <>
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+          Pending
+        </>
+      )}
+    </span>
+  );
+}
+
+function MessageCardActionRail({
+  letter,
+  onEdit,
+  onDelete,
+  onPrint,
+}: {
+  letter: Letter;
+  onEdit: () => void;
+  onDelete: () => void;
+  onPrint: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/60 bg-muted/20 px-4 py-3">
+      <Button type="button" variant="outline" size="sm" onClick={onEdit} className="rounded-xl">
+        <Edit2 className="mr-1.5 h-3.5 w-3.5" />
+        Edit
+      </Button>
+      {letter.messageType === 'letter' && (
+        <Button type="button" variant="outline" size="sm" onClick={onPrint} className="rounded-xl">
+          <Printer className="mr-1.5 h-3.5 w-3.5" />
+          Print
+        </Button>
+      )}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onDelete}
+        className="rounded-xl text-destructive hover:bg-accent hover:text-destructive"
+      >
+        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+        Delete
+      </Button>
+    </div>
+  );
+}
+
 function MessageCard({
   letter,
   onEdit,
@@ -2309,102 +2765,123 @@ function MessageCard({
   onDelete: () => void;
   onPrint: () => void;
 }) {
-  const isVideo = letter.messageType === 'video';
-  const isAudio = letter.messageType === 'audio';
-  const Icon = isVideo ? Video : isAudio ? Mic : FileText;
+  const meta = getMessageTypeMeta(letter.messageType);
+  const { Icon, shortLabel, iconBg, gradient } = meta;
+  const isDelivered = letter.status === 'sent';
+  const recipientName = letter.recipient || 'No recipient';
+  const initials = getRecipientInitials(recipientName);
+  const letterPreview =
+    letter.messageType === 'letter' ? stripHtml(letter.content) : '';
+  const hasVideo = Boolean(
+    letter.media?.url && letter.messageType === 'video',
+  );
+  const hasAudio = Boolean(
+    letter.media?.url && letter.messageType === 'audio',
+  );
+  const editedLabel = letter.lastModified.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
   return (
-    <Card className="overflow-hidden rounded-[24px] transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardContent className="p-0">
-        <div className="flex flex-col lg:flex-row">
-          <div className="min-w-0 flex-1 p-4 sm:p-5">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="rounded-full capitalize">
-                <Icon className="mr-1 h-3 w-3" />
-                {letter.messageType}
-              </Badge>
+    <article className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm transition hover:border-border hover:shadow-md">
+      <div className={cn('h-1 bg-gradient-to-r', gradient)} aria-hidden />
 
-              <Badge variant="outline" className="rounded-full">
-                {letter.deliveryTrigger === 'death'
-                  ? 'Upon death'
-                  : 'Specific date'}
-              </Badge>
+      <div className="p-4 sm:p-5">
+        <div className="flex items-start gap-4">
+          <div
+            className={cn(
+              'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white shadow-sm',
+              iconBg,
+            )}
+          >
+            <Icon className="h-5 w-5" />
+          </div>
 
-              {letter.status === 'sent' && (
-                <Badge className="rounded-full bg-green-600">Delivered</Badge>
-              )}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <h3 className="line-clamp-2 text-base font-semibold leading-snug tracking-tight sm:text-lg">
+                  {letter.title || 'Untitled message'}
+                </h3>
+                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground">
+                      {initials}
+                    </span>
+                    {recipientName}
+                  </span>
+                  {letter.recipientEmail && (
+                    <>
+                      <span className="text-border">·</span>
+                      <span className="truncate">{letter.recipientEmail}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+              <MessageStatusPill delivered={isDelivered} />
             </div>
 
-            <h3 className="mt-3 line-clamp-1 text-base font-semibold sm:text-lg">
-              {letter.title || 'Untitled message'}
-            </h3>
-
-            <p className="mt-1 break-words text-sm text-muted-foreground">
-              To: {letter.recipient || 'No recipient'}
-              {letter.recipientEmail ? ` • ${letter.recipientEmail}` : ''}
-            </p>
-
-            <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
-              {letter.deliveryTrigger === 'date' && letter.deliveryDate && (
-                <span>
-                  📅 {new Date(letter.deliveryDate).toLocaleDateString()}
-                </span>
-              )}
-
-              {letter.deliveryOccasion && (
-                <span>🎉 {letter.deliveryOccasion}</span>
-              )}
-
-              <span>
-                ✏️ {new Date(letter.lastModified).toLocaleDateString()}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+                <Icon className="h-3 w-3 opacity-70" />
+                {shortLabel}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+                <Calendar className="h-3 w-3" />
+                {formatDeliverySummary(letter)}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                {editedLabel}
               </span>
             </div>
 
-            {letter.messageType === 'letter' && letter.content && (
-              <p className="mt-4 line-clamp-3 text-sm leading-6 text-muted-foreground">
-                {stripHtml(letter.content)}
-              </p>
-            )}
-
-            {letter.media?.url && (
-              <div className="mt-4 rounded-2xl border bg-muted/25 p-3">
-                {isVideo ? (
-                  <video
-                    controls
-                    src={letter.media.url}
-                    className="h-44 w-full rounded-xl bg-black object-cover sm:h-56"
-                  />
-                ) : (
-                  <audio controls src={letter.media.url} className="w-full" />
+            {(letterPreview || hasVideo || hasAudio) && (
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start">
+                {letterPreview && (
+                  <p className="line-clamp-3 flex-1 text-sm leading-6 text-muted-foreground">
+                    {letterPreview}
+                  </p>
+                )}
+                {hasVideo && (
+                  <div className="w-full shrink-0 overflow-hidden rounded-xl border border-border/80 bg-black sm:w-32">
+                    <MessageMediaPreview
+                      messageType="video"
+                      media={letter.media!}
+                      className="h-24 w-full object-cover"
+                    />
+                  </div>
+                )}
+                {hasAudio && (
+                  <div className="w-full rounded-xl border border-border/70 bg-muted/25 p-2.5 sm:max-w-xs">
+                    <MessageMediaPreview
+                      messageType="audio"
+                      media={letter.media!}
+                      className="w-full"
+                    />
+                  </div>
                 )}
               </div>
             )}
-          </div>
 
-          <div className="grid grid-cols-3 gap-2 border-t bg-muted/25 p-3 lg:w-[150px] lg:grid-cols-1 lg:border-l lg:border-t-0">
-            <Button type="button" variant="outline" size="sm" onClick={onEdit}>
-              <Edit2 className="mr-2 h-3.5 w-3.5" />
-              Edit
-            </Button>
-
-            <Button type="button" variant="outline" size="sm" onClick={onPrint}>
-              <Printer className="mr-2 h-3.5 w-3.5" />
-              Print
-            </Button>
-
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={onDelete}
-            >
-              <Trash2 className="mr-2 h-3.5 w-3.5" />
-              Delete
-            </Button>
+            {!letterPreview && !hasVideo && !hasAudio && (
+              <p className="mt-3 text-sm text-muted-foreground">
+                No preview yet — use Edit to add your message.
+              </p>
+            )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <MessageCardActionRail
+        letter={letter}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onPrint={onPrint}
+      />
+    </article>
   );
 }
 

@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Badge } from '@common/ui/badge';
 import { Button } from '@common/ui/button';
 import { cn } from '@common/ui/utils';
-import { Calendar } from '@common/ui/calendar';
+import { EnhancedCalendar } from '@/components/EnhancedCalendar';
 import {
   Dialog,
   DialogContent,
@@ -44,6 +44,7 @@ import { toast } from 'sonner';
 
 import {
   MOBILE_SHEET_SCROLL_PADDING,
+  MOBILE_SHEET_FOOTER_CLASS,
   MobileBottomSheet,
   MobileSheetHandle,
   useIsMobile,
@@ -220,11 +221,45 @@ function LetterWizardStepper({
   currentIndex,
   onStepClick,
   compact = false,
+  dotsOnly = false,
 }: {
   currentIndex: number;
   onStepClick?: (index: number) => void;
   compact?: boolean;
+  dotsOnly?: boolean;
 }) {
+  if (dotsOnly) {
+    const step = EDITOR_STEPS[currentIndex];
+    return (
+      <nav
+        aria-label="Letter editor progress"
+        className="flex items-center gap-3"
+      >
+        <div className="flex gap-1">
+          {EDITOR_STEPS.map((_, index) => (
+            <div
+              key={EDITOR_STEPS[index].id}
+              className={cn(
+                'h-1.5 rounded-full transition-all',
+                index === currentIndex
+                  ? 'w-6 bg-primary'
+                  : index < currentIndex
+                    ? 'w-3 bg-primary/40'
+                    : 'w-3 bg-muted',
+              )}
+              aria-hidden
+            />
+          ))}
+        </div>
+        <p className="min-w-0 truncate text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{step.label}</span>
+          <span className="mx-1.5 text-muted-foreground/60">·</span>
+          Step {currentIndex + 1} of {EDITOR_STEPS.length}
+        </p>
+      </nav>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -385,8 +420,8 @@ function DeliveryTimingSelector({
                     <X className="h-5 w-5" />
                   </Button>
                 </div>
-                <div className="flex flex-1 flex-col items-center overflow-y-auto px-4 py-4">
-                  <Calendar
+                <div className="flex flex-1 flex-col items-center overflow-y-auto px-3 py-4">
+                  <EnhancedCalendar
                     mode="single"
                     selected={
                       letterDate ? new Date(letterDate) : undefined
@@ -397,7 +432,6 @@ function DeliveryTimingSelector({
                         setCalendarOpen(false);
                       }
                     }}
-                    initialFocus
                   />
                   <div className="mt-4 flex w-full gap-2">
                     <Button
@@ -433,6 +467,7 @@ function DeliveryTimingSelector({
             onChange={onDateChange}
             placeholder="Select delivery date"
             className="rounded-2xl"
+            sheetTitle="Choose delivery date"
           />
         ))}
     </div>
@@ -813,8 +848,16 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
     )}&body=${encodeURIComponent(body)}`;
   };
 
-  const currentStep = EDITOR_STEPS[wizardStep];
   const isLastStep = wizardStep === EDITOR_STEPS.length - 1;
+  const compactSheet = embeddedInSheet && isMobile;
+
+  const stepIntro = (title: string, description: string) =>
+    compactSheet ? null : (
+      <div>
+        <h4 className="font-semibold">{title}</h4>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      </div>
+    );
 
   const goToWizardStep = (index: number) => {
     if (index < wizardStep) setWizardStep(index);
@@ -833,12 +876,10 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
       case 0:
         return (
           <>
-            <div>
-              <h4 className="font-semibold">Recipient & Delivery</h4>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Confirm who receives this letter and when it delivers.
-              </p>
-            </div>
+            {stepIntro(
+              'Recipient & Delivery',
+              'Confirm who receives this letter and when it delivers.',
+            )}
 
             <DeliveryTimingSelector
               letterDate={localData.letter_date}
@@ -902,12 +943,10 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
       case 1:
         return (
           <>
-            <div>
-              <h4 className="font-semibold">Opening Message</h4>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Write the heartfelt opening and kit description.
-              </p>
-            </div>
+            {stepIntro(
+              'Opening Message',
+              'Write the heartfelt opening and kit description.',
+            )}
             <FieldBlock label="Opening Message">
               <Textarea
                 value={localData.letter_opening || DEFAULTS.letter_opening}
@@ -933,12 +972,10 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
       case 2:
         return (
           <>
-            <div>
-              <h4 className="font-semibold">Access Details</h4>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Login info and sections your next of kin can access.
-              </p>
-            </div>
+            {stepIntro(
+              'Access Details',
+              'Login info and sections your next of kin can access.',
+            )}
             <div className="grid gap-4 md:grid-cols-2">
               <FieldBlock
                 label="Access URL"
@@ -1023,12 +1060,10 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
       case 3:
         return (
           <>
-            <div>
-              <h4 className="font-semibold">Physical Items</h4>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Key bag and documents bag details.
-              </p>
-            </div>
+            {stepIntro(
+              'Physical Items',
+              'Key bag and documents bag details.',
+            )}
             <FieldBlock
               label="Key Bag Information"
               icon={<KeyRound className="h-4 w-4" />}
@@ -1089,12 +1124,10 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
       case 4:
         return (
           <>
-            <div>
-              <h4 className="font-semibold">Closing & Signature</h4>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Final words before saving the letter.
-              </p>
-            </div>
+            {stepIntro(
+              'Closing & Signature',
+              'Final words before saving the letter.',
+            )}
             <FieldBlock label="Incomplete Kit Message">
               <Textarea
                 value={
@@ -1162,9 +1195,11 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
     <div
       className={cn(
         'flex w-full gap-2',
-        isMobile
-          ? 'flex-col-reverse'
-          : 'flex-col-reverse sm:flex-row sm:justify-between',
+        compactSheet
+          ? 'flex-row'
+          : isMobile
+            ? 'flex-col-reverse'
+            : 'flex-col-reverse sm:flex-row sm:justify-between',
       )}
     >
       {wizardStep === 0 ? (
@@ -1176,7 +1211,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
             className={cn(
               'rounded-2xl',
               MIN_TOUCH,
-              isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
+              compactSheet ? 'flex-1' : isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
             )}
           >
             Cancel
@@ -1192,7 +1227,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
           className={cn(
             'rounded-2xl',
             MIN_TOUCH,
-            isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
+            compactSheet ? 'flex-1' : isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
           )}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
@@ -1207,7 +1242,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
           className={cn(
             'rounded-2xl',
             MIN_TOUCH,
-            isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
+            compactSheet ? 'flex-[1.4]' : isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
           )}
         >
           Next
@@ -1220,11 +1255,11 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
           className={cn(
             'rounded-2xl',
             MIN_TOUCH,
-            isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
+            compactSheet ? 'flex-[1.4]' : isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
           )}
         >
           <Download className="mr-2 h-4 w-4" />
-          Export Letter
+          {compactSheet ? 'Export' : 'Export Letter'}
         </Button>
       )}
     </div>
@@ -1427,7 +1462,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
 
         <div
           className={cn(
-            'shrink-0 space-y-0 border-b px-4 pb-4 sm:px-6',
+            'shrink-0 space-y-0 border-b px-4 pb-3 sm:px-6 sm:pb-4',
             embeddedInSheet && isMobile ? 'pt-1' : 'pt-4 sm:pt-5',
           )}
         >
@@ -1435,16 +1470,28 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
             <div className="min-w-0 flex-1">
               <h2
                 id="nok-letter-wizard-title"
-                className="text-left text-lg font-semibold sm:text-xl"
+                className={cn(
+                  'text-left font-semibold',
+                  compactSheet ? 'text-base' : 'text-lg sm:text-xl',
+                )}
               >
-                Next of Kin Letter
+                {compactSheet && recipientName
+                  ? recipientName
+                  : 'Next of Kin Letter'}
               </h2>
-              <p className="text-left text-sm text-muted-foreground">
-                Step {wizardStep + 1} of {EDITOR_STEPS.length}
-              </p>
-              {embeddedInSheet && recipientName && (
+              {!compactSheet && (
+                <p className="text-left text-sm text-muted-foreground">
+                  Step {wizardStep + 1} of {EDITOR_STEPS.length}
+                </p>
+              )}
+              {embeddedInSheet && recipientName && !compactSheet && (
                 <p className="mt-0.5 truncate text-left text-xs text-muted-foreground">
                   {recipientName}
+                </p>
+              )}
+              {compactSheet && (
+                <p className="mt-0.5 text-left text-xs text-muted-foreground">
+                  Letter editor · tap <span className="font-medium text-foreground">Preview</span> to read the full letter
                 </p>
               )}
               {!embeddedInSheet && (
@@ -1470,17 +1517,18 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
                 </div>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1.5">
               {embeddedInSheet && (
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="icon"
+                  variant="outline"
+                  size="sm"
                   onClick={() => setPreviewOpen(true)}
-                  className="h-10 w-10 rounded-full"
+                  className="h-9 shrink-0 rounded-xl px-2.5 text-xs font-medium"
                   aria-label="Preview letter"
                 >
-                  <Eye className="h-5 w-5" />
+                  <Eye className="mr-1.5 h-4 w-4" />
+                  Preview
                 </Button>
               )}
               {embeddedInSheet && isMobile && onClose && (
@@ -1497,18 +1545,20 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
               )}
             </div>
           </div>
-          <div className="mt-4">
+          <div className="mt-3">
             <LetterWizardStepper
               currentIndex={wizardStep}
               onStepClick={goToWizardStep}
               compact={isMobile}
+              dotsOnly={compactSheet}
             />
           </div>
         </div>
 
         <div
           className={cn(
-            'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6',
+            'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6',
+            compactSheet ? 'py-3' : 'py-5',
             embeddedInSheet && MOBILE_SHEET_SCROLL_PADDING,
           )}
         >
@@ -1527,7 +1577,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
                 x: isMobile ? 0 : -12,
               }}
               transition={isMobile ? LETTER_SHEET_SPRING : { duration: 0.2 }}
-              className="space-y-6"
+              className={cn(compactSheet ? 'space-y-4' : 'space-y-6')}
             >
               {renderWizardStepContent()}
             </motion.div>
@@ -1536,10 +1586,13 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
 
         <div
           className={cn(
-            'shrink-0 border-t bg-background/95 px-4 py-4 backdrop-blur sm:px-6',
-            isMobile &&
-              embeddedInSheet &&
-              'pb-[max(1rem,env(safe-area-inset-bottom))]',
+            'shrink-0 border-t px-4 py-3 sm:px-6 sm:py-4',
+            compactSheet
+              ? cn(
+                  MOBILE_SHEET_FOOTER_CLASS,
+                  'pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+                )
+              : 'bg-background/95 backdrop-blur',
           )}
         >
           {wizardFooter}

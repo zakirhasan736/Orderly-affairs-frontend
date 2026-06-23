@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -8,6 +8,16 @@ import {
   CardContent,
 } from '@/components/common/ui/card';
 import { Button } from '@/components/common/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/common/ui/alert-dialog';
 import {
   Plus,
   Minus,
@@ -23,6 +33,11 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
+import {
+  type UploadedAIFile,
+  validateAiDocumentFile,
+} from '@/utils/aiDocumentUploadUi';
 import {
   getTopicCardProps,
   useScrollToVaultTopic,
@@ -137,28 +152,31 @@ interface Props {
 
 type UploadScope = 'full' | `vehicle:${number}`;
 
-type UploadedAIFile = {
-  file_id: string;
-  mime_type: string;
-  expires_at?: string;
+
+
+const describeVehicle = (vehicle: Record<string, unknown>) => {
+  const parts = [vehicle.year, vehicle.make, vehicle.model]
+    .filter(value => value !== null && value !== undefined && value !== '')
+    .map(value => String(value));
+
+  if (parts.length > 0) return parts.join(' ');
+  if (vehicle.vin) return `VIN ${vehicle.vin}`;
+  return 'Vehicle';
 };
 
-const ALLOWED_UPLOAD_TYPES = [
-  'application/pdf',
-  'text/plain',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-];
-
-const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
-
-const getReadableFileType = (mimeType?: string) => {
-  if (!mimeType) return 'Document';
-  if (mimeType === 'application/pdf') return 'PDF';
-  if (mimeType === 'text/plain') return 'Text';
-  if (mimeType.includes('image')) return 'Image';
-  return mimeType;
+const isEmptyValue = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return true;
+  if (Array.isArray(value) && value.length === 0) return true;
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'text' in value &&
+    'files' in value
+  ) {
+    const uploadValue = value as { text?: string; files?: unknown[] };
+    return !uploadValue.text && (!uploadValue.files || uploadValue.files.length === 0);
+  }
+  return false;
 };
 
 /* ------------------------------------------------------------------ */
@@ -186,6 +204,12 @@ export default function Section5Vehicles({
   >({
     full: null,
   });
+
+  const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
+  const [multiVehiclePrompt, setMultiVehiclePrompt] = useState<{
+    vehicles: Record<string, unknown>[];
+    targetIndex?: number;
+  } | null>(null);
 
   const vehicles: any[] = Array.isArray(data['5A']) ? data['5A'] : [];
 
@@ -234,18 +258,21 @@ export default function Section5Vehicles({
   };
 
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return uploadedFiles[scope] || null;
+    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
   };
 
   const cleanPatchObject = (patch: any) => {
     if (!patch || typeof patch !== 'object') return {};
 
     return Object.fromEntries(
-      Object.entries(patch).filter(([, value]) => {
-        if (value === null || value === undefined || value === '') return false;
-        if (Array.isArray(value) && value.length === 0) return false;
-        return true;
-      }),
+      Object.entries(patch)
+        .map(([key, value]) => {
+          if (key === 'year' && value !== null && value !== undefined && value !== '') {
+            return [key, String(value)];
+          }
+          return [key, value];
+        })
+        .filter(([, value]) => !isEmptyValue(value)),
     );
   };
 
@@ -257,20 +284,32 @@ export default function Section5Vehicles({
   };
 
   const extractVehicleArrayFromPatch = (patch: any) => {
-    const rawVehicles = patch?.['5A'];
+    const root =
+      patch?.patch && typeof patch.patch === 'object' ? patch.patch : patch;
+    let rawVehicles = root?.['5A'];
+
+    if (
+      !rawVehicles &&
+      root &&
+      typeof root === 'object' &&
+      !Array.isArray(root) &&
+      (root.vin || root.make || root.model || root.year)
+    ) {
+      rawVehicles = [root];
+    }
 
     if (Array.isArray(rawVehicles)) {
       return rawVehicles
         .map(vehicle => normalizeVehiclePatch(vehicle))
-        .filter(vehicle => {
-          return Object.values(vehicle).some(value => value !== '');
-        });
+        .filter(vehicle =>
+          Object.values(vehicle).some(value => !isEmptyValue(value)),
+        );
     }
 
     if (rawVehicles && typeof rawVehicles === 'object') {
       const vehicle = normalizeVehiclePatch(rawVehicles);
 
-      return Object.values(vehicle).some(value => value !== '')
+      return Object.values(vehicle).some(value => !isEmptyValue(value))
         ? [vehicle]
         : [];
     }
@@ -278,23 +317,78 @@ export default function Section5Vehicles({
     return [];
   };
 
-  const handleDocumentUpload = async (
-    file?: File | null,
-    scope: UploadScope = 'full',
+  const applyExtractedVehicles = (
+    extractedVehicles: Record<string, unknown>[],
+    targetIndex?: number,
   ) => {
+    const normalized = extractedVehicles.map(vehicle =>
+      normalizeVehiclePatch(cleanPatchObject(vehicle)),
+    );
+
+    if (normalized.length === 0) return;
+
+    if (typeof targetIndex === 'number') {
+      const next = [...vehicles];
+
+      normalized.forEach((vehicle, offset) => {
+        const index = targetIndex + offset;
+
+        if (index < next.length) {
+          next[index] = {
+            ...(next[index] || createEmptyVehicle()),
+            ...vehicle,
+          };
+        } else {
+          next.push(vehicle);
+        }
+      });
+
+      updateVehicles(next);
+      return;
+    }
+
+    updateVehicles([...vehicles, ...normalized]);
+  };
+
+  const finishAutofillNotice = (
+    count: number,
+    targetIndex?: number,
+    addedAll = true,
+  ) => {
+    if (count === 1 && typeof targetIndex === 'number') {
+      setAiNotice(
+        `AI filled ${SECTION_5.itemLabel} #${targetIndex + 1}. Please review the fields.`,
+      );
+      return;
+    }
+
+    if (typeof targetIndex === 'number') {
+      setAiNotice(
+        addedAll
+          ? `AI filled ${count} vehicles starting at ${SECTION_5.itemLabel} #${targetIndex + 1}. Please review each card.`
+          : `AI filled only ${SECTION_5.itemLabel} #${targetIndex + 1}. Please review the fields.`,
+      );
+      return;
+    }
+
+    setAiNotice(
+      count === 1
+        ? 'AI added 1 vehicle. Please review the fields.'
+        : `AI added ${count} vehicles. Please review the fields.`,
+    );
+  };
+
+  const handleDocumentUpload = async (file?: File | null,
+    scope: UploadScope = 'full', runAutofill?: () => void | Promise<void>) => {
     try {
       if (!file) return;
 
       setAiError('');
       setAiNotice('');
 
-      if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
-        setAiError('Upload PDF, TXT, PNG, JPG, JPEG, or WEBP only.');
-        return;
-      }
-
-      if (file.size > MAX_UPLOAD_SIZE) {
-        setAiError('File too large. Max 15MB.');
+      const validationError = validateAiDocumentFile(file);
+      if (validationError) {
+        setAiError(validationError);
         return;
       }
 
@@ -302,16 +396,24 @@ export default function Section5Vehicles({
 
       const uploaded = await uploadAIDocument(file);
 
+      const uploadedRecord: UploadedAIFile = {
+        file_id: uploaded.file_id,
+        mime_type: uploaded.mime_type,
+        expires_at: uploaded.expires_at,
+      };
+
+      latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
         ...prev,
- [scope]: {
-    file_id: uploaded.file_id,
-    mime_type: uploaded.mime_type,
-    expires_at: uploaded.expires_at,
-  },
+        [scope]: uploadedRecord,
       }));
 
-      setAiNotice('Document uploaded. You can now use AI autofill.');
+      setUploadingScope(null);
+      setAiNotice('Document uploaded. Running AI autofill…');
+
+      if (runAutofill) {
+        await runAutofill();
+      }
     } catch (err: any) {
       setAiError(err?.message || 'Document upload failed');
     } finally {
@@ -349,31 +451,19 @@ export default function Section5Vehicles({
         return;
       }
 
-      if (typeof vehicleIndex === 'number') {
-        const firstVehicle = cleanPatchObject(extractedVehicles[0]);
-        const next = [...vehicles];
-
-        next[vehicleIndex] = {
-          ...(next[vehicleIndex] || createEmptyVehicle()),
-          ...firstVehicle,
-        };
-
-        updateVehicles(next);
-
+      if (extractedVehicles.length > 1) {
+        setMultiVehiclePrompt({
+          vehicles: extractedVehicles,
+          targetIndex: vehicleIndex,
+        });
         setAiNotice(
-          `AI filled ${SECTION_5.itemLabel} #${vehicleIndex + 1}. Please review the fields.`,
+          `Found ${extractedVehicles.length} vehicles in this document.`,
         );
-
         return;
       }
 
-      updateVehicles([...vehicles, ...extractedVehicles]);
-
-      setAiNotice(
-        extractedVehicles.length === 1
-          ? 'AI added 1 vehicle. Please review the fields.'
-          : `AI added ${extractedVehicles.length} vehicles. Please review the fields.`,
-      );
+      applyExtractedVehicles(extractedVehicles, vehicleIndex);
+      finishAutofillNotice(1, vehicleIndex);
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');
     } finally {
@@ -381,133 +471,114 @@ export default function Section5Vehicles({
     }
   };
 
-  const renderUploader = ({
+    const renderUploader = ({
     scope,
     title,
     description,
     buttonLabel = 'Auto-fill',
+    uploadLabel,
     onAutofill,
     compact = false,
+    tone,
   }: {
     scope: UploadScope;
     title: string;
     description: string;
     buttonLabel?: string;
-    onAutofill: () => void;
+    uploadLabel?: string;
+    onAutofill: () => void | Promise<void>;
     compact?: boolean;
-  }) => {
-    const uploadedFile = getUploadedFileForScope(scope);
-    const isUploading = uploadingScope === scope;
-    const isReading = aiLoadingScope === scope;
-
-    return (
-      <div
-        className={[
-          'relative overflow-hidden rounded-2xl border border-dashed',
-          'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-blue-50/50',
-          'p-4 shadow-sm transition-all duration-200',
-          'hover:border-blue-300 hover:shadow-md',
-          compact ? 'space-y-3' : 'space-y-4',
-        ].join(' ')}
-      >
-        <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-blue-100/70 blur-2xl" />
-        <div className="pointer-events-none absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-cyan-100/70 blur-2xl" />
-
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              {isUploading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-              ) : uploadedFile ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              ) : (
-                <UploadCloud className="h-5 w-5 text-blue-600" />
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <p className="font-semibold text-slate-900">{title}</p>
-              <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
-                {description}
-              </p>
-            </div>
-          </div>
-
-          <Button
-            type="button"
-            size="sm"
-            onClick={onAutofill}
-            disabled={isAnyAIActionRunning || !uploadedFile}
-            className="shrink-0 rounded-xl"
-          >
-            {isReading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="mr-2 h-4 w-4" />
-            )}
-
-            {isReading ? 'Reading…' : buttonLabel}
-          </Button>
-        </div>
-
-        <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-          <label
-            className={[
-              'group flex cursor-pointer flex-col items-center justify-center gap-2',
-              'rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center',
-              'transition hover:border-blue-300 hover:bg-blue-50/50',
-              compact
-                ? 'md:flex-row md:justify-start md:py-3 md:text-left'
-                : '',
-              isAnyAIActionRunning ? 'pointer-events-none opacity-60' : '',
-            ].join(' ')}
-          >
-            <input
-              type="file"
-              className="sr-only"
-              accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp"
-              disabled={isAnyAIActionRunning}
-              onChange={event => {
-                const file = event.currentTarget.files?.[0] || null;
-                void handleDocumentUpload(file, scope);
-                event.currentTarget.value = '';
-              }}
-            />
-
-            <UploadCloud className="h-5 w-5 text-slate-500 group-hover:text-blue-600" />
-
-            <div>
-              <p className="text-sm font-medium text-slate-800">
-                Click to upload vehicle document
-              </p>
-              <p className="text-xs text-slate-500">
-                PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB
-              </p>
-            </div>
-          </label>
-
-          {uploadedFile && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              <FileText className="h-4 w-4" />
-              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
-            </div>
-          )}
-        </div>
-
-        {isUploading && (
-          <div className="relative flex items-center gap-2 text-xs text-slate-500">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Uploading document…
-          </div>
-        )}
-      </div>
-    );
-  };
+    tone?: import('@/components/ai/SectionAiDocumentUploader').SectionAiUploaderTone;
+  }) => (
+    <SectionAiDocumentUploader
+      title={title}
+      description={description}
+      buttonLabel={buttonLabel}
+      uploadLabel={uploadLabel}
+      compact={compact}
+      tone={tone}
+      disabled={isAnyAIActionRunning}
+      isUploading={uploadingScope === scope}
+      isReading={aiLoadingScope === scope}
+      uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
+      onAutofill={onAutofill}
+    />
+  );
 
   if (!show5A) return null;
 
+  const pendingVehicleCount = multiVehiclePrompt?.vehicles.length ?? 0;
+  const pendingTargetIndex = multiVehiclePrompt?.targetIndex;
+
   return (
     <div className="space-y-8">
+      <AlertDialog
+        open={multiVehiclePrompt !== null}
+        onOpenChange={open => {
+          if (!open) setMultiVehiclePrompt(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingVehicleCount} vehicles found
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-left">
+                <p>
+                  This document appears to list multiple vehicles. Would you
+                  like to create a separate vehicle card for each one and
+                  auto-fill them?
+                </p>
+                <ul className="space-y-1 rounded-xl border bg-muted/30 p-3 text-sm text-foreground">
+                  {multiVehiclePrompt?.vehicles.map((vehicle, index) => (
+                    <li key={`pending-vehicle-${index}`}>
+                      {index + 1}. {describeVehicle(vehicle)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                if (!multiVehiclePrompt) return;
+                applyExtractedVehicles(
+                  [multiVehiclePrompt.vehicles[0]],
+                  pendingTargetIndex,
+                );
+                finishAutofillNotice(1, pendingTargetIndex, false);
+                setMultiVehiclePrompt(null);
+              }}
+            >
+              Only fill{' '}
+              {typeof pendingTargetIndex === 'number'
+                ? `${SECTION_5.itemLabel} #${pendingTargetIndex + 1}`
+                : 'the first vehicle'}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!multiVehiclePrompt) return;
+                applyExtractedVehicles(
+                  multiVehiclePrompt.vehicles,
+                  pendingTargetIndex,
+                );
+                finishAutofillNotice(
+                  multiVehiclePrompt.vehicles.length,
+                  pendingTargetIndex,
+                  true,
+                );
+                setMultiVehiclePrompt(null);
+              }}
+            >
+              Add all {pendingVehicleCount} vehicles
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {(aiNotice || aiError) && (
         <div className="space-y-3">
           {aiNotice && (
@@ -549,14 +620,14 @@ export default function Section5Vehicles({
         </CardHeader>
 
         <CardContent className="space-y-8 p-5">
-          {/* {renderUploader({
+          {renderUploader({
             scope: 'full',
-            title: 'Upload document for multiple vehicles',
+            title: 'Upload document for one or more vehicles',
             description:
-              'Use this if one document contains one or more vehicles. AI will add extracted vehicles as new vehicle cards.',
+              'Use this for insurance cards, registration documents, or any file that may list multiple vehicles. AI will detect each vehicle and can create separate cards.',
             buttonLabel: 'Extract Vehicles',
             onAutofill: () => handleAutofill('full'),
-          })} */}
+          })}
 
           {vehicles.length === 0 && (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
@@ -569,8 +640,8 @@ export default function Section5Vehicles({
               </p>
 
               <p className="mt-1 text-sm text-slate-500">
-                Click “Add Vehicle” to create a blank vehicle card, or upload a
-                vehicle document above and let AI create the card.
+                Upload an insurance card or registration above to auto-detect
+                multiple vehicles, or click “Add Vehicle” to start a blank card.
               </p>
             </div>
           )}
@@ -592,8 +663,9 @@ export default function Section5Vehicles({
 
                     <p className="text-sm text-slate-500">
                       Upload a registration, insurance card, title, loan
-                      document, or maintenance receipt to autofill only this
-                      vehicle.
+                      document, or maintenance receipt. If the document lists
+                      multiple vehicles, AI can create and fill additional
+                      cards.
                     </p>
                   </div>
 
@@ -613,7 +685,7 @@ export default function Section5Vehicles({
                   {renderUploader({
                     scope: itemScope,
                     title: `Upload document for ${itemLabel}`,
-                    description: `This will autofill only ${itemLabel}. It will not overwrite other vehicle cards.`,
+                    description: `AI will fill ${itemLabel} first. If multiple vehicles are found (for example, an insurance card with 2 cars), you can add them all as separate cards.`,
                     buttonLabel: `Auto-fill ${itemLabel}`,
                     compact: true,
                     onAutofill: () => handleAutofill(itemScope, index),

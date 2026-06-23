@@ -33,9 +33,10 @@ async function readErrorMessage(res: Response, fallback: string) {
 async function getMessageMediaUploadSignature(
   token: string,
   fileSize: number,
+  resourceType: 'video' | 'image' = 'video',
 ): Promise<MessageMediaUploadSignature> {
   const res = await fetch(
-    `${API_BASE}/message/media/signature?file_size=${fileSize}`,
+    `${API_BASE}/message/media/signature?file_size=${fileSize}&resource_type=${resourceType}`,
     {
       headers: { Authorization: `Bearer ${token}` },
     },
@@ -156,7 +157,18 @@ export async function deleteMessageMedia(token: string, id: string) {
 export async function uploadMessageMedia(token: string, file: File | Blob) {
   validateMessageMediaSize(file.size);
 
-  const signature = await getMessageMediaUploadSignature(token, file.size);
+  const resourceType =
+    file.type?.startsWith('image/') ||
+    (file instanceof File &&
+      /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name))
+      ? 'image'
+      : 'video';
+
+  const signature = await getMessageMediaUploadSignature(
+    token,
+    file.size,
+    resourceType,
+  );
   return uploadMessageMediaToCloudinary(file, signature);
 }
 

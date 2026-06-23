@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -26,7 +26,6 @@ import { DynamicFormField } from '@/components/DynamicFormField';
 import {
   type FieldGroup,
   buildFieldMap,
-  VaultOverviewBox,
   VaultEncryptedBadge,
   VaultGroupCards,
 } from '@/utils/vaultGroupedFields';
@@ -34,10 +33,16 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
+import {
+  type UploadedAIFile,
+  validateAiDocumentFile,
+} from '@/utils/aiDocumentUploadUi';
 import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
 
 /* ------------------------------------------------------------------ */
@@ -184,7 +189,7 @@ const SECTION_11A_GROUPS: FieldGroup[] = [
     icon: Medal,
     accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
     iconWrap: 'bg-amber-500/10 text-amber-700',
-    layout: 'stack',
+    layout: 'grid',
     fieldKeys: [
       'deployments',
       'combat_service',
@@ -209,19 +214,10 @@ const SECTION_11A_GROUPS: FieldGroup[] = [
     icon: Heart,
     accent: 'from-rose-500/[0.07] to-pink-500/[0.03]',
     iconWrap: 'bg-rose-500/10 text-rose-700',
-    layout: 'stack',
+    layout: 'grid',
     fieldKeys: ['burial_preferences', 'veteran_contacts'],
   },
 ];
-
-const SUBSECTION_OVERVIEW = {
-  label: 'Military Service Overview',
-  content:
-    'Record your military service history, honors, VA benefits, and veteran contacts so your family can access benefits and honor your service. Add one card per service period.',
-};
-
-const SUBSECTION_SUBTITLE =
-  'Add each service period with grouped details for deployments, benefits, and legacy contacts in a mobile-friendly layout.';
 
 /* ------------------------------------------------------------------ */
 /* TYPES                                                              */
@@ -236,29 +232,7 @@ interface Props {
 
 type UploadScope = 'full' | `service:${number}`;
 
-type UploadedAIFile = {
-  file_id: string;
-  mime_type: string;
-  expires_at?: string;
-};
 
-const ALLOWED_UPLOAD_TYPES = [
-  'application/pdf',
-  'text/plain',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-];
-
-const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
-
-const getReadableFileType = (mimeType?: string) => {
-  if (!mimeType) return 'Document';
-  if (mimeType === 'application/pdf') return 'PDF';
-  if (mimeType === 'text/plain') return 'Text';
-  if (mimeType.includes('image')) return 'Image';
-  return mimeType;
-};
 
 /* ------------------------------------------------------------------ */
 /* COMPONENT                                                          */
@@ -285,6 +259,8 @@ export default function Section11MilitaryService({
   >({
     full: null,
   });
+
+  const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
   const servicePeriods: any[] = Array.isArray(data['11A']) ? data['11A'] : [];
   const show11A = !activeSubsection || activeSubsection === '11A';
@@ -321,13 +297,20 @@ export default function Section11MilitaryService({
   };
 
   const removeServicePeriod = (index: number) => {
-    updateServicePeriods(
-      servicePeriods.filter((_, itemIndex) => itemIndex !== index),
-    );
+    updateServicePeriods(servicePeriods.filter((_, itemIndex) => itemIndex !== index));
   };
 
+  const multiItemAutofill = useAiMultiItemAutofill({
+    itemLabel: SECTION_11A.itemLabel,
+    createEmpty: createEmptyServicePeriod,
+    getCurrentItems: () => servicePeriods,
+    setItems: updateServicePeriods,
+    setAiNotice,
+    describeFields: ['branch', 'service_branch', 'rank'],
+  });
+
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return uploadedFiles[scope] || null;
+    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
   };
 
   const cleanPatchObject = (patch: any) => {
@@ -369,23 +352,17 @@ export default function Section11MilitaryService({
     return [];
   };
 
-  const handleDocumentUpload = async (
-    file?: File | null,
-    scope: UploadScope = 'full',
-  ) => {
+  const handleDocumentUpload = async (file?: File | null,
+    scope: UploadScope = 'full', runAutofill?: () => void | Promise<void>) => {
     try {
       if (!file) return;
 
       setAiError('');
       setAiNotice('');
 
-      if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
-        setAiError('Upload PDF, TXT, PNG, JPG, JPEG, or WEBP only.');
-        return;
-      }
-
-      if (file.size > MAX_UPLOAD_SIZE) {
-        setAiError('File too large. Max 15MB.');
+      const validationError = validateAiDocumentFile(file);
+      if (validationError) {
+        setAiError(validationError);
         return;
       }
 
@@ -393,16 +370,24 @@ export default function Section11MilitaryService({
 
       const uploaded = await uploadAIDocument(file);
 
+      const uploadedRecord: UploadedAIFile = {
+        file_id: uploaded.file_id,
+        mime_type: uploaded.mime_type,
+        expires_at: uploaded.expires_at,
+      };
+
+      latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
         ...prev,
- [scope]: {
-    file_id: uploaded.file_id,
-    mime_type: uploaded.mime_type,
-    expires_at: uploaded.expires_at,
-  },
+        [scope]: uploadedRecord,
       }));
 
-      setAiNotice('Document uploaded. You can now use AI autofill.');
+      setUploadingScope(null);
+      setAiNotice('Document uploaded. Running AI autofill…');
+
+      if (runAutofill) {
+        await runAutofill();
+      }
     } catch (err: any) {
       setAiError(err?.message || 'Document upload failed');
     } finally {
@@ -436,38 +421,15 @@ export default function Section11MilitaryService({
       const patch = json?.result?.patch ?? {};
       const extractedServicePeriods = extractServicePeriodArrayFromPatch(patch);
 
-      if (extractedServicePeriods.length === 0) {
-        setAiError(
-          'AI could not find military service information in this document.',
-        );
+      if (
+        !multiItemAutofill.processExtraction(extractedServicePeriods, serviceIndex, {
+          setAiError,
+          setAiNotice,
+          emptyError: 'AI could not find military service information in this document.',
+        })
+      ) {
         return;
       }
-
-      if (typeof serviceIndex === 'number') {
-        const firstServicePeriod = cleanPatchObject(extractedServicePeriods[0]);
-        const next = [...servicePeriods];
-
-        next[serviceIndex] = {
-          ...(next[serviceIndex] || createEmptyServicePeriod()),
-          ...firstServicePeriod,
-        };
-
-        updateServicePeriods(next);
-
-        setAiNotice(
-          `AI filled ${SECTION_11A.itemLabel} #${serviceIndex + 1}. Please review the fields.`,
-        );
-
-        return;
-      }
-
-      updateServicePeriods([...servicePeriods, ...extractedServicePeriods]);
-
-      setAiNotice(
-        extractedServicePeriods.length === 1
-          ? 'AI added 1 military service record. Please review the fields.'
-          : `AI added ${extractedServicePeriods.length} military service records. Please review the fields.`,
-      );
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');
     } finally {
@@ -475,133 +437,46 @@ export default function Section11MilitaryService({
     }
   };
 
-  const renderUploader = ({
+    const renderUploader = ({
     scope,
     title,
     description,
     buttonLabel = 'Auto-fill',
+    uploadLabel,
     onAutofill,
     compact = false,
+    tone,
   }: {
     scope: UploadScope;
     title: string;
     description: string;
     buttonLabel?: string;
-    onAutofill: () => void;
+    uploadLabel?: string;
+    onAutofill: () => void | Promise<void>;
     compact?: boolean;
-  }) => {
-    const uploadedFile = getUploadedFileForScope(scope);
-    const isUploading = uploadingScope === scope;
-    const isReading = aiLoadingScope === scope;
-
-    return (
-      <div
-        className={[
-          'relative overflow-hidden rounded-2xl border border-dashed',
-          'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-indigo-50/50',
-          'p-4 shadow-sm transition-all duration-200',
-          'hover:border-indigo-300 hover:shadow-md',
-          compact ? 'space-y-3' : 'space-y-4',
-        ].join(' ')}
-      >
-        <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-indigo-100/70 blur-2xl" />
-        <div className="pointer-events-none absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-blue-100/70 blur-2xl" />
-
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              {isUploading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
-              ) : uploadedFile ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              ) : (
-                <UploadCloud className="h-5 w-5 text-indigo-600" />
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <p className="font-semibold text-slate-900">{title}</p>
-              <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
-                {description}
-              </p>
-            </div>
-          </div>
-
-          <Button
-            type="button"
-            size="sm"
-            onClick={onAutofill}
-            disabled={isAnyAIActionRunning || !uploadedFile}
-            className="shrink-0 rounded-xl"
-          >
-            {isReading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="mr-2 h-4 w-4" />
-            )}
-
-            {isReading ? 'Reading…' : buttonLabel}
-          </Button>
-        </div>
-
-        <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-          <label
-            className={[
-              'group flex cursor-pointer flex-col items-center justify-center gap-2',
-              'rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center',
-              'transition hover:border-indigo-300 hover:bg-indigo-50/50',
-              compact
-                ? 'md:flex-row md:justify-start md:py-3 md:text-left'
-                : '',
-              isAnyAIActionRunning ? 'pointer-events-none opacity-60' : '',
-            ].join(' ')}
-          >
-            <input
-              type="file"
-              className="sr-only"
-              accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp"
-              disabled={isAnyAIActionRunning}
-              onChange={event => {
-                const file = event.currentTarget.files?.[0] || null;
-                void handleDocumentUpload(file, scope);
-                event.currentTarget.value = '';
-              }}
-            />
-
-            <UploadCloud className="h-5 w-5 text-slate-500 group-hover:text-indigo-600" />
-
-            <div>
-              <p className="text-sm font-medium text-slate-800">
-                Click to upload military service document
-              </p>
-              <p className="text-xs text-slate-500">
-                PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB
-              </p>
-            </div>
-          </label>
-
-          {uploadedFile && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              <FileText className="h-4 w-4" />
-              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
-            </div>
-          )}
-        </div>
-
-        {isUploading && (
-          <div className="relative flex items-center gap-2 text-xs text-slate-500">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Uploading document…
-          </div>
-        )}
-      </div>
-    );
-  };
+    tone?: import('@/components/ai/SectionAiDocumentUploader').SectionAiUploaderTone;
+  }) => (
+    <SectionAiDocumentUploader
+      title={title}
+      description={description}
+      buttonLabel={buttonLabel}
+      uploadLabel={uploadLabel}
+      compact={compact}
+      tone={tone}
+      disabled={isAnyAIActionRunning}
+      isUploading={uploadingScope === scope}
+      isReading={aiLoadingScope === scope}
+      uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
+      onAutofill={onAutofill}
+    />
+  );
 
   if (!show11A) return null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 sm:space-y-5">
+      {multiItemAutofill.dialog}
       {(aiNotice || aiError) && (
         <div className="space-y-3">
           {aiNotice && (
@@ -627,25 +502,22 @@ export default function Section11MilitaryService({
         )}
       >
         <Card className="overflow-hidden border-slate-200/80 shadow-sm">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-indigo-50/60 px-5 py-5 sm:px-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
-                  <ShieldCheck className="h-5 w-5 text-indigo-600" />
-                  11A. {SECTION_11A.title}
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 via-white to-indigo-50/60 px-4 py-4 sm:px-6 sm:py-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <CardTitle className="flex min-w-0 items-center gap-2 text-lg tracking-tight text-slate-900 sm:text-xl">
+                  <ShieldCheck className="h-5 w-5 shrink-0 text-indigo-600" />
+                  <span className="min-w-0">11A. {SECTION_11A.title}</span>
                 </CardTitle>
-                <p className="max-w-2xl text-sm leading-6 text-slate-600">
-                  {SUBSECTION_SUBTITLE}
-                </p>
               </div>
 
-              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+              <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
                 <VaultEncryptedBadge />
                 <Button
                   type="button"
                   size="sm"
                   onClick={addServicePeriod}
-                  className="rounded-xl"
+                  className="w-auto rounded-xl"
                 >
                   <Plus className="mr-1 h-4 w-4" />
                   Add {SECTION_11A.itemLabel}
@@ -654,33 +526,19 @@ export default function Section11MilitaryService({
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-8 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:p-6">
-            <VaultOverviewBox
-              label={SUBSECTION_OVERVIEW.label}
-              content={SUBSECTION_OVERVIEW.content}
-            />
-          {/* {renderUploader({
-            scope: 'full',
-            title: 'Upload document for multiple military service records',
-            description:
-              'Use this if one document contains one or more military service records, DD-214 details, VA benefit letters, discharge papers, deployments, awards, or veteran contacts. AI will add extracted service records as new cards.',
-            buttonLabel: 'Extract Service Records',
-            onAutofill: () => handleAutofill('full'),
-          })} */}
-
+          <CardContent className="space-y-5 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.05),transparent_36%)] p-4 sm:space-y-6 sm:p-6">
           {servicePeriods.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center sm:py-8">
+              <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100">
                 <ShieldCheck className="h-5 w-5 text-slate-500" />
               </div>
 
-              <p className="font-medium text-slate-800">
-                No military service records added yet.
+              <p className="text-sm font-medium text-slate-800 sm:text-base">
+                No service periods yet
               </p>
 
               <p className="mt-1 text-sm text-slate-500">
-                Click “Add Service Period” to create a blank card, or upload a
-                military service document above and let AI create the card.
+                Tap Add Service Period or upload a DD-214 on a card to autofill.
               </p>
             </div>
           )}
@@ -696,34 +554,27 @@ export default function Section11MilitaryService({
                 id={topicProps.id}
                 className={topicProps.className}
               >
-                <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <strong className="text-slate-900">{itemLabel}</strong>
-
-                    <p className="text-sm text-slate-500">
-                      Upload a DD-214, discharge paper, VA benefit letter,
-                      service record, award certificate, veteran ID, or burial
-                      benefit document to autofill only this card.
-                    </p>
-                  </div>
+                <div className="flex flex-col gap-3 border-b bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4">
+                  <strong className="min-w-0 text-slate-900">{itemLabel}</strong>
 
                   <Button
                     type="button"
                     size="sm"
                     variant="destructive"
                     onClick={() => removeServicePeriod(index)}
-                    className="rounded-xl"
+                    className="w-auto shrink-0 self-start rounded-xl sm:self-auto"
                   >
                     <Minus className="mr-1 h-4 w-4" />
                     Remove
                   </Button>
                 </div>
 
-                <CardContent className="space-y-6 p-5">
+                <CardContent className="space-y-5 p-4 sm:space-y-6 sm:p-5">
                   {renderUploader({
                     scope: itemScope,
-                    title: `Upload document for ${itemLabel}`,
-                    description: `This will autofill only ${itemLabel}. It will not overwrite other military service cards.`,
+                    title: `Upload for ${itemLabel}`,
+                    description:
+                      'DD-214, discharge papers, VA letters, or service records — fills this card only.',
                     buttonLabel: `Auto-fill ${itemLabel}`,
                     compact: true,
                     onAutofill: () => handleAutofill(itemScope, index),

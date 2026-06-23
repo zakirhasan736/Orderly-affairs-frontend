@@ -5,7 +5,7 @@ import { Button } from '@common/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@common/ui/select';
 import { RadioGroup, RadioGroupItem } from '@common/ui/radio-group';
 import { Label } from '@common/ui/label';
-import { Upload, Camera } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import { DatePicker } from './DatePicker';
 // Using built-in date formatting instead of date-fns for simplicity
 
@@ -27,11 +27,6 @@ export function FormField({ label, type, value, onChange, options = [], placehol
     if (file) {
       onChange(file.name);
     }
-  };
-
-  const handleCameraCapture = () => {
-    // In a real app, this would open camera
-    onChange('Camera capture - ' + new Date().toLocaleTimeString());
   };
 
   const renderField = () => {
@@ -71,7 +66,7 @@ export function FormField({ label, type, value, onChange, options = [], placehol
             <SelectTrigger className="w-full">
               <SelectValue placeholder={placeholder || 'Select an option'} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="z-[200] max-h-[min(60dvh,320px)]">
               {options.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
@@ -96,26 +91,15 @@ export function FormField({ label, type, value, onChange, options = [], placehol
       case 'upload':
         return (
           <div className="space-y-2">
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex-1"
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                Upload File
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleCameraCapture}
-                className="flex-1"
-              >
-                <Camera className="mr-2 h-4 w-4" />
-                Camera
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full sm:w-auto"
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Upload File
+            </Button>
             <input
               ref={fileInputRef}
               type="file"

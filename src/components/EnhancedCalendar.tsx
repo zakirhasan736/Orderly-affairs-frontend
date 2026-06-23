@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Calendar } from '@common/ui/calendar';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@common/ui/select';
 import { Button } from '@common/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { cn } from '@common/ui/utils';
 
 interface EnhancedCalendarProps {
   mode?: 'single';
@@ -16,7 +16,19 @@ function toDateKey(date?: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-export function EnhancedCalendar({ mode = 'single', selected, onSelect, className }: EnhancedCalendarProps) {
+const nativeSelectClass = cn(
+  'h-10 min-h-10 min-w-0 flex-1 rounded-md border border-input bg-white px-2 text-sm text-foreground',
+  'touch-manipulation cursor-pointer appearance-auto',
+  'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none',
+  'dark:bg-input/30',
+);
+
+export function EnhancedCalendar({
+  mode = 'single',
+  selected,
+  onSelect,
+  className,
+}: EnhancedCalendarProps) {
   const initialDate = selected || new Date();
   const [month, setMonth] = useState(initialDate.getMonth());
   const [year, setYear] = useState(initialDate.getFullYear());
@@ -30,11 +42,24 @@ export function EnhancedCalendar({ mode = 'single', selected, onSelect, classNam
   }, [selectedKey, selected]);
 
   const currentYear = new Date().getFullYear();
-  const yearOptions = Array.from({ length: currentYear - 1900 + 11 }, (_, i) => 1900 + i).reverse();
-  
+  const yearOptions = Array.from(
+    { length: currentYear - 1900 + 11 },
+    (_, i) => 1900 + i,
+  ).reverse();
+
   const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
 
   const handleMonthChange = (newMonth: string) => {
@@ -78,7 +103,10 @@ export function EnhancedCalendar({ mode = 'single', selected, onSelect, classNam
 
   return (
     <div
-      className={`enhanced-calendar-popover datepicker-calendar-popup rounded-2xl border bg-background p-4 shadow-lg ${className || ''}`}
+      className={cn(
+        'enhanced-calendar-popover datepicker-calendar-popup rounded-2xl border bg-background p-4 shadow-lg',
+        className,
+      )}
     >
       <div className="enhanced-calendar-header mb-4 flex items-center gap-2">
         <Button
@@ -86,37 +114,38 @@ export function EnhancedCalendar({ mode = 'single', selected, onSelect, classNam
           variant="outline"
           size="sm"
           onClick={handlePreviousMonth}
-          className="h-8 w-8 shrink-0 p-0"
+          className="h-10 w-10 shrink-0 p-0 touch-manipulation"
+          aria-label="Previous month"
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
 
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <Select value={month.toString()} onValueChange={handleMonthChange}>
-            <SelectTrigger className="h-8 min-w-0 flex-1 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {monthNames.map((monthName, index) => (
-                <SelectItem key={index} value={index.toString()}>
-                  {monthName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <select
+            aria-label="Select month"
+            value={month.toString()}
+            onChange={event => handleMonthChange(event.target.value)}
+            className={nativeSelectClass}
+          >
+            {monthNames.map((monthName, index) => (
+              <option key={monthName} value={index.toString()}>
+                {monthName}
+              </option>
+            ))}
+          </select>
 
-          <Select value={year.toString()} onValueChange={handleYearChange}>
-            <SelectTrigger className="h-8 w-24 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="max-h-60">
-              {yearOptions.map(yearOption => (
-                <SelectItem key={yearOption} value={yearOption.toString()}>
-                  {yearOption}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <select
+            aria-label="Select year"
+            value={year.toString()}
+            onChange={event => handleYearChange(event.target.value)}
+            className={cn(nativeSelectClass, 'w-24 shrink-0')}
+          >
+            {yearOptions.map(yearOption => (
+              <option key={yearOption} value={yearOption.toString()}>
+                {yearOption}
+              </option>
+            ))}
+          </select>
         </div>
 
         <Button
@@ -124,7 +153,8 @@ export function EnhancedCalendar({ mode = 'single', selected, onSelect, classNam
           variant="outline"
           size="sm"
           onClick={handleNextMonth}
-          className="h-8 w-8 shrink-0 p-0"
+          className="h-10 w-10 shrink-0 p-0 touch-manipulation"
+          aria-label="Next month"
         >
           <ChevronRight className="h-4 w-4" />
         </Button>
@@ -143,6 +173,8 @@ export function EnhancedCalendar({ mode = 'single', selected, onSelect, classNam
         classNames={{
           nav_button: 'hidden',
           caption: 'hidden',
+          day_button:
+            'mx-auto flex min-h-11 min-w-11 items-center justify-center rounded-xl p-0 text-sm font-medium touch-manipulation',
         }}
       />
 
@@ -157,7 +189,7 @@ export function EnhancedCalendar({ mode = 'single', selected, onSelect, classNam
             setYear(today.getFullYear());
             handleSelect(today);
           }}
-          className="h-7 px-2 text-xs"
+          className="h-10 min-h-10 px-3 text-xs touch-manipulation"
         >
           Today
         </Button>
@@ -166,7 +198,7 @@ export function EnhancedCalendar({ mode = 'single', selected, onSelect, classNam
           variant="ghost"
           size="sm"
           onClick={() => onSelect(undefined)}
-          className="h-7 px-2 text-xs text-muted-foreground"
+          className="h-10 min-h-10 px-3 text-xs text-muted-foreground touch-manipulation"
         >
           Clear
         </Button>

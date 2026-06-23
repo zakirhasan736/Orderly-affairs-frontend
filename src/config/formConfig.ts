@@ -1759,6 +1759,7 @@ export const formConfig: FormConfig = {
                   key: 'account_type',
                   label: 'Account Type',
                   type: 'Dropdown',
+                  placeholder: 'Select what kind of online account this is',
                   options: [
                     'Social Media',
                     'Email',
@@ -1772,14 +1773,34 @@ export const formConfig: FormConfig = {
                     'Utilities',
                     'Other',
                   ],
-                  helperText: 'Category of online account',
+                  optionLabels: {
+                    'Social Media':
+                      'Social Media — Facebook, Instagram, LinkedIn, X…',
+                    Email: 'Email — Gmail, Outlook, Yahoo, iCloud…',
+                    Banking: 'Banking — Online banking login portals',
+                    Investment: 'Investment — Brokerage or trading sites',
+                    Shopping: 'Shopping — Amazon, eBay, retail stores…',
+                    Streaming: 'Streaming — Netflix, Spotify, YouTube…',
+                    'Cloud Storage':
+                      'Cloud Storage — Google Drive, Dropbox, iCloud…',
+                    'Work/Professional':
+                      'Work / Professional — Employer or business portals',
+                    Government: 'Government — IRS, DMV, benefits portals…',
+                    Utilities:
+                      'Utilities — Electric, gas, internet provider…',
+                    Other: 'Other — Describe the type in the field below',
+                  },
+                  helperText:
+                    'Start here: choose the category that best matches this login. Select Other if none fit — a text field will appear so you can describe it.',
                 },
                 {
                   key: 'account_type_other',
-                  label: 'Please specify other account type',
+                  label: 'Specify account type',
                   type: 'TextInput',
+                  placeholder:
+                    'e.g., Gaming (Steam), Password manager (1Password), News subscription',
                   helperText:
-                    'Please describe the specific type of online account',
+                    'Required when you choose Other — helps your family understand what this account is for.',
                   conditionalDisplay: { field: 'account_type', value: 'Other' },
                 },
                 {

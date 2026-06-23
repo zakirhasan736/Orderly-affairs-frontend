@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -21,7 +21,6 @@ import {
   Mail,
   ScrollText,
 } from 'lucide-react';
-import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
 import {
   type FieldGroup,
@@ -34,15 +33,81 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
+import {
+  type UploadedAIFile,
+  validateAiDocumentFile,
+} from '@/utils/aiDocumentUploadUi';
 import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
+
+const ACCOUNT_TYPE_OPTION_LABELS: Record<string, string> = {
+  'Social Media': 'Social Media — Facebook, Instagram, LinkedIn, X…',
+  Email: 'Email — Gmail, Outlook, Yahoo, iCloud…',
+  Banking: 'Banking — Online banking login portals',
+  Investment: 'Investment — Brokerage or trading sites',
+  Shopping: 'Shopping — Amazon, eBay, retail stores…',
+  Streaming: 'Streaming — Netflix, Spotify, YouTube…',
+  'Cloud Storage': 'Cloud Storage — Google Drive, Dropbox, iCloud…',
+  'Work/Professional': 'Work / Professional — Employer or business portals',
+  Government: 'Government — IRS, DMV, benefits portals…',
+  Utilities: 'Utilities — Electric, gas, internet provider…',
+  Other: 'Other — Describe the type in the field below',
+};
+
+const ACCOUNT_TYPE_HINTS: Record<
+  string,
+  { description: string; examples: string[] }
+> = {
+  'Social Media': {
+    description: 'Profiles and posts your family may want to memorialize or close.',
+    examples: ['Facebook', 'Instagram', 'LinkedIn', 'X (Twitter)', 'TikTok'],
+  },
+  Email: {
+    description: 'Often the recovery hub for other accounts — include login and recovery details.',
+    examples: ['Gmail', 'Outlook', 'Yahoo Mail', 'Proton Mail'],
+  },
+  Banking: {
+    description: 'Online access to bank accounts (not the account numbers in Section 12).',
+    examples: ['Chase.com', 'Bank of America online', 'Credit union portal'],
+  },
+  Investment: {
+    description: 'Brokerage, retirement, or crypto exchange logins.',
+    examples: ['Fidelity', 'Vanguard', 'Robinhood', 'Coinbase'],
+  },
+  Shopping: {
+    description: 'Retail sites where you shop or store payment methods.',
+    examples: ['Amazon', 'eBay', 'Walmart', 'Etsy'],
+  },
+  Streaming: {
+    description: 'Subscriptions for video, music, or entertainment.',
+    examples: ['Netflix', 'Spotify', 'Hulu', 'Disney+'],
+  },
+  'Cloud Storage': {
+    description: 'Where photos, documents, or backups are stored online.',
+    examples: ['Google Drive', 'Dropbox', 'OneDrive', 'iCloud'],
+  },
+  'Work/Professional': {
+    description: 'Employer systems, freelance platforms, or business tools.',
+    examples: ['Slack', 'Microsoft 365 work account', 'Upwork', 'Company VPN'],
+  },
+  Government: {
+    description: 'Federal, state, or local government portals.',
+    examples: ['IRS', 'Social Security', 'DMV', 'Medicare'],
+  },
+  Utilities: {
+    description: 'Bills and service accounts for home utilities.',
+    examples: ['Electric company', 'Gas provider', 'Internet / cable', 'Water'],
+  },
+};
 
 const SECTION_13A = {
   subsectionId: '13A',
@@ -53,6 +118,7 @@ const SECTION_13A = {
       key: 'account_type',
       label: 'Account Type',
       type: 'Dropdown',
+      placeholder: 'Select what kind of online account this is',
       options: [
         'Social Media',
         'Email',
@@ -66,13 +132,18 @@ const SECTION_13A = {
         'Utilities',
         'Other',
       ],
-      helperText: 'Category of online account',
+      optionLabels: ACCOUNT_TYPE_OPTION_LABELS,
+      helperText:
+        'Start here: choose the category that best matches this login. Select Other if none fit — a text field will appear so you can describe it.',
     },
     {
       key: 'account_type_other',
-      label: 'Please specify other account type',
+      label: 'Specify account type',
       type: 'TextInput',
-      helperText: 'Please describe the specific type of online account',
+      placeholder:
+        'e.g., Gaming (Steam), Password manager (1Password), News subscription',
+      helperText:
+        'Required when you choose Other — helps your family understand what this account is for.',
       conditionalDisplay: { field: 'account_type', value: 'Other' },
     },
     {
@@ -150,19 +221,13 @@ const FIELD_MAP_13A = buildFieldMap(SECTION_13A.fields);
 const SECTION_13A_GROUPS: FieldGroup[] = [
   {
     key: 'account_identity',
-    title: 'Account Identity',
-    subtitle: 'Account type, service name, and login credentials',
+    title: 'Login Details',
+    subtitle: 'Service name, username, and password after you choose the account type above',
     icon: Globe,
     accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
     iconWrap: 'bg-violet-500/10 text-violet-600',
     layout: 'grid',
-    fieldKeys: [
-      'account_type',
-      'account_type_other',
-      'service_name',
-      'account_username',
-      'account_password',
-    ],
+    fieldKeys: ['service_name', 'account_username', 'account_password'],
   },
   {
     key: 'contact_recovery',
@@ -202,13 +267,71 @@ const SECTION_13A_GROUPS: FieldGroup[] = [
 ];
 
 const SUBSECTION_OVERVIEW = {
-  label: 'Online Accounts Overview',
+  label: 'How to add online accounts',
   content:
-    'Store usernames, passwords, recovery info, and closure instructions for your online accounts so your family can access or close them. Add one card per account.',
+    'Add one card per website or app login. First choose an Account Type (or Other and describe it), then enter the service name, username, password, and recovery details. Your family can use this to access or close accounts when needed.',
 };
 
 const SUBSECTION_SUBTITLE =
-  'Add each online account with grouped identity, recovery, and closure details in a mobile-friendly layout.';
+  'Choose an account type first, then fill in login and recovery details — one card per website or app.';
+
+const isAccountFieldVisible = (field: { conditionalDisplay?: { field: string; value: string } }, formData: Record<string, unknown>) => {
+  if (!field.conditionalDisplay) return true;
+  return formData[field.conditionalDisplay.field] === field.conditionalDisplay.value;
+};
+
+function AccountTypeGuidance({ accountType }: { accountType?: string }) {
+  if (!accountType) {
+    return (
+      <div
+        className="rounded-xl border border-amber-200/90 bg-amber-50/90 p-3.5 text-sm leading-relaxed text-amber-950"
+        role="status"
+      >
+        <p className="font-medium">Choose an account type to continue</p>
+        <p className="mt-1 text-amber-900/90">
+          Open the dropdown above and pick the category that best describes this
+          login. If nothing fits, select{' '}
+          <span className="font-medium">Other</span> — a text field will appear
+          so you can name the type yourself.
+        </p>
+      </div>
+    );
+  }
+
+  if (accountType === 'Other') {
+    return (
+      <div
+        className="rounded-xl border border-violet-200 bg-violet-50/90 p-3.5 text-sm leading-relaxed text-violet-950"
+        role="status"
+      >
+        <p className="font-medium">You selected Other</p>
+        <p className="mt-1 text-violet-900/90">
+          Use the <span className="font-medium">Specify account type</span> field
+          below to describe this login (for example: Gaming, Password manager, or
+          News subscription).
+        </p>
+      </div>
+    );
+  }
+
+  const hint = ACCOUNT_TYPE_HINTS[accountType];
+  if (!hint) return null;
+
+  return (
+    <div
+      className="rounded-xl border border-slate-200 bg-slate-50/90 p-3.5 text-sm leading-relaxed text-slate-700"
+      role="status"
+    >
+      <p>
+        <span className="font-medium text-slate-900">{accountType}:</span>{' '}
+        {hint.description}
+      </p>
+      <p className="mt-1.5 text-xs text-slate-500">
+        Examples: {hint.examples.join(' · ')}
+      </p>
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /* TYPES                                                              */
@@ -223,29 +346,7 @@ interface Props {
 
 type UploadScope = 'full' | `account:${number}`;
 
-type UploadedAIFile = {
-  file_id: string;
-  mime_type: string;
-  expires_at?: string;
-};
 
-const ALLOWED_UPLOAD_TYPES = [
-  'application/pdf',
-  'text/plain',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-];
-
-const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
-
-const getReadableFileType = (mimeType?: string) => {
-  if (!mimeType) return 'Document';
-  if (mimeType === 'application/pdf') return 'PDF';
-  if (mimeType === 'text/plain') return 'Text';
-  if (mimeType.includes('image')) return 'Image';
-  return mimeType;
-};
 
 const createRowId = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -281,6 +382,8 @@ export default function Section13PasswordsOnlineAccounts({
     full: null,
   });
 
+  const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
+
   const accounts: any[] = Array.isArray(data['13A']) ? data['13A'] : [];
   const show13A = !activeSubsection || activeSubsection === '13A';
 
@@ -309,13 +412,17 @@ export default function Section13PasswordsOnlineAccounts({
 
   const updateAccount = (index: number, key: string, value: any) => {
     const next = [...accounts];
-
-    next[index] = {
+    const current = {
       ...(next[index] || {}),
-      [key]: value,
       __rowId: next[index]?.__rowId || createRowId(),
     };
 
+    if (key === 'account_type' && value !== 'Other') {
+      current.account_type_other = '';
+    }
+
+    current[key] = value;
+    next[index] = current;
     updateAccounts(next);
   };
 
@@ -323,8 +430,17 @@ export default function Section13PasswordsOnlineAccounts({
     updateAccounts(accounts.filter((_, itemIndex) => itemIndex !== index));
   };
 
+  const multiItemAutofill = useAiMultiItemAutofill({
+    itemLabel: SECTION_13A.itemLabel,
+    createEmpty: createEmptyAccount,
+    getCurrentItems: () => accounts,
+    setItems: updateAccounts,
+    setAiNotice,
+    describeFields: ['account_name', 'website', 'platform'],
+  });
+
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return uploadedFiles[scope] || null;
+    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
   };
 
   const cleanPatchObject = (patch: any) => {
@@ -373,23 +489,17 @@ export default function Section13PasswordsOnlineAccounts({
     return [];
   };
 
-  const handleDocumentUpload = async (
-    file?: File | null,
-    scope: UploadScope = 'full',
-  ) => {
+  const handleDocumentUpload = async (file?: File | null,
+    scope: UploadScope = 'full', runAutofill?: () => void | Promise<void>) => {
     try {
       if (!file) return;
 
       setAiError('');
       setAiNotice('');
 
-      if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
-        setAiError('Upload PDF, TXT, PNG, JPG, JPEG, or WEBP only.');
-        return;
-      }
-
-      if (file.size > MAX_UPLOAD_SIZE) {
-        setAiError('File too large. Max 15MB.');
+      const validationError = validateAiDocumentFile(file);
+      if (validationError) {
+        setAiError(validationError);
         return;
       }
 
@@ -397,16 +507,24 @@ export default function Section13PasswordsOnlineAccounts({
 
       const uploaded = await uploadAIDocument(file);
 
+      const uploadedRecord: UploadedAIFile = {
+        file_id: uploaded.file_id,
+        mime_type: uploaded.mime_type,
+        expires_at: uploaded.expires_at,
+      };
+
+      latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
         ...prev,
- [scope]: {
-    file_id: uploaded.file_id,
-    mime_type: uploaded.mime_type,
-    expires_at: uploaded.expires_at,
-  },
+        [scope]: uploadedRecord,
       }));
 
-      setAiNotice('Document uploaded. You can now use AI autofill.');
+      setUploadingScope(null);
+      setAiNotice('Document uploaded. Running AI autofill…');
+
+      if (runAutofill) {
+        await runAutofill();
+      }
     } catch (err: any) {
       setAiError(err?.message || 'Document upload failed');
     } finally {
@@ -439,39 +557,15 @@ export default function Section13PasswordsOnlineAccounts({
       const patch = json?.result?.patch ?? {};
       const extractedAccounts = extractAccountArrayFromPatch(patch);
 
-      if (extractedAccounts.length === 0) {
-        setAiError(
-          'AI could not find online account information in this document.',
-        );
+      if (
+        !multiItemAutofill.processExtraction(extractedAccounts, accountIndex, {
+          setAiError,
+          setAiNotice,
+          emptyError: 'AI could not find online account information in this document.',
+        })
+      ) {
         return;
       }
-
-      if (typeof accountIndex === 'number') {
-        const firstAccount = cleanPatchObject(extractedAccounts[0]);
-        const next = [...accounts];
-
-        next[accountIndex] = {
-          ...(next[accountIndex] || createEmptyAccount()),
-          ...firstAccount,
-          __rowId: next[accountIndex]?.__rowId || createRowId(),
-        };
-
-        updateAccounts(next);
-
-        setAiNotice(
-          `AI filled ${SECTION_13A.itemLabel} #${accountIndex + 1}. Please review the fields.`,
-        );
-
-        return;
-      }
-
-      updateAccounts([...accounts, ...extractedAccounts]);
-
-      setAiNotice(
-        extractedAccounts.length === 1
-          ? 'AI added 1 online account. Please review the fields.'
-          : `AI added ${extractedAccounts.length} online accounts. Please review the fields.`,
-      );
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');
     } finally {
@@ -479,133 +573,46 @@ export default function Section13PasswordsOnlineAccounts({
     }
   };
 
-  const renderUploader = ({
+    const renderUploader = ({
     scope,
     title,
     description,
     buttonLabel = 'Auto-fill',
+    uploadLabel,
     onAutofill,
     compact = false,
+    tone,
   }: {
     scope: UploadScope;
     title: string;
     description: string;
     buttonLabel?: string;
-    onAutofill: () => void;
+    uploadLabel?: string;
+    onAutofill: () => void | Promise<void>;
     compact?: boolean;
-  }) => {
-    const uploadedFile = getUploadedFileForScope(scope);
-    const isUploading = uploadingScope === scope;
-    const isReading = aiLoadingScope === scope;
-
-    return (
-      <div
-        className={[
-          'relative overflow-hidden rounded-2xl border border-dashed',
-          'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-violet-50/50',
-          'p-4 shadow-sm transition-all duration-200',
-          'hover:border-violet-300 hover:shadow-md',
-          compact ? 'space-y-3' : 'space-y-4',
-        ].join(' ')}
-      >
-        <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-violet-100/70 blur-2xl" />
-        <div className="pointer-events-none absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-fuchsia-100/70 blur-2xl" />
-
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              {isUploading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-violet-600" />
-              ) : uploadedFile ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              ) : (
-                <UploadCloud className="h-5 w-5 text-violet-600" />
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <p className="font-semibold text-slate-900">{title}</p>
-              <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
-                {description}
-              </p>
-            </div>
-          </div>
-
-          <Button
-            type="button"
-            size="sm"
-            onClick={onAutofill}
-            disabled={isAnyAIActionRunning || !uploadedFile}
-            className="shrink-0 rounded-xl"
-          >
-            {isReading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="mr-2 h-4 w-4" />
-            )}
-
-            {isReading ? 'Reading…' : buttonLabel}
-          </Button>
-        </div>
-
-        <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-          <label
-            className={[
-              'group flex cursor-pointer flex-col items-center justify-center gap-2',
-              'rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center',
-              'transition hover:border-violet-300 hover:bg-violet-50/50',
-              compact
-                ? 'md:flex-row md:justify-start md:py-3 md:text-left'
-                : '',
-              isAnyAIActionRunning ? 'pointer-events-none opacity-60' : '',
-            ].join(' ')}
-          >
-            <input
-              type="file"
-              className="sr-only"
-              accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp"
-              disabled={isAnyAIActionRunning}
-              onChange={event => {
-                const file = event.currentTarget.files?.[0] || null;
-                void handleDocumentUpload(file, scope);
-                event.currentTarget.value = '';
-              }}
-            />
-
-            <UploadCloud className="h-5 w-5 text-slate-500 group-hover:text-violet-600" />
-
-            <div>
-              <p className="text-sm font-medium text-slate-800">
-                Click to upload account document
-              </p>
-              <p className="text-xs text-slate-500">
-                PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB
-              </p>
-            </div>
-          </label>
-
-          {uploadedFile && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              <FileText className="h-4 w-4" />
-              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
-            </div>
-          )}
-        </div>
-
-        {isUploading && (
-          <div className="relative flex items-center gap-2 text-xs text-slate-500">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Uploading document…
-          </div>
-        )}
-      </div>
-    );
-  };
+    tone?: import('@/components/ai/SectionAiDocumentUploader').SectionAiUploaderTone;
+  }) => (
+    <SectionAiDocumentUploader
+      title={title}
+      description={description}
+      buttonLabel={buttonLabel}
+      uploadLabel={uploadLabel}
+      compact={compact}
+      tone={tone}
+      disabled={isAnyAIActionRunning}
+      isUploading={uploadingScope === scope}
+      isReading={aiLoadingScope === scope}
+      uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
+      onAutofill={onAutofill}
+    />
+  );
 
   if (!show13A) return null;
 
   return (
     <div className="space-y-8">
+      {multiItemAutofill.dialog}
       {(aiNotice || aiError) && (
         <div className="space-y-3">
           {aiNotice && (
@@ -629,25 +636,35 @@ export default function Section13PasswordsOnlineAccounts({
       >
         <Card className="overflow-hidden border-slate-200 shadow-sm">
           <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-violet-50/70">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <KeyRound className="h-5 w-5 text-violet-600" />
-                13A. {SECTION_13A.title}
-              </CardTitle>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2">
+                  <KeyRound className="h-5 w-5 text-violet-600" />
+                  13A. {SECTION_13A.title}
+                </CardTitle>
+                <p className="text-sm text-slate-600">{SUBSECTION_SUBTITLE}</p>
+              </div>
 
-              <Button
-                type="button"
-                size="sm"
-                onClick={addAccount}
-                className="rounded-xl"
-              >
-                <Plus className="mr-1 h-4 w-4" />
-                Add {SECTION_13A.itemLabel}
-              </Button>
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                <VaultEncryptedBadge />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={addAccount}
+                  className="rounded-xl"
+                >
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add {SECTION_13A.itemLabel}
+                </Button>
+              </div>
             </div>
           </CardHeader>
 
           <CardContent className="space-y-8 p-5">
+            <VaultOverviewBox
+              label={SUBSECTION_OVERVIEW.label}
+              content={SUBSECTION_OVERVIEW.content}
+            />
             {/* {renderUploader({
               scope: 'full',
               title: 'Upload document for multiple online accounts',
@@ -668,8 +685,9 @@ export default function Section13PasswordsOnlineAccounts({
                 </p>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Click “Add Online Account” to create a blank card, or upload
-                  an account document above and let AI create the card.
+                  Click “Add Online Account” to create a blank card. Start each
+                  card by choosing an <strong>Account Type</strong> from the
+                  dropdown.
                 </p>
               </div>
             )}
@@ -718,20 +736,70 @@ export default function Section13PasswordsOnlineAccounts({
                       onAutofill: () => handleAutofill(itemScope, index),
                     })}
 
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {SECTION_13A.fields.map(field => (
+                    <div className="rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-50/60 via-white to-white p-4 shadow-sm sm:p-5">
+                      <div className="mb-4 space-y-1">
+                        <p className="text-sm font-semibold text-slate-900">
+                          Step 1 — What kind of account is this?
+                        </p>
+                        <p className="text-xs leading-relaxed text-slate-500">
+                          Pick a category from the list. Choose{' '}
+                          <span className="font-medium text-slate-700">Other</span>{' '}
+                          if none match — you will get a field to describe the
+                          type yourself.
+                        </p>
+                      </div>
+
+                      <div className="space-y-4">
                         <DynamicFormField
-                          key={`${field.key}-${account.__rowId || index}`}
-                          field={field}
-                          value={account?.[field.key]}
+                          field={FIELD_MAP_13A.account_type}
+                          value={account?.account_type}
                           formData={account}
                           rowId={account.__rowId}
                           onChange={value =>
-                            updateAccount(index, field.key, value)
+                            updateAccount(index, 'account_type', value)
                           }
                         />
-                      ))}
+
+                        <AccountTypeGuidance accountType={account?.account_type} />
+
+                        {account?.account_type === 'Other' && (
+                          <DynamicFormField
+                            field={FIELD_MAP_13A.account_type_other}
+                            value={account?.account_type_other}
+                            formData={account}
+                            rowId={account.__rowId}
+                            onChange={value =>
+                              updateAccount(index, 'account_type_other', value)
+                            }
+                          />
+                        )}
+                      </div>
                     </div>
+
+                    <VaultGroupCards
+                      groups={SECTION_13A_GROUPS}
+                      fieldMap={FIELD_MAP_13A}
+                      renderField={fieldKey => {
+                        const field = FIELD_MAP_13A[fieldKey];
+                        if (!field || !isAccountFieldVisible(field, account)) {
+                          return null;
+                        }
+
+                        return (
+                          <DynamicFormField
+                            key={`${fieldKey}-${account.__rowId || index}`}
+                            field={field}
+                            value={account?.[fieldKey]}
+                            formData={account}
+                            rowId={account.__rowId}
+                            onChange={value =>
+                              updateAccount(index, fieldKey, value)
+                            }
+                            className="space-y-2"
+                          />
+                        );
+                      }}
+                    />
                   </CardContent>
                 </Card>
               );

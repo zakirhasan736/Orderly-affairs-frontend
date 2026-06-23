@@ -66,6 +66,7 @@ export interface NextKinAccessResponse {
     relationship?: string;
   };
   password_card_generated?: boolean;
+  master_password?: string | null;
   card_storage_location?: string | null;
   key_bag_location?: string | null;
   documents_bag_location?: string | null;

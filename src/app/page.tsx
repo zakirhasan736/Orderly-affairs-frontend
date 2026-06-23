@@ -69,6 +69,19 @@ type MFAStep =
 
 type OnboardingStep = MFAStep | 'plan_selection' | 'payment';
 
+type AuthLoadingAction =
+  | 'sign_in'
+  | 'forgot_password'
+  | 'request_reset'
+  | 'reset_password'
+  | 'mfa_method'
+  | 'send_email_code'
+  | 'login_mfa_email_send'
+  | 'start_sms'
+  | 'verify_mfa'
+  | 'verify_email'
+  | 'verify_sms';
+
 // ------------------------------
 // Validation helpers
 // ------------------------------
@@ -119,6 +132,22 @@ const persistAuthToken = (accessToken: string | undefined) => {
     sameSite: 'strict',
     path: '/',
   });
+};
+
+const goToDashboard = (router: ReturnType<typeof useRouter>) => {
+  router.replace('/dashboard');
+};
+
+const hasValidOwnerSession = () => {
+  const token = Cookies.get('auth_token');
+  if (!token) return false;
+
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload?.role === 'owner';
+  } catch {
+    return false;
+  }
 };
 
 const MFA_METHODS: MFAMethod[] = ['authenticator', 'email', 'sms'];
@@ -239,7 +268,7 @@ function PaymentForm({
       }).unwrap();
 
       // 4️⃣ Success → dashboard
-      router.push('/dashboard');
+      goToDashboard(router);
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'Payment failed. Please try again.'));
     } finally {
@@ -365,7 +394,28 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
 
   const [smsSent, setSmsSent] = useState(false);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<AuthLoadingAction | null>(
+    null,
+  );
+  const loadingActionRef = useRef<AuthLoadingAction | null>(null);
+  const isAuthLoading = (action: AuthLoadingAction) =>
+    loadingAction === action;
+  const isAuthBusy = loadingAction !== null;
+  const startAuthLoading = (action: AuthLoadingAction) => {
+    loadingActionRef.current = action;
+    setLoadingAction(action);
+  };
+  const stopAuthLoading = (action?: AuthLoadingAction) => {
+    if (action && loadingActionRef.current !== action) return;
+    loadingActionRef.current = null;
+    setLoadingAction(null);
+  };
+
+  useEffect(() => {
+    if (hasValidOwnerSession()) {
+      goToDashboard(router);
+    }
+  }, [router]);
 
   // OTP UX
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
@@ -392,7 +442,7 @@ const handleSendEmailCode = async () => {
   }
 
   setError('');
-  setLoading(true);
+  startAuthLoading('send_email_code');
 
   try {
     const res = await sendEmailOtp({
@@ -409,7 +459,7 @@ const handleSendEmailCode = async () => {
   } catch (err: unknown) {
     setError(getApiErrorMessage(err, 'Failed to send verification code'));
   } finally {
-    setLoading(false);
+    stopAuthLoading();
   }
 };
 
@@ -418,7 +468,7 @@ const handleSendEmailCode = async () => {
    setError('');
 
    if (email && isValidEmail(email)) {
-     setLoading(true);
+     startAuthLoading('forgot_password');
 
      try {
        await requestPasswordReset({ email }).unwrap();
@@ -428,7 +478,7 @@ const handleSendEmailCode = async () => {
      } catch (err: unknown) {
        setError(getApiErrorMessage(err, 'Failed to send reset code'));
      } finally {
-       setLoading(false);
+       stopAuthLoading();
      }
    } else {
      setStep('forgot_password');
@@ -437,7 +487,7 @@ const handleSendEmailCode = async () => {
 
  const handleRequestReset = async () => {
    setError('');
-   setLoading(true);
+   startAuthLoading('request_reset');
 
    try {
      await requestPasswordReset({ email: resetEmail }).unwrap();
@@ -447,7 +497,7 @@ const handleSendEmailCode = async () => {
    } catch (err: unknown) {
      setError(getApiErrorMessage(err, 'Failed to send reset code'));
    } finally {
-     setLoading(false);
+     stopAuthLoading();
    }
  };
 const handleResetPassword = async () => {
@@ -456,7 +506,7 @@ const handleResetPassword = async () => {
     return;
   }
 
-  setLoading(true);
+  startAuthLoading('reset_password');
 
   try {
     await resetPassword({
@@ -470,7 +520,7 @@ const handleResetPassword = async () => {
   } catch (err: unknown) {
     setError(getApiErrorMessage(err, 'Reset failed'));
   } finally {
-    setLoading(false);
+    stopAuthLoading();
   }
 };
 
@@ -508,7 +558,7 @@ const beginLinkedLoginMfa = async (
     }
 
     if (useLoginChallenge && challengeToken) {
-      setLoading(true);
+      startAuthLoading('login_mfa_email_send');
       try {
         const res = await startEmailMfa({
           email,
@@ -520,7 +570,7 @@ const beginLinkedLoginMfa = async (
         setVerificationSent(false);
         setError(getApiErrorMessage(err, 'Failed to send verification code'));
       } finally {
-        setLoading(false);
+        stopAuthLoading('login_mfa_email_send');
       }
       setStep('verifyEmail');
       return;
@@ -541,7 +591,7 @@ const beginLinkedLoginMfa = async (
     return;
   }
 
-  setLoading(true);
+  startAuthLoading('start_sms');
   try {
     const smsRes = await startSmsMfa({
       email,
@@ -558,7 +608,7 @@ const beginLinkedLoginMfa = async (
   } catch (err: unknown) {
     setError(getApiErrorMessage(err, 'Failed to send SMS code'));
   } finally {
-    setLoading(false);
+    stopAuthLoading();
   }
 };
 
@@ -646,7 +696,7 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
       return;
     }
 
-    setLoading(true);
+    startAuthLoading('sign_in');
 
     const res = await login({ email, password }).unwrap();
 
@@ -685,17 +735,17 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
 
     persistAuthToken(res.access_token);
 
-    router.push('/dashboard');
+    goToDashboard(router);
   } catch (err: unknown) {
     setError(getApiErrorMessage(err, 'Authentication failed'));
   } finally {
-    setLoading(false);
+    stopAuthLoading('sign_in');
   }
 };
 
 const handleMFAMethodSelection = async () => {
   setError('');
-  setLoading(true);
+  startAuthLoading('mfa_method');
 
   try {
     if (!selectedMFAMethod) {
@@ -898,13 +948,13 @@ const handleMFAMethodSelection = async () => {
 
     setError(detail);
   } finally {
-    setLoading(false);
+    stopAuthLoading('mfa_method');
   }
 };
 
 const verifyMfaCode = useCallback(async () => {
   setError('');
-  setLoading(true);
+  startAuthLoading('verify_mfa');
 
   try {
     if (!verifyTOTPCode(mfaCode)) {
@@ -925,15 +975,11 @@ const verifyMfaCode = useCallback(async () => {
 
     persistAuthToken(res.access_token);
 
-    if (isNewUser) {
-      setStep('plan_selection');
-    } else {
-      router.push('/dashboard');
-    }
+    goToDashboard(router);
   } catch (err: unknown) {
     setError(getApiErrorMessage(err, 'Invalid verification code'));
   } finally {
-    setLoading(false);
+    stopAuthLoading('verify_mfa');
   }
 }, [
   mfaCode,
@@ -942,7 +988,6 @@ const verifyMfaCode = useCallback(async () => {
   email,
   linkAuthenticator,
   mfaSecret,
-  isNewUser,
   router,
 ]);
 
@@ -959,7 +1004,7 @@ const verifyEmailOtpCode = useCallback(async () => {
     return;
   }
 
-  setLoading(true);
+  startAuthLoading('verify_email');
 
   try {
     const code = parseInt(emailCode);
@@ -975,11 +1020,7 @@ const verifyEmailOtpCode = useCallback(async () => {
 
     persistAuthToken(res.access_token);
 
-    if (isNewUser) {
-      setStep('plan_selection');
-    } else {
-      router.push('/dashboard');
-    }
+    goToDashboard(router);
   } catch (err: unknown) {
     const nextAttempts = attempts + 1;
     setAttempts(nextAttempts);
@@ -990,9 +1031,9 @@ const verifyEmailOtpCode = useCallback(async () => {
         : getApiErrorMessage(err, 'Verification failed'),
     );
   } finally {
-    setLoading(false);
+    stopAuthLoading('verify_email');
   }
-}, [emailCode, verifyEmailCode, email, isNewUser, router, attempts]);
+}, [emailCode, verifyEmailCode, email, router, attempts]);
 
 const handleVerifyEmail = async (e: React.FormEvent) => {
   e.preventDefault();
@@ -1014,7 +1055,7 @@ const verifySmsOtpCode = useCallback(async () => {
     return;
   }
 
-  setLoading(true);
+  startAuthLoading('verify_sms');
 
   try {
     const res = await verifySmsOtp({
@@ -1027,11 +1068,7 @@ const verifySmsOtpCode = useCallback(async () => {
 
     persistAuthToken(res.access_token);
 
-    if (isNewUser) {
-      setStep('plan_selection');
-    } else {
-      router.push('/dashboard');
-    }
+    goToDashboard(router);
   } catch (err: unknown) {
     const nextAttempts = attempts + 1;
     setAttempts(nextAttempts);
@@ -1042,9 +1079,9 @@ const verifySmsOtpCode = useCallback(async () => {
         : getApiErrorMessage(err, 'Invalid SMS code'),
     );
   } finally {
-    setLoading(false);
+    stopAuthLoading('verify_sms');
   }
-}, [otp, attempts, verifySmsOtp, email, isNewUser, router]);
+}, [otp, attempts, verifySmsOtp, email, router]);
 
 const handleVerifySms = async (e: React.FormEvent) => {
   e.preventDefault();
@@ -1059,7 +1096,7 @@ useEffect(() => {
     return;
   }
 
-  if (loading) return;
+  if (isAuthBusy) return;
 
   const verifyKey = [
     step,
@@ -1072,7 +1109,7 @@ useEffect(() => {
 
   autoMfaVerifyKey.current = verifyKey;
   void verifyMfaCode();
-}, [step, mfaCode, loading, hasLinkedAuthenticator, mfaSecret, verifyMfaCode]);
+}, [step, mfaCode, loadingAction, hasLinkedAuthenticator, mfaSecret, verifyMfaCode]);
 
 useEffect(() => {
   if (
@@ -1085,7 +1122,7 @@ useEffect(() => {
     return;
   }
 
-  if (loading) return;
+  if (isAuthBusy) return;
 
   const verifyKey = [
     email,
@@ -1101,7 +1138,7 @@ useEffect(() => {
   step,
   emailCode,
   verificationSent,
-  loading,
+  loadingAction,
   email,
   isNewUser,
   verifyEmailOtpCode,
@@ -1147,7 +1184,7 @@ useEffect(() => {
     return;
   }
 
-  if (loading) return;
+  if (isAuthBusy) return;
 
   const verifyKey = [email, smsCode, attempts].join(':');
 
@@ -1160,7 +1197,7 @@ useEffect(() => {
   otp,
   smsSent,
   attempts,
-  loading,
+  loadingAction,
   email,
   verifySmsOtpCode,
 ]);
@@ -1425,9 +1462,9 @@ const backButtonLabel =
                           variant="link"
                           className="text-xs cursor-pointer flex items-center gap-2"
                           onClick={handleForgotPasswordClick}
-                          disabled={loading}
+                          disabled={isAuthBusy}
                         >
-                          {loading && (
+                          {isAuthLoading('forgot_password') && (
                             <span className="h-3 w-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></span>
                           )}
                           Forgot password?
@@ -1547,8 +1584,11 @@ const backButtonLabel =
                       </>
                     )}
 
-                    <Button className="w-full btn-primary" disabled={loading}>
-                      {loading
+                    <Button
+                      className="w-full btn-primary"
+                      disabled={isAuthBusy}
+                    >
+                      {isAuthLoading('sign_in')
                         ? 'Please wait…'
                         : isNewUser
                           ? 'Create Account'
@@ -1650,12 +1690,12 @@ const backButtonLabel =
                       onClick={handleMFAMethodSelection}
                       className="w-full btn-primary"
                       disabled={
-                        loading ||
+                        isAuthBusy ||
                         (showSmsPhoneInput && !captchaToken) ||
                         (showEmailCaptcha && !captchaToken)
                       }
                     >
-                      {loading
+                      {isAuthLoading('mfa_method')
                         ? isLoginMfaChallenge
                           ? 'Starting...'
                           : 'Setting up...'
@@ -1714,9 +1754,12 @@ const backButtonLabel =
                           <Button
                             type="submit"
                             className="w-full btn-primary"
-                            disabled={loading || mfaCode.length !== 6}
+                            disabled={
+                              isAuthLoading('verify_mfa') ||
+                              mfaCode.length !== 6
+                            }
                           >
-                            {loading
+                            {isAuthLoading('verify_mfa')
                               ? 'Verifying...'
                               : 'Verify & Complete Setup'}
                           </Button>
@@ -1748,9 +1791,12 @@ const backButtonLabel =
                           <Button
                             type="submit"
                             className="w-full btn-primary"
-                            disabled={loading || mfaCode.length !== 6}
+                            disabled={
+                              isAuthLoading('verify_mfa') ||
+                              mfaCode.length !== 6
+                            }
                           >
-                            {loading
+                            {isAuthLoading('verify_mfa')
                               ? 'Verifying...'
                               : 'Verify & Complete Setup'}
                           </Button>
@@ -1784,7 +1830,8 @@ const backButtonLabel =
                     </Alert>
 
                     {!verificationSent ? (
-                      isLoginMfaChallenge && loading ? (
+                      isLoginMfaChallenge &&
+                      isAuthLoading('login_mfa_email_send') ? (
                         <div className="flex items-center justify-center py-4">
                           <span className="h-5 w-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></span>
                           <span className="ml-2 text-sm text-muted-foreground">
@@ -1797,9 +1844,13 @@ const backButtonLabel =
                           <Button
                             onClick={handleSendEmailCode}
                             className="w-full btn-primary"
-                            disabled={loading || !captchaToken}
+                            disabled={
+                              isAuthBusy || !captchaToken
+                            }
                           >
-                            {loading ? 'Sending…' : 'Send Verification Code'}
+                            {isAuthLoading('send_email_code')
+                              ? 'Sending…'
+                              : 'Send Verification Code'}
                           </Button>
                         </div>
                       )
@@ -1822,12 +1873,14 @@ const backButtonLabel =
                           type="submit"
                           className="w-full btn-primary"
                           disabled={
-                            loading ||
+                            isAuthLoading('verify_email') ||
                             emailCode.length !== 6 ||
                             attempts >= MAX_ATTEMPTS
                           }
                         >
-                          {loading ? 'Verifying…' : 'Verify & Continue'}
+                          {isAuthLoading('verify_email')
+                            ? 'Verifying…'
+                            : 'Verify & Continue'}
                         </Button>
                       </form>
                     )}
@@ -1886,19 +1939,23 @@ const backButtonLabel =
                           );
                           setOtp(next);
                         }}
-                        disabled={loading || attempts >= MAX_ATTEMPTS}
+                        disabled={
+                          isAuthLoading('verify_sms') || attempts >= MAX_ATTEMPTS
+                        }
                       />
 
                       <Button
                         type="submit"
                         className="w-full btn-primary"
                         disabled={
-                          loading ||
+                          isAuthLoading('verify_sms') ||
                           otp.join('').length !== 6 ||
                           attempts >= MAX_ATTEMPTS
                         }
                       >
-                        {loading ? 'Verifying…' : 'Verify & Continue'}
+                        {isAuthLoading('verify_sms')
+                          ? 'Verifying…'
+                          : 'Verify & Continue'}
                       </Button>
                     </form>
 
@@ -1945,13 +2002,17 @@ const backButtonLabel =
                     <Button
                       className="w-full btn-primary flex items-center justify-center"
                       onClick={handleRequestReset}
-                      disabled={loading || !resetEmail}
+                      disabled={isAuthBusy || !resetEmail}
                     >
-                      {loading && (
+                      {isAuthLoading('request_reset') && (
                         <span className="mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                       )}
 
-                      {resetEmailSent ? 'Code Sent' : 'Sending Reset Code...'}
+                      {isAuthLoading('request_reset')
+                        ? 'Sending Reset Code...'
+                        : resetEmailSent
+                          ? 'Code Sent'
+                          : 'Send Reset Code'}
                     </Button>
 
                     {resetEmailSent && (
@@ -2040,13 +2101,15 @@ const backButtonLabel =
                       className="w-full btn-primary"
                       onClick={handleResetPassword}
                       disabled={
-                        loading ||
+                        isAuthBusy ||
                         !resetOtp ||
                         !newPassword ||
                         newPassword !== confirmPassword
                       }
                     >
-                      {loading ? 'Resetting...' : 'Reset Password'}
+                      {isAuthLoading('reset_password')
+                        ? 'Resetting...'
+                        : 'Reset Password'}
                     </Button>
                   </div>
                 )}

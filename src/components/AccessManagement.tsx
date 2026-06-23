@@ -1,6 +1,14 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Button } from '@common/ui/button';
 import { Input } from '@common/ui/input';
@@ -30,13 +38,12 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  Bell,
   Check,
   CheckCircle,
   ChevronRight,
   Clock,
-  CreditCard,
   Eye,
+  EyeOff,
   FileText,
   KeyRound,
   Loader2,
@@ -69,6 +76,7 @@ import {
 
 import { PasswordCard } from './PasswordCard';
 import {
+  MOBILE_SHEET_FOOTER_CLASS,
   MOBILE_SHEET_SCROLL_PADDING,
   MobileBottomSheet,
   MobileSheetHandle,
@@ -110,50 +118,81 @@ const WIZARD_STEPS: { id: WizardStepId; label: string }[] = [
   { id: 'review', label: 'Review' },
 ];
 
-const HOW_ACCESS_STEPS = [
-  'Add a trusted person with their contact details',
-  'Choose full kit or section-specific permissions',
-  'Generate secure credentials and password card',
-  'Share the card location — never the password directly',
-  'Track logins and revoke access anytime',
-];
-
-const FEATURE_CARDS = [
-  {
-    title: "You're in Control",
-    description: 'Decide who sees what and change it anytime.',
-    icon: Shield,
-    tone: 'text-blue-600 bg-blue-50',
-  },
-  {
-    title: 'Secure & Private',
-    description: 'Unique credentials per person with instant revoke.',
-    icon: Lock,
-    tone: 'text-emerald-600 bg-emerald-50',
-  },
-  {
-    title: 'Password Card',
-    description: 'Printable cards for safe offline sharing.',
-    icon: CreditCard,
-    tone: 'text-violet-600 bg-violet-50',
-  },
-  {
-    title: 'Activity Tracking',
-    description: 'Get notified when someone accesses your kit.',
-    icon: Bell,
-    tone: 'text-primary bg-primary/10',
-  },
-];
-
 const SECTION_PRESETS: Record<string, string[] | 'all'> = {
   'Full Access': 'all',
-  'Financial & Tax': ['7', '12', '14', '16', '19', '20'],
+  'Financial & Tax': ['7', '12', '14', '16', '19'],
   'Healthcare & Medical': ['15'],
   'Legal & Estate': ['20', '21'],
-  'Personal & Family': ['1', '2', '17'],
+  'Personal & Family': ['1', '17'],
   'Business & Employment': ['18'],
   'Insurance & Benefits': ['7', '11'],
 };
+
+type SectionRegistryItem = {
+  id: string;
+  title: string;
+  subsections: { id: string; title: string }[];
+};
+
+function buildSectionRegistry(): SectionRegistryItem[] {
+  const items: SectionRegistryItem[] = [];
+
+  formConfig.chunks.forEach(chunk => {
+    chunk.sections.forEach(section => {
+      if (section.id === '0') return;
+
+      items.push({
+        id: section.id,
+        title: section.title,
+        subsections: (section.subsections ?? []).map(sub => ({
+          id: sub.id,
+          title: sub.title,
+        })),
+      });
+    });
+  });
+
+  return items;
+}
+
+function expandParentSectionIds(
+  parentId: string,
+  registry: SectionRegistryItem[],
+): string[] {
+  const section = registry.find(entry => entry.id === parentId);
+  if (!section) return [parentId];
+
+  const ids = [parentId];
+  section.subsections.forEach(sub => ids.push(sub.id));
+  return ids;
+}
+
+function expandPresetToSectionIds(
+  preset: string,
+  registry: SectionRegistryItem[],
+): string[] {
+  const presetSections = SECTION_PRESETS[preset];
+  if (!presetSections || presetSections === 'all') return [];
+
+  const ids = new Set<string>();
+  presetSections.forEach(parentId => {
+    expandParentSectionIds(parentId, registry).forEach(id => ids.add(id));
+  });
+
+  return Array.from(ids);
+}
+
+function isPresetFullySelected(
+  preset: string,
+  authorizedSections: string[],
+  registry: SectionRegistryItem[],
+): boolean {
+  const presetIds = expandPresetToSectionIds(preset, registry);
+  return (
+    presetIds.length > 0 &&
+    presetIds.every(id => authorizedSections.includes(id))
+  );
+}
 
 const MIN_TOUCH = 'min-h-11';
 
@@ -219,6 +258,52 @@ type NextKinApiPersonExtras = {
   _id?: string;
   master_password?: string | null;
 };
+
+function toNextKinApiBody(
+  person: AuthorizedPerson,
+  options?: { isCreate?: boolean; passwordChanged?: boolean },
+) {
+  const {
+    __clientId: _clientId,
+    _id,
+    master_password,
+    card_storage_location,
+    key_bag_location,
+    documents_bag_location,
+    special_instructions,
+    password_card_generated,
+    ...shared
+  } = person;
+
+  const credentialExtras = {
+    card_storage_location,
+    key_bag_location,
+    documents_bag_location,
+    special_instructions,
+    password_card_generated,
+  };
+
+  if (options?.isCreate) {
+    return {
+      ...shared,
+      master_password,
+      ...credentialExtras,
+    };
+  }
+
+  if (person.immediate_access) {
+    if (options?.passwordChanged && master_password?.trim()) {
+      return { ...shared, master_password };
+    }
+    return shared;
+  }
+
+  return {
+    ...shared,
+    ...(master_password?.trim() ? { master_password } : {}),
+    ...credentialExtras,
+  };
+}
 
 function getApiErrorDetail(error: unknown) {
   if (
@@ -342,18 +427,54 @@ function SelectableOptionCard({
 }
 
 function WizardStepper({
+  steps,
   currentIndex,
   onStepClick,
+  compact = false,
 }: {
+  steps: { id: WizardStepId; label: string }[];
   currentIndex: number;
   onStepClick?: (index: number) => void;
+  compact?: boolean;
 }) {
+  if (compact) {
+    const step = steps[currentIndex];
+    return (
+      <nav
+        aria-label="Add trusted person progress"
+        className="flex items-center gap-3"
+      >
+        <div className="flex gap-1">
+          {steps.map((_, index) => (
+            <div
+              key={steps[index].id}
+              className={cn(
+                'h-1.5 rounded-full transition-all',
+                index === currentIndex
+                  ? 'w-6 bg-primary'
+                  : index < currentIndex
+                    ? 'w-3 bg-primary/40'
+                    : 'w-3 bg-muted',
+              )}
+              aria-hidden
+            />
+          ))}
+        </div>
+        <p className="min-w-0 truncate text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{step.label}</span>
+          <span className="mx-1.5 text-muted-foreground/60">·</span>
+          Step {currentIndex + 1} of {steps.length}
+        </p>
+      </nav>
+    );
+  }
+
   return (
     <nav
       aria-label="Add trusted person progress"
       className="flex items-center gap-0"
     >
-      {WIZARD_STEPS.map((step, index) => {
+      {steps.map((step, index) => {
         const isActive = index === currentIndex;
         const isComplete = index < currentIndex;
         const canNavigate = isComplete && !!onStepClick;
@@ -406,6 +527,109 @@ function WizardStepper({
         );
       })}
     </nav>
+  );
+}
+
+function TrustedPersonLoginPassword({
+  password,
+  className,
+  compact = false,
+}: {
+  password?: string;
+  className?: string;
+  compact?: boolean;
+}) {
+  const [visible, setVisible] = useState(false);
+  const hasPassword = Boolean(password?.trim());
+
+  if (compact) {
+    return (
+      <div
+        className={cn(
+          'flex items-center gap-2 rounded-xl border bg-background/80 px-2.5 py-2',
+          className,
+        )}
+      >
+        <KeyRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
+          Login
+        </span>
+        <span
+          className={cn(
+            'min-w-0 flex-1 truncate font-mono text-xs tracking-wide',
+            !hasPassword && 'text-muted-foreground',
+          )}
+        >
+          {hasPassword
+            ? visible
+              ? password
+              : '•'.repeat(Math.min(password!.length, 12))
+            : 'Not set — edit to generate'}
+        </span>
+        {hasPassword && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 rounded-lg"
+            onClick={() => setVisible(v => !v)}
+            aria-label={visible ? 'Hide password' : 'Show password'}
+          >
+            {visible ? (
+              <EyeOff className="h-3.5 w-3.5" />
+            ) : (
+              <Eye className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        'overflow-hidden rounded-2xl border bg-background',
+        className,
+      )}
+    >
+      <div className="flex items-start gap-3 px-3 py-3">
+        <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Login Password
+          </p>
+          <p
+            className={cn(
+              'mt-0.5 text-sm leading-5 break-all font-mono tracking-wider',
+              !hasPassword && 'text-muted-foreground',
+            )}
+          >
+            {hasPassword
+              ? visible
+                ? password
+                : '•'.repeat(Math.min(password!.length, 14))
+              : 'Not saved — edit and generate a password'}
+          </p>
+        </div>
+        {hasPassword && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0 rounded-xl"
+            onClick={() => setVisible(v => !v)}
+            aria-label={visible ? 'Hide password' : 'Show password'}
+          >
+            {visible ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -491,14 +715,99 @@ function TrustedPersonMobileListItem({
   );
 }
 
-function TrustedPersonMobileDetails({
+function TrustedPersonMobileActionBar({
   person,
-  index,
   isBusy,
   isDeleting,
   isApproving,
   isRevoking,
+  onEdit,
+  onViewCard,
+  onApprove,
+  onRevoke,
+  onDelete,
+  revokeDisabled,
+}: {
+  person: AuthorizedPerson;
+  isBusy: boolean;
+  isDeleting: boolean;
+  isApproving: boolean;
+  isRevoking: boolean;
+  onEdit: () => void;
+  onViewCard: () => void;
+  onApprove: () => void;
+  onRevoke: () => void;
+  onDelete: () => void;
+  revokeDisabled: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        'grid gap-1',
+        person._id
+          ? person.immediate_access
+            ? 'grid-cols-3'
+            : 'grid-cols-4'
+          : person.immediate_access
+            ? 'grid-cols-2'
+            : 'grid-cols-3',
+      )}
+    >
+      <MobileIconAction
+        label="Edit"
+        icon={Pencil}
+        onClick={onEdit}
+        disabled={isBusy}
+      />
+      {!person.immediate_access && (
+        <MobileIconAction
+          label="Card"
+          icon={Eye}
+          onClick={onViewCard}
+          disabled={isBusy}
+          tone="primary"
+        />
+      )}
+      {person._id &&
+        (person.immediate_access ? (
+          <MobileIconAction
+            label="Revoke"
+            icon={Lock}
+            onClick={onRevoke}
+            disabled={isBusy || revokeDisabled}
+            tone="danger"
+            loading={isRevoking}
+          />
+        ) : (
+          <MobileIconAction
+            label="Approve"
+            icon={Unlock}
+            onClick={onApprove}
+            disabled={isBusy}
+            loading={isApproving}
+          />
+        ))}
+      <MobileIconAction
+        label="Delete"
+        icon={Trash2}
+        onClick={onDelete}
+        disabled={isBusy}
+        tone="danger"
+        loading={isDeleting}
+      />
+    </div>
+  );
+}
+
+function TrustedPersonMobileDetails({
+  person,
+  index,
   hasNokLetter,
+  hideActions = false,
+  isBusy,
+  isDeleting,
+  isApproving,
+  isRevoking,
   onEdit,
   onViewCard,
   onApprove,
@@ -508,11 +817,12 @@ function TrustedPersonMobileDetails({
 }: {
   person: AuthorizedPerson;
   index: number;
+  hasNokLetter: boolean;
+  hideActions?: boolean;
   isBusy: boolean;
   isDeleting: boolean;
   isApproving: boolean;
   isRevoking: boolean;
-  hasNokLetter: boolean;
   onEdit: () => void;
   onViewCard: () => void;
   onApprove: () => void;
@@ -580,6 +890,10 @@ function TrustedPersonMobileDetails({
         </div>
       )}
 
+      {person._id && (
+        <TrustedPersonLoginPassword password={person.master_password} compact />
+      )}
+
       {(person.email || person.phone_number) && (
         <div className="overflow-hidden rounded-2xl border bg-background">
           {person.email && (
@@ -609,53 +923,23 @@ function TrustedPersonMobileDetails({
         </div>
       )}
 
-      <div
-        className={cn(
-          'grid gap-1 rounded-2xl border bg-muted/20 p-1',
-          person._id ? 'grid-cols-4' : 'grid-cols-3',
-        )}
-      >
-        <MobileIconAction
-          label="Edit"
-          icon={Pencil}
-          onClick={onEdit}
-          disabled={isBusy}
-        />
-        <MobileIconAction
-          label="Card"
-          icon={Eye}
-          onClick={onViewCard}
-          disabled={isBusy}
-          tone="primary"
-        />
-        {person._id &&
-          (person.immediate_access ? (
-            <MobileIconAction
-              label="Revoke"
-              icon={Lock}
-              onClick={onRevoke}
-              disabled={isBusy || revokeDisabled}
-              tone="danger"
-              loading={isRevoking}
-            />
-          ) : (
-            <MobileIconAction
-              label="Approve"
-              icon={Unlock}
-              onClick={onApprove}
-              disabled={isBusy}
-              loading={isApproving}
-            />
-          ))}
-        <MobileIconAction
-          label="Delete"
-          icon={Trash2}
-          onClick={onDelete}
-          disabled={isBusy}
-          tone="danger"
-          loading={isDeleting}
-        />
-      </div>
+      {!hideActions && (
+        <div className="rounded-2xl border bg-muted/20 p-1">
+          <TrustedPersonMobileActionBar
+            person={person}
+            isBusy={isBusy}
+            isDeleting={isDeleting}
+            isApproving={isApproving}
+            isRevoking={isRevoking}
+            onEdit={onEdit}
+            onViewCard={onViewCard}
+            onApprove={onApprove}
+            onRevoke={onRevoke}
+            onDelete={onDelete}
+            revokeDisabled={revokeDisabled}
+          />
+        </div>
+      )}
 
       {!person._id && (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">
@@ -700,193 +984,185 @@ function TrustedPersonCard({
   const isActiveAccess = Boolean(person._id && person.immediate_access);
   const displayName = person.full_name || `Person ${index + 1}`;
   const sectionCount = person.authorized_sections.length;
+  const accessLabel = isFullAccess ? 'Full kit' : `${sectionCount} sections`;
+  const timingLabel = person.immediate_access ? 'Immediate' : 'Upon death';
 
   return (
     <article
       className={cn(
-        'w-full max-w-full overflow-hidden rounded-3xl border bg-card shadow-sm transition hover:shadow-md',
-        hasNokLetter && 'border-emerald-200',
-        isActiveAccess && 'ring-1 ring-emerald-500/20',
+        'group flex w-full max-w-full overflow-hidden rounded-2xl border bg-card shadow-sm transition hover:border-slate-300/80 hover:shadow-md',
+        hasNokLetter && 'border-emerald-200/80',
+        !person._id && 'border-amber-200/80 bg-amber-50/20',
       )}
     >
       <div
         className={cn(
-          'h-1 w-full',
-          isFullAccess
-            ? 'bg-gradient-to-r from-emerald-500 to-emerald-400'
-            : 'bg-gradient-to-r from-blue-500 to-blue-400',
+          'w-1 shrink-0',
+          isFullAccess ? 'bg-emerald-500' : 'bg-blue-500',
         )}
         aria-hidden
       />
 
-      <div className="p-5">
-        <div className="flex gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/75 text-base font-bold text-primary-foreground shadow-sm">
-            {initials}
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <h4 className="truncate text-lg font-semibold tracking-tight">
-                  {displayName}
-                </h4>
-                {person.relationship && (
-                  <p className="mt-0.5 text-sm capitalize text-muted-foreground">
-                    {person.relationship}
-                  </p>
-                )}
+      <div className="flex min-w-0 flex-1 flex-col sm:flex-row">
+        <div className="min-w-0 flex-1 p-4 sm:p-4 sm:pr-3">
+          <div className="flex items-start gap-3">
+            <div className="relative shrink-0">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-sm font-semibold text-white">
+                {initials}
               </div>
-              <TrustedPersonStatusPill person={person} />
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Badge
-                className={cn(
-                  'gap-1 rounded-full px-2.5 py-1 text-xs',
-                  isFullAccess
-                    ? 'bg-emerald-600 text-white hover:bg-emerald-600'
-                    : 'bg-blue-600 text-white hover:bg-blue-600',
-                )}
-              >
-                {isFullAccess ? (
-                  <Unlock className="h-3 w-3" />
-                ) : (
-                  <Lock className="h-3 w-3" />
-                )}
-                {isFullAccess ? 'Full Access' : `${sectionCount} Sections`}
-              </Badge>
-              <Badge
-                variant="outline"
-                className={cn(
-                  'gap-1 rounded-full px-2.5 py-1 text-xs',
-                  person.immediate_access
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                    : 'border-amber-200 bg-amber-50 text-amber-700',
-                )}
-              >
-                <Clock className="h-3 w-3" />
-                {person.immediate_access ? 'Immediate Access' : 'Upon Death'}
-              </Badge>
-              {hasNokLetter && (
-                <Badge
-                  variant="outline"
-                  className="gap-1 rounded-full border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700"
-                >
-                  <CheckCircle className="h-3 w-3" />
-                  NOK letter
-                </Badge>
+              {person._id && (
+                <span
+                  className={cn(
+                    'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-card',
+                    isActiveAccess ? 'bg-emerald-500' : 'bg-slate-300',
+                  )}
+                  title={isActiveAccess ? 'Active' : 'Inactive'}
+                />
               )}
             </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <h4 className="truncate text-base font-semibold tracking-tight">
+                  {displayName}
+                </h4>
+                {person._id && (
+                  <span
+                    className={cn(
+                      'text-[11px] font-medium',
+                      isActiveAccess
+                        ? 'text-emerald-600'
+                        : 'text-muted-foreground',
+                    )}
+                  >
+                    {isActiveAccess ? 'Active' : 'Inactive'}
+                  </span>
+                )}
+              </div>
+              {person.relationship && (
+                <p className="mt-0.5 text-sm capitalize text-muted-foreground">
+                  {person.relationship}
+                </p>
+              )}
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{accessLabel}</span>
+                <span className="mx-1.5 text-slate-300">·</span>
+                <span>{timingLabel}</span>
+                {hasNokLetter && (
+                  <>
+                    <span className="mx-1.5 text-slate-300">·</span>
+                    <span className="text-emerald-600">NOK letter</span>
+                  </>
+                )}
+              </p>
+            </div>
           </div>
+
+          {(person.email || person.phone_number || person._id) && (
+            <div className="mt-3 space-y-2">
+              {(person.email || person.phone_number) && (
+                <div className="flex flex-wrap gap-2">
+                  {person.email && (
+                    <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+                      <Mail className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{person.email}</span>
+                    </span>
+                  )}
+                  {person.phone_number && (
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+                      <Phone className="h-3.5 w-3.5 shrink-0" />
+                      {person.phone_number}
+                    </span>
+                  )}
+                </div>
+              )}
+              {person._id && (
+                <TrustedPersonLoginPassword
+                  password={person.master_password}
+                  compact
+                />
+              )}
+            </div>
+          )}
+
+          {!person._id && (
+            <p className="mt-3 rounded-lg border border-amber-200/80 bg-amber-50/60 px-2.5 py-2 text-xs text-amber-900">
+              Unsaved draft — open Edit to finish setup.
+            </p>
+          )}
         </div>
 
-        {(person.email || person.phone_number) && (
-          <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl bg-muted/35 p-3">
-            {person.email && (
-              <div className="flex min-w-0 items-center gap-2.5 text-sm">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground shadow-sm">
-                  <Mail className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 truncate text-muted-foreground">
-                  {person.email}
-                </span>
-              </div>
-            )}
-            {person.phone_number && (
-              <div className="flex min-w-0 items-center gap-2.5 text-sm">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground shadow-sm">
-                  <Phone className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 truncate text-muted-foreground">
-                  {person.phone_number}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="mt-4 border-t pt-4">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Actions
-          </p>
-          <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex shrink-0 flex-row flex-wrap gap-1.5 border-t border-border/60 bg-muted/20 p-2.5 sm:w-[7.75rem] sm:flex-col sm:border-l sm:border-t-0 sm:p-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 flex-1 justify-start rounded-xl text-xs font-medium sm:w-full sm:flex-none"
+            onClick={onEdit}
+            disabled={isBusy}
+          >
+            <Pencil className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+            Edit
+          </Button>
+          {!person.immediate_access && (
             <Button
               variant="outline"
-              className={cn('rounded-xl sm:min-w-[108px]', MIN_TOUCH)}
-              onClick={onEdit}
-              disabled={isBusy}
-            >
-              <Pencil className="mr-1.5 h-4 w-4" />
-              Edit
-            </Button>
-            <Button
-              variant="outline"
-              className={cn('rounded-xl sm:min-w-[108px]', MIN_TOUCH)}
+              size="sm"
+              className="h-9 flex-1 justify-start rounded-xl text-xs font-medium sm:w-full sm:flex-none"
               onClick={onViewCard}
               disabled={isBusy}
             >
-              <Eye className="mr-1.5 h-4 w-4" />
-              View Card
+              <Eye className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+              Card
             </Button>
-            {person._id &&
-              (person.immediate_access ? (
-                <Button
-                  variant="outline"
-                  className={cn(
-                    'rounded-xl border-destructive/30 text-destructive hover:text-destructive sm:min-w-[108px]',
-                    MIN_TOUCH,
-                  )}
-                  onClick={onRevoke}
-                  disabled={isBusy || revokeDisabled}
-                >
-                  {isRevoking ? (
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Lock className="mr-1.5 h-4 w-4" />
-                  )}
-                  Revoke
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  className={cn('rounded-xl sm:min-w-[108px]', MIN_TOUCH)}
-                  onClick={onApprove}
-                  disabled={isBusy}
-                >
-                  {isApproving ? (
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Unlock className="mr-1.5 h-4 w-4" />
-                  )}
-                  Approve
-                </Button>
-              ))}
-            <Button
-              variant="outline"
-              className={cn(
-                'rounded-xl border-destructive/30 text-destructive hover:text-destructive sm:min-w-[108px]',
-                MIN_TOUCH,
-              )}
-              onClick={onDelete}
-              disabled={isBusy}
-              aria-label={`Delete ${displayName}`}
-            >
-              {isDeleting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4" />
-              )}
-              <span className="ml-1.5">Delete</span>
-            </Button>
-          </div>
+          )}
+          {person._id &&
+            (person.immediate_access ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 flex-1 justify-start rounded-xl text-xs font-medium sm:w-full sm:flex-none"
+                onClick={onRevoke}
+                disabled={isBusy || revokeDisabled}
+              >
+                {isRevoking ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 shrink-0 animate-spin" />
+                ) : (
+                  <Lock className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                )}
+                Revoke
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 flex-1 justify-start rounded-xl text-xs font-medium sm:w-full sm:flex-none"
+                onClick={onApprove}
+                disabled={isBusy}
+              >
+                {isApproving ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 shrink-0 animate-spin" />
+                ) : (
+                  <Unlock className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                )}
+                Approve
+              </Button>
+            ))}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 flex-1 justify-start rounded-xl text-xs font-medium text-destructive hover:bg-accent hover:text-destructive sm:w-full sm:flex-none"
+            onClick={onDelete}
+            disabled={isBusy}
+            aria-label={`Delete ${displayName}`}
+          >
+            {isDeleting ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 shrink-0 animate-spin" />
+            ) : (
+              <Trash2 className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+            )}
+            Delete
+          </Button>
         </div>
-
-        {!person._id && (
-          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">
-            Unsaved draft — open Edit to finish setup.
-          </p>
-        )}
       </div>
     </article>
   );
@@ -920,7 +1196,19 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 /* Main component                                                      */
 /* ------------------------------------------------------------------ */
 
-export function AccessManagement() {
+interface AccessManagementProps {
+  /** When true, defers section title/copy to Section 2 wrapper — toolbar + list only. */
+  embedded?: boolean;
+}
+
+export type AccessManagementHandle = {
+  openAddWizard: () => void;
+};
+
+export const AccessManagement = forwardRef<
+  AccessManagementHandle,
+  AccessManagementProps
+>(function AccessManagement({ embedded = false }, ref) {
   const isMobile = useIsMobile();
   const { data, isLoading, refetch } = useGetMyNextKinQuery(undefined);
 
@@ -941,6 +1229,7 @@ export function AccessManagement() {
   const [sectionPickerOpen, setSectionPickerOpen] = useState(false);
 
   const [cardPreviewIndex, setCardPreviewIndex] = useState<number | null>(null);
+  const [originalMasterPassword, setOriginalMasterPassword] = useState('');
   const [detailViewIndex, setDetailViewIndex] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [revokeAllOpen, setRevokeAllOpen] = useState(false);
@@ -987,27 +1276,32 @@ export function AccessManagement() {
     });
   }, [data]);
 
+  const sectionRegistry = useMemo(() => buildSectionRegistry(), []);
+
   const sectionOptions = useMemo(() => {
     const options: { id: string; label: string; isSubsection: boolean }[] = [];
-    formConfig.chunks.forEach(chunk => {
-      chunk.sections.forEach(section => {
-        if (section.id === '0') return;
+
+    sectionRegistry.forEach(section => {
+      options.push({
+        id: section.id,
+        label: `${section.id}. ${section.title}`,
+        isSubsection: false,
+      });
+
+      section.subsections.forEach(sub => {
         options.push({
-          id: section.id,
-          label: `${section.id}. ${section.title}`,
-          isSubsection: false,
-        });
-        section.subsections?.forEach(sub => {
-          options.push({
-            id: sub.id,
-            label: `${sub.id}. ${sub.title}`,
-            isSubsection: true,
-          });
+          id: sub.id,
+          label: `${sub.id}. ${sub.title}`,
+          isSubsection: true,
         });
       });
     });
+
     return options;
-  }, []);
+  }, [sectionRegistry]);
+
+  const sectionGroupRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const sectionListRef = useRef<HTMLDivElement | null>(null);
 
   const sectionLabelMap = useMemo(
     () =>
@@ -1052,25 +1346,30 @@ export function AccessManagement() {
     setDraft(prev => (prev ? { ...prev, ...patch } : prev));
   }, []);
 
-  const openAddWizard = () => {
+  const openAddWizard = useCallback(() => {
     setDraft(createEmptyPerson());
+    setOriginalMasterPassword('');
     setWizardMode('add');
     setWizardIndex(null);
     setWizardStep(0);
     setSectionPickerOpen(false);
-    setShowWizardCardPreview(true);
+    setShowWizardCardPreview(!isMobile);
     setWizardOpen(true);
-  };
+  }, [isMobile]);
+
+  useImperativeHandle(ref, () => ({ openAddWizard }), [openAddWizard]);
 
   const openEditWizard = (index: number) => {
-    setDraft({ ...authorizedPeople[index] });
+    const person = authorizedPeople[index];
+    setDraft({ ...person });
+    setOriginalMasterPassword(person.master_password || '');
     setWizardMode('edit');
     setWizardIndex(index);
     setWizardStep(0);
     setSectionPickerOpen(
       authorizedPeople[index].authorized_sections.length > 0,
     );
-    setShowWizardCardPreview(true);
+    setShowWizardCardPreview(!isMobile);
     setWizardOpen(true);
   };
 
@@ -1089,39 +1388,82 @@ export function AccessManagement() {
     patchDraft({ authorized_sections: updated });
   };
 
-  const applyPresetToDraft = (preset: string) => {
+  const toggleDraftSectionGroup = (parentId: string) => {
     if (!draft) return;
-    const presetSections = SECTION_PRESETS[preset];
 
-    if (presetSections === 'all') {
+    const groupIds = expandParentSectionIds(parentId, sectionRegistry);
+    const allSelected = groupIds.every(id =>
+      draft.authorized_sections.includes(id),
+    );
+
+    patchDraft({
+      authorized_sections: allSelected
+        ? draft.authorized_sections.filter(id => !groupIds.includes(id))
+        : Array.from(new Set([...draft.authorized_sections, ...groupIds])),
+    });
+  };
+
+  const scrollToSectionGroup = (parentSectionId: string) => {
+    setSectionPickerOpen(true);
+
+    window.setTimeout(() => {
+      const groupNode = sectionGroupRefs.current[parentSectionId];
+      const listNode = sectionListRef.current;
+
+      if (groupNode && listNode) {
+        const top =
+          groupNode.offsetTop - listNode.offsetTop + listNode.scrollTop;
+        listNode.scrollTo({ top: Math.max(top - 8, 0), behavior: 'smooth' });
+        return;
+      }
+
+      groupNode?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
+
+  const togglePresetOnDraft = (preset: string) => {
+    if (!draft) return;
+
+    if (SECTION_PRESETS[preset] === 'all') {
       patchDraft({
         access_level: 'Full Kit Access',
         authorized_sections: [],
       });
-      toast.success(`Applied preset: ${preset}`);
+      toast.success('Full kit access selected');
       return;
     }
 
-    const expandedSections: string[] = [];
-    presetSections.forEach(sectionId => {
-      expandedSections.push(sectionId);
-      sectionOptions
-        .filter(s => s.isSubsection && s.id.startsWith(sectionId))
-        .forEach(s => expandedSections.push(s.id));
-    });
+    const presetIds = expandPresetToSectionIds(preset, sectionRegistry);
+    if (presetIds.length === 0) return;
+
+    const isActive = isPresetFullySelected(
+      preset,
+      draft.authorized_sections,
+      sectionRegistry,
+    );
 
     patchDraft({
       access_level: 'Section-Specific Access',
-      authorized_sections: Array.from(new Set(expandedSections)),
+      authorized_sections: isActive
+        ? draft.authorized_sections.filter(id => !presetIds.includes(id))
+        : Array.from(new Set([...draft.authorized_sections, ...presetIds])),
     });
-    setSectionPickerOpen(true);
-    toast.success(`Applied preset: ${preset}`);
+
+    if (!isActive) {
+      const firstParentId = SECTION_PRESETS[preset]?.[0];
+      if (typeof firstParentId === 'string') {
+        scrollToSectionGroup(firstParentId);
+      }
+      toast.success(`Added ${preset} sections`);
+    } else {
+      toast.success(`Removed ${preset} sections`);
+    }
   };
 
-  const validateWizardStep = (step: number): boolean => {
-    if (!draft) return false;
+  const validateWizardStep = (stepId: WizardStepId | undefined): boolean => {
+    if (!draft || !stepId) return false;
 
-    if (step === 0) {
+    if (stepId === 'person') {
       if (!draft.full_name?.trim() || !draft.email?.trim() || !draft.relationship?.trim()) {
         toast.error('Full name, email, and relationship are required');
         return false;
@@ -1129,7 +1471,7 @@ export function AccessManagement() {
       return true;
     }
 
-    if (step === 1) {
+    if (stepId === 'access') {
       if (
         draft.access_level === 'Section-Specific Access' &&
         draft.authorized_sections.length === 0
@@ -1140,9 +1482,13 @@ export function AccessManagement() {
       return true;
     }
 
-    if (step === 2) {
+    if (stepId === 'credentials') {
       if (!draft.master_password?.trim()) {
-        toast.error('Generate or enter a master password');
+        toast.error(
+          draft.immediate_access
+            ? 'Generate or enter a login password'
+            : 'Generate or enter a master password',
+        );
         return false;
       }
       return true;
@@ -1152,8 +1498,8 @@ export function AccessManagement() {
   };
 
   const goNextStep = () => {
-    if (!validateWizardStep(wizardStep)) return;
-    setWizardStep(s => Math.min(s + 1, WIZARD_STEPS.length - 1));
+    if (!validateWizardStep(currentWizardStepId)) return;
+    setWizardStep(s => Math.min(s + 1, wizardSteps.length - 1));
   };
 
   const goPrevStep = () => {
@@ -1161,14 +1507,16 @@ export function AccessManagement() {
   };
 
   const goToWizardStep = (index: number) => {
-    if (index < 0 || index >= WIZARD_STEPS.length) return;
+    if (index < 0 || index >= wizardSteps.length) return;
     if (index > wizardStep) return;
     setWizardStep(index);
   };
 
   const saveWizard = async () => {
-    if (!draft || !validateWizardStep(0) || !validateWizardStep(1) || !validateWizardStep(2)) {
-      return;
+    if (!draft) return;
+
+    for (const step of wizardSteps) {
+      if (!validateWizardStep(step.id)) return;
     }
 
     const normalizedEmail = draft.email.trim().toLowerCase();
@@ -1188,8 +1536,19 @@ export function AccessManagement() {
     setPersonAction(personKey, 'saving');
 
     try {
+      const passwordChanged =
+        Boolean(draft.master_password?.trim()) &&
+        draft.master_password !== originalMasterPassword;
+      const savePayload = toNextKinApiBody(draft, {
+        isCreate: !draft._id,
+        passwordChanged,
+      });
+
       if (draft._id) {
-        await updateNextKin({ nextkinId: draft._id, body: draft }).unwrap();
+        const result = await updateNextKin({
+          nextkinId: draft._id,
+          body: savePayload,
+        }).unwrap() as { password_email_sent?: boolean };
         if (wizardIndex !== null) {
           setAuthorizedPeople(prev => {
             const copy = [...prev];
@@ -1197,10 +1556,16 @@ export function AccessManagement() {
             return copy;
           });
         }
-        toast.success(`Updated ${draft.full_name}`);
+        if (result.password_email_sent) {
+          toast.success(
+            `Updated ${draft.full_name}. New login details were emailed.`,
+          );
+        } else {
+          toast.success(`Updated ${draft.full_name}`);
+        }
       } else {
         const res =
-          (await createNextKin(draft).unwrap()) as CreateNextKinResponseWithId;
+          (await createNextKin(savePayload).unwrap()) as CreateNextKinResponseWithId;
         const saved: AuthorizedPerson = {
           ...draft,
           _id: res.id || res._id,
@@ -1336,6 +1701,21 @@ export function AccessManagement() {
     );
   }, [draft, sectionLabelMap]);
 
+  const wizardSteps = useMemo(() => {
+    return WIZARD_STEPS.map(step =>
+      step.id === 'credentials' && draft?.immediate_access
+        ? { ...step, label: 'Login Password' }
+        : step,
+    );
+  }, [draft?.immediate_access]);
+
+  const currentWizardStepId = wizardSteps[wizardStep]?.id;
+
+  useEffect(() => {
+    if (!wizardOpen) return;
+    setWizardStep(prev => Math.min(prev, Math.max(wizardSteps.length - 1, 0)));
+  }, [wizardOpen, wizardSteps.length]);
+
   const isWizardSaving = Boolean(
     draft &&
       personActions[draft._id || draft.__clientId || 'wizard-save'] ===
@@ -1348,7 +1728,7 @@ export function AccessManagement() {
 
         <div
           className={cn(
-            'shrink-0 space-y-0 border-b px-4 pb-4 sm:px-6',
+            'shrink-0 space-y-0 border-b px-4 pb-3 sm:px-6 sm:pb-4',
             isMobile ? 'pt-1' : 'pt-5',
           )}
         >
@@ -1356,15 +1736,17 @@ export function AccessManagement() {
             <div className="min-w-0 flex-1">
               <h2
                 id="wizard-sheet-title"
-                className="text-left text-lg font-semibold sm:text-xl"
+                className="text-left text-base font-semibold sm:text-xl"
               >
                 {wizardMode === 'add'
                   ? 'Add Trusted Person'
                   : 'Edit Trusted Person'}
               </h2>
-              <p className="text-left text-sm text-muted-foreground">
-                Step {wizardStep + 1} of {WIZARD_STEPS.length}
-              </p>
+              {!isMobile && (
+                <p className="text-left text-sm text-muted-foreground">
+                  Step {wizardStep + 1} of {wizardSteps.length}
+                </p>
+              )}
             </div>
             {isMobile && (
               <Button
@@ -1379,22 +1761,29 @@ export function AccessManagement() {
               </Button>
             )}
           </div>
-          <div className="mt-4">
+          <div className="mt-3">
             <WizardStepper
+              steps={wizardSteps}
               currentIndex={wizardStep}
               onStepClick={goToWizardStep}
+              compact={isMobile}
             />
           </div>
         </div>
 
         {draft && (
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
-            <div className="space-y-6">
-{wizardStep === 0 && (
+          <div
+            className={cn(
+              'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6',
+              isMobile ? 'py-3' : 'py-5',
+            )}
+          >
+            <div className={cn(isMobile ? 'space-y-4' : 'space-y-6')}>
+{currentWizardStepId === 'person' && (
                     <>
                       <div>
                         <h4 className="font-semibold">Personal Information</h4>
-                        <p className="mt-1 text-sm text-muted-foreground">
+                        <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
                           Who are you granting access to?
                         </p>
                       </div>
@@ -1451,7 +1840,7 @@ export function AccessManagement() {
 
                       <div>
                         <h4 className="font-semibold">Access Timing</h4>
-                        <p className="mt-1 text-sm text-muted-foreground">
+                        <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
                           When should this person be able to access?
                         </p>
                         <div
@@ -1504,13 +1893,20 @@ export function AccessManagement() {
                     </>
                   )}
 
-                  {wizardStep === 1 && (
+                  {currentWizardStepId === 'access' && (
                     <>
                       <div>
                         <h4 className="font-semibold">Choose Access Level</h4>
-                        <p className="mt-1 text-sm text-muted-foreground">
+                        <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
                           Control how much of your kit they can view.
                         </p>
+                        {draft.immediate_access && (
+                          <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm leading-5 text-emerald-900">
+                            Immediate access — they will receive login details by
+                            email. No password card or physical credentials are
+                            needed.
+                          </p>
+                        )}
                       </div>
                       <div
                         role="radiogroup"
@@ -1534,11 +1930,12 @@ export function AccessManagement() {
                           selected={
                             draft.access_level === 'Section-Specific Access'
                           }
-                          onSelect={() =>
+                          onSelect={() => {
                             patchDraft({
                               access_level: 'Section-Specific Access',
-                            })
-                          }
+                            });
+                            setSectionPickerOpen(true);
+                          }}
                           title="Section-Specific Access"
                           description="Choose exactly which sections they can access."
                           icon={FileText}
@@ -1570,51 +1967,123 @@ export function AccessManagement() {
                             </Button>
                           </div>
                           <div className="mt-3 flex flex-wrap gap-2">
-                            {Object.keys(SECTION_PRESETS).map(preset => (
-                              <Button
-                                key={preset}
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="rounded-full"
-                                onClick={() => applyPresetToDraft(preset)}
-                              >
-                                <Sparkles className="mr-1 h-3 w-3" />
-                                {preset}
-                              </Button>
-                            ))}
-                          </div>
-                          {sectionPickerOpen && (
-                            <div className="mt-3 max-h-56 space-y-1 overflow-y-auto rounded-xl border bg-background p-2">
-                              {sectionOptions.map(section => (
-                                <label
-                                  key={section.id}
+                            {Object.keys(SECTION_PRESETS).map(preset => {
+                              const isFullAccessPreset =
+                                SECTION_PRESETS[preset] === 'all';
+                              const isActive = isFullAccessPreset
+                                ? draft.access_level === 'Full Kit Access'
+                                : isPresetFullySelected(
+                                    preset,
+                                    draft.authorized_sections,
+                                    sectionRegistry,
+                                  );
+
+                              return (
+                                <Button
+                                  key={preset}
+                                  type="button"
+                                  size="sm"
+                                  variant={isActive ? 'default' : 'outline'}
                                   className={cn(
-                                    'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-muted',
-                                    section.isSubsection && 'ml-3',
-                                    MIN_TOUCH,
+                                    'rounded-full',
+                                    isActive &&
+                                      'border-primary bg-primary text-primary-foreground shadow-sm',
                                   )}
+                                  onClick={() => togglePresetOnDraft(preset)}
                                 >
-                                  <input
-                                    type="checkbox"
-                                    checked={draft.authorized_sections.includes(
-                                      section.id,
-                                    )}
-                                    onChange={() =>
-                                      toggleDraftSection(section.id)
-                                    }
-                                    className="h-4 w-4"
-                                  />
-                                  <span
-                                    className={cn(
-                                      'min-w-0 flex-1 text-sm',
-                                      !section.isSubsection && 'font-medium',
-                                    )}
+                                  <Sparkles className="mr-1 h-3 w-3" />
+                                  {preset}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-blue-900/80">
+                            Tap a category to select all of its subsections.
+                            Tap again to remove that category. You can combine
+                            multiple categories and uncheck individual items.
+                          </p>
+                          {sectionPickerOpen && (
+                            <div
+                              ref={sectionListRef}
+                              className="mt-3 max-h-[min(50vh,320px)] space-y-3 overflow-y-auto rounded-xl border bg-background p-2 sm:max-h-72"
+                            >
+                              {sectionRegistry.map(section => {
+                                const groupIds = expandParentSectionIds(
+                                  section.id,
+                                  sectionRegistry,
+                                );
+                                const selectedCount = groupIds.filter(id =>
+                                  draft.authorized_sections.includes(id),
+                                ).length;
+                                const allSelected =
+                                  selectedCount === groupIds.length &&
+                                  groupIds.length > 0;
+                                const someSelected =
+                                  selectedCount > 0 && !allSelected;
+
+                                return (
+                                  <div
+                                    key={section.id}
+                                    ref={node => {
+                                      sectionGroupRefs.current[section.id] =
+                                        node;
+                                    }}
+                                    className="rounded-lg border border-border/60 bg-muted/20 p-2"
                                   >
-                                    {section.label}
-                                  </span>
-                                </label>
-                              ))}
+                                    <label
+                                      className={cn(
+                                        'flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-muted/80',
+                                        MIN_TOUCH,
+                                      )}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={allSelected}
+                                        ref={input => {
+                                          if (input) {
+                                            input.indeterminate = someSelected;
+                                          }
+                                        }}
+                                        onChange={() =>
+                                          toggleDraftSectionGroup(section.id)
+                                        }
+                                        className="h-4 w-4"
+                                      />
+                                      <span className="min-w-0 flex-1 text-sm font-semibold">
+                                        {section.id}. {section.title}
+                                      </span>
+                                    </label>
+
+                                    {section.subsections.length > 0 ? (
+                                      <div className="ml-2 space-y-0.5 border-l border-border/70 pl-2">
+                                        {section.subsections.map(sub => (
+                                          <label
+                                            key={sub.id}
+                                            className={cn(
+                                              'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 hover:bg-muted/80',
+                                              MIN_TOUCH,
+                                            )}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={draft.authorized_sections.includes(
+                                                sub.id,
+                                              )}
+                                              onChange={() =>
+                                                toggleDraftSection(sub.id)
+                                              }
+                                              className="h-4 w-4"
+                                            />
+                                            <span className="min-w-0 flex-1 text-sm text-muted-foreground">
+                                              {sub.id}. {sub.title}
+                                            </span>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -1622,42 +2091,70 @@ export function AccessManagement() {
                     </>
                   )}
 
-                  {wizardStep === 2 && (
+                  {currentWizardStepId === 'credentials' && (
                     <>
                       <div>
-                        <h4 className="font-semibold">Create Credentials</h4>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Generate a secure master password and storage details.
+                        <h4 className="font-semibold">
+                          {draft.immediate_access
+                            ? 'Login Password'
+                            : 'Create Credentials'}
+                        </h4>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          {draft.immediate_access
+                            ? 'Generate a login password. It will be emailed to this person when you save.'
+                            : 'Add storage details, then generate the password card.'}
                         </p>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="wizard-password">Master Password</Label>
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                          <Input
-                            id="wizard-password"
-                            value={draft.master_password}
-                            onChange={e =>
-                              patchDraft({ master_password: e.target.value })
-                            }
-                            className={cn(
-                              'rounded-2xl font-mono tracking-wider',
-                              MIN_TOUCH,
+
+                      {draft.immediate_access ? (
+                        <div className="space-y-2 rounded-2xl border bg-muted/20 p-4">
+                          <Label htmlFor="wizard-password-immediate">
+                            Login Password
+                          </Label>
+                          {wizardMode === 'edit' &&
+                            !draft.master_password?.trim() && (
+                              <p className="text-xs leading-5 text-amber-800">
+                                No saved password on file. Click{' '}
+                                <strong>Generate</strong> to create one for
+                                email login.
+                              </p>
                             )}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className={cn('shrink-0 rounded-2xl', MIN_TOUCH)}
-                            onClick={() =>
-                              patchDraft({
-                                master_password: generatePassword(),
-                              })
-                            }
-                          >
-                            Generate
-                          </Button>
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <Input
+                              id="wizard-password-immediate"
+                              value={draft.master_password}
+                              onChange={e =>
+                                patchDraft({
+                                  master_password: e.target.value,
+                                })
+                              }
+                              className={cn(
+                                'rounded-2xl bg-background font-mono tracking-wider',
+                                MIN_TOUCH,
+                              )}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className={cn('shrink-0 rounded-2xl', MIN_TOUCH)}
+                              onClick={() =>
+                                patchDraft({
+                                  master_password: generatePassword(),
+                                })
+                              }
+                            >
+                              Generate
+                            </Button>
+                          </div>
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            {wizardMode === 'edit' &&
+                            draft.master_password !== originalMasterPassword
+                              ? 'Saving will email this person the new password and login link.'
+                              : 'No password card is needed for immediate access.'}
+                          </p>
                         </div>
-                      </div>
+                      ) : (
+                        <>
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                           <Label htmlFor="wizard-card-loc">Card Location</Label>
@@ -1734,25 +2231,72 @@ export function AccessManagement() {
                           </Button>
                         </div>
                         {showWizardCardPreview && (
-                          <PasswordCard
-                            personName={
-                              draft.full_name || 'Trusted Person'
-                            }
-                            masterPassword={draft.master_password}
-                            email={draft.email}
-                            phone={draft.phone_number}
-                            relationship={draft.relationship}
-                            accessLevel={draft.access_level}
-                            authorizedSections={draftSectionLabels}
-                            immediateAccess={draft.immediate_access}
-                            card_storage_location={draft.card_storage_location}
-                          />
+                          <div className="space-y-4">
+                            <div className="space-y-2 rounded-2xl border bg-muted/20 p-4">
+                              <Label htmlFor="wizard-password">
+                                Master Password
+                              </Label>
+                              {wizardMode === 'edit' &&
+                                !draft.master_password?.trim() && (
+                                  <p className="text-xs leading-5 text-amber-800">
+                                    This person&apos;s password was created before
+                                    passwords were saved for editing. Click{' '}
+                                    <strong>Generate</strong> to create a new one
+                                    for the card and login.
+                                  </p>
+                                )}
+                              <div className="flex flex-col gap-2 sm:flex-row">
+                                <Input
+                                  id="wizard-password"
+                                  value={draft.master_password}
+                                  onChange={e =>
+                                    patchDraft({
+                                      master_password: e.target.value,
+                                    })
+                                  }
+                                  className={cn(
+                                    'rounded-2xl bg-background font-mono tracking-wider',
+                                    MIN_TOUCH,
+                                  )}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className={cn('shrink-0 rounded-2xl', MIN_TOUCH)}
+                                  onClick={() =>
+                                    patchDraft({
+                                      master_password: generatePassword(),
+                                    })
+                                  }
+                                >
+                                  Generate
+                                </Button>
+                              </div>
+                            </div>
+                            <PasswordCard
+                              personName={
+                                draft.full_name || 'Trusted Person'
+                              }
+                              masterPassword={draft.master_password}
+                              email={draft.email}
+                              phone={draft.phone_number}
+                              relationship={draft.relationship}
+                              accessLevel={draft.access_level}
+                              authorizedSections={draftSectionLabels}
+                              immediateAccess={draft.immediate_access}
+                              card_storage_location={
+                                draft.card_storage_location
+                              }
+                            />
+                          </div>
                         )}
                       </div>
+                        </>
+                      )}
                     </>
                   )}
 
-                  {wizardStep === 3 && (
+                  {currentWizardStepId === 'review' && (
                     <>
                       <div>
                         <h4 className="font-semibold">Review</h4>
@@ -1779,18 +2323,29 @@ export function AccessManagement() {
                               ? 'All sections'
                               : `${draft.authorized_sections.length} selected`,
                           ],
-                          [
-                            'Card location',
-                            draft.card_storage_location || '—',
-                          ],
-                          [
-                            'Key bag location',
-                            draft.key_bag_location || '—',
-                          ],
-                          [
-                            'Document bag location',
-                            draft.documents_bag_location || '—',
-                          ],
+                          ...(draft.immediate_access
+                            ? [
+                                [
+                                  'Login password',
+                                  draft.master_password
+                                    ? 'Set — emailed on save'
+                                    : '—',
+                                ],
+                              ]
+                            : [
+                                [
+                                  'Card location',
+                                  draft.card_storage_location || '—',
+                                ],
+                                [
+                                  'Key bag location',
+                                  draft.key_bag_location || '—',
+                                ],
+                                [
+                                  'Document bag location',
+                                  draft.documents_bag_location || '—',
+                                ],
+                              ]),
                         ].map(([label, value]) => (
                           <div
                             key={label}
@@ -1801,17 +2356,26 @@ export function AccessManagement() {
                           </div>
                         ))}
                       </dl>
-                      <PasswordCard
-                        personName={draft.full_name || 'Trusted Person'}
-                        masterPassword={draft.master_password}
-                        email={draft.email}
-                        phone={draft.phone_number}
-                        relationship={draft.relationship}
-                        accessLevel={draft.access_level}
-                        authorizedSections={draftSectionLabels}
-                        immediateAccess={draft.immediate_access}
-                        card_storage_location={draft.card_storage_location}
-                      />
+                      {!draft.immediate_access && (
+                        <PasswordCard
+                          personName={draft.full_name || 'Trusted Person'}
+                          masterPassword={draft.master_password}
+                          email={draft.email}
+                          phone={draft.phone_number}
+                          relationship={draft.relationship}
+                          accessLevel={draft.access_level}
+                          authorizedSections={draftSectionLabels}
+                          immediateAccess={draft.immediate_access}
+                          card_storage_location={draft.card_storage_location}
+                        />
+                      )}
+                      {draft.immediate_access && (
+                        <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+                          Login credentials will be emailed to{' '}
+                          <strong>{draft.email}</strong> when you save. No
+                          password card is required.
+                        </p>
+                      )}
                     </>
                   )}
             </div>
@@ -1820,16 +2384,19 @@ export function AccessManagement() {
 
           <div
             className={cn(
-              'shrink-0 border-t bg-background/95 px-4 py-4 backdrop-blur sm:px-6',
-              isMobile && 'sticky bottom-0 pb-[max(1rem,env(safe-area-inset-bottom))]',
+              'shrink-0 border-t px-4 py-3 sm:px-6 sm:py-4',
+              isMobile
+                ? cn(
+                    MOBILE_SHEET_FOOTER_CLASS,
+                    'sticky bottom-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+                  )
+                : 'bg-background/95 backdrop-blur',
             )}
           >
             <div
               className={cn(
                 'flex w-full gap-2',
-                isMobile
-                  ? 'flex-col-reverse'
-                  : 'flex-col-reverse sm:flex-row sm:justify-between',
+                isMobile ? 'flex-row' : 'flex-col-reverse sm:flex-row sm:justify-between',
               )}
             >
               {wizardStep === 0 ? (
@@ -1837,7 +2404,11 @@ export function AccessManagement() {
                   type="button"
                   variant="outline"
                   onClick={closeWizard}
-                  className={cn('rounded-2xl', MIN_TOUCH, 'w-auto')}
+                  className={cn(
+                    'rounded-2xl',
+                    MIN_TOUCH,
+                    isMobile ? 'flex-1' : 'w-auto',
+                  )}
                 >
                   Cancel
                 </Button>
@@ -1846,18 +2417,26 @@ export function AccessManagement() {
                   type="button"
                   variant="outline"
                   onClick={goPrevStep}
-                  className={cn('rounded-2xl', MIN_TOUCH, 'w-auto')}
+                  className={cn(
+                    'rounded-2xl',
+                    MIN_TOUCH,
+                    isMobile ? 'flex-1' : 'w-auto',
+                  )}
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back
                 </Button>
               )}
 
-              {wizardStep < WIZARD_STEPS.length - 1 ? (
+              {wizardStep < wizardSteps.length - 1 ? (
                 <Button
                   type="button"
                   onClick={goNextStep}
-                  className={cn('rounded-2xl', MIN_TOUCH, 'w-auto')}
+                  className={cn(
+                    'rounded-2xl',
+                    MIN_TOUCH,
+                    isMobile ? 'flex-[1.4]' : 'w-auto',
+                  )}
                 >
                   Next
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -1867,14 +2446,22 @@ export function AccessManagement() {
                   type="button"
                   onClick={saveWizard}
                   disabled={isWizardSaving}
-                  className={cn('rounded-2xl', MIN_TOUCH, 'w-auto')}
+                  className={cn(
+                    'rounded-2xl',
+                    MIN_TOUCH,
+                    isMobile ? 'flex-[1.4]' : 'w-auto',
+                  )}
                 >
                   {isWizardSaving ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Shield className="mr-2 h-4 w-4" />
                   )}
-                  {isWizardSaving ? 'Saving...' : 'Save Trusted Person'}
+                  {isWizardSaving
+                    ? 'Saving...'
+                    : isMobile
+                      ? 'Save'
+                      : 'Save Trusted Person'}
                 </Button>
               )}
             </div>
@@ -1892,67 +2479,162 @@ export function AccessManagement() {
   }
 
   return (
-    <div className="w-full space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            2A Kit Access Control
-          </p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
-            Access Management
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Manage who can access your kit, what they can see, and revoke access anytime.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:w-auto sm:flex-row">
-          <Button
-            variant="outline"
-            onClick={() => setRevokeAllOpen(true)}
-            disabled={!authorizedPeople.length || isRevokingAll || hasPersonAction}
-            className={cn('rounded-2xl border-destructive/30 text-destructive hover:text-destructive', MIN_TOUCH, 'w-auto')}
+    <div
+      className={cn(
+        'w-full space-y-6',
+        isMobile && 'space-y-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))]',
+        embedded && !isMobile && 'space-y-4',
+      )}
+    >
+      <div
+        className={cn(
+          'flex gap-4',
+          embedded && !isMobile
+            ? 'items-center justify-between border-b border-slate-100 pb-4'
+            : isMobile
+              ? 'flex-row items-center justify-between gap-3'
+              : 'flex-col sm:flex-row sm:items-start sm:justify-between',
+        )}
+      >
+        {embedded && !isMobile ? (
+          <span
+            className={cn(
+              'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium',
+              savedCount >= 1
+                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                : 'bg-amber-50 text-amber-800 ring-1 ring-amber-200',
+            )}
           >
-            {isRevokingAll ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lock className="mr-2 h-4 w-4" />}
-            Revoke All
-          </Button>
-          <Button onClick={openAddWizard} className={cn('rounded-2xl', MIN_TOUCH, 'w-auto')}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Trusted Person
+            {savedCount >= 1
+              ? `${savedCount} ${savedCount === 1 ? 'person' : 'people'}`
+              : 'Add at least 1 person'}
+          </span>
+        ) : (
+          <div className="min-w-0">
+            {!isMobile && !embedded && (
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                2A Kit Access Control
+              </p>
+            )}
+            <h2
+              className={cn(
+                'font-semibold tracking-tight',
+                isMobile ? 'text-lg' : 'mt-1 text-2xl sm:text-3xl',
+              )}
+            >
+              {isMobile || embedded ? 'Trusted People' : 'Access Management'}
+            </h2>
+            {!isMobile && !embedded && (
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                Add trusted people, choose full or section-specific access, and
+                revoke access anytime.
+              </p>
+            )}
+          </div>
+        )}
+        <div
+          className={cn(
+            'flex shrink-0 gap-2',
+            isMobile ? 'flex-row' : 'flex-col sm:w-auto sm:flex-row',
+          )}
+        >
+          {!isMobile && (
+            <Button
+              variant="outline"
+              onClick={() => setRevokeAllOpen(true)}
+              disabled={
+                !authorizedPeople.length || isRevokingAll || hasPersonAction
+              }
+              className={cn(
+                'rounded-2xl border-destructive/30 text-destructive hover:text-destructive',
+                MIN_TOUCH,
+                'w-auto',
+              )}
+            >
+              {isRevokingAll ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Lock className="mr-2 h-4 w-4" />
+              )}
+              Revoke All
+            </Button>
+          )}
+          <Button
+            onClick={openAddWizard}
+            className={cn(
+              'rounded-2xl',
+              MIN_TOUCH,
+              isMobile ? 'h-10 px-3' : 'w-auto',
+            )}
+          >
+            <Plus className={cn('h-4 w-4', !isMobile && 'mr-2')} />
+            {!isMobile && 'Add Trusted Person'}
+            {isMobile && <span className="sr-only">Add Trusted Person</span>}
           </Button>
         </div>
       </div>
 
-      {needsDesignation && (
-        <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-            <div>
-              <h4 className="font-semibold">Access designation required</h4>
-              <p className="mt-1 text-sm leading-6">Please add at least one trusted person who can access your kit.</p>
+      {needsDesignation && !embedded && (
+        <div
+          role="alert"
+          className={cn(
+            'flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 text-amber-950',
+            isMobile
+              ? 'items-center p-3'
+              : 'flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between',
+          )}
+        >
+          <div className="flex min-w-0 flex-1 gap-2.5">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div className="min-w-0">
+              <h4 className="text-sm font-semibold">Add at least one person</h4>
+              {!isMobile && (
+                <p className="mt-1 text-sm leading-6">
+                  Please add at least one trusted person who can access your kit.
+                </p>
+              )}
             </div>
           </div>
-          <Button variant="secondary" onClick={openAddWizard} className={cn('shrink-0 rounded-xl bg-background', MIN_TOUCH, 'w-full sm:w-auto')}>
-            Add Now
-          </Button>
+          {!isMobile && (
+            <Button
+              variant="secondary"
+              onClick={openAddWizard}
+              className={cn(
+                'shrink-0 rounded-xl bg-background',
+                MIN_TOUCH,
+                'w-full sm:w-auto',
+              )}
+            >
+              Add Now
+            </Button>
+          )}
         </div>
       )}
 
-      <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div
+        className={cn(
+          'grid w-full gap-6',
+          !embedded && 'lg:grid-cols-[minmax(0,1fr)_280px]',
+        )}
+      >
         <div className="min-w-0 w-full space-y-4">
           <div
             className={cn(
               'w-full rounded-3xl border bg-card shadow-sm',
               isMobile && 'rounded-2xl border-0 bg-transparent shadow-none',
+              embedded && !isMobile && 'rounded-2xl border-0 bg-transparent shadow-none',
             )}
           >
             <div
               className={cn(
                 'border-b',
-                isMobile ? 'border-0 pb-3' : 'p-4 sm:p-5',
+                isMobile || embedded ? 'hidden' : 'p-4 sm:p-5',
               )}
             >
               <h3 className="text-lg font-semibold">Trusted People</h3>
-              <p className="mt-1 text-sm text-muted-foreground">People who can access your kit</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                People who can access your kit
+              </p>
             </div>
             <div className={cn('w-full', isMobile ? 'pt-0' : 'p-4 sm:p-5')}>
               {authorizedPeople.length > 0 && (
@@ -2019,40 +2701,35 @@ export function AccessManagement() {
             </div>
           </div>
         </div>
-        <aside className="hidden space-y-4 lg:block">
-          <div className="rounded-2xl border bg-card p-4 shadow-sm">
+        {!embedded && (
+        <aside className="hidden lg:block">
+          <div className="sticky top-6 rounded-2xl border bg-card p-4 shadow-sm">
             <h4 className="text-sm font-semibold">Setup Progress</h4>
-            <p className="mt-2 text-2xl font-semibold">{savedCount} <span className="text-base font-normal text-muted-foreground">/ 1 people added</span></p>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={setupProgress * 100} aria-valuemin={0} aria-valuemax={100}>
-              <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: setupProgress * 100 + '%' }} />
+            <p className="mt-2 text-2xl font-semibold">
+              {savedCount}{' '}
+              <span className="text-base font-normal text-muted-foreground">
+                / 1 people added
+              </span>
+            </p>
+            <div
+              className="mt-3 h-2 overflow-hidden rounded-full bg-muted"
+              role="progressbar"
+              aria-valuenow={setupProgress * 100}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-500"
+                style={{ width: setupProgress * 100 + '%' }}
+              />
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">At least 1 trusted person is required</p>
-          </div>
-          <div className="rounded-2xl border bg-card p-4 shadow-sm">
-            <h4 className="font-semibold">How Access Works</h4>
-            <ol className="mt-4 space-y-3">
-              {HOW_ACCESS_STEPS.map((step, i) => (
-                <li key={step} className="flex gap-3 text-sm leading-6">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{i + 1}</span>
-                  <span className="text-muted-foreground">{step}</span>
-                </li>
-              ))}
-            </ol>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              Add at least one trusted person. Use Revoke All if you need to
+              immediately lock everyone out.
+            </p>
           </div>
         </aside>
-      </div>
-
-      <div className="hidden gap-3 sm:grid sm:grid-cols-2 xl:grid-cols-4">
-        {FEATURE_CARDS.map(card => {
-          const Icon = card.icon;
-          return (
-            <div key={card.title} className="rounded-2xl border bg-card p-4 shadow-sm">
-              <div className={cn('flex h-10 w-10 items-center justify-center rounded-xl', card.tone)}><Icon className="h-5 w-5" /></div>
-              <h4 className="mt-3 font-semibold">{card.title}</h4>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">{card.description}</p>
-            </div>
-          );
-        })}
+        )}
       </div>
 
       {/* Add / Edit wizard */}
@@ -2090,7 +2767,7 @@ export function AccessManagement() {
         >
           <div className="flex h-full min-h-0 flex-col">
             <MobileSheetHandle />
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-4 pt-1">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-3 pt-1">
               <div className="min-w-0">
                 <h3 id="person-detail-title" className="text-lg font-semibold">
                   Trusted Person
@@ -2112,51 +2789,75 @@ export function AccessManagement() {
                 <X className="h-5 w-5" />
               </Button>
             </div>
-            {detailViewIndex !== null && (() => {
-            const person = authorizedPeople[detailViewIndex];
-            const key = getPersonKey(person, detailViewIndex);
-            const action = personActions[key];
-            const isBusy = !!action || isRevokingAll;
-            const isDeleting = action === 'deleting';
-            const isApproving = action === 'approving';
-            const isRevoking = action === 'revoking';
-            const hasNokLetter =
-              !person.immediate_access && person.nok_letter_received;
+            {detailViewIndex !== null &&
+              (() => {
+                const person = authorizedPeople[detailViewIndex];
+                const key = getPersonKey(person, detailViewIndex);
+                const action = personActions[key];
+                const isBusy = !!action || isRevokingAll;
+                const isDeleting = action === 'deleting';
+                const isApproving = action === 'approving';
+                const isRevoking = action === 'revoking';
+                const hasNokLetter =
+                  !person.immediate_access && person.nok_letter_received;
 
-            return (
-              <div
-                className={cn(
-                  'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4',
-                  MOBILE_SHEET_SCROLL_PADDING,
-                )}
-              >
-                <TrustedPersonMobileDetails
-                  person={person}
-                  index={detailViewIndex}
-                  isBusy={isBusy}
-                  isDeleting={isDeleting}
-                  isApproving={isApproving}
-                  isRevoking={isRevoking}
-                  hasNokLetter={hasNokLetter}
-                  revokeDisabled={isRevokingOne}
-                  onEdit={() => {
+                const actionHandlers = {
+                  onEdit: () => {
                     setDetailViewIndex(null);
                     openEditWizard(detailViewIndex);
-                  }}
-                  onViewCard={() => {
+                  },
+                  onViewCard: () => {
                     setDetailViewIndex(null);
                     setCardPreviewIndex(detailViewIndex);
-                  }}
-                  onApprove={() => approveOne(detailViewIndex)}
-                  onRevoke={() => revokeOne(detailViewIndex)}
-                  onDelete={() => {
+                  },
+                  onApprove: () => approveOne(detailViewIndex),
+                  onRevoke: () => revokeOne(detailViewIndex),
+                  onDelete: () => {
                     setDetailViewIndex(null);
                     setDeleteTarget(detailViewIndex);
-                  }}
-                />
-              </div>
-            );
-          })()}
+                  },
+                };
+
+                return (
+                  <>
+                    <div
+                      className={cn(
+                        'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3',
+                        MOBILE_SHEET_SCROLL_PADDING,
+                      )}
+                    >
+                      <TrustedPersonMobileDetails
+                        person={person}
+                        index={detailViewIndex}
+                        isBusy={isBusy}
+                        isDeleting={isDeleting}
+                        isApproving={isApproving}
+                        isRevoking={isRevoking}
+                        hasNokLetter={hasNokLetter}
+                        hideActions
+                        revokeDisabled={isRevokingOne}
+                        {...actionHandlers}
+                      />
+                    </div>
+                    <div
+                      className={cn(
+                        MOBILE_SHEET_FOOTER_CLASS,
+                        'shrink-0 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+                      )}
+                    >
+                      <TrustedPersonMobileActionBar
+                        person={person}
+                        isBusy={isBusy}
+                        isDeleting={isDeleting}
+                        isApproving={isApproving}
+                        isRevoking={isRevoking}
+                        revokeDisabled={isRevokingOne}
+                        {...actionHandlers}
+                      />
+                    </div>
+                  </>
+                );
+              })()}
           </div>
         </MobileBottomSheet>
       )}
@@ -2329,6 +3030,21 @@ export function AccessManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {isMobile && !wizardOpen && detailViewIndex === null && (
+        <div className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 md:hidden">
+          <Button
+            onClick={openAddWizard}
+            className={cn(
+              'h-12 w-full rounded-2xl shadow-lg shadow-primary/20',
+              MIN_TOUCH,
+            )}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Trusted Person
+          </Button>
+        </div>
+      )}
     </div>
   );
-}
+});

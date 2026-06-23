@@ -21,10 +21,12 @@ interface MediaMessagePickerProps {
   uploading?: boolean;
   onClose: () => void;
   onRecord: () => void;
+  onTakePhoto?: () => void;
   onFileSelected: (file: File) => void;
 }
 
 const VIDEO_ACCEPT = 'video/*';
+const VIDEO_LIBRARY_ACCEPT = 'video/*,image/*';
 const AUDIO_ACCEPT =
   'audio/*,audio/mpeg,audio/mp4,audio/wav,audio/x-m4a,audio/aac';
 
@@ -34,6 +36,7 @@ export function MediaMessagePicker({
   uploading = false,
   onClose,
   onRecord,
+  onTakePhoto,
   onFileSelected,
 }: MediaMessagePickerProps) {
   const [showSourceMenu, setShowSourceMenu] = useState(false);
@@ -45,6 +48,7 @@ export function MediaMessagePicker({
   const isVideo = type === 'video';
   const mediaLabel = isVideo ? 'Video' : 'Audio';
   const accept = isVideo ? VIDEO_ACCEPT : AUDIO_ACCEPT;
+  const libraryAccept = isVideo ? VIDEO_LIBRARY_ACCEPT : AUDIO_ACCEPT;
 
   useEffect(() => {
     if (!open) setShowSourceMenu(false);
@@ -67,6 +71,16 @@ export function MediaMessagePicker({
     fileInputRef.current?.click();
   };
 
+  const startPhotoCapture = () => {
+    if (onTakePhoto) {
+      onClose();
+      onTakePhoto();
+      return;
+    }
+
+    openLibraryPicker();
+  };
+
   const startRecording = () => {
     onClose();
     onRecord();
@@ -86,9 +100,10 @@ export function MediaMessagePicker({
           id={libraryInputId}
           ref={libraryInputRef}
           type="file"
-          accept={accept}
+          accept={libraryAccept}
           onChange={handleInputChange}
-          className="hidden"
+          className="sr-only"
+          tabIndex={-1}
         />
         <input
           id={fileInputId}
@@ -96,7 +111,8 @@ export function MediaMessagePicker({
           type="file"
           accept={accept}
           onChange={handleInputChange}
-          className="hidden"
+          className="sr-only"
+          tabIndex={-1}
         />
 
         <CardContent className="space-y-5 p-5 sm:p-6">
@@ -172,16 +188,25 @@ export function MediaMessagePicker({
                 {isVideo ? 'Upload Video' : 'Upload Audio'}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Choose to record, pick from your gallery, or select a file.
+                {isVideo
+                  ? 'Record video, take a photo, pick from your gallery, or choose a file.'
+                  : 'Record audio, pick from your gallery, or choose a file.'}
               </p>
             </button>
           ) : (
             <div className="overflow-hidden rounded-2xl border bg-slate-950 text-white shadow-lg">
               <SourceOption
-                icon={<Camera className="h-5 w-5" />}
-                label={isVideo ? 'Take Video' : 'Record Audio'}
+                icon={isVideo ? <Video className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                label={isVideo ? 'Record Video' : 'Record Audio'}
                 onClick={startRecording}
               />
+              {isVideo && (
+                <SourceOption
+                  icon={<Camera className="h-5 w-5" />}
+                  label="Take Photo"
+                  onClick={startPhotoCapture}
+                />
+              )}
               <SourceOption
                 icon={<Images className="h-5 w-5" />}
                 label="Photo Library"

@@ -3,6 +3,8 @@ export interface FieldDefinition {
   label: string;
   type: string;
   options?: string[];
+  /** Optional longer labels for dropdown options (value → display text) */
+  optionLabels?: Record<string, string>;
   required?: boolean;
   helperText?: string;
   placeholder?: string;

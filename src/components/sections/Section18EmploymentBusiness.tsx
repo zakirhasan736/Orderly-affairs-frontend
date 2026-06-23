@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -26,6 +26,11 @@ import {
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  type UploadedAIFile,
+  validateAiDocumentFile,
+} from '@/utils/aiDocumentUploadUi';
+import { useAiDocumentDropZone } from '@/hooks/useAiDocumentDropZone';
 import {
   getTopicCardProps,
   useScrollToVaultTopic,
@@ -405,22 +410,6 @@ interface Props {
 
 type SubsectionId = '18A' | '18B' | '18C' | '18D';
 
-type UploadedAIFile = {
-  file_id: string;
-  mime_type: string;
-  expires_at?: string;
-};
-
-const ALLOWED_UPLOAD_TYPES = [
-  'application/pdf',
-  'text/plain',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-];
-
-const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
-
 const SUBSECTION_UI: Record<
   SubsectionId,
   {
@@ -601,6 +590,8 @@ export default function Section18EmploymentBusiness({
     Record<string, UploadedAIFile | null>
   >({});
 
+  const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
+
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
 
@@ -737,23 +728,23 @@ export default function Section18EmploymentBusiness({
   };
 
   const getUploadedFileForScope = (scope: string) => {
-    return uploadedFiles[scope] || null;
+    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
   };
 
-  const handleDocumentUpload = async (file?: File | null, scope?: string) => {
+  const handleDocumentUpload = async (
+    file?: File | null,
+    scope?: string,
+    runAutofill?: () => void | Promise<void>,
+  ) => {
     try {
       if (!file || !scope) return;
 
       setAiError('');
       setAiNotice('');
 
-      if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
-        setAiError('Upload PDF, TXT, PNG, JPG, JPEG, or WEBP only.');
-        return;
-      }
-
-      if (file.size > MAX_UPLOAD_SIZE) {
-        setAiError('File too large. Max 15MB.');
+      const validationError = validateAiDocumentFile(file);
+      if (validationError) {
+        setAiError(validationError);
         return;
       }
 
@@ -761,16 +752,24 @@ export default function Section18EmploymentBusiness({
 
       const uploaded = await uploadAIDocument(file);
 
+      const uploadedRecord: UploadedAIFile = {
+        file_id: uploaded.file_id,
+        mime_type: uploaded.mime_type,
+        expires_at: uploaded.expires_at,
+      };
+
+      latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
         ...prev,
- [scope]: {
-    file_id: uploaded.file_id,
-    mime_type: uploaded.mime_type,
-    expires_at: uploaded.expires_at,
-  },
+        [scope]: uploadedRecord,
       }));
 
-      setAiNotice('Document uploaded. You can now use AI autofill.');
+      setUploadingScope(null);
+      setAiNotice('Document uploaded. Running AI autofill…');
+
+      if (runAutofill) {
+        await runAutofill();
+      }
     } catch (err: any) {
       setAiError(err?.message || 'Document upload failed');
     } finally {
@@ -848,6 +847,12 @@ export default function Section18EmploymentBusiness({
     const isUploading = uploadingScope === scope;
     const isReading = aiLoadingScope === scope;
     const tone = config.tone;
+    const runAutofill = () =>
+      handleAutofill({ subsection, scope, itemIndex });
+    const { isDragging, processFile, dropZoneProps } = useAiDocumentDropZone(
+      uploaded => handleDocumentUpload(uploaded, scope, runAutofill),
+      isAnyAIActionRunning,
+    );
 
     return (
       <div
@@ -913,10 +918,12 @@ export default function Section18EmploymentBusiness({
 
         <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
           <label
+            {...dropZoneProps}
             className={[
               'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center transition',
               tone.uploadBox,
               isAnyAIActionRunning ? 'pointer-events-none opacity-60' : '',
+              isDragging && 'border-indigo-400 bg-indigo-50/80 ring-2 ring-indigo-200',
             ].join(' ')}
           >
             <input
@@ -926,7 +933,7 @@ export default function Section18EmploymentBusiness({
               disabled={isAnyAIActionRunning}
               onChange={event => {
                 const file = event.currentTarget.files?.[0] || null;
-                void handleDocumentUpload(file, scope);
+                processFile(file);
                 event.currentTarget.value = '';
               }}
             />
@@ -935,7 +942,7 @@ export default function Section18EmploymentBusiness({
 
             <div>
               <p className="text-sm font-medium text-slate-800">
-                Click to upload document
+                Drag and drop or click to upload document
               </p>
 
               <p className="text-xs text-slate-500">

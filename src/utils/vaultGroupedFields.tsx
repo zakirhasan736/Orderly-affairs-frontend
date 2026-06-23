@@ -81,7 +81,11 @@ function renderGroupInner(
   if (group.layout === 'stack') {
     return (
       <div className="space-y-4">
-        {group.fieldKeys.map(fieldKey => renderField(fieldKey))}
+        {group.fieldKeys.map(fieldKey => {
+          const rendered = renderField(fieldKey);
+          if (!rendered) return null;
+          return <React.Fragment key={fieldKey}>{rendered}</React.Fragment>;
+        })}
       </div>
     );
   }
@@ -92,12 +96,15 @@ function renderGroupInner(
         const field = fieldMap[fieldKey];
         if (!field) return null;
 
+        const rendered = renderField(fieldKey);
+        if (!rendered) return null;
+
         return (
           <div
             key={fieldKey}
             className={cn(isFullWidthField(field) && 'md:col-span-2')}
           >
-            {renderField(fieldKey)}
+            {rendered}
           </div>
         );
       })}

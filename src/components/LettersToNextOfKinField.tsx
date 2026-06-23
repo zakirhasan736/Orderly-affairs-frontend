@@ -17,7 +17,7 @@ export function LettersToNextOfKinField({
   clearNonce,
 }: LettersToNextOfKinFieldProps) {
   return (
-    <div className="w-full max-w-full px-3" data-field-type="LettersToNextOfKin">
+    <div className="w-full max-w-full sm:px-0" data-field-type="LettersToNextOfKin">
       <div className="w-full max-w-none">
         <Letters
           value={value}

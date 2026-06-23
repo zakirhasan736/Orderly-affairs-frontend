@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -23,10 +23,16 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
+import {
+  type UploadedAIFile,
+  validateAiDocumentFile,
+} from '@/utils/aiDocumentUploadUi';
 import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -115,29 +121,7 @@ interface Props {
 
 type UploadScope = 'full' | `group:${number}`;
 
-type UploadedAIFile = {
-  file_id: string;
-  mime_type: string;
-  expires_at?: string;
-};
 
-const ALLOWED_UPLOAD_TYPES = [
-  'application/pdf',
-  'text/plain',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-];
-
-const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
-
-const getReadableFileType = (mimeType?: string) => {
-  if (!mimeType) return 'Document';
-  if (mimeType === 'application/pdf') return 'PDF';
-  if (mimeType === 'text/plain') return 'Text';
-  if (mimeType.includes('image')) return 'Image';
-  return mimeType;
-};
 
 /* ------------------------------------------------------------------ */
 /* COMPONENT                                                          */
@@ -164,6 +148,8 @@ export default function Section8CommunityMembership({
   >({
     full: null,
   });
+
+  const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
   const groups: any[] = Array.isArray(data['8A']) ? data['8A'] : [];
   const show8A = !activeSubsection || activeSubsection === '8A';
@@ -214,8 +200,17 @@ export default function Section8CommunityMembership({
     updateGroups(groups.filter((_, itemIndex) => itemIndex !== index));
   };
 
+  const multiItemAutofill = useAiMultiItemAutofill({
+    itemLabel: SECTION_8A.itemLabel,
+    createEmpty: createEmptyGroup,
+    getCurrentItems: () => groups,
+    setItems: updateGroups,
+    setAiNotice,
+    describeFields: ['organization_name', 'group_name', 'name'],
+  });
+
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return uploadedFiles[scope] || null;
+    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
   };
 
   const cleanPatchObject = (patch: any) => {
@@ -257,23 +252,17 @@ export default function Section8CommunityMembership({
     return [];
   };
 
-  const handleDocumentUpload = async (
-    file?: File | null,
-    scope: UploadScope = 'full',
-  ) => {
+  const handleDocumentUpload = async (file?: File | null,
+    scope: UploadScope = 'full', runAutofill?: () => void | Promise<void>) => {
     try {
       if (!file) return;
 
       setAiError('');
       setAiNotice('');
 
-      if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
-        setAiError('Upload PDF, TXT, PNG, JPG, JPEG, or WEBP only.');
-        return;
-      }
-
-      if (file.size > MAX_UPLOAD_SIZE) {
-        setAiError('File too large. Max 15MB.');
+      const validationError = validateAiDocumentFile(file);
+      if (validationError) {
+        setAiError(validationError);
         return;
       }
 
@@ -281,16 +270,24 @@ export default function Section8CommunityMembership({
 
       const uploaded = await uploadAIDocument(file);
 
+      const uploadedRecord: UploadedAIFile = {
+        file_id: uploaded.file_id,
+        mime_type: uploaded.mime_type,
+        expires_at: uploaded.expires_at,
+      };
+
+      latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
         ...prev,
- [scope]: {
-    file_id: uploaded.file_id,
-    mime_type: uploaded.mime_type,
-    expires_at: uploaded.expires_at,
-  },
+        [scope]: uploadedRecord,
       }));
 
-      setAiNotice('Document uploaded. You can now use AI autofill.');
+      setUploadingScope(null);
+      setAiNotice('Document uploaded. Running AI autofill…');
+
+      if (runAutofill) {
+        await runAutofill();
+      }
     } catch (err: any) {
       setAiError(err?.message || 'Document upload failed');
     } finally {
@@ -323,38 +320,16 @@ export default function Section8CommunityMembership({
      const patch = json?.result?.patch ?? {};
       const extractedGroups = extractGroupArrayFromPatch(patch);
 
-      if (extractedGroups.length === 0) {
-        setAiError(
-          'AI could not find group membership information in this document.',
-        );
+      if (
+        !multiItemAutofill.processExtraction(extractedGroups, groupIndex, {
+          setAiError,
+          setAiNotice,
+          emptyError:
+            'AI could not find group membership information in this document.',
+        })
+      ) {
         return;
       }
-
-      if (typeof groupIndex === 'number') {
-        const firstGroup = cleanPatchObject(extractedGroups[0]);
-        const next = [...groups];
-
-        next[groupIndex] = {
-          ...(next[groupIndex] || createEmptyGroup()),
-          ...firstGroup,
-        };
-
-        updateGroups(next);
-
-        setAiNotice(
-          `AI filled ${SECTION_8A.itemLabel} #${groupIndex + 1}. Please review the fields.`,
-        );
-
-        return;
-      }
-
-      updateGroups([...groups, ...extractedGroups]);
-
-      setAiNotice(
-        extractedGroups.length === 1
-          ? 'AI added 1 group membership. Please review the fields.'
-          : `AI added ${extractedGroups.length} group memberships. Please review the fields.`,
-      );
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');
     } finally {
@@ -362,133 +337,47 @@ export default function Section8CommunityMembership({
     }
   };
 
-  const renderUploader = ({
+    const renderUploader = ({
     scope,
     title,
     description,
     buttonLabel = 'Auto-fill',
+    uploadLabel,
     onAutofill,
     compact = false,
+    tone,
   }: {
     scope: UploadScope;
     title: string;
     description: string;
     buttonLabel?: string;
-    onAutofill: () => void;
+    uploadLabel?: string;
+    onAutofill: () => void | Promise<void>;
     compact?: boolean;
-  }) => {
-    const uploadedFile = getUploadedFileForScope(scope);
-    const isUploading = uploadingScope === scope;
-    const isReading = aiLoadingScope === scope;
-
-    return (
-      <div
-        className={[
-          'relative overflow-hidden rounded-2xl border border-dashed',
-          'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-orange-50/50',
-          'p-4 shadow-sm transition-all duration-200',
-          'hover:border-orange-300 hover:shadow-md',
-          compact ? 'space-y-3' : 'space-y-4',
-        ].join(' ')}
-      >
-        <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-orange-100/70 blur-2xl" />
-        <div className="pointer-events-none absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-amber-100/70 blur-2xl" />
-
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              {isUploading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-orange-600" />
-              ) : uploadedFile ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              ) : (
-                <UploadCloud className="h-5 w-5 text-orange-600" />
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <p className="font-semibold text-slate-900">{title}</p>
-              <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
-                {description}
-              </p>
-            </div>
-          </div>
-
-          <Button
-            type="button"
-            size="sm"
-            onClick={onAutofill}
-            disabled={isAnyAIActionRunning || !uploadedFile}
-            className="shrink-0 rounded-xl"
-          >
-            {isReading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="mr-2 h-4 w-4" />
-            )}
-
-            {isReading ? 'Reading…' : buttonLabel}
-          </Button>
-        </div>
-
-        <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-          <label
-            className={[
-              'group flex cursor-pointer flex-col items-center justify-center gap-2',
-              'rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center',
-              'transition hover:border-orange-300 hover:bg-orange-50/50',
-              compact
-                ? 'md:flex-row md:justify-start md:py-3 md:text-left'
-                : '',
-              isAnyAIActionRunning ? 'pointer-events-none opacity-60' : '',
-            ].join(' ')}
-          >
-            <input
-              type="file"
-              className="sr-only"
-              accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp"
-              disabled={isAnyAIActionRunning}
-              onChange={event => {
-                const file = event.currentTarget.files?.[0] || null;
-                void handleDocumentUpload(file, scope);
-                event.currentTarget.value = '';
-              }}
-            />
-
-            <UploadCloud className="h-5 w-5 text-slate-500 group-hover:text-orange-600" />
-
-            <div>
-              <p className="text-sm font-medium text-slate-800">
-                Click to upload membership document
-              </p>
-              <p className="text-xs text-slate-500">
-                PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB
-              </p>
-            </div>
-          </label>
-
-          {uploadedFile && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              <FileText className="h-4 w-4" />
-              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
-            </div>
-          )}
-        </div>
-
-        {isUploading && (
-          <div className="relative flex items-center gap-2 text-xs text-slate-500">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Uploading document…
-          </div>
-        )}
-      </div>
-    );
-  };
+    tone?: import('@/components/ai/SectionAiDocumentUploader').SectionAiUploaderTone;
+  }) => (
+    <SectionAiDocumentUploader
+      title={title}
+      description={description}
+      buttonLabel={buttonLabel}
+      uploadLabel={uploadLabel}
+      compact={compact}
+      tone={tone}
+      disabled={isAnyAIActionRunning}
+      isUploading={uploadingScope === scope}
+      isReading={aiLoadingScope === scope}
+      uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
+      onAutofill={onAutofill}
+    />
+  );
 
   if (!show8A) return null;
 
   return (
     <div className="space-y-8">
+      {multiItemAutofill.dialog}
+
       {(aiNotice || aiError) && (
         <div className="space-y-3">
           {aiNotice && (

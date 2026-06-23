@@ -37,6 +37,39 @@ export function blobToMediaFile(blob: Blob, kind: 'video' | 'audio'): File {
   });
 }
 
+export function blobToPhotoFile(blob: Blob): File {
+  const mimeType =
+    blob.type?.trim() && blob.type.startsWith('image/')
+      ? blob.type
+      : 'image/jpeg';
+
+  const ext = mimeType.split('/')[1]?.split(';')[0] || 'jpg';
+
+  return new File([blob], `photo-message-${Date.now()}.${ext}`, {
+    type: mimeType,
+  });
+}
+
+export function prepareMessageMediaFile(file: File, kind: 'video' | 'audio') {
+  if (file.type?.startsWith('image/')) {
+    if (file.name) return file;
+    return new File([file], `photo-message-${Date.now()}.jpg`, {
+      type: file.type || 'image/jpeg',
+    });
+  }
+
+  if (file.type && file.type !== 'application/octet-stream') {
+    return file;
+  }
+
+  return new File([file], file.name, {
+    type: inferMediaContentType(
+      file.name,
+      kind === 'video' ? 'video/mp4' : 'audio/mp4',
+    ),
+  });
+}
+
 export function isAllowedMediaFile(file: File, kind: 'video' | 'audio') {
   if (file.type.startsWith(`${kind}/`)) return true;
 
@@ -44,6 +77,29 @@ export function isAllowedMediaFile(file: File, kind: 'video' | 'audio') {
   const allowedExtensions = kind === 'video' ? VIDEO_EXTENSIONS : AUDIO_EXTENSIONS;
 
   return allowedExtensions.includes(ext);
+}
+
+/** Video messages may attach a still photo via Take Photo. */
+export function isAllowedVideoMessageFile(file: File) {
+  if (isAllowedMediaFile(file, 'video')) return true;
+  return file.type.startsWith('image/');
+}
+
+const IMAGE_FORMATS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif']);
+
+export function isImageMedia(media?: {
+  type?: string;
+  format?: string;
+  url?: string;
+}) {
+  if (!media) return false;
+  if (media.type === 'image') return true;
+
+  const format = media.format?.toLowerCase();
+  if (format && IMAGE_FORMATS.has(format)) return true;
+
+  const ext = media.url?.split('.').pop()?.split('?')[0]?.toLowerCase();
+  return ext ? IMAGE_FORMATS.has(ext) : false;
 }
 
 export function formatMediaFileSize(size?: number) {

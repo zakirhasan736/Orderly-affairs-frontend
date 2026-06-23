@@ -1,34 +1,33 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Card, CardContent } from '@common/ui/card';
-import { Badge } from '@common/ui/badge';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from '@/components/common/ui/card';
 import { Button } from '@common/ui/button';
 import { cn } from '@common/ui/utils';
-import {
-  Sheet,
-  SheetContent,
-} from '@common/ui/sheet';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@common/ui/select';
+import { Sheet, SheetContent } from '@common/ui/sheet';
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
+  Eye,
   FileText,
   Mail,
   Phone,
+  Printer,
   ShieldCheck,
   Sparkles,
   Users,
 } from 'lucide-react';
 
 import { NextOfKinLetterField } from '@/components/NextOfKinLetterField';
+import { NokLetterPreviewDialog } from '@/components/NokLetterPreviewDialog';
 import {
   MobileBottomSheet,
   useIsMobile,
@@ -38,8 +37,43 @@ import {
   useGetMyNextKinQuery,
 } from '@/services/authApi';
 import { useGetNokLetterQuery } from '@/services/nokLetterApi';
+import { isNokLetterDelivered } from '@/utils/nokLetterPreview';
 
 type LetterData = Record<string, unknown>;
+
+const SECTION_3A = {
+  id: '3A',
+  title: 'Letter to Next of Kin',
+};
+
+const GUIDE_STEPS = [
+  {
+    title: 'Mark in Access Management',
+    text: 'For upon-death trusted people, check Next-of-Kin Letter Received in Section 2. They appear here when ready.',
+    icon: Users,
+  },
+  {
+    title: 'Choose recipient',
+    text: 'Select the person below. Each marked person gets their own letter with their access details.',
+    icon: CheckCircle2,
+  },
+  {
+    title: 'Review & customize',
+    text: 'Edit the letter steps — login info, bag locations, and your personal message are auto-filled where possible.',
+    icon: Sparkles,
+  },
+  {
+    title: 'Share the letter',
+    text: 'Preview, print, export as PDF, or open in your email app when you are ready.',
+    icon: Printer,
+  },
+];
+
+const HELPFUL_NOTES = [
+  'Only upon-death trusted people with NOK letter marked appear here.',
+  'Each person gets a separate letter with their own password card location.',
+  'Complete Section 2 Access Management before starting this letter.',
+];
 
 interface Props {
   data?: {
@@ -48,6 +82,7 @@ interface Props {
     next_of_kin_letters_by_nok?: Record<string, LetterData>;
   };
   onChange?: (data: NonNullable<Props['data']>) => void;
+  isActive?: boolean;
 }
 
 function MarkedNokLetterSync({ nokId }: { nokId: string }) {
@@ -62,9 +97,7 @@ function getDisplayName(person?: NextKinAccessResponse | null) {
 
 function getInitials(name?: string | null) {
   if (!name) return 'NK';
-
   const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
-
   return (
     parts
       .map(part => part.charAt(0))
@@ -73,65 +106,331 @@ function getInitials(name?: string | null) {
   );
 }
 
-function RecipientListItem({
-  name,
-  email,
-  phone,
-  isSelected,
-  onOpen,
-}: {
-  name: string;
-  email?: string | null;
-  phone?: string | null;
-  isSelected: boolean;
-  onOpen: () => void;
-}) {
+function GuidePanel({ className }: { className?: string }) {
+  const [openIndex, setOpenIndex] = React.useState<number | null>(null);
+
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={cn(
-        'flex w-full items-center gap-3 rounded-2xl border bg-card p-3 text-left shadow-sm transition active:scale-[0.99] active:bg-muted/30',
-        isSelected && 'border-primary/40 bg-primary/5 ring-1 ring-primary/15',
-      )}
-    >
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/75 text-sm font-bold text-primary-foreground">
-        {getInitials(name)}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="min-w-0 truncate text-base font-semibold">{name}</span>
-          {isSelected && (
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-          )}
+    <div className={cn('space-y-3', className)}>
+      <div className="rounded-2xl border border-amber-200/70 bg-amber-50/40 p-3.5 sm:rounded-3xl sm:p-4">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+            <AlertTriangle className="h-4 w-4" />
+          </div>
+          <h4 className="text-sm font-semibold text-amber-950">Before you start</h4>
         </div>
-        <p className="mt-0.5 truncate text-sm text-muted-foreground">
-          {email || phone || 'Tap to open letter editor'}
-        </p>
+        <ul className="mt-2.5 space-y-2">
+          {HELPFUL_NOTES.map(note => (
+            <li
+              key={note}
+              className="flex gap-2 text-xs leading-5 text-amber-950/85 sm:text-sm sm:leading-6"
+            >
+              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 sm:h-4 sm:w-4" />
+              <span>{note}</span>
+            </li>
+          ))}
+        </ul>
       </div>
-      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-    </button>
+
+      <div className="rounded-2xl border bg-card p-3.5 shadow-sm sm:rounded-3xl sm:p-4">
+        <h4 className="text-sm font-semibold">How it works</h4>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Tap a step for details.
+        </p>
+        <ol className="mt-3 space-y-1">
+          {GUIDE_STEPS.map((step, index) => {
+            const Icon = step.icon;
+            const isOpen = openIndex === index;
+            return (
+              <li key={step.title} className="overflow-hidden rounded-xl border">
+                <button
+                  type="button"
+                  onClick={() => setOpenIndex(isOpen ? null : index)}
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-muted/30"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="min-w-0 flex-1 text-sm font-medium">
+                    {index + 1}. {step.title}
+                  </span>
+                  {isOpen ? (
+                    <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  )}
+                </button>
+                {isOpen && (
+                  <p className="border-t bg-muted/20 px-3 py-2 text-xs leading-5 text-muted-foreground">
+                    {step.text}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </div>
   );
 }
 
-function InfoPill({
-  icon,
-  title,
-  subtitle,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-}) {
+function MobileGuide() {
   return (
-    <div className="rounded-[1.35rem] flex flex-row sm:flex-col sm:justify-center items-center gap-3 border border-border/60 bg-background/80 p-4 shadow-sm backdrop-blur">
-      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-        {icon}
+    <details className="group rounded-2xl border bg-card lg:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 [&::-webkit-details-marker]:hidden">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <ShieldCheck className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">How it works</p>
+            <p className="text-xs text-muted-foreground">4 steps · prerequisites</p>
+          </div>
+        </div>
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition group-open:rotate-180" />
+      </summary>
+      <div className="border-t px-3 pb-4 pt-3">
+        <GuidePanel />
       </div>
-      <div className="smm:text-center text-left">
-      <p className="text-base sm:text-center text-left font-black text-foreground">{title}</p>
-      <p className="mt-1 text-xs sm:text-center text-left leading-5 text-muted-foreground">{subtitle}</p>
+    </details>
+  );
+}
+
+function DeliveredBadge() {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200/80">
+      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+      Delivered
+    </span>
+  );
+}
+
+function RecipientCard({
+  person,
+  isSelected,
+  isDelivered,
+  onOpen,
+  onPreview,
+  compact = false,
+}: {
+  person: NextKinAccessResponse;
+  isSelected: boolean;
+  isDelivered: boolean;
+  onOpen: () => void;
+  onPreview: () => void;
+  compact?: boolean;
+}) {
+  const name = getDisplayName(person);
+  const initials = getInitials(name);
+  const actionBtn =
+    'h-9 w-full justify-start rounded-xl text-xs font-medium sm:flex-none';
+
+  if (compact) {
+    return (
+      <div
+        className={cn(
+          'flex w-full items-stretch overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm transition hover:border-border hover:shadow-md',
+          isSelected && 'border-primary/40 ring-1 ring-primary/20',
+        )}
+      >
+        <div
+          className={cn(
+            'w-1 shrink-0',
+            isSelected ? 'bg-primary' : 'bg-muted-foreground/30',
+          )}
+          aria-hidden
+        />
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex min-w-0 flex-1 items-center gap-3 p-4 text-left"
+        >
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground">
+            {initials}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="truncate text-base font-semibold">{name}</span>
+              {isDelivered ? (
+                <DeliveredBadge />
+              ) : (
+                isSelected && (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                )
+              )}
+            </div>
+            <p className="mt-0.5 truncate text-sm text-muted-foreground">
+              {person.email || person.phone_number || 'Tap to open letter'}
+            </p>
+          </div>
+          <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={onPreview}
+          className="flex shrink-0 items-center border-l border-border/60 px-3 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          aria-label={`Preview letter for ${name}`}
+        >
+          <Eye className="h-5 w-5" />
+        </button>
       </div>
+    );
+  }
+
+  return (
+    <article
+      className={cn(
+        'group flex overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm transition hover:border-border hover:shadow-md',
+        isSelected && 'border-primary/40 ring-1 ring-primary/20',
+      )}
+    >
+      <div
+        className={cn(
+          'w-1 shrink-0',
+          isSelected ? 'bg-primary' : 'bg-muted-foreground/25',
+        )}
+        aria-hidden
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col sm:flex-row">
+        <div className="min-w-0 flex-1 p-4 sm:p-5 sm:pr-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground shadow-sm">
+                {initials}
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="line-clamp-1 text-base font-semibold tracking-tight sm:text-lg">
+                    {name}
+                  </h4>
+                  <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 ring-1 ring-emerald-200/70">
+                    NOK ready
+                  </span>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Upon-death access · personalized letter
+                </p>
+              </div>
+            </div>
+            {isDelivered ? (
+              <DeliveredBadge />
+            ) : (
+              isSelected && (
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />
+              )
+            )}
+          </div>
+
+          <div className="mt-4 rounded-xl border border-border/70 bg-muted/25 px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+              {person.email && (
+                <span className="inline-flex max-w-full items-center gap-1.5 truncate">
+                  <Mail className="h-3.5 w-3.5 shrink-0" />
+                  {person.email}
+                </span>
+              )}
+              {person.phone_number && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Phone className="h-3.5 w-3.5 shrink-0" />
+                  {person.phone_number}
+                </span>
+              )}
+              {!person.email && !person.phone_number && (
+                <span>No contact details on file</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 flex-col gap-1.5 border-t border-border/60 bg-muted/20 p-2.5 sm:w-[7.75rem] sm:border-l sm:border-t-0 sm:p-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onPreview}
+            className={actionBtn}
+          >
+            <Eye className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+            Preview
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onOpen}
+            className={actionBtn}
+          >
+            <FileText className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+            Open
+          </Button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function RecipientCardWithStatus({
+  person,
+  isSelected,
+  onOpen,
+  onPreview,
+  compact,
+}: {
+  person: NextKinAccessResponse;
+  isSelected: boolean;
+  onOpen: () => void;
+  onPreview: () => void;
+  compact?: boolean;
+}) {
+  const { data: letter } = useGetNokLetterQuery({ nokId: person.id });
+  const isDelivered = isNokLetterDelivered(letter);
+
+  return (
+    <RecipientCard
+      person={person}
+      isSelected={isSelected}
+      isDelivered={isDelivered}
+      onOpen={onOpen}
+      onPreview={onPreview}
+      compact={compact}
+    />
+  );
+}
+
+function EmptyRecipientsState() {
+  return (
+    <div className="rounded-3xl border border-dashed border-amber-200/90 bg-gradient-to-b from-amber-50/80 to-background px-5 py-10 text-center sm:px-8 sm:py-12">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+        <Users className="h-6 w-6" />
+      </div>
+      <h3 className="mt-4 text-base font-semibold text-amber-950 sm:text-lg">
+        No recipients ready yet
+      </h3>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-amber-900/80">
+        In <strong className="font-medium">Section 2 → Access Management</strong>,
+        add an upon-death trusted person and mark{' '}
+        <strong className="font-medium">Next-of-Kin Letter Received</strong>.
+        They will show up here automatically.
+      </p>
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="space-y-2.5">
+      {[0, 1].map(i => (
+        <div
+          key={i}
+          className="flex items-center gap-3 rounded-2xl border bg-card p-3"
+        >
+          <div className="h-9 w-9 animate-pulse rounded-xl bg-muted" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-3.5 w-32 animate-pulse rounded-full bg-muted" />
+            <div className="h-3 w-48 max-w-full animate-pulse rounded-full bg-muted" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -139,9 +438,11 @@ function InfoPill({
 export default function Section3NextOfKinLetter({
   data = {},
   onChange = () => {},
+  isActive = false,
 }: Props) {
   const isMobile = useIsMobile();
   const [letterSheetOpen, setLetterSheetOpen] = useState(false);
+  const [previewNokId, setPreviewNokId] = useState<string | null>(null);
   const { data: nextKinPeople = [], isLoading } =
     useGetMyNextKinQuery(undefined);
 
@@ -159,7 +460,6 @@ export default function Section3NextOfKinLetter({
     ) {
       return data.selected_nok_id;
     }
-
     return letterReadyPeople[0]?.id || '';
   }, [data.selected_nok_id, letterReadyPeople]);
 
@@ -210,99 +510,22 @@ export default function Section3NextOfKinLetter({
     setLetterSheetOpen(true);
   };
 
+  const openPreviewForRecipient = (nokId: string) => {
+    handleRecipientChange(nokId);
+    setPreviewNokId(nokId);
+  };
+
+  const previewPerson = letterReadyPeople.find(p => p.id === previewNokId);
+
   return (
-    <section className="space-y-5 sm:space-y-7">
-      {/* ================= HERO ================= */}
-      <div className="relative overflow-hidden rounded-[1.75rem] border border-border/60 bg-gradient-to-br from-primary/10 via-background to-muted/50 shadow-sm sm:rounded-[2.25rem]">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-primary/15 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-28 -left-20 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl" />
-
-        <div className="relative grid gap-6 p-4 sm:p-7 lg:grid-cols-[1.15fr_0.85fr] lg:p-8">
-          <div className="flex flex-col justify-between gap-6">
-            <div>
-              <Badge
-                variant="outline"
-                className="mb-4 rounded-full border-primary/20 bg-background/80 px-3 py-1 text-primary shadow-sm backdrop-blur"
-              >
-                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                Section 3
-              </Badge>
-
-              <h2 className="max-w-3xl text-2xl font-black tracking-tight text-foreground sm:text-3xl lg:text-4xl">
-                Letters to Next of Kin
-              </h2>
-
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-                Prepare a thoughtful, practical letter for the person who may
-                need to access your Orderly Affairs kit. The letter can include
-                access instructions, login details, document locations, and your
-                personal message.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <InfoPill
-                icon={<Users className="h-5 w-5" />}
-                title={`${letterReadyPeople.length}`}
-                subtitle="marked recipients"
-              />
-
-              <InfoPill
-                icon={<ShieldCheck className="h-5 w-5" />}
-                title="Auto-fill"
-                subtitle="from access management"
-              />
-
-              <InfoPill
-                icon={<FileText className="h-5 w-5" />}
-                title="Ready"
-                subtitle="preview, print, export"
-              />
-            </div>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-border/60 bg-background/85 p-4 shadow-xl shadow-black/5 backdrop-blur sm:rounded-[1.85rem] sm:p-5">
-            <div className="flex items-start gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-                <FileText className="h-6 w-6" />
-              </div>
-
-              <div>
-                <h3 className="text-base font-black text-foreground">
-                  Simple workflow
-                </h3>
-                <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                  Select a marked recipient, review the generated letter, then
-                  print, export, or open it in your email app.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {[
-                'Mark recipient in Access Management',
-                'Select the recipient here',
-                'Review and customize the letter',
-                'Preview, print, export, or email',
-              ].map((item, index) => (
-                <div
-                  key={item}
-                  className="flex items-center gap-3 rounded-2xl border border-border/60 bg-muted/30 px-3 py-3 sm:px-4"
-                >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background text-xs font-black shadow-sm">
-                    {index + 1}
-                  </span>
-                  <span className="text-sm font-semibold text-foreground">
-                    {item}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Hidden hook sync components */}
+    <Card
+      id="subsection-3A"
+      className={cn(
+        'overflow-hidden rounded-3xl border-slate-200/80 shadow-sm transition-all',
+        isActive && 'bg-primary/[0.02] ring-2 ring-primary/40',
+        isMobile && 'rounded-2xl',
+      )}
+    >
       {letterReadyPeople.map(person => (
         <MarkedNokLetterSync
           key={`letter-sync-${person.id}`}
@@ -310,186 +533,79 @@ export default function Section3NextOfKinLetter({
         />
       ))}
 
-      {/* ================= LOADING / EMPTY / RECIPIENTS ================= */}
-      {isLoading ? (
-        <Card className="overflow-hidden rounded-[1.75rem] border-border/60 sm:rounded-[2rem]">
-          <CardContent className="p-4 sm:p-7">
-            <div className="flex items-center gap-4 rounded-3xl border border-border/60 bg-muted/30 p-5">
-              <div className="h-11 w-11 animate-pulse rounded-2xl bg-muted" />
-              <div className="min-w-0 flex-1">
-                <div className="h-4 w-48 animate-pulse rounded-full bg-muted" />
-                <div className="mt-3 h-3 w-72 max-w-full animate-pulse rounded-full bg-muted" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : letterReadyPeople.length === 0 ? (
-        <Card className="overflow-hidden rounded-[1.75rem] border-amber-200 bg-amber-50/80 shadow-sm sm:rounded-[2rem]">
-          <CardContent className="p-4 sm:p-7">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
-                <AlertTriangle className="h-6 w-6" />
-              </div>
-
-              <div>
-                <h3 className="text-base font-black text-amber-950">
-                  No next-of-kin letter recipient is ready yet
-                </h3>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-900/80">
-                  Go to Access Management and mark at least one upon-death
-                  person as <strong>Next-of-Kin Letter Received</strong>. After
-                  that, this section will create a personalized letter for that
-                  person.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card
-          className={cn(
-            'overflow-hidden rounded-[1.75rem] border-border/60 shadow-sm sm:rounded-[2rem]',
-            isMobile && 'rounded-2xl border-0 bg-transparent shadow-none',
-          )}
-        >
-          <CardContent
+      <CardHeader className="border-b px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="flex items-center gap-2.5 text-base sm:gap-3 sm:text-xl">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-xs font-bold text-primary-foreground sm:h-9 sm:w-9 sm:text-sm">
+              {SECTION_3A.id}
+            </span>
+            <span>{SECTION_3A.title}</span>
+          </CardTitle>
+          <span
             className={cn(
-              'space-y-5',
-              isMobile ? 'p-0' : 'p-4 sm:p-6 lg:p-7',
+              'inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-xs',
+              letterReadyPeople.length > 0
+                ? 'border-emerald-200/80 bg-emerald-50/80 text-emerald-700'
+                : 'bg-muted/30 text-muted-foreground',
             )}
           >
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-lg font-black text-foreground">
-                    Choose Recipient
-                  </h3>
+            <FileText className="h-3.5 w-3.5 shrink-0" />
+            {isLoading
+              ? 'Loading…'
+              : letterReadyPeople.length > 0
+                ? `${letterReadyPeople.length} recipient${letterReadyPeople.length === 1 ? '' : 's'} ready`
+                : 'No recipients yet'}
+          </span>
+        </div>
+      </CardHeader>
 
-                  <Badge
-                    variant="outline"
-                    className="rounded-full border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700"
-                  >
-                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                    {letterReadyPeople.length} marked
-                  </Badge>
-                </div>
+      <CardContent className="space-y-4 p-3 sm:space-y-5 sm:p-6">
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_260px] xl:grid-cols-[minmax(0,1fr)_280px] xl:gap-6">
+          <div className="min-w-0 scroll-mt-6 space-y-3">
+            {letterReadyPeople.length > 0 && !isLoading && (
+              <p className="text-xs text-muted-foreground sm:text-sm">
+                Select a recipient and open their letter to review, customize,
+                print, or email.
+              </p>
+            )}
 
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                  {isMobile
-                    ? 'Tap a recipient to open the letter editor.'
-                    : 'Each marked upon-death person gets a separate letter using their name, email, phone, password card location, key bag location, and document bag location.'}
-                </p>
-              </div>
-
-              {!isMobile && (
-                <div className="w-full lg:w-80">
-                  <Select
-                    value={selectedNokId}
-                    onValueChange={handleRecipientChange}
-                  >
-                    <SelectTrigger className="h-12 rounded-2xl border-border/70 bg-background shadow-sm">
-                      <SelectValue placeholder="Select recipient" />
-                    </SelectTrigger>
-
-                    <SelectContent className="rounded-2xl">
-                      {letterReadyPeople.map(person => (
-                        <SelectItem key={person.id} value={person.id}>
-                          {getDisplayName(person)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
-
-            {isMobile ? (
-              <ul className="space-y-2" role="list">
+            {isLoading ? (
+              <LoadingState />
+            ) : letterReadyPeople.length === 0 ? (
+              <EmptyRecipientsState />
+            ) : (
+              <ul
+                className={cn(isMobile ? 'space-y-2.5' : 'space-y-3')}
+                role="list"
+              >
                 {letterReadyPeople.map(person => {
                   const isSelected = person.id === selectedNokId;
-                  const name = getDisplayName(person);
-
                   return (
                     <li key={person.id}>
-                      <RecipientListItem
-                        name={name}
-                        email={person.email}
-                        phone={person.phone_number}
+                      <RecipientCardWithStatus
+                        person={person}
                         isSelected={isSelected}
                         onOpen={() => openLetterForRecipient(person.id)}
+                        onPreview={() => openPreviewForRecipient(person.id)}
+                        compact={isMobile}
                       />
                     </li>
                   );
                 })}
               </ul>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {letterReadyPeople.map(person => {
-                  const isSelected = person.id === selectedNokId;
-                  const name = getDisplayName(person);
-
-                  return (
-                    <button
-                      key={person.id}
-                      type="button"
-                      onClick={() => openLetterForRecipient(person.id)}
-                      className={`group rounded-[1.5rem] border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
-                        isSelected
-                          ? 'border-primary/40 bg-primary/5 shadow-md shadow-primary/10 ring-2 ring-primary/15'
-                          : 'border-border/60 bg-background hover:border-primary/25'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-sm font-black transition ${
-                            isSelected
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
-                          }`}
-                        >
-                          {getInitials(name)}
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate font-black text-foreground">
-                              {name}
-                            </p>
-
-                            {isSelected && (
-                              <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                            )}
-                          </div>
-
-                          <div className="mt-3 space-y-2">
-                            {person.email && (
-                              <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                                <Mail className="h-3.5 w-3.5 shrink-0" />
-                                <span className="truncate">{person.email}</span>
-                              </div>
-                            )}
-
-                            {person.phone_number && (
-                              <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                                <Phone className="h-3.5 w-3.5 shrink-0" />
-                                <span className="truncate">
-                                  {person.phone_number}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
 
-      {/* ================= LETTER EDITOR (mobile bottom sheet) ================= */}
+          <aside className="hidden lg:block">
+            <div className="sticky top-6">
+              <GuidePanel />
+            </div>
+          </aside>
+        </div>
+
+        <MobileGuide />
+      </CardContent>
+
       {isMobile ? (
         <MobileBottomSheet
           open={letterSheetOpen && !!selectedNokId && !!selectedPerson}
@@ -534,6 +650,19 @@ export default function Section3NextOfKinLetter({
           </SheetContent>
         </Sheet>
       )}
-    </section>
+
+      {previewNokId && previewPerson && (
+        <NokLetterPreviewDialog
+          open={!!previewNokId}
+          onClose={() => setPreviewNokId(null)}
+          nokId={previewNokId}
+          person={previewPerson}
+          fallbackData={
+            (data.next_of_kin_letters_by_nok?.[previewNokId] ||
+              data.next_of_kin_letter_data) as any
+          }
+        />
+      )}
+    </Card>
   );
 }

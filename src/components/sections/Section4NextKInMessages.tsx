@@ -1,26 +1,25 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
 } from '@/components/common/ui/card';
-import { Badge } from '@/components/common/ui/badge';
 import { cn } from '@common/ui/utils';
 import { useIsMobile } from '@/components/MobileBottomSheet';
 import {
+  CalendarClock,
   ChevronDown,
   ChevronUp,
   FileText,
-  Video,
+  HeartHandshake,
+  MessageCircleHeart,
   Mic,
   ShieldCheck,
-  CalendarClock,
-  HeartHandshake,
   Sparkles,
-  MessageCircleHeart,
+  Video,
 } from 'lucide-react';
 import { DynamicFormField } from '@/components/DynamicFormField';
 
@@ -32,11 +31,27 @@ const SECTION_4A = {
       key: 'letters_data',
       label: 'Letters and Messages',
       type: 'LettersToNextOfKin',
-      helperText:
-        'Create and manage personal letters, video messages, and audio recordings for your loved ones',
     },
   ],
 };
+
+const GUIDE_STEPS = [
+  {
+    title: 'Choose recipient',
+    text: 'Pick someone from Access Management or enter their name and email.',
+    icon: HeartHandshake,
+  },
+  {
+    title: 'Create message',
+    text: 'Write a letter, record video or audio, or upload an existing file.',
+    icon: Sparkles,
+  },
+  {
+    title: 'Set delivery',
+    text: 'Deliver upon death or schedule for a specific date or occasion.',
+    icon: CalendarClock,
+  },
+];
 
 interface Props {
   data?: any;
@@ -44,6 +59,94 @@ interface Props {
   isActive?: boolean;
   fullFormData?: any;
   messagesClearNonce?: number;
+}
+
+function GuidePanel({ className }: { className?: string }) {
+  const [openIndex, setOpenIndex] = React.useState<number | null>(null);
+
+  return (
+    <div className={cn('space-y-3', className)}>
+      <div className="rounded-2xl border bg-card p-3.5 shadow-sm sm:rounded-3xl sm:p-4">
+        <h4 className="text-sm font-semibold">How it works</h4>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Tap a step for details.
+        </p>
+        <ol className="mt-3 space-y-1">
+          {GUIDE_STEPS.map((step, index) => {
+            const Icon = step.icon;
+            const isOpen = openIndex === index;
+            return (
+              <li key={step.title} className="overflow-hidden rounded-xl border">
+                <button
+                  type="button"
+                  onClick={() => setOpenIndex(isOpen ? null : index)}
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-muted/30"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="min-w-0 flex-1 text-sm font-medium">
+                    {index + 1}. {step.title}
+                  </span>
+                  {isOpen ? (
+                    <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  )}
+                </button>
+                {isOpen && (
+                  <p className="border-t bg-muted/20 px-3 py-2 text-xs leading-5 text-muted-foreground">
+                    {step.text}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-muted/20 px-3 py-3 text-center">
+        <div className="flex items-center justify-center gap-3 text-[11px] text-muted-foreground sm:text-xs">
+          <span className="inline-flex items-center gap-1">
+            <FileText className="h-3.5 w-3.5" />
+            Letters
+          </span>
+          <span className="text-slate-300">·</span>
+          <span className="inline-flex items-center gap-1">
+            <Video className="h-3.5 w-3.5" />
+            Video
+          </span>
+          <span className="text-slate-300">·</span>
+          <span className="inline-flex items-center gap-1">
+            <Mic className="h-3.5 w-3.5" />
+            Audio
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileGuide() {
+  return (
+    <details className="group rounded-2xl border bg-card lg:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 [&::-webkit-details-marker]:hidden">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <ShieldCheck className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">How it works</p>
+            <p className="text-xs text-muted-foreground">3 steps · message types</p>
+          </div>
+        </div>
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition group-open:rotate-180" />
+      </summary>
+      <div className="border-t px-3 pb-4 pt-3">
+        <GuidePanel />
+      </div>
+    </details>
+  );
 }
 
 export default function Section4NextOfKinMessages({
@@ -54,8 +157,6 @@ export default function Section4NextOfKinMessages({
   messagesClearNonce = 0,
 }: Props) {
   const isMobile = useIsMobile();
-  const [showGuide, setShowGuide] = useState(false);
-
   const subsectionData = data['4A'] || {};
 
   const updateSubsection = (key: string, value: any) => {
@@ -70,131 +171,47 @@ export default function Section4NextOfKinMessages({
 
   const savedMessagesCount = useMemo(() => {
     const lettersData = subsectionData?.letters_data;
-
     if (Array.isArray(lettersData)) return lettersData.length;
     if (Array.isArray(lettersData?.letters)) return lettersData.letters.length;
-
     return 0;
   }, [subsectionData]);
 
   return (
-    <section
+    <Card
       id="subsection-4A"
-      className={[
-        'relative overflow-hidden rounded-[28px] border bg-background shadow-sm transition-all duration-300',
-        isActive
-          ? 'border-primary/60 ring-4 ring-primary/10'
-          : 'border-border/70',
-      ].join(' ')}
+      className={cn(
+        'overflow-hidden rounded-3xl border-slate-200/80 shadow-sm transition-all',
+        isActive && 'bg-primary/[0.02] ring-2 ring-primary/40',
+        isMobile && 'rounded-2xl',
+      )}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.12),transparent_32%),linear-gradient(to_bottom,hsl(var(--muted)/0.35),transparent_45%)]" />
-
-      <Card className="relative border-0 bg-transparent shadow-none">
-        <CardHeader className="space-y-5 p-4 sm:p-6 lg:p-8">
-          <div className="grid gap-5 lg:grid-cols-[1fr_360px] lg:items-start">
-            <div className="min-w-0 space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary" className="rounded-full px-3 py-1">
-                  {SECTION_4A.id}
-                </Badge>
-
-                <Badge
-                  variant="outline"
-                  className="rounded-full border-primary/20 bg-primary/5 px-3 py-1 text-primary"
-                >
-                  <MessageCircleHeart className="mr-1 h-3 w-3" />
-                  Legacy messages
-                </Badge>
-
-                <Badge variant="outline" className="rounded-full px-3 py-1">
-                  {savedMessagesCount} saved
-                </Badge>
-              </div>
-
-              <div className="space-y-2">
-                <CardTitle className="text-[22px] font-semibold tracking-tight text-foreground sm:text-3xl">
-                  {SECTION_4A.title}
-                </CardTitle>
-
-                <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-                  Create private letters, audio recordings, and video messages
-                  for loved ones. Each message can be saved for delivery upon
-                  death or scheduled for a specific date.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 rounded-3xl border bg-background/85 p-2 shadow-sm backdrop-blur">
-              <FeaturePill icon={<FileText />} label="Letters" />
-              <FeaturePill icon={<Video />} label="Video" />
-              <FeaturePill icon={<Mic />} label="Audio" />
-            </div>
-          </div>
-
-          <div className="rounded-3xl border bg-background/90 p-4 shadow-sm backdrop-blur sm:p-5">
-            <button
-              type="button"
-              onClick={() => setShowGuide(prev => !prev)}
-              className="flex w-full items-center justify-between gap-4 text-left"
-            >
-              <div className="flex min-w-0 items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-foreground sm:text-base">
-                    Quick guide
-                  </h3>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground sm:text-sm">
-                    Keep the page clean, but open this when the user needs help.
-                  </p>
-                </div>
-              </div>
-
-              {showGuide ? (
-                <ChevronUp className="h-5 w-5 shrink-0 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
-              )}
-            </button>
-
-            {showGuide && (
-              <div className="mt-5 grid gap-3 border-t pt-5 sm:grid-cols-2 lg:grid-cols-3">
-                <GuideCard
-                  icon={<HeartHandshake className="h-4 w-4" />}
-                  title="Choose recipient"
-                  text="Select a person from Access Management or enter the details manually."
-                />
-
-                <GuideCard
-                  icon={<Sparkles className="h-4 w-4" />}
-                  title="Create message"
-                  text="Write a letter, record video, record audio, or upload an existing file."
-                />
-
-                <GuideCard
-                  icon={<CalendarClock className="h-4 w-4" />}
-                  title="Set delivery"
-                  text="Deliver upon death or schedule the message for a future date."
-                />
-              </div>
-            )}
-          </div>
-        </CardHeader>
-
-        <CardContent
-          className={cn(
-            'pt-0 sm:p-6 sm:pt-0 lg:p-8 lg:pt-0',
-            isMobile ? 'p-0' : 'p-3',
-          )}
-        >
-          <div
+      <CardHeader className="border-b px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="flex items-center gap-2.5 text-base sm:gap-3 sm:text-xl">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-xs font-bold text-primary-foreground sm:h-9 sm:w-9 sm:text-sm">
+              {SECTION_4A.id}
+            </span>
+            <span>{SECTION_4A.title}</span>
+          </CardTitle>
+          <span
             className={cn(
-              'rounded-[24px] border bg-card shadow-sm sm:p-5',
-              isMobile ? 'rounded-2xl border-0 bg-transparent p-0 shadow-none' : 'p-3',
+              'inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-xs',
+              savedMessagesCount > 0
+                ? 'border-emerald-200/80 bg-emerald-50/80 text-emerald-700'
+                : 'bg-muted/30 text-muted-foreground',
             )}
           >
+            <MessageCircleHeart className="h-3.5 w-3.5 shrink-0" />
+            {savedMessagesCount > 0
+              ? `${savedMessagesCount} message${savedMessagesCount === 1 ? '' : 's'}`
+              : 'No messages yet'}
+          </span>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4 p-3 sm:space-y-5 sm:p-6">
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_260px] xl:grid-cols-[minmax(0,1fr)_280px] xl:gap-6">
+          <div className="min-w-0 scroll-mt-6">
             {SECTION_4A.fields.map(field => (
               <DynamicFormField
                 key={field.key}
@@ -206,45 +223,16 @@ export default function Section4NextOfKinMessages({
               />
             ))}
           </div>
-        </CardContent>
-      </Card>
-    </section>
-  );
-}
 
-function FeaturePill({
-  icon,
-  label,
-}: {
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <div className="rounded-2xl bg-muted/60 p-3 text-center">
-      <div className="mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded-xl bg-background text-primary shadow-sm [&>svg]:h-4 [&>svg]:w-4">
-        {icon}
-      </div>
-      <p className="text-[11px] font-medium sm:text-xs">{label}</p>
-    </div>
-  );
-}
+          <aside className="hidden lg:block">
+            <div className="sticky top-6">
+              <GuidePanel />
+            </div>
+          </aside>
+        </div>
 
-function GuideCard({
-  icon,
-  title,
-  text,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  text: string;
-}) {
-  return (
-    <div className="rounded-2xl border bg-muted/30 p-4">
-      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-background text-primary shadow-sm">
-        {icon}
-      </div>
-      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
-      <p className="mt-1 text-xs leading-5 text-muted-foreground">{text}</p>
-    </div>
+        <MobileGuide />
+      </CardContent>
+    </Card>
   );
 }

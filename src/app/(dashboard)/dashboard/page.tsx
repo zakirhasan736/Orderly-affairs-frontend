@@ -14,10 +14,17 @@ import { deleteUpload } from '@/libs/api/upload';
 import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
 import {
   findDynamicTopic,
-  getDynamicTopicsForSubsection,
   getTopicElementId,
-  subsectionHasDynamicTopics,
 } from '@/utils/dynamicVaultTopics';
+import {
+  applySubsectionOrder,
+  loadSubsectionOrder,
+  remapTopicIdAfterReorder,
+  reorderIds,
+  reorderTopicInFormData,
+  saveSubsectionOrder,
+} from '@/utils/vaultNavOrder';
+import { VaultSidebarNavigation } from '@/components/VaultSidebarNavigation';
 
 import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
@@ -26,8 +33,6 @@ import { Card, CardContent } from '@/components/common/ui/card';
 import { Badge } from '@/components/common/ui/badge';
 import { Progress } from '@/components/common/ui/progress';
 import {
-  CheckCircle,
-  Circle,
   Save,
   FileText,
   User,
@@ -35,7 +40,6 @@ import {
   LayoutList,
   Clock3,
   MoreHorizontal,
-  X,
   ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -100,7 +104,7 @@ import { getSection18, saveSection18 } from '@/libs/api/section18';
 import { getSection19, saveSection19 } from '@/libs/api/section19';
 import { getSection20, saveSection20 } from '@/libs/api/section20';
 import { getSection21, saveSection21 } from '@/libs/api/section21';
-import { clearAllMessages } from '@/libs/api/lettersOfNaxtKinMessage';
+import { clearAllMessages, getMessages } from '@/libs/api/lettersOfNaxtKinMessage';
 
 import {
   mapUIToSection1Payload,
@@ -220,6 +224,7 @@ export default function DashboardPage() {
   const [messagesClearNonce, setMessagesClearNonce] = useState(0);
   const skipInitialContextualNavigation = useRef(true);
   const sectionLoadedSnapshotRef = useRef<Record<string, string>>({});
+  const sectionsPrefetchedRef = useRef(false);
   type DashboardFormData = Record<string, any>;
 
   const [formData, setFormData] = useState<DashboardFormData>({});
@@ -241,7 +246,24 @@ export default function DashboardPage() {
   const [collapsedSubsections, setCollapsedSubsections] = useState<
     Record<string, boolean>
   >({ '17E': true }); // Start with 17E collapsed
-  const allSections = VAULT_NAVIGATION;
+  const [subsectionOrder, setSubsectionOrder] = useState<
+    Record<string, string[]>
+  >({});
+  const allSections = useMemo(
+    () =>
+      VAULT_NAVIGATION.map(section => {
+        if (!section.subsections?.length) return section;
+        return {
+          ...section,
+          subsections: applySubsectionOrder(
+            section.subsections,
+            section.id,
+            subsectionOrder,
+          ),
+        };
+      }),
+    [subsectionOrder],
+  );
   // Sections that include obituary content (marked with dove symbol)
   const obituarySections = useMemo(
     () => new Set(['7', '8', '9', '10', '16']),
@@ -252,7 +274,185 @@ export default function DashboardPage() {
   const { data: dashboardNokLetter } = useGetNokLetterQuery(
     firstNokId ? { nokId: firstNokId } : undefined,
   );
+
+  const recordLoadedSection = useCallback(
+    (sectionId: string, data: unknown) => {
+      if (data == null) return;
+      if (
+        typeof data === 'object' &&
+        !Array.isArray(data) &&
+        Object.keys(data as object).length === 0
+      ) {
+        return;
+      }
+
+      sectionLoadedSnapshotRef.current[sectionId] = JSON.stringify(data);
+      setFormData(prev => ({
+        ...prev,
+        [sectionId]: data,
+      }));
+    },
+    [],
+  );
+
+  // Prefetch all owner section data on load so sidebar checkmarks are accurate
+  // without requiring the user to visit each section first.
   useEffect(() => {
+    if (appMode !== 'owner') {
+      sectionsPrefetchedRef.current = false;
+      return;
+    }
+
+    if (sectionsPrefetchedRef.current) return;
+
+    const token = Cookies.get('auth_token');
+    if (!token) return;
+
+    sectionsPrefetchedRef.current = true;
+
+    getSection1(token)
+      .then(res => recordLoadedSection('1', mapSection1ResponseToUI(res)))
+      .catch(err => console.error('Failed to load Section 1', err));
+
+    getSection5(token)
+      .then(res => {
+        if (res?.data) recordLoadedSection('5', res.data);
+      })
+      .catch(err => console.error('Failed to load Section 5', err));
+
+    getSection6(token)
+      .then(res => recordLoadedSection('6', res.data))
+      .catch(err => console.error('Failed to load Section 6', err));
+    getSection7(token)
+      .then(res => recordLoadedSection('7', res.data))
+      .catch(err => console.error('Failed to load Section 7', err));
+    getSection8(token)
+      .then(res => recordLoadedSection('8', res.data))
+      .catch(err => console.error('Failed to load Section 8', err));
+    getSection9(token)
+      .then(res => recordLoadedSection('9', res.data))
+      .catch(err => console.error('Failed to load Section 9', err));
+    getSection10(token)
+      .then(res => recordLoadedSection('10', res.data))
+      .catch(err => console.error('Failed to load Section 10', err));
+    getSection11(token)
+      .then(res => recordLoadedSection('11', res.data))
+      .catch(err => console.error('Failed to load Section 11', err));
+    getSection12(token)
+      .then(res => {
+        if (res?.data) recordLoadedSection('12', res.data);
+      })
+      .catch(err => console.error('Failed to load Section 12', err));
+    getSection13(token)
+      .then(res => {
+        if (res?.data) recordLoadedSection('13', res.data);
+      })
+      .catch(err => console.error('Failed to load Section 13', err));
+    getSection14(token)
+      .then(res => {
+        if (res?.data) recordLoadedSection('14', res.data);
+      })
+      .catch(err => console.error('Failed to load Section 14', err));
+    getSection15(token)
+      .then(res => {
+        if (res?.data) recordLoadedSection('15', res.data);
+      })
+      .catch(err => console.error('Failed to load Section 15', err));
+    getSection16(token)
+      .then(res => {
+        if (res?.data) recordLoadedSection('16', res.data);
+      })
+      .catch(err => console.error('Failed to load Section 16', err));
+    getSection17(token)
+      .then(res => {
+        if (res?.data) recordLoadedSection('17', res.data);
+      })
+      .catch(err => console.error('Failed to load Section 17', err));
+    getSection18(token)
+      .then(res => {
+        if (res?.data) recordLoadedSection('18', res.data);
+      })
+      .catch(err => console.error('Failed to load Section 18', err));
+    getSection19(token)
+      .then(res => {
+        if (res?.data) recordLoadedSection('19', res.data);
+      })
+      .catch(err => console.error('Failed to load Section 19', err));
+    getSection20(token)
+      .then(res => {
+        if (res?.data) recordLoadedSection('20', res.data);
+      })
+      .catch(err => console.error('Failed to load Section 20', err));
+    getSection21(token)
+      .then(res => {
+        if (res?.data) recordLoadedSection('21', res.data);
+      })
+      .catch(err => console.error('Failed to load Section 21', err));
+
+    getMessages(token)
+      .then(messages => {
+        if (Array.isArray(messages) && messages.length > 0) {
+          recordLoadedSection('4', { '4A': { letters_data: messages } });
+        }
+      })
+      .catch(err => console.error('Failed to load Section 4 messages', err));
+  }, [appMode, recordLoadedSection]);
+
+  // Section 3 letters are stored per next-of-kin via a separate API.
+  useEffect(() => {
+    if (appMode !== 'owner' || !Array.isArray(myNextKin) || myNextKin.length === 0) {
+      return;
+    }
+
+    const token = Cookies.get('auth_token');
+    if (!token) return;
+
+    const letterReadyPeople = myNextKin.filter(
+      person => !person.immediate_access && person.nok_letter_received,
+    );
+
+    if (letterReadyPeople.length === 0) return;
+
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+
+    Promise.all(
+      letterReadyPeople.map(person =>
+        fetch(
+          `${apiBase}/nok-letter?nok_id=${encodeURIComponent(person.id)}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        ).then(res => (res.ok ? res.json() : null)),
+      ),
+    )
+      .then(results => {
+        const lettersByNok: Record<string, unknown> = {};
+
+        results.forEach((letter, index) => {
+          if (
+            letter &&
+            typeof letter === 'object' &&
+            Object.keys(letter).length > 0
+          ) {
+            lettersByNok[letterReadyPeople[index].id] = letter;
+          }
+        });
+
+        if (Object.keys(lettersByNok).length === 0) return;
+
+        recordLoadedSection('3', {
+          selected_nok_id: letterReadyPeople[0].id,
+          next_of_kin_letter_data: lettersByNok[letterReadyPeople[0].id],
+          next_of_kin_letters_by_nok: lettersByNok,
+        });
+      })
+      .catch(err => console.error('Failed to load Section 3 letters', err));
+  }, [appMode, myNextKin, recordLoadedSection]);
+
+  // Refresh the active section when navigated (keeps data current after edits).
+  useEffect(() => {
+    if (appMode !== 'owner') return;
+
     if (
       ![
         '1',
@@ -274,82 +474,51 @@ export default function DashboardPage() {
         '20',
         '21',
       ].includes(activeSection)
-    )
+    ) {
       return;
+    }
 
     const token = Cookies.get('auth_token') || Cookies.get('nok_auth_token');
     if (!token) return;
 
-    getSection1(token).then(res => {
-      const sectionData = mapSection1ResponseToUI(res);
-      sectionLoadedSnapshotRef.current['1'] = JSON.stringify(sectionData);
-      setFormData(prev => ({
-        ...prev,
-        '1': sectionData,
-      }));
-    });
-    getSection5(token)
-      .then(res => {
-        if (res?.data) {
-          sectionLoadedSnapshotRef.current['5'] = JSON.stringify(res.data);
-          setFormData(prev => ({
-            ...prev,
-            '5': res.data,
-          }));
-        }
-      })
-      .catch(err => {
-        console.error('Failed to load Section 5', err);
-      });
-    const recordLoadedSection = (sectionId: string, data: unknown) => {
-      sectionLoadedSnapshotRef.current[sectionId] = JSON.stringify(data);
-      setFormData(prev => ({
-        ...prev,
-        [sectionId]: data,
-      }));
+    if (activeSection === '1') {
+      getSection1(token)
+        .then(res => recordLoadedSection('1', mapSection1ResponseToUI(res)))
+        .catch(err => console.error('Failed to refresh Section 1', err));
+      return;
+    }
+
+    const refreshMap: Record<string, (t: string) => Promise<{ data?: unknown }>> = {
+      '5': getSection5,
+      '6': getSection6,
+      '7': getSection7,
+      '8': getSection8,
+      '9': getSection9,
+      '10': getSection10,
+      '11': getSection11,
+      '12': getSection12,
+      '13': getSection13,
+      '14': getSection14,
+      '15': getSection15,
+      '16': getSection16,
+      '17': getSection17,
+      '18': getSection18,
+      '19': getSection19,
+      '20': getSection20,
+      '21': getSection21,
     };
 
-    getSection6(token).then(res => recordLoadedSection('6', res.data));
-    getSection7(token).then(res => recordLoadedSection('7', res.data));
-    getSection8(token).then(res => recordLoadedSection('8', res.data));
-    getSection9(token).then(res => recordLoadedSection('9', res.data));
-    getSection10(token).then(res => recordLoadedSection('10', res.data));
-    getSection11(token).then(res => recordLoadedSection('11', res.data));
-    getSection12(token).then(res => {
-      if (res?.data) recordLoadedSection('12', res.data);
-    });
-    getSection13(token).then(res => {
-      if (res?.data) recordLoadedSection('13', res.data);
-    });
-    getSection14(token).then(res => {
-      if (res?.data) recordLoadedSection('14', res.data);
-    });
-    getSection15(token).then(res => {
-      if (res?.data) recordLoadedSection('15', res.data);
-    });
-    getSection16(token).then(res => {
-      if (res?.data) recordLoadedSection('16', res.data);
-    });
-    getSection17(token).then(res => {
-      if (res?.data) recordLoadedSection('17', res.data);
-    });
-    getSection18(token).then(res => {
-      if (res?.data) recordLoadedSection('18', res.data);
-    });
-    getSection19(token).then(res => {
-      if (res?.data) recordLoadedSection('19', res.data);
-    });
-    getSection20(token).then(res => {
-      if (res?.data) recordLoadedSection('20', res.data);
-    });
-    getSection21(token)
+    const loader = refreshMap[activeSection];
+    if (!loader) return;
+
+    loader(token)
       .then(res => {
-        if (res?.data) recordLoadedSection('21', res.data);
+        if (res?.data) recordLoadedSection(activeSection, res.data);
       })
-      .catch(err => {
-        console.error('Failed to load Section 12', err);
-      });
-  }, [activeSection]);
+      .catch(err =>
+        console.error(`Failed to refresh Section ${activeSection}`, err),
+      );
+  }, [activeSection, appMode, recordLoadedSection]);
 
   // Timer refs for cleanup
   const autoSaveRef = useRef<NodeJS.Timeout | null>(null);
@@ -487,7 +656,7 @@ export default function DashboardPage() {
       }
     }
 
-    setAppMode('owner_login');
+    router.replace('/');
   }, [router]);
 
   // Load form data when switching to owner mode
@@ -541,6 +710,8 @@ export default function DashboardPage() {
           console.error('Error loading collapsed subsections:', error);
         }
       }
+
+      setSubsectionOrder(loadSubsectionOrder());
     }
   }, [appMode]); // Only when appMode changes to 'owner'
 
@@ -586,7 +757,8 @@ export default function DashboardPage() {
               owner_id: decoded.owner_id,
             });
             setAppMode('nok_dashboard');
-            router.push('/dashboard');
+            setActiveSection('dashboard');
+            router.replace('/dashboard');
             toast.success(`Welcome back, ${decoded.email}!`);
           } else {
             toast.error('Invalid role in token.');
@@ -708,7 +880,6 @@ export default function DashboardPage() {
     (sectionId: string) => {
       if (disabledSections[sectionId]) return true;
 
-      // 🔥 SPECIAL CASE: INSTRUCTIONS
       if (sectionId === '0') {
         return instructionRead;
       }
@@ -717,12 +888,35 @@ export default function DashboardPage() {
         return Array.isArray(myNextKin) && myNextKin.length > 0;
       }
 
+      if (sectionId === '3') {
+        const lettersByNok = formData['3']?.next_of_kin_letters_by_nok;
+        if (
+          lettersByNok &&
+          Object.values(lettersByNok).some(
+            letter =>
+              letter &&
+              typeof letter === 'object' &&
+              Object.keys(letter as object).length > 0,
+          )
+        ) {
+          return true;
+        }
+
+        return Boolean(dashboardNokLetter && Object.keys(dashboardNokLetter).length > 0);
+      }
+
+      if (sectionId === '4') {
+        const letters = formData['4']?.['4A']?.letters_data;
+        if (Array.isArray(letters) && letters.length > 0) return true;
+        return false;
+      }
+
       const sectionData = formData[sectionId];
       if (!sectionData) return false;
 
       return Object.keys(sectionData).length > 0;
     },
-    [formData, disabledSections, myNextKin, instructionRead],
+    [formData, disabledSections, myNextKin, instructionRead, dashboardNokLetter],
   );
 
   // Simplified progress calculation to avoid performance issues
@@ -738,7 +932,15 @@ export default function DashboardPage() {
       console.error('Progress calculation error:', e);
       return 0;
     }
-  }, [allSections.length, formData, disabledSections, myNextKin]);
+  }, [
+    allSections.length,
+    formData,
+    disabledSections,
+    myNextKin,
+    instructionRead,
+    dashboardNokLetter,
+    getSectionCompletionStatus,
+  ]);
 
   const currentSectionLabel = useMemo(() => {
     if (activeSection === 'dashboard') {
@@ -1481,7 +1683,7 @@ export default function DashboardPage() {
       case '10':
         return 'Preserve your education, accomplishments, awards, and legacy details that may help your family tell your story.';
       case '11':
-        return 'Document military service details, deployments, records, DD-214 documents, VA benefits, and service legacy information.';
+        return 'Record each service period, deployments, DD-214 documents, VA benefits, and legacy contacts.';
       case '12':
         return 'Organize bank accounts, digital payment services, statements, account contacts, automatic payments, and safe deposit information.';
       case '13':
@@ -1556,6 +1758,54 @@ export default function DashboardPage() {
       }
     }, 120);
   };
+
+  const handleReorderSubsection = useCallback(
+    (sectionId: string, fromSubsectionId: string, toSubsectionId: string) => {
+      const section = VAULT_NAVIGATION.find(s => s.id === sectionId);
+      if (!section?.subsections) return;
+
+      const currentIds =
+        subsectionOrder[sectionId] ?? section.subsections.map(sub => sub.id);
+      const nextIds = reorderIds(currentIds, fromSubsectionId, toSubsectionId);
+      const nextOrder = { ...subsectionOrder, [sectionId]: nextIds };
+      setSubsectionOrder(nextOrder);
+      saveSubsectionOrder(nextOrder);
+    },
+    [subsectionOrder],
+  );
+
+  const handleReorderTopic = useCallback(
+    (
+      sectionId: string,
+      subsectionId: string,
+      fromTopicId: string,
+      toTopicId: string,
+    ) => {
+      const sectionData = formData[sectionId] as
+        | Record<string, unknown>
+        | undefined;
+      const reordered = reorderTopicInFormData(
+        sectionId,
+        subsectionId,
+        fromTopicId,
+        toTopicId,
+        sectionData,
+      );
+      if (!reordered) return;
+
+      updateSectionData(sectionId, reordered);
+      setActiveTopicId(prev => {
+        if (!prev) return prev;
+        return remapTopicIdAfterReorder(
+          prev,
+          subsectionId,
+          fromTopicId,
+          toTopicId,
+        );
+      });
+    },
+    [formData, updateSectionData],
+  );
 
   return (
     <>
@@ -1724,213 +1974,30 @@ export default function DashboardPage() {
         </header>
 
         <div className="flex min-h-[calc(100vh-76px)]">
-          {/* Sidebar drawer */}
-          <aside
-            className={`sidebar-navigation fixed inset-y-0 left-0 z-[70] w-[88vw] max-w-[330px] transform border-r border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out lg:sticky lg:top-0 lg:z-20 lg:h-screen lg:w-72 lg:max-w-none lg:translate-x-0 lg:shadow-none ${
-              sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-            }`}
-          >
-            <div className="flex h-full flex-col">
-              <div className="border-b border-slate-100 bg-white p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <Image
-                      src="/images/brand-logo.png"
-                      alt="Orderly Affairs Logo"
-                      width={44}
-                      height={44}
-                      className="h-10 w-10 object-contain"
-                    />
-                    <div className="min-w-0">
-                      <h2 className="truncate text-[14px] font-semibold text-[#10213f]">
-                        Vault Navigation
-                      </h2>
-                      <p className="text-[11px] font-medium text-slate-400">
-                        {completedSectionsCount} of {allSections.length}{' '}
-                        completed
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setSidebarOpen(false)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-slate-500 lg:hidden"
-                    aria-label="Close navigation"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-
-                <div className="mt-4 flex items-center gap-3">
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
-                    <Progress value={progress} className="h-full w-full" />
-                  </div>
-                  <span className="text-xs font-semibold text-[#10213f]">
-                    {progress}%
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-3 py-4">
-                <button
-                  type="button"
-                  onClick={goToDashboard}
-                  className={`owner-dashboard-item mb-3 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition ${
-                    activeSection === 'dashboard'
-                      ? 'bg-[#10213f] text-white shadow-lg shadow-slate-900/10'
-                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
-                      <Home className="h-4 w-4" />
-                    </span>
-                    <span className="text-sm font-semibold">
-                      Dashboard Overview
-                    </span>
-                  </span>
-                  <ChevronRight className="h-4 w-4 opacity-60" />
-                </button>
-
-                <div className="space-y-2">
-                  {allSections.map(section => {
-                    const isSelected =
-                      activeSection === section.id && !activeSubsection;
-                    const isExpanded =
-                      activeSection === section.id &&
-                      !disabledSections[section.id];
-                    const isComplete = getSectionCompletionStatus(section.id);
-
-                    return (
-                      <div
-                        key={`main-section-${section.id}`}
-                        className="space-y-1"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => goToSection(section.id)}
-                          className={`section-${section.id}-nav flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
-                            isSelected
-                              ? 'bg-[#10213f] text-white shadow-lg shadow-slate-900/10'
-                              : 'text-slate-700 hover:bg-slate-50'
-                          } ${disabledSections[section.id] ? 'opacity-55' : ''}`}
-                        >
-                          <span
-                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
-                              isSelected ? 'bg-white/15' : 'bg-slate-100'
-                            }`}
-                          >
-                            {isComplete ? (
-                              <CheckCircle className="h-4 w-4 text-emerald-500" />
-                            ) : (
-                              <Circle className="h-4 w-4" />
-                            )}
-                          </span>
-
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold">
-                              {(obituarySections.has(section.id) ||
-                                hasDoveTag(section.id)) && (
-                                <span className="mr-1">🕊️</span>
-                              )}
-                              {section.id}. {section.title}
-                            </span>
-                            {disabledSections[section.id] && (
-                              <span className="text-[10px] font-semibold text-slate-400">
-                                Not Applicable
-                              </span>
-                            )}
-                          </span>
-                        </button>
-
-                        {section.subsections && isExpanded && (
-                          <div className="ml-4 space-y-1 border-l border-slate-100 pl-3">
-                            {section.subsections.map((subsection: any) => {
-                              const dynamicTopics = subsectionHasDynamicTopics(
-                                section.id,
-                                subsection.id,
-                              )
-                                ? getDynamicTopicsForSubsection(
-                                    section.id,
-                                    subsection.id,
-                                    formData[section.id],
-                                  )
-                                : [];
-
-                              const isSubsectionActive =
-                                activeSubsection === subsection.id &&
-                                !activeTopicId;
-
-                              return (
-                                <div
-                                  key={`section-${section.id}-subsection-${subsection.id}`}
-                                  className="space-y-1"
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      goToSubsection(section.id, subsection.id)
-                                    }
-                                    className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${
-                                      isSubsectionActive ||
-                                      (activeSubsection === subsection.id &&
-                                        dynamicTopics.length === 0)
-                                        ? 'bg-slate-100 font-semibold text-[#10213f]'
-                                        : activeSubsection === subsection.id
-                                          ? 'font-semibold text-[#10213f]'
-                                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                                    } ${disabledSubsections[subsection.id] ? 'opacity-50' : ''}`}
-                                  >
-                                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
-                                    <span className="min-w-0 flex-1 truncate">
-                                      {(obituarySubsections.has(subsection.id) ||
-                                        hasDoveTag(section.id, subsection.id)) && (
-                                        <span className="mr-1">🕊️</span>
-                                      )}
-                                      {subsection.id}. {subsection.title}
-                                    </span>
-                                  </button>
-
-                                  {dynamicTopics.length > 0 && (
-                                    <div className="ml-3 space-y-1 border-l border-slate-100 pl-3">
-                                      {dynamicTopics.map(topic => (
-                                        <button
-                                          key={`topic-${topic.id}`}
-                                          type="button"
-                                          onClick={() =>
-                                            goToTopic(
-                                              section.id,
-                                              subsection.id,
-                                              topic.id,
-                                            )
-                                          }
-                                          className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs transition ${
-                                            activeTopicId === topic.id
-                                              ? 'bg-blue-50 font-semibold text-[#10213f]'
-                                              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                                          }`}
-                                        >
-                                          <span className="h-1 w-1 shrink-0 rounded-full bg-current opacity-50" />
-                                          <span className="min-w-0 flex-1 truncate">
-                                            {topic.label}
-                                          </span>
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </aside>
+          <VaultSidebarNavigation
+            sections={allSections}
+            activeSection={activeSection}
+            activeSubsection={activeSubsection}
+            activeTopicId={activeTopicId}
+            disabledSections={disabledSections}
+            disabledSubsections={disabledSubsections}
+            formData={formData}
+            progress={progress}
+            completedSectionsCount={completedSectionsCount}
+            totalSectionsCount={allSections.length}
+            getSectionCompletionStatus={getSectionCompletionStatus}
+            obituarySections={obituarySections}
+            obituarySubsections={obituarySubsections}
+            hasDoveTag={hasDoveTag}
+            sidebarOpen={sidebarOpen}
+            onCloseSidebar={() => setSidebarOpen(false)}
+            goToDashboard={goToDashboard}
+            goToSection={goToSection}
+            goToSubsection={goToSubsection}
+            goToTopic={goToTopic}
+            onReorderSubsection={handleReorderSubsection}
+            onReorderTopic={handleReorderTopic}
+          />
 
           {/* Drawer overlay */}
           {sidebarOpen && (
@@ -2055,6 +2122,59 @@ export default function DashboardPage() {
                     </div>
                   </section>
 
+                  {activeSection === '11' && (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="flex cursor-pointer items-start gap-3 rounded-[20px] border border-slate-200 bg-slate-50/80 p-4 shadow-sm sm:items-center sm:rounded-[24px] sm:p-5">
+                        <input
+                          type="checkbox"
+                          id="military-service-opt-out"
+                          checked={disabledSections['11'] || false}
+                          onChange={e =>
+                            toggleSectionDisabled('11', e.target.checked)
+                          }
+                          className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-primary focus:ring-primary sm:mt-0"
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-[#10213f] sm:text-[15px]">
+                            I have not served in the military
+                          </span>
+                          <span className="mt-1 block text-sm leading-6 text-slate-500">
+                            Marks this section as not applicable.
+                          </span>
+                        </span>
+                      </label>
+
+                      <div className="flex items-start gap-3 rounded-[20px] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-[24px] sm:p-5">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-[#10213f]">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div>
+                            <h3 className="text-sm font-semibold text-[#10213f]">
+                              VA Burial Benefits
+                            </h3>
+                            <p className="mt-0.5 text-sm text-slate-500">
+                              Official VA burial allowance information.
+                            </p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              window.open(
+                                'https://www.va.gov/burials-memorials/veterans-burial-allowance/',
+                                '_blank',
+                              )
+                            }
+                            className="w-auto shrink-0 rounded-2xl"
+                          >
+                            Open VA Info
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div
                     className={`transition-all duration-300 ${
                       disabledSections[activeSection]
@@ -2064,61 +2184,6 @@ export default function DashboardPage() {
                   >
                     {renderSection()}
                   </div>
-
-                  {activeSection === '11' && (
-                    <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-[#10213f]">
-                          <FileText className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-semibold text-[#10213f]">
-                            VA Burial Benefits Information
-                          </h3>
-                          <p className="mt-1 text-sm text-slate-500">
-                            Open official VA information in a new tab.
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          window.open(
-                            'https://www.va.gov/burials-memorials/veterans-burial-allowance/',
-                            '_blank',
-                          )
-                        }
-                        className="rounded-2xl"
-                      >
-                        Open VA Info
-                      </Button>
-                    </div>
-                  )}
-
-                  {activeSection === '11' && (
-                    <label className="flex cursor-pointer items-start gap-3 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
-                      <input
-                        type="checkbox"
-                        id="military-service-opt-out"
-                        checked={disabledSections['11'] || false}
-                        onChange={e =>
-                          toggleSectionDisabled('11', e.target.checked)
-                        }
-                        className="mt-1 h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-                      />
-                      <span>
-                        <span className="block text-sm font-semibold text-[#10213f]">
-                          I have not served in the military.
-                        </span>
-                        <span className="mt-1 block text-sm leading-6 text-slate-500">
-                          Check this box if you have never served in any branch
-                          of the military. This marks the section as not
-                          applicable.
-                        </span>
-                      </span>
-                    </label>
-                  )}
 
                   {activeSection === '4' && (
                     <div className="flex flex-col gap-3 rounded-[24px] border border-rose-100 bg-rose-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">

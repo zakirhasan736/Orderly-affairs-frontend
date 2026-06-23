@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -30,6 +30,10 @@ import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
+import {
+  validateAiDocumentFile,
+} from '@/utils/aiDocumentUploadUi';
+import { useAiDocumentDropZone } from '@/hooks/useAiDocumentDropZone';
 import {
   getTopicCardProps,
   useScrollToVaultTopic,
@@ -398,6 +402,8 @@ export default function Section16CreditCardsDebt({
     Record<string, UploadedAIFile | null>
   >({});
 
+  const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
+
   const creditCards: any[] = Array.isArray(data['16A']) ? data['16A'] : [];
   const debts: any[] = Array.isArray(data['16B']) ? data['16B'] : [];
 
@@ -463,7 +469,7 @@ export default function Section16CreditCardsDebt({
   };
 
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return uploadedFiles[scope] || null;
+    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
   };
 
   const cleanPatchObject = (patch: any) => {
@@ -514,9 +520,9 @@ export default function Section16CreditCardsDebt({
     return [];
   };
 
-  const handleDocumentUpload = async (
-    file?: File | null,
+  const handleDocumentUpload = async (file?: File | null,
     scope?: UploadScope,
+    runAutofill?: () => void | Promise<void>,
   ) => {
     try {
       if (!file || !scope) return;
@@ -524,30 +530,34 @@ export default function Section16CreditCardsDebt({
       setAiError('');
       setAiNotice('');
 
-      if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
-        setAiError('Upload PDF, TXT, PNG, JPG, JPEG, or WEBP only.');
+            const validationError = validateAiDocumentFile(file);
+      if (validationError) {
+        setAiError(validationError);
         return;
       }
 
-      if (file.size > MAX_UPLOAD_SIZE) {
-        setAiError('File too large. Max 15MB.');
-        return;
-      }
-
-      setUploadingScope(scope);
+      setUploadingScope(scope as UploadScope);
 
       const uploaded = await uploadAIDocument(file);
 
+      const uploadedRecord: UploadedAIFile = {
+        file_id: uploaded.file_id,
+        mime_type: uploaded.mime_type,
+        expires_at: uploaded.expires_at,
+      };
+
+      latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
         ...prev,
- [scope]: {
-    file_id: uploaded.file_id,
-    mime_type: uploaded.mime_type,
-    expires_at: uploaded.expires_at,
-  },
+        [scope]: uploadedRecord,
       }));
 
-      setAiNotice('Document uploaded. You can now use AI autofill.');
+      setUploadingScope(null);
+      setAiNotice('Document uploaded. Running AI autofill…');
+
+      if (runAutofill) {
+        await runAutofill();
+      }
     } catch (err: any) {
       setAiError(err?.message || 'Document upload failed');
     } finally {
@@ -646,6 +656,10 @@ export default function Section16CreditCardsDebt({
     const uploadedFile = getUploadedFileForScope(scope);
     const isUploading = uploadingScope === scope;
     const isReading = aiLoadingScope === scope;
+    const { isDragging, processFile, dropZoneProps } = useAiDocumentDropZone(
+      uploaded => handleDocumentUpload(uploaded, scope, onAutofill),
+      isAnyAIActionRunning,
+    );
     const isCreditCard = subsection === '16A';
 
     const wrapperClass = isCreditCard
@@ -721,6 +735,7 @@ export default function Section16CreditCardsDebt({
 
         <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
           <label
+            {...dropZoneProps}
             className={[
               'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center transition',
               uploadBoxClass,
@@ -737,7 +752,7 @@ export default function Section16CreditCardsDebt({
               disabled={isAnyAIActionRunning}
               onChange={event => {
                 const file = event.currentTarget.files?.[0] || null;
-                void handleDocumentUpload(file, scope);
+                processFile(file);
                 event.currentTarget.value = '';
               }}
             />
@@ -746,7 +761,7 @@ export default function Section16CreditCardsDebt({
 
             <div>
               <p className="text-sm font-medium text-slate-800">
-                Click to upload credit/debt document
+                Drag and drop or click to upload credit/debt document
               </p>
               <p className="text-xs text-slate-500">
                 PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB

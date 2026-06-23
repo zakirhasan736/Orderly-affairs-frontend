@@ -41,7 +41,7 @@ function topicConfig(
   };
 }
 
-const SUBSECTION_TOPIC_CONFIG: Record<
+export const SUBSECTION_TOPIC_CONFIG: Record<
   string,
   Record<string, SubsectionTopicConfig>
 > = {

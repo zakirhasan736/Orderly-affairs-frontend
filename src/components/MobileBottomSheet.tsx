@@ -17,6 +17,11 @@ export const MOBILE_SHEET_Z = 'z-[70]';
 export const MOBILE_SHEET_SCROLL_PADDING =
   'pb-[max(2rem,env(safe-area-inset-bottom))]';
 
+/** Opaque panel/footer classes — safe on Safari/WebKit with transform animations */
+export const MOBILE_SHEET_PANEL_CLASS = 'mobile-sheet-panel';
+export const MOBILE_SHEET_OVERLAY_CLASS = 'mobile-sheet-overlay';
+export const MOBILE_SHEET_FOOTER_CLASS = 'mobile-sheet-footer';
+
 export function useIsMobile(breakpoint = 768) {
   const query = `(max-width: ${breakpoint - 1}px)`;
 
@@ -74,7 +79,7 @@ export function MobileBottomSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22 }}
-            className="absolute inset-0 bg-black/60 backdrop-blur-[1px]"
+            className={cn('absolute inset-0', MOBILE_SHEET_OVERLAY_CLASS)}
             onClick={onClose}
           />
           <motion.div
@@ -86,12 +91,21 @@ export function MobileBottomSheet({
             exit={{ y: '100%' }}
             transition={MOBILE_SHEET_SPRING}
             className={cn(
-              'absolute inset-x-0 bottom-0 flex max-h-[96dvh] flex-col overflow-hidden rounded-t-[1.75rem] bg-background shadow-2xl',
+              'absolute inset-x-0 bottom-0 flex max-h-[96dvh] flex-col overflow-hidden rounded-t-[1.75rem] shadow-2xl',
               'pb-[env(safe-area-inset-bottom)]',
               className,
             )}
           >
-            {children}
+            <div
+              className={cn(
+                'pointer-events-none absolute inset-0 rounded-t-[1.75rem]',
+                MOBILE_SHEET_PANEL_CLASS,
+              )}
+              aria-hidden
+            />
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              {children}
+            </div>
           </motion.div>
         </div>
       )}

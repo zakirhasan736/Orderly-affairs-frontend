@@ -200,10 +200,10 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
                 placeholder={field.placeholder || 'Select an option'}
               />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="z-[200] max-h-[min(60dvh,320px)]">
               {field.options?.map(option => (
                 <SelectItem key={option} value={option}>
-                  {option}
+                  {field.optionLabels?.[option] ?? option}
                 </SelectItem>
               ))}
             </SelectContent>

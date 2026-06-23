@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@common/ui/button';
 import { Badge } from '@common/ui/badge';
 import {
@@ -393,18 +394,23 @@ export function PasswordCard({
 
   const handlePrint = () => {
     const htmlContent = generateCardHtml();
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+    const printWindow = window.open('', '_blank');
 
-    if (!printWindow) return;
+    if (!printWindow) {
+      toast.error('Pop-up blocked. Please allow pop-ups to print the card.');
+      return;
+    }
 
+    printWindow.document.open();
     printWindow.document.write(htmlContent);
     printWindow.document.close();
 
-    printWindow.onload = () => {
-      printWindow.focus();
+    printWindow.focus();
+
+    window.setTimeout(() => {
       printWindow.print();
       onPrint?.();
-    };
+    }, 300);
   };
 
   return (
