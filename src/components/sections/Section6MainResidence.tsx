@@ -36,7 +36,16 @@ import {
 } from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
-import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
+import {
+  createEmptyItemFromFields,
+  mergeAiPatchWithDefaults,
+} from '@/utils/aiPatchNormalizer';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import {
+  resolveAiUploadedFileForScope,
+  useRestoreAiPendingUploadForSection,
+} from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
@@ -598,6 +607,14 @@ export default function Section6MainResidence({
 
   const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
+  const aiRouting = useOptionalAiDocumentRouting();
+
+  useRestoreAiPendingUploadForSection({
+    sectionId: '6',
+    setUploadedFiles,
+    latestUploadRef,
+  });
+
   const subsectionData = data['6A'] || {};
   const show6A = !activeSubsection || activeSubsection === '6A';
 
@@ -605,7 +622,10 @@ export default function Section6MainResidence({
     uploadingScope !== null || aiLoadingScope !== null;
 
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+    const pendingFile =
+      aiRouting?.getPendingFileForSection('6', String(scope)) ?? null;
+
+    return resolveAiUploadedFileForScope(scope, uploadedFiles, latestUploadRef, pendingFile);
   };
 
   const updateField = (key: string, value: any) => {
@@ -686,11 +706,18 @@ export default function Section6MainResidence({
       setAiNotice('');
       setAiLoadingScope(scope);
 
-      const json = await autofillSectionFromDocument({
-        section: 'main_residence',
+      const json = await runAiSectionAutofill({
+        sectionKey: 'main_residence',
+        sectionId: '6',
         file_id: uploadedFile.file_id,
+        mime_type: uploadedFile.mime_type,
         subsection: '6A',
-      });
+        uploadScope: String(scope),
+        fields: SECTION_6A.fields,
+        aiRouting,
+        });
+
+      if (!json) return;
 
       const patch = json?.result?.patch ?? {};
       const subsectionPatch = cleanPatchObject(patch?.['6A']);
@@ -715,6 +742,7 @@ export default function Section6MainResidence({
       setAiError(err?.message || 'AI autofill failed');
     } finally {
       setAiLoadingScope(null);
+      releaseDeferredAiRoutingDialog(aiRouting);
     }
   };
 
@@ -731,6 +759,7 @@ export default function Section6MainResidence({
         isUploading={uploadingScope === scope}
         isReading={aiLoadingScope === scope}
         uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      highlightUpload={aiRouting?.shouldHighlightUpload('6', String(scope)) ?? false}
         onUpload={file =>
           handleDocumentUpload(file, scope, () => handleAutofill(scope))
         }

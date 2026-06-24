@@ -30,7 +30,16 @@ import {
 } from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
-import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
+import {
+  createEmptyItemFromFields,
+  mergeAiPatchWithDefaults,
+} from '@/utils/aiPatchNormalizer';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import {
+  resolveAiUploadedFileForScope,
+  useRestoreAiPendingUploadForSection,
+} from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
@@ -193,6 +202,14 @@ export default function Section10EducationAccomplishments({
 
   const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
+  const aiRouting = useOptionalAiDocumentRouting();
+
+  useRestoreAiPendingUploadForSection({
+    sectionId: '10',
+    setUploadedFiles,
+    latestUploadRef,
+  });
+
   const educationItems: any[] = Array.isArray(data['10A']) ? data['10A'] : [];
   const show10A = !activeSubsection || activeSubsection === '10A';
 
@@ -207,14 +224,7 @@ export default function Section10EducationAccomplishments({
     _deleted_files: [] as string[],
   });
 
-  const createEmptyEducation = () => {
-    return Object.fromEntries(
-      SECTION_10A.fields.map(field => [
-        field.key,
-        field.type === 'TextInputWithUpload' ? createEmptyUploadField() : '',
-      ]),
-    );
-  };
+  const createEmptyEducation = () => createEmptyItemFromFields(SECTION_10A.fields);
 
   const updateEducation = (next: any[]) => {
     onChange({
@@ -249,10 +259,14 @@ export default function Section10EducationAccomplishments({
     setItems: updateEducation,
     setAiNotice,
     describeFields: ['institution', 'school', 'degree'],
+    onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+    const pendingFile =
+      aiRouting?.getPendingFileForSection('10', String(scope)) ?? null;
+
+    return resolveAiUploadedFileForScope(scope, uploadedFiles, latestUploadRef, pendingFile);
   };
 
   const cleanPatchObject = (patch: any) => {
@@ -267,12 +281,8 @@ export default function Section10EducationAccomplishments({
     );
   };
 
-  const normalizeEducationPatch = (patch: any) => {
-    return {
-      ...createEmptyEducation(),
-      ...cleanPatchObject(patch),
-    };
-  };
+  const normalizeEducationPatch = (patch: any) =>
+    mergeAiPatchWithDefaults(patch, SECTION_10A.fields, createEmptyEducation);
 
   const extractEducationArrayFromPatch = (patch: any) => {
     const rawEducationItems = patch?.['10A'];
@@ -353,23 +363,34 @@ export default function Section10EducationAccomplishments({
       setAiNotice('');
       setAiLoadingScope(scope);
 
-      const json = await autofillSectionFromDocument({
-        section: 'education_accomplishments',
+      const json = await runAiSectionAutofill({
+        sectionKey: 'education_accomplishments',
+        sectionId: '10',
         file_id: uploadedFile.file_id,
+        mime_type: uploadedFile.mime_type,
         subsection: '10A',
-      });
+        uploadScope: String(scope),
+        fields: SECTION_10A.fields,
+        aiRouting,
+        });
+
+      if (!json) return;
 
       const patch = json?.result?.patch ?? {};
       const extractedEducationItems = extractEducationArrayFromPatch(patch);
 
-      if (
-        !multiItemAutofill.processExtraction(extractedEducationItems, educationIndex, {
+      const disposition = multiItemAutofill.processExtraction(
+        extractedEducationItems,
+        educationIndex,
+        {
           setAiError,
           setAiNotice,
-          emptyError: 'AI could not find education information in this document.',
-        })
-      ) {
-        return;
+          emptyError:
+            'AI could not find education information in this document.',
+        },
+      );
+      if (disposition !== 'pending_user') {
+        releaseDeferredAiRoutingDialog(aiRouting);
       }
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');
@@ -408,6 +429,7 @@ export default function Section10EducationAccomplishments({
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}
       uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      highlightUpload={aiRouting?.shouldHighlightUpload('10', String(scope)) ?? false}
       onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
       onAutofill={onAutofill}
     />

@@ -7,7 +7,6 @@ import React, {
   useRef,
 } from 'react';
 import { GuidedTour } from '@/onboarding/components/GuidedTour';
-import { shouldTriggerContextualTour } from '@/onboarding/utils/contextualTrigger';
 import { useOnboarding } from '@/onboarding/components/OnboardingProvider';
 
 import { deleteUpload } from '@/libs/api/upload';
@@ -25,6 +24,10 @@ import {
   saveSubsectionOrder,
 } from '@/utils/vaultNavOrder';
 import { VaultSidebarNavigation } from '@/components/VaultSidebarNavigation';
+import { AiDetectedInformationPanel } from '@/components/ai/AiDetectedInformationPanel';
+import { AiDocumentRoutingProvider } from '@/contexts/AiDocumentRoutingContext';
+import { AiPendingUploadSectionBanner } from '@/components/ai/AiPendingUploadSectionBanner';
+import { VaultExportMenu } from '@/components/VaultExportMenu';
 
 import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
@@ -222,16 +225,11 @@ export default function DashboardPage() {
   const [activeSubsection, setActiveSubsection] = useState<string | null>(null);
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
   const [messagesClearNonce, setMessagesClearNonce] = useState(0);
-  const skipInitialContextualNavigation = useRef(true);
   const sectionLoadedSnapshotRef = useRef<Record<string, string>>({});
   const sectionsPrefetchedRef = useRef(false);
   type DashboardFormData = Record<string, any>;
 
   const [formData, setFormData] = useState<DashboardFormData>({});
-  const contextualStep = useMemo(() => {
-    if (appMode !== 'owner') return null;
-    return shouldTriggerContextualTour(formData, myNextKin || []);
-  }, [formData, myNextKin, appMode]);
 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
@@ -647,7 +645,6 @@ export default function DashboardPage() {
           setActiveTopicId(null);
           setSidebarOpen(false);
           setMobileMoreOpen(false);
-          skipInitialContextualNavigation.current = true;
           setAppMode('owner');
           return;
         }
@@ -981,26 +978,8 @@ export default function DashboardPage() {
       setActiveTopicId(null);
       setSidebarOpen(false);
       setMobileMoreOpen(false);
-      skipInitialContextualNavigation.current = true;
     }
   }, [appMode]);
-
-  useEffect(() => {
-    if (!contextualStep) return;
-
-    if (skipInitialContextualNavigation.current) {
-      skipInitialContextualNavigation.current = false;
-      return;
-    }
-
-    if (contextualStep === 'assign_nok') {
-      setActiveSection('2');
-    }
-
-    if (contextualStep === 'create_messages') {
-      setActiveSection('4');
-    }
-  }, [contextualStep]);
 
   useEffect(() => {
     console.log('NextKin loaded:', myNextKin);
@@ -1154,28 +1133,14 @@ export default function DashboardPage() {
     }
   }, [formData, disabledSections, disabledSubsections, collapsedSubsections]);
 
-  const exportData = useCallback(() => {
-    try {
-      const exportData = {
-        formData,
-        disabledSections,
-        disabledSubsections,
-        exportDate: new Date().toISOString(),
-      };
-      const dataStr = JSON.stringify(exportData, null, 2);
-      const dataBlob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(dataBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'orderly-affairs-data.json';
-      link.click();
-      URL.revokeObjectURL(url);
-      toast.success('Data exported successfully!');
-    } catch (error) {
-      console.error('Export failed:', error);
-      toast.error('Export failed. Please try again.');
-    }
-  }, [formData, disabledSections, disabledSubsections]);
+  const exportPayload = useMemo(
+    () => ({
+      formData,
+      disabledSections,
+      disabledSubsections,
+    }),
+    [formData, disabledSections, disabledSubsections],
+  );
 
   const clearSectionData = useCallback(
     async (sectionId: string, subsectionId?: string) => {
@@ -1809,6 +1774,17 @@ export default function DashboardPage() {
 
   return (
     <>
+      <AiDocumentRoutingProvider
+        currentSectionId={activeSection}
+        onNavigateToSection={(sectionId, subsectionId) => {
+          if (subsectionId) {
+            goToSubsection(sectionId, subsectionId);
+            return;
+          }
+
+          goToSection(sectionId);
+        }}
+      >
       <div className="min-h-screen bg-[#f6f8fb] text-slate-950 pb-24 md:pb-0">
         {/* Mobile header — matches the clean app-style screenshot */}
         <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/95 backdrop-blur-xl md:hidden">
@@ -1915,14 +1891,18 @@ export default function DashboardPage() {
                   </span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={exportData}
-                  className="owners-states-export flex h-9 items-center gap-2 rounded-xl px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#10213f] active:scale-95"
-                >
-                  <ExportIcon />
-                  <span className="hidden xl:inline">Export</span>
-                </button>
+                <VaultExportMenu
+                  payload={exportPayload}
+                  trigger={
+                    <button
+                      type="button"
+                      className="owners-states-export flex h-9 items-center gap-2 rounded-xl px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#10213f] active:scale-95"
+                    >
+                      <ExportIcon />
+                      <span className="hidden xl:inline">Export</span>
+                    </button>
+                  }
+                />
               </div>
 
               <div className="owner-state-information group relative">
@@ -2042,6 +2022,8 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
+                  {appMode === 'owner' && <AiDetectedInformationPanel />}
+
                   <DataBindingDashboard
                     formData={formData}
                     nextKinList={myNextKin || []}
@@ -2067,6 +2049,11 @@ export default function DashboardPage() {
                 </div>
               ) : currentSection ? (
                 <div className="space-y-5 md:space-y-6">
+                  {appMode === 'owner' && (
+                    <AiPendingUploadSectionBanner
+                      activeSectionId={activeSection}
+                    />
+                  )}
                   <section className="overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-sm">
                     <div className="relative p-5 sm:p-6 md:p-7">
                       <div className="pointer-events-none absolute right-0 top-0 h-28 w-28 rounded-bl-[60px] bg-[#10213f]/5" />
@@ -2107,16 +2094,20 @@ export default function DashboardPage() {
                             <Save className="mr-2 h-4 w-4" />
                             {autoSaving ? 'Saving...' : 'Save'}
                           </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={exportData}
-                            className="rounded-2xl border-slate-200 bg-white px-4"
-                          >
-                            <ExportIcon />
-                            <span className="ml-2">Export</span>
-                          </Button>
+                          <VaultExportMenu
+                            payload={exportPayload}
+                            trigger={
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="rounded-2xl border-slate-200 bg-white px-4"
+                              >
+                                <ExportIcon />
+                                <span className="ml-2">Export</span>
+                              </Button>
+                            }
+                          />
                         </div>
                       </div>
                     </div>
@@ -2262,13 +2253,18 @@ export default function DashboardPage() {
                 >
                   Save Now <Save className="h-4 w-4" />
                 </button>
-                <button
-                  type="button"
-                  onClick={exportData}
-                  className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#10213f]"
-                >
-                  Export Data <ExportIcon />
-                </button>
+                <VaultExportMenu
+                  payload={exportPayload}
+                  align="start"
+                  trigger={
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#10213f]"
+                    >
+                      Export Data <ExportIcon />
+                    </button>
+                  }
+                />
                 <button
                   type="button"
                   onClick={handleOwnerLogout}
@@ -2392,6 +2388,7 @@ export default function DashboardPage() {
           />
         )}
       </div>
+      </AiDocumentRoutingProvider>
     </>
   );
 }

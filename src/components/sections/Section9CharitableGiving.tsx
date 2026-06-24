@@ -21,7 +21,16 @@ import {
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
-import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
+import {
+  createEmptyItemFromFields,
+  mergeAiPatchWithDefaults,
+} from '@/utils/aiPatchNormalizer';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import {
+  resolveAiUploadedFileForScope,
+  useRestoreAiPendingUploadForSection,
+} from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
@@ -185,6 +194,14 @@ export default function Section9CharitableGiving({
 
   const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
+  const aiRouting = useOptionalAiDocumentRouting();
+
+  useRestoreAiPendingUploadForSection({
+    sectionId: '9',
+    setUploadedFiles,
+    latestUploadRef,
+  });
+
   const charities: any[] = Array.isArray(data['9A']) ? data['9A'] : [];
   const show9A = !activeSubsection || activeSubsection === '9A';
 
@@ -205,14 +222,7 @@ const createEmptyUploadField = () => ({
   _deleted_files: [] as string[],
 });
 
-const createEmptyCharity = () => {
-  return Object.fromEntries(
-    SECTION_9A.fields.map(field => [
-      field.key,
-      field.type === 'TextInputWithUpload' ? createEmptyUploadField() : '',
-    ]),
-  );
-};
+const createEmptyCharity = () => createEmptyItemFromFields(SECTION_9A.fields);
 
   const updateCharities = (next: any[]) => {
     onChange({
@@ -247,10 +257,14 @@ const createEmptyCharity = () => {
     setItems: updateCharities,
     setAiNotice,
     describeFields: ['charity_name', 'organization_name', 'name'],
+    onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+    const pendingFile =
+      aiRouting?.getPendingFileForSection('9', String(scope)) ?? null;
+
+    return resolveAiUploadedFileForScope(scope, uploadedFiles, latestUploadRef, pendingFile);
   };
 
   const cleanPatchObject = (patch: any) => {
@@ -265,12 +279,8 @@ const createEmptyCharity = () => {
     );
   };
 
-  const normalizeCharityPatch = (patch: any) => {
-    return {
-      ...createEmptyCharity(),
-      ...cleanPatchObject(patch),
-    };
-  };
+  const normalizeCharityPatch = (patch: any) =>
+    mergeAiPatchWithDefaults(patch, SECTION_9A.fields, createEmptyCharity);
 
   const extractCharityArrayFromPatch = (patch: any) => {
     const rawCharities = patch?.['9A'];
@@ -353,23 +363,34 @@ const createEmptyCharity = () => {
       setAiNotice('');
       setAiLoadingScope(scope);
 
-      const json = await autofillSectionFromDocument({
-        section: 'charitable_giving',
+      const json = await runAiSectionAutofill({
+        sectionKey: 'charitable_giving',
+        sectionId: '9',
         file_id: uploadedFile.file_id,
+        mime_type: uploadedFile.mime_type,
         subsection: '9A',
-      });
+        uploadScope: String(scope),
+        fields: SECTION_9A.fields,
+        aiRouting,
+        });
+
+      if (!json) return;
 
       const patch = json?.result?.patch ?? {};
       const extractedCharities = extractCharityArrayFromPatch(patch);
 
-      if (
-        !multiItemAutofill.processExtraction(extractedCharities, charityIndex, {
+      const disposition = multiItemAutofill.processExtraction(
+        extractedCharities,
+        charityIndex,
+        {
           setAiError,
           setAiNotice,
-          emptyError: 'AI could not find charitable giving information in this document.',
-        })
-      ) {
-        return;
+          emptyError:
+            'AI could not find charitable giving information in this document.',
+        },
+      );
+      if (disposition !== 'pending_user') {
+        releaseDeferredAiRoutingDialog(aiRouting);
       }
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');
@@ -408,6 +429,7 @@ const createEmptyCharity = () => {
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}
       uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      highlightUpload={aiRouting?.shouldHighlightUpload('9', String(scope)) ?? false}
       onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
       onAutofill={onAutofill}
     />

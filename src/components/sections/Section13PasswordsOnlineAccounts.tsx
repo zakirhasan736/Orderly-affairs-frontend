@@ -31,7 +31,13 @@ import {
 } from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
-import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
+import { mergeAiPatchWithDefaults } from '@/utils/aiPatchNormalizer';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import {
+  resolveAiUploadedFileForScope,
+  useRestoreAiPendingUploadForSection,
+} from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
@@ -384,6 +390,14 @@ export default function Section13PasswordsOnlineAccounts({
 
   const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
+  const aiRouting = useOptionalAiDocumentRouting();
+
+  useRestoreAiPendingUploadForSection({
+    sectionId: '13',
+    setUploadedFiles,
+    latestUploadRef,
+  });
+
   const accounts: any[] = Array.isArray(data['13A']) ? data['13A'] : [];
   const show13A = !activeSubsection || activeSubsection === '13A';
 
@@ -437,10 +451,14 @@ export default function Section13PasswordsOnlineAccounts({
     setItems: updateAccounts,
     setAiNotice,
     describeFields: ['account_name', 'website', 'platform'],
+    onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+    const pendingFile =
+      aiRouting?.getPendingFileForSection('13', String(scope)) ?? null;
+
+    return resolveAiUploadedFileForScope(scope, uploadedFiles, latestUploadRef, pendingFile);
   };
 
   const cleanPatchObject = (patch: any) => {
@@ -456,12 +474,8 @@ export default function Section13PasswordsOnlineAccounts({
     );
   };
 
-  const normalizeAccountPatch = (patch: any) => {
-    return {
-      ...createEmptyAccount(),
-      ...cleanPatchObject(patch),
-    };
-  };
+  const normalizeAccountPatch = (patch: any) =>
+    mergeAiPatchWithDefaults(patch, SECTION_13A.fields, createEmptyAccount);
 
   const extractAccountArrayFromPatch = (patch: any) => {
     const rawAccounts = patch?.['13A'];
@@ -548,23 +562,34 @@ export default function Section13PasswordsOnlineAccounts({
       setAiNotice('');
       setAiLoadingScope(scope);
 
-      const json = await autofillSectionFromDocument({
-        section: 'passwords_online_accounts',
+      const json = await runAiSectionAutofill({
+        sectionKey: 'passwords_online_accounts',
+        sectionId: '13',
         file_id: uploadedFile.file_id,
+        mime_type: uploadedFile.mime_type,
         subsection: '13A',
-      });
+        uploadScope: String(scope),
+        fields: SECTION_13A.fields,
+        aiRouting,
+        });
+
+      if (!json) return;
 
       const patch = json?.result?.patch ?? {};
       const extractedAccounts = extractAccountArrayFromPatch(patch);
 
-      if (
-        !multiItemAutofill.processExtraction(extractedAccounts, accountIndex, {
+      const disposition = multiItemAutofill.processExtraction(
+        extractedAccounts,
+        accountIndex,
+        {
           setAiError,
           setAiNotice,
-          emptyError: 'AI could not find online account information in this document.',
-        })
-      ) {
-        return;
+          emptyError:
+            'AI could not find online account information in this document.',
+        },
+      );
+      if (disposition !== 'pending_user') {
+        releaseDeferredAiRoutingDialog(aiRouting);
       }
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');
@@ -603,6 +628,7 @@ export default function Section13PasswordsOnlineAccounts({
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}
       uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      highlightUpload={aiRouting?.shouldHighlightUpload('13', String(scope)) ?? false}
       onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
       onAutofill={onAutofill}
     />

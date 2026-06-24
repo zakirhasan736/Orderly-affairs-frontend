@@ -21,7 +21,16 @@ import {
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
-import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
+import {
+  createEmptyItemFromFields,
+  mergeAiPatchWithDefaults,
+} from '@/utils/aiPatchNormalizer';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import {
+  resolveAiUploadedFileForScope,
+  useRestoreAiPendingUploadForSection,
+} from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
@@ -33,6 +42,7 @@ import {
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
+import { insurancePoliciesAreDuplicates } from '@/utils/aiItemDedup';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -174,6 +184,14 @@ export default function Section7InsurancePolicies({
 
   const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
+  const aiRouting = useOptionalAiDocumentRouting();
+
+  useRestoreAiPendingUploadForSection({
+    sectionId: '7',
+    setUploadedFiles,
+    latestUploadRef,
+  });
+
   const policies: any[] = Array.isArray(data['7A']) ? data['7A'] : [];
   const show7A = !activeSubsection || activeSubsection === '7A';
 
@@ -181,9 +199,7 @@ export default function Section7InsurancePolicies({
 
   const isAnyAIActionRunning = uploadingScope !== null || aiLoadingScope !== null;
 
-  const createEmptyPolicy = () => {
-    return Object.fromEntries(SECTION_7A.fields.map(field => [field.key, '']));
-  };
+  const createEmptyPolicy = () => createEmptyItemFromFields(SECTION_7A.fields);
 
   const updatePolicies = (next: any[]) => {
     onChange({
@@ -218,10 +234,15 @@ export default function Section7InsurancePolicies({
     setItems: updatePolicies,
     setAiNotice,
     describeFields: ['policy_type', 'insurance_company', 'provider'],
+    isDuplicate: insurancePoliciesAreDuplicates,
+    onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+    const pendingFile =
+      aiRouting?.getPendingFileForSection('7', String(scope)) ?? null;
+
+    return resolveAiUploadedFileForScope(scope, uploadedFiles, latestUploadRef, pendingFile);
   };
 
   const cleanPatchObject = (patch: any) => {
@@ -236,12 +257,8 @@ export default function Section7InsurancePolicies({
     );
   };
 
-  const normalizePolicyPatch = (patch: any) => {
-    return {
-      ...createEmptyPolicy(),
-      ...cleanPatchObject(patch),
-    };
-  };
+  const normalizePolicyPatch = (patch: any) =>
+    mergeAiPatchWithDefaults(patch, SECTION_7A.fields, createEmptyPolicy);
 
   const extractPolicyArrayFromPatch = (patch: any) => {
     const rawPolicies = patch?.['7A'];
@@ -324,25 +341,34 @@ export default function Section7InsurancePolicies({
       setAiNotice('');
       setAiLoadingScope(scope);
 
-      const json = await autofillSectionFromDocument({
-        section: 'insurance_policies',
+      const json = await runAiSectionAutofill({
+        sectionKey: 'insurance_policies',
+        sectionId: '7',
         file_id: uploadedFile.file_id,
+        mime_type: uploadedFile.mime_type,
         subsection: '7A',
+        uploadScope: String(scope),
+        fields: SECTION_7A.fields,
+        aiRouting,
+        });
 
-      });
+      if (!json) return;
 
       const patch = json?.result?.patch ?? {};
       const extractedPolicies = extractPolicyArrayFromPatch(patch);
 
-      if (
-        !multiItemAutofill.processExtraction(extractedPolicies, policyIndex, {
+      const disposition = multiItemAutofill.processExtraction(
+        extractedPolicies,
+        policyIndex,
+        {
           setAiError,
           setAiNotice,
           emptyError:
             'AI could not find insurance policy information in this document.',
-        })
-      ) {
-        return;
+        },
+      );
+      if (disposition !== 'pending_user') {
+        releaseDeferredAiRoutingDialog(aiRouting);
       }
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');
@@ -381,6 +407,7 @@ export default function Section7InsurancePolicies({
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}
       uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      highlightUpload={aiRouting?.shouldHighlightUpload('7', String(scope)) ?? false}
       onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
       onAutofill={onAutofill}
     />

@@ -8,12 +8,15 @@ import {
   buildMultiItemFoundNotice,
   describeAutofillItem,
 } from '@/utils/aiMultiItemAutofill';
+import { buildDuplicateSkippedNotice } from '@/utils/aiItemDedup';
 
 type PromptState<T> = {
   items: T[];
   targetIndex?: number;
   itemLabel: string;
 };
+
+export type AiMultiItemExtractionResult = 'pending_user' | 'applied' | 'failed';
 
 export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
   itemLabel,
@@ -22,6 +25,8 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
   setItems,
   setAiNotice,
   describeFields,
+  isDuplicate,
+  onFlowComplete,
 }: {
   itemLabel: string;
   createEmpty: () => T;
@@ -29,6 +34,9 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
   setItems: (items: T[]) => void;
   setAiNotice: (message: string) => void;
   describeFields?: string[];
+  isDuplicate?: (existing: T, incoming: T) => boolean;
+  /** Called when multi-item dialog closes (apply, skip, or dismiss) */
+  onFlowComplete?: () => void;
 }) {
   const [prompt, setPrompt] = useState<PromptState<T> | null>(null);
 
@@ -44,20 +52,27 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
 
   const applyExtracted = useCallback(
     (items: T[], targetIndex?: number) => {
-      if (items.length === 0) return;
+      if (items.length === 0) return 0;
 
-      setItems(
-        applyItemsToIndexedList({
-          currentItems: getCurrentItems(),
-          extractedItems: normalizeItems(items),
-          targetIndex,
-          createEmpty,
-          preserveRowId,
-        }),
-      );
+      const { items: nextItems, skipped } = applyItemsToIndexedList({
+        currentItems: getCurrentItems(),
+        extractedItems: normalizeItems(items),
+        targetIndex,
+        createEmpty,
+        preserveRowId,
+        isDuplicate,
+      });
+
+      setItems(nextItems);
+      return skipped;
     },
-    [createEmpty, getCurrentItems, normalizeItems, preserveRowId, setItems],
+    [createEmpty, getCurrentItems, isDuplicate, normalizeItems, preserveRowId, setItems],
   );
+
+  const closePrompt = useCallback(() => {
+    setPrompt(null);
+    onFlowComplete?.();
+  }, [onFlowComplete]);
 
   const processExtraction = useCallback(
     (
@@ -74,23 +89,39 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
         emptyError: string;
         itemLabel?: string;
       },
-    ): boolean => {
+    ): AiMultiItemExtractionResult => {
       const activeLabel = labelOverride ?? itemLabel;
 
       if (extracted.length === 0) {
         setAiError(emptyError);
-        return false;
+        return 'failed';
       }
 
       if (extracted.length > 1) {
         setPrompt({ items: extracted, targetIndex, itemLabel: activeLabel });
         setAiNotice(buildMultiItemFoundNotice(extracted.length, activeLabel));
-        return true;
+        return 'pending_user';
       }
 
-      applyExtracted(extracted, targetIndex);
-      setAiNotice(buildAutofillSuccessNotice(1, activeLabel, targetIndex));
-      return true;
+      const skipped = applyExtracted(extracted, targetIndex);
+      const duplicateNotice = buildDuplicateSkippedNotice(skipped, activeLabel);
+      if (skipped > 0 && skipped >= extracted.length) {
+        setAiNotice(
+          duplicateNotice ||
+            `All ${activeLabel.toLowerCase()} entries were already on file.`,
+        );
+        return 'applied';
+      }
+
+      setAiNotice(
+        [
+          buildAutofillSuccessNotice(1, activeLabel, targetIndex),
+          duplicateNotice,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+      return 'applied';
     },
     [applyExtracted, itemLabel],
   );
@@ -101,7 +132,7 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
     <MultiItemAutofillDialog
       open={prompt !== null}
       onOpenChange={open => {
-        if (!open) setPrompt(null);
+        if (!open) closePrompt();
       }}
       itemLabel={activeLabel}
       items={prompt?.items ?? []}
@@ -114,29 +145,47 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
       targetIndex={prompt?.targetIndex}
       onAddAll={() => {
         if (!prompt) return;
-        applyExtracted(prompt.items, prompt.targetIndex);
-        setAiNotice(
-          buildAutofillSuccessNotice(
-            prompt.items.length,
-            prompt.itemLabel,
-            prompt.targetIndex,
-            true,
-          ),
+        const skipped = applyExtracted(prompt.items, prompt.targetIndex);
+        const duplicateNotice = buildDuplicateSkippedNotice(
+          skipped,
+          prompt.itemLabel,
         );
-        setPrompt(null);
+        setAiNotice(
+          [
+            buildAutofillSuccessNotice(
+              prompt.items.length,
+              prompt.itemLabel,
+              prompt.targetIndex,
+              true,
+            ),
+            duplicateNotice,
+          ]
+            .filter(Boolean)
+            .join(' '),
+        );
+        closePrompt();
       }}
       onAddFirstOnly={() => {
         if (!prompt) return;
-        applyExtracted([prompt.items[0]], prompt.targetIndex);
-        setAiNotice(
-          buildAutofillSuccessNotice(
-            1,
-            prompt.itemLabel,
-            prompt.targetIndex,
-            false,
-          ),
+        const skipped = applyExtracted([prompt.items[0]], prompt.targetIndex);
+        const duplicateNotice = buildDuplicateSkippedNotice(
+          skipped,
+          prompt.itemLabel,
         );
-        setPrompt(null);
+        setAiNotice(
+          [
+            buildAutofillSuccessNotice(
+              1,
+              prompt.itemLabel,
+              prompt.targetIndex,
+              false,
+            ),
+            duplicateNotice,
+          ]
+            .filter(Boolean)
+            .join(' '),
+        );
+        closePrompt();
       }}
     />
   );

@@ -1,5 +1,9 @@
 /** Shared helpers for AI autofill when documents contain multiple repeatable entries. */
 
+import {
+  filterDuplicateAutofillItems,
+} from '@/utils/aiItemDedup';
+
 const DEFAULT_DESCRIBE_FIELDS = [
   'name',
   'full_name',
@@ -142,19 +146,40 @@ export function applyItemsToIndexedList<T extends Record<string, unknown>>({
   targetIndex,
   createEmpty,
   preserveRowId = true,
+  isDuplicate,
 }: {
   currentItems: T[];
   extractedItems: T[];
   targetIndex?: number;
   createEmpty: () => T;
   preserveRowId?: boolean;
-}): T[] {
-  if (extractedItems.length === 0) return currentItems;
+  isDuplicate?: (existing: T, incoming: T) => boolean;
+}): { items: T[]; skipped: number } {
+  if (extractedItems.length === 0) {
+    return { items: currentItems, skipped: 0 };
+  }
+
+  let itemsToApply = extractedItems;
+  let skipped = 0;
+
+  if (isDuplicate) {
+    const filtered = filterDuplicateAutofillItems(
+      currentItems,
+      extractedItems,
+      isDuplicate,
+    );
+    itemsToApply = filtered.unique;
+    skipped = filtered.skipped;
+  }
+
+  if (itemsToApply.length === 0) {
+    return { items: currentItems, skipped };
+  }
 
   if (typeof targetIndex === 'number') {
     const next = [...currentItems];
 
-    extractedItems.forEach((item, offset) => {
+    itemsToApply.forEach((item, offset) => {
       const index = targetIndex + offset;
       const existing = next[index] || createEmpty();
       const merged = {
@@ -176,10 +201,10 @@ export function applyItemsToIndexedList<T extends Record<string, unknown>>({
       }
     });
 
-    return next;
+    return { items: next, skipped };
   }
 
-  return [...currentItems, ...extractedItems];
+  return { items: [...currentItems, ...itemsToApply], skipped };
 }
 
 export function describeAutofillItem(

@@ -31,7 +31,13 @@ import {
 } from '@/utils/vaultGroupedFields';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
-import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
+import { mergeAiPatchWithDefaults } from '@/utils/aiPatchNormalizer';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import {
+  resolveAiUploadedFileForScope,
+  useRestoreAiPendingUploadForSection,
+} from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
@@ -262,6 +268,14 @@ export default function Section11MilitaryService({
 
   const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
+  const aiRouting = useOptionalAiDocumentRouting();
+
+  useRestoreAiPendingUploadForSection({
+    sectionId: '11',
+    setUploadedFiles,
+    latestUploadRef,
+  });
+
   const servicePeriods: any[] = Array.isArray(data['11A']) ? data['11A'] : [];
   const show11A = !activeSubsection || activeSubsection === '11A';
 
@@ -307,10 +321,14 @@ export default function Section11MilitaryService({
     setItems: updateServicePeriods,
     setAiNotice,
     describeFields: ['branch', 'service_branch', 'rank'],
+    onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+    const pendingFile =
+      aiRouting?.getPendingFileForSection('11', String(scope)) ?? null;
+
+    return resolveAiUploadedFileForScope(scope, uploadedFiles, latestUploadRef, pendingFile);
   };
 
   const cleanPatchObject = (patch: any) => {
@@ -325,12 +343,8 @@ export default function Section11MilitaryService({
     );
   };
 
-  const normalizeServicePeriodPatch = (patch: any) => {
-    return {
-      ...createEmptyServicePeriod(),
-      ...cleanPatchObject(patch),
-    };
-  };
+  const normalizeServicePeriodPatch = (patch: any) =>
+    mergeAiPatchWithDefaults(patch, SECTION_11A.fields, createEmptyServicePeriod);
 
   const extractServicePeriodArrayFromPatch = (patch: any) => {
     const rawServicePeriods = patch?.['11A'];
@@ -411,24 +425,34 @@ export default function Section11MilitaryService({
       setAiNotice('');
       setAiLoadingScope(scope);
 
-      const json = await autofillSectionFromDocument({
-        section: 'military_service',
+      const json = await runAiSectionAutofill({
+        sectionKey: 'military_service',
+        sectionId: '11',
         file_id: uploadedFile.file_id,
+        mime_type: uploadedFile.mime_type,
         subsection: '11A',
+        uploadScope: String(scope),
+        fields: SECTION_11A.fields,
+        aiRouting,
+        });
 
-      });
+      if (!json) return;
 
       const patch = json?.result?.patch ?? {};
       const extractedServicePeriods = extractServicePeriodArrayFromPatch(patch);
 
-      if (
-        !multiItemAutofill.processExtraction(extractedServicePeriods, serviceIndex, {
+      const disposition = multiItemAutofill.processExtraction(
+        extractedServicePeriods,
+        serviceIndex,
+        {
           setAiError,
           setAiNotice,
-          emptyError: 'AI could not find military service information in this document.',
-        })
-      ) {
-        return;
+          emptyError:
+            'AI could not find military service information in this document.',
+        },
+      );
+      if (disposition !== 'pending_user') {
+        releaseDeferredAiRoutingDialog(aiRouting);
       }
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');
@@ -467,6 +491,7 @@ export default function Section11MilitaryService({
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}
       uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      highlightUpload={aiRouting?.shouldHighlightUpload('11', String(scope)) ?? false}
       onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
       onAutofill={onAutofill}
     />

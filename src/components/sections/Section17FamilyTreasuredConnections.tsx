@@ -33,12 +33,22 @@ import {
   Heart,
 } from 'lucide-react';
 
-import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
+import {
+  createEmptyItemFromFields,
+  mergeAiPatchWithDefaults,
+} from '@/utils/aiPatchNormalizer';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import {
+  resolveAiUploadedFileForScope,
+  useRestoreAiPendingUploadForSection,
+} from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import {
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
-import { useAiDocumentDropZone } from '@/hooks/useAiDocumentDropZone';
+import { AiDocumentDropZoneInput } from '@/components/ai/AiDocumentDropZoneInput';
+import { AI_PENDING_ROUTED_HINT } from '@/utils/aiRoutingUi';
 import {
   buildFieldMap,
   FieldGroup,
@@ -1284,6 +1294,14 @@ export default function Section17FamilyTreasuredConnections({
 
   const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
+  const aiRouting = useOptionalAiDocumentRouting();
+
+  useRestoreAiPendingUploadForSection({
+    sectionId: '17',
+    setUploadedFiles,
+    latestUploadRef,
+  });
+
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
 
@@ -1423,7 +1441,10 @@ export default function Section17FamilyTreasuredConnections({
   };
 
   const getUploadedFileForScope = (scope: string) => {
-    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+    const pendingFile =
+      aiRouting?.getPendingFileForSection('17', String(scope)) ?? null;
+
+    return resolveAiUploadedFileForScope(scope, uploadedFiles, latestUploadRef, pendingFile);
   };
 
   const handleDocumentUpload = async (file?: File | null, scope?: string, runAutofill?: () => void | Promise<void>) => {
@@ -1491,11 +1512,16 @@ export default function Section17FamilyTreasuredConnections({
       setAiNotice('');
       setAiLoadingScope(scope);
 
-      const json = await autofillSectionFromDocument({
-        section: 'family_treasured_connections',
+      const json = await runAiSectionAutofill({
+        sectionKey: 'family_treasured_connections',
+        sectionId: '17',
         file_id: uploadedFile.file_id,
         subsection,
-      });
+        uploadScope: String(scope),
+        aiRouting,
+        });
+
+      if (!json) return;
 
       const patch = json?.result?.patch ?? {};
       const extracted = extractObjectFromPatch(subsection, patch);
@@ -1521,6 +1547,7 @@ export default function Section17FamilyTreasuredConnections({
       setAiError(err?.message || 'AI autofill failed');
     } finally {
       setAiLoadingScope(null);
+      releaseDeferredAiRoutingDialog(aiRouting);
     }
   };
 
@@ -1537,17 +1564,13 @@ export default function Section17FamilyTreasuredConnections({
     const uploadedFile = getUploadedFileForScope(scope);
     const isUploading = uploadingScope === scope;
     const isReading = aiLoadingScope === scope;
-    const { isDragging, processFile, dropZoneProps } = useAiDocumentDropZone(
-      uploaded =>
-        handleDocumentUpload(uploaded, scope, () =>
-          handleAutofill({ subsection, scope, itemIndex }),
-        ),
-      isAnyAIActionRunning,
-    );
+    const highlightUpload =
+      aiRouting?.shouldHighlightUpload('17', String(scope)) ?? false;
     const tone = config.tone;
 
     return (
       <div
+        data-ai-upload-zone={highlightUpload ? 'highlight' : undefined}
         className={[
           'relative overflow-hidden rounded-2xl border border-dashed p-4 shadow-sm transition-all duration-200 hover:shadow-md',
           tone.wrapper,
@@ -1567,6 +1590,12 @@ export default function Section17FamilyTreasuredConnections({
             tone.glowTwo,
           ].join(' ')}
         />
+
+        {highlightUpload && (
+          <div className="relative rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-800">
+            {AI_PENDING_ROUTED_HINT}
+          </div>
+        )}
 
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex gap-3">
@@ -1594,6 +1623,7 @@ export default function Section17FamilyTreasuredConnections({
           <Button
             type="button"
             size="sm"
+            data-ai-autofill-trigger
             onClick={() => handleAutofill({ subsection, scope, itemIndex })}
             disabled={isAnyAIActionRunning || !uploadedFile}
             className="shrink-0 rounded-xl"
@@ -1609,39 +1639,20 @@ export default function Section17FamilyTreasuredConnections({
         </div>
 
         <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-          <label
-            {...dropZoneProps}
+          <AiDocumentDropZoneInput
+            onFile={uploaded =>
+        handleDocumentUpload(uploaded, scope, () =>
+          handleAutofill({ subsection, scope, itemIndex }),
+        )}
+            disabled={isAnyAIActionRunning}
+            showSupportedHint
             className={[
-              'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center transition',
+              'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-3.5 text-center transition',
               tone.uploadBox,
               isAnyAIActionRunning ? 'pointer-events-none opacity-60' : '',
-              isDragging && 'border-indigo-400 bg-indigo-50/80 ring-2 ring-indigo-200',
             ].join(' ')}
-          >
-            <input
-              type="file"
-              className="sr-only"
-              accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp"
-              disabled={isAnyAIActionRunning}
-              onChange={event => {
-                const file = event.currentTarget.files?.[0] || null;
-                processFile(file);
-                event.currentTarget.value = '';
-              }}
-            />
-
-            <UploadCloud className={`h-5 w-5 ${tone.icon}`} />
-
-            <div>
-              <p className="text-sm font-medium text-slate-800">
-                Drag and drop or click to upload document
-              </p>
-
-              <p className="text-xs text-slate-500">
-                PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB
-              </p>
-            </div>
-          </label>
+            iconClassName={tone.icon}
+          />
 
           {uploadedFile && (
             <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
@@ -1731,7 +1742,8 @@ export default function Section17FamilyTreasuredConnections({
               <Button
                 type="button"
                 size="sm"
-                onClick={() => addItem(section)}
+            data-ai-autofill-trigger
+            onClick={() => addItem(section)}
                 className="w-auto rounded-xl sm:w-auto"
               >
                 <Plus className="mr-1 h-4 w-4" />
@@ -1755,7 +1767,8 @@ export default function Section17FamilyTreasuredConnections({
                 <Button
                   type="button"
                   size="sm"
-                  onClick={() => addItem(section)}
+            data-ai-autofill-trigger
+            onClick={() => addItem(section)}
                   className="mt-4 rounded-xl"
                 >
                   <Plus className="mr-1 h-4 w-4" />

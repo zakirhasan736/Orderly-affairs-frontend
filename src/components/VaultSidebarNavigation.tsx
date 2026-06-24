@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Progress } from '@/components/common/ui/progress';
 import { cn } from '@common/ui/utils';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
   getDynamicTopicsForSubsection,
   subsectionHasDynamicTopics,
@@ -220,6 +221,7 @@ export function VaultSidebarNavigation({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const activeDragRef = useRef<DragPayload | null>(null);
+  const aiRouting = useOptionalAiDocumentRouting();
 
   const handleDragStart = (payload: DragPayload) => {
     activeDragRef.current = payload;
@@ -349,6 +351,11 @@ export function VaultSidebarNavigation({
               const isExpanded =
                 activeSection === section.id && !disabledSections[section.id];
               const isComplete = getSectionCompletionStatus(section.id);
+              const pendingAiUploads =
+                aiRouting?.getPendingUploadsForSection(section.id) ?? [];
+              const hasAiReady = pendingAiUploads.some(
+                upload => upload.highlightUpload,
+              );
 
               return (
                 <div key={`main-section-${section.id}`} className="space-y-1">
@@ -387,6 +394,17 @@ export function VaultSidebarNavigation({
                       {disabledSections[section.id] && (
                         <span className="text-[10px] font-semibold text-slate-400">
                           Not Applicable
+                        </span>
+                      )}
+                      {hasAiReady && (
+                        <span className="mt-1 inline-flex items-center gap-1.5">
+                          <span className="relative flex h-2 w-2 shrink-0">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-600" />
+                          </span>
+                          <span className="text-[10px] font-semibold text-blue-600">
+                            New data
+                          </span>
                         </span>
                       )}
                     </span>

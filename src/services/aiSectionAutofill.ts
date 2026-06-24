@@ -1,0 +1,131 @@
+import {
+  AiDocumentMismatchError,
+  AiDocumentUnavailableError,
+} from '@/utils/aiDocumentRouting';
+import type { AiDocumentRoutingContextValue } from '@/contexts/AiDocumentRoutingContext';
+import type { FieldDefinition } from '@/types/formTypes';
+import { buildFieldCatalogForAi } from '@/utils/aiPatchNormalizer';
+import { autofillSectionFromDocument } from '@/services/aiAutofill';
+
+type RunAiAutofillArgs = {
+  sectionKey: string;
+  sectionId: string;
+  file_id: string;
+  mime_type?: string;
+  subsection?: string | null;
+  uploadScope?: string;
+  useRoutedCache?: boolean;
+  fields?: FieldDefinition[];
+  aiRouting?: Pick<
+    AiDocumentRoutingContextValue,
+    | 'handleMismatch'
+    | 'handleAutofillSuccess'
+    | 'releaseAdditionalSectionsDialog'
+    | 'clearAllPendingForFile'
+    | 'clearPendingForSection'
+    | 'getPendingUploadsForSection'
+    | 'shouldHighlightUpload'
+  > | null;
+};
+
+export function releaseDeferredAiRoutingDialog(
+  aiRouting?: Pick<
+    AiDocumentRoutingContextValue,
+    'releaseAdditionalSectionsDialog'
+  > | null,
+) {
+  aiRouting?.releaseAdditionalSectionsDialog();
+}
+
+function shouldUseRoutedCache(
+  sectionId: string,
+  fileId: string,
+  uploadScope: string,
+  aiRouting?: RunAiAutofillArgs['aiRouting'],
+  explicit?: boolean,
+) {
+  if (explicit) return true;
+  if (!aiRouting) return false;
+
+  const pending = aiRouting.getPendingUploadsForSection(sectionId).find(
+    item =>
+      item.file_id === fileId &&
+      (item.uploadScope === uploadScope ||
+        item.uploadScope === 'full' ||
+        uploadScope === 'full'),
+  );
+
+  if (pending) return true;
+
+  return aiRouting.shouldHighlightUpload(sectionId, uploadScope);
+}
+
+export async function runAiSectionAutofill({
+  sectionKey,
+  sectionId,
+  file_id,
+  mime_type,
+  subsection,
+  uploadScope = 'full',
+  useRoutedCache,
+  fields,
+  aiRouting,
+}: RunAiAutofillArgs) {
+  try {
+    const json = await autofillSectionFromDocument({
+      section: sectionKey,
+      file_id,
+      subsection,
+      use_routed_cache: shouldUseRoutedCache(
+        sectionId,
+        file_id,
+        uploadScope,
+        aiRouting,
+        useRoutedCache,
+      ),
+      field_catalog: fields ? buildFieldCatalogForAi(fields) : undefined,
+    });
+
+    aiRouting?.handleAutofillSuccess({
+      file_id,
+      mime_type: mime_type || 'application/pdf',
+      currentSectionId: sectionId,
+      uploadScope,
+      additional_sections: json.additional_sections,
+      section_previews: json.section_previews,
+      document_summary: json.document_summary,
+      document_deleted: json.document_deleted,
+      deferAdditionalDialog: true,
+    });
+
+    return json;
+  } catch (error) {
+    if (error instanceof AiDocumentMismatchError) {
+      aiRouting?.handleMismatch(error.detail, {
+        currentSectionId: sectionId,
+        uploadScope,
+      });
+      return null;
+    }
+
+    if (error instanceof AiDocumentUnavailableError) {
+      aiRouting?.clearAllPendingForFile(file_id);
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('orderly-ai-document-consumed', {
+            detail: {
+              sectionId,
+              uploadScope,
+              fileId: file_id,
+            },
+          }),
+        );
+      }
+
+      throw error;
+    }
+
+    throw error;
+  }
+}

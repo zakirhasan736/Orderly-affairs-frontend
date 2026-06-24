@@ -1729,3 +1729,28 @@ html {
     z-index: 200;
   }
 }
+
+@keyframes shrinkbar {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
+[data-ai-guided-pulse='active'] {
+  animation: ai-guided-ring 1.25s ease-in-out infinite;
+}
+
+@keyframes ai-guided-ring {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 0 10px rgba(99, 102, 241, 0.4);
+  }
+}

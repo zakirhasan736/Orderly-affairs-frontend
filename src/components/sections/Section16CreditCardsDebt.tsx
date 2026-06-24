@@ -28,12 +28,22 @@ import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
-import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
+import {
+  createEmptyItemFromFields,
+  mergeAiPatchWithDefaults,
+} from '@/utils/aiPatchNormalizer';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import {
+  resolveAiUploadedFileForScope,
+  useRestoreAiPendingUploadForSection,
+} from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import {
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
-import { useAiDocumentDropZone } from '@/hooks/useAiDocumentDropZone';
+import { AiDocumentDropZoneInput } from '@/components/ai/AiDocumentDropZoneInput';
+import { AI_PENDING_ROUTED_HINT } from '@/utils/aiRoutingUi';
 import {
   getTopicCardProps,
   useScrollToVaultTopic,
@@ -404,6 +414,14 @@ export default function Section16CreditCardsDebt({
 
   const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
+  const aiRouting = useOptionalAiDocumentRouting();
+
+  useRestoreAiPendingUploadForSection({
+    sectionId: '16',
+    setUploadedFiles,
+    latestUploadRef,
+  });
+
   const creditCards: any[] = Array.isArray(data['16A']) ? data['16A'] : [];
   const debts: any[] = Array.isArray(data['16B']) ? data['16B'] : [];
 
@@ -469,7 +487,10 @@ export default function Section16CreditCardsDebt({
   };
 
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+    const pendingFile =
+      aiRouting?.getPendingFileForSection('16', String(scope)) ?? null;
+
+    return resolveAiUploadedFileForScope(scope, uploadedFiles, latestUploadRef, pendingFile);
   };
 
   const cleanPatchObject = (patch: any) => {
@@ -582,11 +603,16 @@ export default function Section16CreditCardsDebt({
       setAiNotice('');
       setAiLoadingScope(scope);
 
-      const json = await autofillSectionFromDocument({
-        section: 'credit_cards_debt',
+      const json = await runAiSectionAutofill({
+        sectionKey: 'credit_cards_debt',
+        sectionId: '16',
         file_id: uploadedFile.file_id,
         subsection,
-      });
+        uploadScope: String(scope),
+        aiRouting,
+        });
+
+      if (!json) return;
 
       const patch = json?.result?.patch ?? {};
       const extractedItems = extractArrayFromPatch(subsection, patch);
@@ -633,6 +659,7 @@ export default function Section16CreditCardsDebt({
       setAiError(err?.message || 'AI autofill failed');
     } finally {
       setAiLoadingScope(null);
+      releaseDeferredAiRoutingDialog(aiRouting);
     }
   };
 
@@ -656,10 +683,8 @@ export default function Section16CreditCardsDebt({
     const uploadedFile = getUploadedFileForScope(scope);
     const isUploading = uploadingScope === scope;
     const isReading = aiLoadingScope === scope;
-    const { isDragging, processFile, dropZoneProps } = useAiDocumentDropZone(
-      uploaded => handleDocumentUpload(uploaded, scope, onAutofill),
-      isAnyAIActionRunning,
-    );
+    const highlightUpload =
+      aiRouting?.shouldHighlightUpload('16', String(scope)) ?? false;
     const isCreditCard = subsection === '16A';
 
     const wrapperClass = isCreditCard
@@ -677,6 +702,7 @@ export default function Section16CreditCardsDebt({
 
     return (
       <div
+        data-ai-upload-zone={highlightUpload ? 'highlight' : undefined}
         className={[
           'relative overflow-hidden rounded-2xl border border-dashed p-4 shadow-sm transition-all duration-200 hover:shadow-md',
           wrapperClass,
@@ -695,6 +721,12 @@ export default function Section16CreditCardsDebt({
             glowTwo,
           ].join(' ')}
         />
+
+        {highlightUpload && (
+          <div className="relative rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-800">
+            {AI_PENDING_ROUTED_HINT}
+          </div>
+        )}
 
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex gap-3">
@@ -719,6 +751,7 @@ export default function Section16CreditCardsDebt({
           <Button
             type="button"
             size="sm"
+            data-ai-autofill-trigger
             onClick={onAutofill}
             disabled={isAnyAIActionRunning || !uploadedFile}
             className="shrink-0 rounded-xl"
@@ -734,40 +767,22 @@ export default function Section16CreditCardsDebt({
         </div>
 
         <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-          <label
-            {...dropZoneProps}
+          <AiDocumentDropZoneInput
+            onFile={uploaded => handleDocumentUpload(uploaded, scope, onAutofill)}
+            disabled={isAnyAIActionRunning}
+            showSupportedHint
             className={[
-              'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center transition',
-              uploadBoxClass,
+              'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-3.5 text-center transition',
+              isCreditCard
+                ? 'hover:border-rose-300 hover:bg-rose-50/50'
+                : 'hover:border-orange-300 hover:bg-orange-50/50',
               compact
                 ? 'md:flex-row md:justify-start md:py-3 md:text-left'
                 : '',
               isAnyAIActionRunning ? 'pointer-events-none opacity-60' : '',
             ].join(' ')}
-          >
-            <input
-              type="file"
-              className="sr-only"
-              accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp"
-              disabled={isAnyAIActionRunning}
-              onChange={event => {
-                const file = event.currentTarget.files?.[0] || null;
-                processFile(file);
-                event.currentTarget.value = '';
-              }}
-            />
-
-            <UploadCloud className={`h-5 w-5 ${iconClass}`} />
-
-            <div>
-              <p className="text-sm font-medium text-slate-800">
-                Drag and drop or click to upload credit/debt document
-              </p>
-              <p className="text-xs text-slate-500">
-                PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB
-              </p>
-            </div>
-          </label>
+            iconClassName={iconClass}
+          />
 
           {uploadedFile && (
             <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
@@ -822,7 +837,8 @@ export default function Section16CreditCardsDebt({
               <Button
                 type="button"
                 size="sm"
-                onClick={() => addItem(subsection)}
+            data-ai-autofill-trigger
+            onClick={() => addItem(subsection)}
                 className="rounded-xl"
               >
                 <Plus className="mr-1 h-4 w-4" />

@@ -29,12 +29,22 @@ import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
-import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
+import {
+  createEmptyItemFromFields,
+  mergeAiPatchWithDefaults,
+} from '@/utils/aiPatchNormalizer';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import {
+  resolveAiUploadedFileForScope,
+  useRestoreAiPendingUploadForSection,
+} from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import {
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
-import { useAiDocumentDropZone } from '@/hooks/useAiDocumentDropZone';
+import { AiDocumentDropZoneInput } from '@/components/ai/AiDocumentDropZoneInput';
+import { AI_PENDING_ROUTED_HINT } from '@/utils/aiRoutingUi';
 import {
   getTopicCardProps,
   useScrollToVaultTopic,
@@ -505,6 +515,14 @@ export default function Section20LegalDocumentsRecords({
 
   const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
+  const aiRouting = useOptionalAiDocumentRouting();
+
+  useRestoreAiPendingUploadForSection({
+    sectionId: '20',
+    setUploadedFiles,
+    latestUploadRef,
+  });
+
   const documents: any[] = Array.isArray(data['20C']) ? data['20C'] : [];
 
   useScrollToVaultTopic(activeTopicId, documents.length);
@@ -517,7 +535,10 @@ export default function Section20LegalDocumentsRecords({
   };
 
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+    const pendingFile =
+      aiRouting?.getPendingFileForSection('20', String(scope)) ?? null;
+
+    return resolveAiUploadedFileForScope(scope, uploadedFiles, latestUploadRef, pendingFile);
   };
 
   const updateStaticField = (
@@ -707,11 +728,16 @@ export default function Section20LegalDocumentsRecords({
       setAiNotice('');
       setAiLoadingScope(scope);
 
-      const json = await autofillSectionFromDocument({
-        section: 'legal_documents_records',
+      const json = await runAiSectionAutofill({
+        sectionKey: 'legal_documents_records',
+        sectionId: '20',
         file_id: uploadedFile.file_id,
         subsection,
-      });
+        uploadScope: String(scope),
+        aiRouting,
+        });
+
+      if (!json) return;
 
       const patch = json?.result?.patch ?? {};
       const extracted = extractStaticObjectFromPatch(subsection, patch);
@@ -736,6 +762,7 @@ export default function Section20LegalDocumentsRecords({
       setAiError(err?.message || 'AI autofill failed');
     } finally {
       setAiLoadingScope(null);
+      releaseDeferredAiRoutingDialog(aiRouting);
     }
   };
 
@@ -755,11 +782,17 @@ export default function Section20LegalDocumentsRecords({
       setAiNotice('');
       setAiLoadingScope(scope);
 
-      const json = await autofillSectionFromDocument({
-        section: 'legal_documents_records',
+      const json = await runAiSectionAutofill({
+        sectionKey: 'legal_documents_records',
+        sectionId: '20',
         file_id: uploadedFile.file_id,
+        mime_type: uploadedFile.mime_type,
         subsection: '20C',
-      });
+        uploadScope: String(scope),
+        aiRouting,
+        });
+
+      if (!json) return;
 
       const patch = json?.result?.patch ?? {};
       const extractedDocuments = extractDocumentsFromPatch(patch);
@@ -801,6 +834,7 @@ export default function Section20LegalDocumentsRecords({
       setAiError(err?.message || 'AI autofill failed');
     } finally {
       setAiLoadingScope(null);
+      releaseDeferredAiRoutingDialog(aiRouting);
     }
   };
 
@@ -824,10 +858,8 @@ export default function Section20LegalDocumentsRecords({
     const uploadedFile = getUploadedFileForScope(scope);
     const isUploading = uploadingScope === scope;
     const isReading = aiLoadingScope === scope;
-    const { isDragging, processFile, dropZoneProps } = useAiDocumentDropZone(
-      uploaded => handleDocumentUpload(uploaded, scope, onAutofill),
-      isAnyAIActionRunning,
-    );
+    const highlightUpload =
+      aiRouting?.shouldHighlightUpload('20', String(scope)) ?? false;
 
     const tone =
       subsection === '20A'
@@ -859,6 +891,7 @@ export default function Section20LegalDocumentsRecords({
 
     return (
       <div
+        data-ai-upload-zone={highlightUpload ? 'highlight' : undefined}
         className={[
           'relative overflow-hidden rounded-2xl border border-dashed p-4 shadow-sm transition-all duration-200 hover:shadow-md',
           tone.wrapper,
@@ -877,6 +910,12 @@ export default function Section20LegalDocumentsRecords({
             tone.glowTwo,
           ].join(' ')}
         />
+
+        {highlightUpload && (
+          <div className="relative rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-800">
+            {AI_PENDING_ROUTED_HINT}
+          </div>
+        )}
 
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex gap-3">
@@ -901,6 +940,7 @@ export default function Section20LegalDocumentsRecords({
           <Button
             type="button"
             size="sm"
+            data-ai-autofill-trigger
             onClick={onAutofill}
             disabled={isAnyAIActionRunning || !uploadedFile}
             className="shrink-0 rounded-xl"
@@ -916,40 +956,20 @@ export default function Section20LegalDocumentsRecords({
         </div>
 
         <div className="relative grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-          <label
-            {...dropZoneProps}
+          <AiDocumentDropZoneInput
+            onFile={uploaded => handleDocumentUpload(uploaded, scope, onAutofill)}
+            disabled={isAnyAIActionRunning}
+            showSupportedHint
             className={[
-              'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-5 text-center transition',
+              'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-3.5 text-center transition',
               tone.uploadBox,
               compact
                 ? 'md:flex-row md:justify-start md:py-3 md:text-left'
                 : '',
               isAnyAIActionRunning ? 'pointer-events-none opacity-60' : '',
             ].join(' ')}
-          >
-            <input
-              type="file"
-              className="sr-only"
-              accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp"
-              disabled={isAnyAIActionRunning}
-              onChange={event => {
-                const file = event.currentTarget.files?.[0] || null;
-                processFile(file);
-                event.currentTarget.value = '';
-              }}
-            />
-
-            <UploadCloud className={`h-5 w-5 ${tone.icon}`} />
-
-            <div>
-              <p className="text-sm font-medium text-slate-800">
-                Drag and drop or click to upload document
-              </p>
-              <p className="text-xs text-slate-500">
-                PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB
-              </p>
-            </div>
-          </label>
+            iconClassName={tone.icon}
+          />
 
           {uploadedFile && (
             <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
@@ -1159,7 +1179,8 @@ export default function Section20LegalDocumentsRecords({
               <Button
                 type="button"
                 size="sm"
-                onClick={addDocument}
+            data-ai-autofill-trigger
+            onClick={addDocument}
                 className="rounded-xl"
               >
                 <Plus className="mr-1 h-4 w-4" />

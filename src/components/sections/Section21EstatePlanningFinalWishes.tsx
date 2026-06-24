@@ -30,7 +30,16 @@ import {
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 
-import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
+import {
+  createEmptyItemFromFields,
+  mergeAiPatchWithDefaults,
+} from '@/utils/aiPatchNormalizer';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import {
+  resolveAiUploadedFileForScope,
+  useRestoreAiPendingUploadForSection,
+} from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
@@ -1052,6 +1061,14 @@ export default function Section21EstatePlanningFinalWishes({
 
   const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
+  const aiRouting = useOptionalAiDocumentRouting();
+
+  useRestoreAiPendingUploadForSection({
+    sectionId: '21',
+    setUploadedFiles,
+    latestUploadRef,
+  });
+
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
 
@@ -1075,7 +1092,10 @@ export default function Section21EstatePlanningFinalWishes({
   }, []);
 
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+    const pendingFile =
+      aiRouting?.getPendingFileForSection('21', String(scope)) ?? null;
+
+    return resolveAiUploadedFileForScope(scope, uploadedFiles, latestUploadRef, pendingFile);
   };
 
   const updateField = (sectionId: SubsectionId, key: string, value: any) => {
@@ -1189,11 +1209,16 @@ export default function Section21EstatePlanningFinalWishes({
       setAiNotice('');
       setAiLoadingScope(scope);
 
-      const json = await autofillSectionFromDocument({
-        section: 'estate_planning_final_wishes',
+      const json = await runAiSectionAutofill({
+        sectionKey: 'estate_planning_final_wishes',
+        sectionId: '21',
         file_id: uploadedFile.file_id,
         subsection,
-      });
+        uploadScope: String(scope),
+        aiRouting,
+        });
+
+      if (!json) return;
 
       const patch = json?.result?.patch ?? {};
       const extracted = extractObjectFromPatch(subsection, patch);
@@ -1209,6 +1234,7 @@ export default function Section21EstatePlanningFinalWishes({
       setAiError(err?.message || 'AI autofill failed');
     } finally {
       setAiLoadingScope(null);
+      releaseDeferredAiRoutingDialog(aiRouting);
     }
   };
 
@@ -1233,6 +1259,7 @@ export default function Section21EstatePlanningFinalWishes({
         isUploading={uploadingScope === scope}
         isReading={aiLoadingScope === scope}
         uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      highlightUpload={aiRouting?.shouldHighlightUpload('21', String(scope)) ?? false}
         onUpload={file =>
           handleDocumentUpload(file, scope, () => handleAutofill(subsection))
         }

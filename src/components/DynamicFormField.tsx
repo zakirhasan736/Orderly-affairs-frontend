@@ -9,6 +9,7 @@ import { DatePicker } from './DatePicker';
 import { TextInputWithUpload } from './TextInputWithUpload';
 import { PODInstructionsModal } from './PODInstructionsModal';
 import { FieldDefinition } from '@/types/formTypes';
+import { getAiFieldDisplayLabel } from '@/utils/aiPatchNormalizer';
 import { MultiSelect } from './MultiSelect';
 import { AccessManagement } from './AccessManagement';
 import { LettersToNextOfKinField } from './LettersToNextOfKinField';
@@ -173,7 +174,7 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
       case 'TextInputWithUpload':
         return (
           <TextInputWithUpload
-            label=""
+            label={getAiFieldDisplayLabel(field)}
             value={value}
             onChange={onChange}
             placeholder={field.placeholder}
@@ -366,7 +367,7 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
     <div className="space-y-2">
       {field.type !== 'TextInputWithUpload' && field.type !== 'Checkbox' && field.type !== 'InstructionsModal' && field.type !== 'Instructions' && field.type !== 'LettersToNextOfKin' && field.type !== 'NextOfKinLetter' && (
         <Label className="flex items-center gap-1">
-          {field.label}
+          {getAiFieldDisplayLabel(field)}
           {field.required && <span className="text-destructive">*</span>}
         </Label>
       )}

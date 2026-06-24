@@ -9,16 +9,6 @@ import {
 } from '@/components/common/ui/card';
 import { Button } from '@/components/common/ui/button';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/common/ui/alert-dialog';
-import {
   Plus,
   Minus,
   Sparkles,
@@ -31,7 +21,18 @@ import {
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
-import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
+import {
+  createEmptyItemFromFields,
+  mergeAiPatchWithDefaults,
+} from '@/utils/aiPatchNormalizer';
+import { vehiclesAreDuplicates } from '@/utils/aiItemDedup';
+import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import {
+  resolveAiUploadedFileForScope,
+  useRestoreAiPendingUploadForSection,
+} from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
@@ -152,18 +153,6 @@ interface Props {
 
 type UploadScope = 'full' | `vehicle:${number}`;
 
-
-
-const describeVehicle = (vehicle: Record<string, unknown>) => {
-  const parts = [vehicle.year, vehicle.make, vehicle.model]
-    .filter(value => value !== null && value !== undefined && value !== '')
-    .map(value => String(value));
-
-  if (parts.length > 0) return parts.join(' ');
-  if (vehicle.vin) return `VIN ${vehicle.vin}`;
-  return 'Vehicle';
-};
-
 const isEmptyValue = (value: unknown) => {
   if (value === null || value === undefined || value === '') return true;
   if (Array.isArray(value) && value.length === 0) return true;
@@ -206,10 +195,14 @@ export default function Section5Vehicles({
   });
 
   const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
-  const [multiVehiclePrompt, setMultiVehiclePrompt] = useState<{
-    vehicles: Record<string, unknown>[];
-    targetIndex?: number;
-  } | null>(null);
+
+  const aiRouting = useOptionalAiDocumentRouting();
+
+  useRestoreAiPendingUploadForSection({
+    sectionId: '5',
+    setUploadedFiles,
+    latestUploadRef,
+  });
 
   const vehicles: any[] = Array.isArray(data['5A']) ? data['5A'] : [];
 
@@ -220,16 +213,7 @@ export default function Section5Vehicles({
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
 
-  const createEmptyVehicle = () => {
-    return Object.fromEntries(
-      SECTION_5.fields.map(field => [
-        field.key,
-        field.type === 'TextInputWithUpload'
-          ? { text: '', files: [], _deleted_files: [] }
-          : '',
-      ]),
-    );
-  };
+  const createEmptyVehicle = () => createEmptyItemFromFields(SECTION_5.fields);
 
   const updateVehicles = (next: any[]) => {
     onChange({
@@ -257,8 +241,22 @@ export default function Section5Vehicles({
     updateVehicles(vehicles.filter((_, itemIndex) => itemIndex !== index));
   };
 
+  const multiItemAutofill = useAiMultiItemAutofill({
+    itemLabel: SECTION_5.itemLabel,
+    createEmpty: createEmptyVehicle,
+    getCurrentItems: () => vehicles,
+    setItems: updateVehicles,
+    setAiNotice,
+    describeFields: ['make', 'model', 'year', 'vin'],
+    isDuplicate: vehiclesAreDuplicates,
+    onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
+  });
+
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+    const pendingFile =
+      aiRouting?.getPendingFileForSection('5', String(scope)) ?? null;
+
+    return resolveAiUploadedFileForScope(scope, uploadedFiles, latestUploadRef, pendingFile);
   };
 
   const cleanPatchObject = (patch: any) => {
@@ -276,12 +274,8 @@ export default function Section5Vehicles({
     );
   };
 
-  const normalizeVehiclePatch = (patch: any) => {
-    return {
-      ...createEmptyVehicle(),
-      ...cleanPatchObject(patch),
-    };
-  };
+  const normalizeVehiclePatch = (patch: any) =>
+    mergeAiPatchWithDefaults(patch, SECTION_5.fields, createEmptyVehicle);
 
   const extractVehicleArrayFromPatch = (patch: any) => {
     const root =
@@ -315,67 +309,6 @@ export default function Section5Vehicles({
     }
 
     return [];
-  };
-
-  const applyExtractedVehicles = (
-    extractedVehicles: Record<string, unknown>[],
-    targetIndex?: number,
-  ) => {
-    const normalized = extractedVehicles.map(vehicle =>
-      normalizeVehiclePatch(cleanPatchObject(vehicle)),
-    );
-
-    if (normalized.length === 0) return;
-
-    if (typeof targetIndex === 'number') {
-      const next = [...vehicles];
-
-      normalized.forEach((vehicle, offset) => {
-        const index = targetIndex + offset;
-
-        if (index < next.length) {
-          next[index] = {
-            ...(next[index] || createEmptyVehicle()),
-            ...vehicle,
-          };
-        } else {
-          next.push(vehicle);
-        }
-      });
-
-      updateVehicles(next);
-      return;
-    }
-
-    updateVehicles([...vehicles, ...normalized]);
-  };
-
-  const finishAutofillNotice = (
-    count: number,
-    targetIndex?: number,
-    addedAll = true,
-  ) => {
-    if (count === 1 && typeof targetIndex === 'number') {
-      setAiNotice(
-        `AI filled ${SECTION_5.itemLabel} #${targetIndex + 1}. Please review the fields.`,
-      );
-      return;
-    }
-
-    if (typeof targetIndex === 'number') {
-      setAiNotice(
-        addedAll
-          ? `AI filled ${count} vehicles starting at ${SECTION_5.itemLabel} #${targetIndex + 1}. Please review each card.`
-          : `AI filled only ${SECTION_5.itemLabel} #${targetIndex + 1}. Please review the fields.`,
-      );
-      return;
-    }
-
-    setAiNotice(
-      count === 1
-        ? 'AI added 1 vehicle. Please review the fields.'
-        : `AI added ${count} vehicles. Please review the fields.`,
-    );
   };
 
   const handleDocumentUpload = async (file?: File | null,
@@ -437,33 +370,51 @@ export default function Section5Vehicles({
       setAiNotice('');
       setAiLoadingScope(scope);
 
-      const json = await autofillSectionFromDocument({
-        section: 'vehicles',
+      const json = await runAiSectionAutofill({
+        sectionKey: 'vehicles',
+        sectionId: '5',
         file_id: uploadedFile.file_id,
+        mime_type: uploadedFile.mime_type,
         subsection: '5A',
-      });
+        uploadScope: String(scope),
+        fields: SECTION_5.fields,
+        aiRouting,
+        });
+
+      if (!json) return;
 
       const patch = json?.result?.patch ?? {};
       const extractedVehicles = extractVehicleArrayFromPatch(patch);
 
       if (extractedVehicles.length === 0) {
-        setAiError('AI could not find vehicle information in this document.');
-        return;
-      }
-
-      if (extractedVehicles.length > 1) {
-        setMultiVehiclePrompt({
-          vehicles: extractedVehicles,
-          targetIndex: vehicleIndex,
-        });
-        setAiNotice(
-          `Found ${extractedVehicles.length} vehicles in this document.`,
+        const hasInsuranceFollowUp = (json.additional_sections || []).some(
+          section => section.section_key === 'insurance_policies',
         );
+        if (hasInsuranceFollowUp) {
+          setAiNotice(
+            'No new vehicle fields were found, but insurance details are ready in the Insurance section.',
+          );
+          releaseDeferredAiRoutingDialog(aiRouting);
+          return;
+        }
+        setAiError('AI could not find vehicle information in this document.');
+        releaseDeferredAiRoutingDialog(aiRouting);
         return;
       }
 
-      applyExtractedVehicles(extractedVehicles, vehicleIndex);
-      finishAutofillNotice(1, vehicleIndex);
+      const disposition = multiItemAutofill.processExtraction(
+        extractedVehicles,
+        vehicleIndex,
+        {
+          setAiError,
+          setAiNotice,
+          emptyError:
+            'AI could not find vehicle information in this document.',
+        },
+      );
+      if (disposition !== 'pending_user') {
+        releaseDeferredAiRoutingDialog(aiRouting);
+      }
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');
     } finally {
@@ -501,6 +452,7 @@ export default function Section5Vehicles({
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}
       uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      highlightUpload={aiRouting?.shouldHighlightUpload('5', String(scope)) ?? false}
       onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
       onAutofill={onAutofill}
     />
@@ -508,76 +460,9 @@ export default function Section5Vehicles({
 
   if (!show5A) return null;
 
-  const pendingVehicleCount = multiVehiclePrompt?.vehicles.length ?? 0;
-  const pendingTargetIndex = multiVehiclePrompt?.targetIndex;
-
   return (
     <div className="space-y-8">
-      <AlertDialog
-        open={multiVehiclePrompt !== null}
-        onOpenChange={open => {
-          if (!open) setMultiVehiclePrompt(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {pendingVehicleCount} vehicles found
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3 text-left">
-                <p>
-                  This document appears to list multiple vehicles. Would you
-                  like to create a separate vehicle card for each one and
-                  auto-fill them?
-                </p>
-                <ul className="space-y-1 rounded-xl border bg-muted/30 p-3 text-sm text-foreground">
-                  {multiVehiclePrompt?.vehicles.map((vehicle, index) => (
-                    <li key={`pending-vehicle-${index}`}>
-                      {index + 1}. {describeVehicle(vehicle)}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => {
-                if (!multiVehiclePrompt) return;
-                applyExtractedVehicles(
-                  [multiVehiclePrompt.vehicles[0]],
-                  pendingTargetIndex,
-                );
-                finishAutofillNotice(1, pendingTargetIndex, false);
-                setMultiVehiclePrompt(null);
-              }}
-            >
-              Only fill{' '}
-              {typeof pendingTargetIndex === 'number'
-                ? `${SECTION_5.itemLabel} #${pendingTargetIndex + 1}`
-                : 'the first vehicle'}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (!multiVehiclePrompt) return;
-                applyExtractedVehicles(
-                  multiVehiclePrompt.vehicles,
-                  pendingTargetIndex,
-                );
-                finishAutofillNotice(
-                  multiVehiclePrompt.vehicles.length,
-                  pendingTargetIndex,
-                  true,
-                );
-                setMultiVehiclePrompt(null);
-              }}
-            >
-              Add all {pendingVehicleCount} vehicles
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {multiItemAutofill.dialog}
 
       {(aiNotice || aiError) && (
         <div className="space-y-3">

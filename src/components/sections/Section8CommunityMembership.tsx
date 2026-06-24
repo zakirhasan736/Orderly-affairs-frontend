@@ -21,7 +21,16 @@ import {
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
-import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
+import {
+  createEmptyItemFromFields,
+  mergeAiPatchWithDefaults,
+} from '@/utils/aiPatchNormalizer';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import {
+  resolveAiUploadedFileForScope,
+  useRestoreAiPendingUploadForSection,
+} from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
@@ -151,6 +160,14 @@ export default function Section8CommunityMembership({
 
   const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
+  const aiRouting = useOptionalAiDocumentRouting();
+
+  useRestoreAiPendingUploadForSection({
+    sectionId: '8',
+    setUploadedFiles,
+    latestUploadRef,
+  });
+
   const groups: any[] = Array.isArray(data['8A']) ? data['8A'] : [];
   const show8A = !activeSubsection || activeSubsection === '8A';
 
@@ -165,14 +182,7 @@ export default function Section8CommunityMembership({
     _deleted_files: [] as string[],
   });
 
-  const createEmptyGroup = () => {
-    return Object.fromEntries(
-      SECTION_8A.fields.map(field => [
-        field.key,
-        field.type === 'TextInputWithUpload' ? createEmptyUploadField() : '',
-      ]),
-    );
-  };
+  const createEmptyGroup = () => createEmptyItemFromFields(SECTION_8A.fields);
 
   const updateGroups = (next: any[]) => {
     onChange({
@@ -207,10 +217,14 @@ export default function Section8CommunityMembership({
     setItems: updateGroups,
     setAiNotice,
     describeFields: ['organization_name', 'group_name', 'name'],
+    onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 
   const getUploadedFileForScope = (scope: UploadScope) => {
-    return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+    const pendingFile =
+      aiRouting?.getPendingFileForSection('8', String(scope)) ?? null;
+
+    return resolveAiUploadedFileForScope(scope, uploadedFiles, latestUploadRef, pendingFile);
   };
 
   const cleanPatchObject = (patch: any) => {
@@ -225,12 +239,8 @@ export default function Section8CommunityMembership({
     );
   };
 
-  const normalizeGroupPatch = (patch: any) => {
-    return {
-      ...createEmptyGroup(),
-      ...cleanPatchObject(patch),
-    };
-  };
+  const normalizeGroupPatch = (patch: any) =>
+    mergeAiPatchWithDefaults(patch, SECTION_8A.fields, createEmptyGroup);
 
   const extractGroupArrayFromPatch = (patch: any) => {
     const rawGroups = patch?.['8A'];
@@ -311,24 +321,34 @@ export default function Section8CommunityMembership({
       setAiNotice('');
       setAiLoadingScope(scope);
 
-      const json = await autofillSectionFromDocument({
-        section: 'community_memberships',
+      const json = await runAiSectionAutofill({
+        sectionKey: 'community_memberships',
+        sectionId: '8',
         file_id: uploadedFile.file_id,
+        mime_type: uploadedFile.mime_type,
         subsection: '8A',
-      });
+        uploadScope: String(scope),
+        fields: SECTION_8A.fields,
+        aiRouting,
+        });
+
+      if (!json) return;
 
      const patch = json?.result?.patch ?? {};
       const extractedGroups = extractGroupArrayFromPatch(patch);
 
-      if (
-        !multiItemAutofill.processExtraction(extractedGroups, groupIndex, {
+      const disposition = multiItemAutofill.processExtraction(
+        extractedGroups,
+        groupIndex,
+        {
           setAiError,
           setAiNotice,
           emptyError:
             'AI could not find group membership information in this document.',
-        })
-      ) {
-        return;
+        },
+      );
+      if (disposition !== 'pending_user') {
+        releaseDeferredAiRoutingDialog(aiRouting);
       }
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');
@@ -367,6 +387,7 @@ export default function Section8CommunityMembership({
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}
       uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      highlightUpload={aiRouting?.shouldHighlightUpload('8', String(scope)) ?? false}
       onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
       onAutofill={onAutofill}
     />

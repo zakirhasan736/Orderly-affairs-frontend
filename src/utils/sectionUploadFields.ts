@@ -13,7 +13,11 @@ export function createEmptyItemFromFields(fields: SectionFieldConfig[]) {
   return Object.fromEntries(
     fields.map(field => [
       field.key,
-      field.type === 'TextInputWithUpload' ? createEmptyUploadField() : '',
+      field.type === 'TextInputWithUpload'
+        ? createEmptyUploadField()
+        : field.type === 'Checkbox'
+          ? false
+          : '',
     ]),
   );
 }
@@ -21,6 +25,13 @@ export function createEmptyItemFromFields(fields: SectionFieldConfig[]) {
 export function normalizeUploadField(value: unknown) {
   if (value === '' || value == null) {
     return createEmptyUploadField();
+  }
+
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return {
+      ...createEmptyUploadField(),
+      text: String(value),
+    };
   }
 
   if (typeof value === 'object') {
