@@ -1,62 +1,23 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { secureFetch } from '@/libs/secureFetch';
 
-/* ---------------- SAVE ---------------- */
-
-export async function saveSection18(token: string, payload: any) {
-  const res = await fetch(
-    `${API_BASE}/sections/section18-employment-business`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    },
-  );
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
+export async function getSection18() {
+  const res = await secureFetch('/sections/section18-employment-business');
+  if (!res.ok) throw new Error('Failed to load Section 18');
   return res.json();
 }
 
-/* ---------------- GET ---------------- */
-
-export async function getSection18(token: string) {
-  const res = await fetch(
-    `${API_BASE}/sections/section18-employment-business`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
+export async function saveSection18(payload: any) {
+  const res = await secureFetch('/sections/section18-employment-business', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to save Section 18');
   return res.json();
 }
 
-/* ---------------- DELETE ---------------- */
-
-export async function deleteSection18(token: string) {
-  const res = await fetch(
-    `${API_BASE}/sections/section18-employment-business`,
-    {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  return res.json();
+export async function deleteSection18() {
+  const res = await secureFetch('/sections/section18-employment-business', {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete Section 18');
 }

@@ -1,36 +1,23 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { secureFetch } from '@/libs/secureFetch';
 
-export async function saveSection5(token: string, payload: any) {
-  const res = await fetch(`${API_BASE}/sections/section5-vehicles`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    let detail = 'Failed to save Section 5';
-    try {
-      const payload = await res.json();
-      detail = payload?.detail ? JSON.stringify(payload.detail) : detail;
-    } catch {
-      const text = await res.text();
-      if (text) detail = text;
-    }
-    throw new Error(detail);
-  }
+export async function getSection5() {
+  const res = await secureFetch('/sections/section5-vehicles');
+  if (!res.ok) throw new Error('Failed to load Section 5');
   return res.json();
 }
 
-export async function getSection5(token: string) {
-  const res = await fetch(`${API_BASE}/sections/section5-vehicles`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+export async function saveSection5(payload: any) {
+  const res = await secureFetch('/sections/section5-vehicles', {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
-
-  if (!res.ok) throw new Error('Failed to load Section 5');
+  if (!res.ok) throw new Error('Failed to save Section 5');
   return res.json();
+}
+
+export async function deleteSection5() {
+  const res = await secureFetch('/sections/section5-vehicles', {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete Section 5');
 }

@@ -3,6 +3,7 @@
 import React from 'react';
 import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { useConfirmCardMutation } from '@/services/billingApi';
+import { devError } from '@/utils/clientLogger';
 
 interface Props {
   onSuccess: () => void;
@@ -36,7 +37,7 @@ export const StripePaymentForm: React.FC<Props> = ({ onSuccess }) => {
 
       onSuccess();
     } catch (err) {
-      console.error(err);
+      devError('Card confirmation failed', err);
       alert('Failed to save card');
     }
   };

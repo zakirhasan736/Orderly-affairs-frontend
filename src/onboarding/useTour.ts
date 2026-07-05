@@ -1,9 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Cookies from 'js-cookie';
-
-const API = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { secureFetch } from '@/libs/secureFetch';
 
 export interface TourStatus {
   version: string | null;
@@ -16,59 +14,33 @@ export const useTour = () => {
   const [status, setStatus] = useState<TourStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const getToken = () =>
-    Cookies.get('auth_token') || Cookies.get('nok_auth_token');
-
   const fetchStatus = async () => {
     try {
-      const res = await fetch(`${API}/onboarding/status`, {
-        headers: {
-          Authorization: `Bearer ${getToken()}`,
-        },
-      });
-
+      const res = await secureFetch('/onboarding/status');
       if (!res.ok) {
-        throw new Error('Failed to fetch tour status');
+        setStatus(null);
+        return;
       }
-
-      const data = await res.json();
-      setStatus(data);
-    } catch (err) {
-      console.error('Tour status fetch error:', err);
+      setStatus(await res.json());
+    } catch {
+      setStatus(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const updateStatus = async (payload: {
-    has_completed?: boolean;
-    manually_started?: boolean;
-    version?: string;
-  }) => {
-    try {
-      await fetch(`${API}/onboarding/status`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${getToken()}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      await fetchStatus();
-    } catch (err) {
-      console.error('Tour update error:', err);
-    }
+  const updateStatus = async (payload: Partial<TourStatus>) => {
+    const res = await secureFetch('/onboarding/status', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Failed to update tour status');
+    await fetchStatus();
   };
 
   useEffect(() => {
-    fetchStatus();
+    void fetchStatus();
   }, []);
 
-  return {
-    status,
-    loading,
-    updateStatus,
-    refetch: fetchStatus,
-  };
+  return { status, loading, updateStatus, refetch: fetchStatus };
 };

@@ -1,24 +1,12 @@
 'use client';
-import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
+import { useLogout } from '@/libs/logoutHandler';
 
 export default function LogoutButton() {
-  const router = useRouter();
-
-  const handleLogout = () => {
-    // 🧹 Remove JWT cookie
-    Cookies.remove('auth_token', { path: '/' });
-
-    // Optional: clear any local storage
-    localStorage.clear();
-
-    // 🔁 Redirect to login
-    router.push('/');
-  };
+  const logout = useLogout();
 
   return (
     <button
-      onClick={handleLogout}
+      onClick={() => void logout()}
       className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
     >
       Logout

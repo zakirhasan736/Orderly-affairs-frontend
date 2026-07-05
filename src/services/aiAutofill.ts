@@ -1,23 +1,11 @@
 // src/services/aiAutofill.ts
 
-import Cookies from 'js-cookie';
+import { secureFetch } from '@/libs/secureFetch';
 import {
   AiDocumentMismatchError,
   AiDocumentUnavailableError,
   isAiDocumentMismatchDetail,
 } from '@/utils/aiDocumentRouting';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-function getOwnerToken() {
-  const token = Cookies.get('auth_token');
-
-  if (!token) {
-    throw new Error('You are not logged in. Please log in again.');
-  }
-
-  return token;
-}
 
 export async function autofillSectionFromDocument(payload: {
   section: string;
@@ -33,18 +21,8 @@ export async function autofillSectionFromDocument(payload: {
     options?: string[];
   }>;
 }) {
-  if (!API_BASE_URL) {
-    throw new Error('NEXT_PUBLIC_API_BASE_URL is missing');
-  }
-
-  const token = getOwnerToken();
-
-  const res = await fetch(`${API_BASE_URL}/ai/autofill-section`, {
+  const res = await secureFetch('/ai/autofill-section', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
     body: JSON.stringify({
       section: payload.section,
       file_id: payload.file_id,
@@ -98,7 +76,7 @@ export async function autofillSectionFromDocument(payload: {
     throw new Error(detail || 'AI autofill failed');
   }
 
-    return json as {
+  return json as {
     success: boolean;
     section: string;
     scope: 'section' | 'subsection';

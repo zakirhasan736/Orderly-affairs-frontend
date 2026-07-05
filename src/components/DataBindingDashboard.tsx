@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import Cookies from 'js-cookie';
 import { getMessages } from '@/libs/api/lettersOfNaxtKinMessage';
 
 import { Card, CardContent } from '@common/ui/card';
@@ -102,17 +101,11 @@ export function DataBindingDashboard({
   const [messages, setMessages] = useState<ApiMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
-  const token = isNextOfKin
-    ? Cookies.get('nok_auth_token')
-    : Cookies.get('auth_token');
-
   useEffect(() => {
     const fetchMessages = async () => {
-      if (!token) return;
-
       try {
         setLoadingMessages(true);
-        const response = await getMessages(token);
+        const response = await getMessages();
         setMessages(Array.isArray(response) ? response : []);
       } catch (error) {
         console.error('Failed to fetch messages:', error);
@@ -122,7 +115,7 @@ export function DataBindingDashboard({
     };
 
     fetchMessages();
-  }, [token]);
+  }, []);
 
   const accessManagementData = useMemo(() => {
     return Array.isArray(nextKinList) ? nextKinList : [];

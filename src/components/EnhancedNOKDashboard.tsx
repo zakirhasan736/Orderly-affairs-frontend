@@ -23,7 +23,11 @@ import {
 import {
   type NextKinOwnerSummary,
   useGetMyNextKinAccessQuery,
+  useReportOwnerDeceasedMutation,
 } from '@/services/authApi';
+import { toast } from 'sonner';
+import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
+import { Label } from '@common/ui/label';
 interface KitSection {
   id: string;
   data?: any;
@@ -78,6 +82,9 @@ export function EnhancedNOKDashboard({
 }: EnhancedNOKDashboardProps) {
   const [activeFilter, setActiveFilter] = useState<Filter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportPassword, setReportPassword] = useState('');
+  const [reportConfirmed, setReportConfirmed] = useState(false);
   const isPreview = !!previewAccess;
 
   // Either use live API or preview access
@@ -85,7 +92,10 @@ export function EnhancedNOKDashboard({
     data: access,
     error: accessError,
     isLoading: accessLoading,
+    refetch: refetchAccess,
   } = useGetMyNextKinAccessQuery(undefined, { skip: isPreview });
+  const [reportOwnerDeceased, { isLoading: reportingDeceased }] =
+    useReportOwnerDeceasedMutation();
 
   const effectiveAccess: DashboardAccess | undefined = isPreview
     ? {
@@ -198,6 +208,32 @@ const allSections = useMemo(
     effectiveAccess?.owner?.email ||
     'the kit owner';
   const ownerIsDeceased = ownerStatus === 'deceased';
+
+  const handleReportPassing = async () => {
+    if (!reportPassword.trim() || !reportConfirmed) {
+      toast.error('Enter your password and confirm this report');
+      return;
+    }
+
+    try {
+      const result = await reportOwnerDeceased({
+        master_password: reportPassword,
+        confirm: true,
+      }).unwrap();
+      setShowReportModal(false);
+      setReportPassword('');
+      setReportConfirmed(false);
+      await refetchAccess();
+      toast.success(
+        result.message ||
+          'Passing recorded. Letters and upon-death access are being processed.',
+      );
+    } catch (err: unknown) {
+      toast.error(
+        getSafeErrorMessage(err, 'Unable to record this report. Try again.'),
+      );
+    }
+  };
 
   // Loading (only when NOT preview)
   if (!isPreview && accessLoading) {
@@ -350,6 +386,86 @@ const allSections = useMemo(
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {!ownerIsDeceased && !isPreview && effectiveAccess.immediate_access && (
+            <Card className="border-red-200 bg-red-50/40">
+              <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-red-900">Report a passing</p>
+                  <p className="mt-1 text-sm text-red-800">
+                    Only use this after {ownerName} has passed. This releases
+                    upon-death letters, messages, and access for other trusted
+                    people.
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowReportModal(true)}
+                >
+                  Report passing
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {showReportModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <Card className="w-full max-w-md">
+                <CardHeader>
+                  <CardTitle>Confirm passing report</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    This action cannot be undone. Re-enter your Next of Kin
+                    password to confirm.
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="report-password">Master password</Label>
+                    <Input
+                      id="report-password"
+                      type="password"
+                      value={reportPassword}
+                      onChange={e => setReportPassword(e.target.value)}
+                      autoComplete="current-password"
+                    />
+                  </div>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={reportConfirmed}
+                      onChange={e => setReportConfirmed(e.target.checked)}
+                      className="mt-1"
+                    />
+                    <span>
+                      I confirm that {ownerName} has passed and I understand
+                      this will release upon-death content and access.
+                    </span>
+                  </label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        setShowReportModal(false);
+                        setReportPassword('');
+                        setReportConfirmed(false);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      className="flex-1"
+                      disabled={reportingDeceased}
+                      onClick={() => void handleReportPassing()}
+                    >
+                      {reportingDeceased ? 'Submitting…' : 'Confirm report'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {/* Important Actions */}

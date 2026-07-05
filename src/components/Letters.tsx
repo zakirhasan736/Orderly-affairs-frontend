@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import Cookies from 'js-cookie';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -259,9 +258,6 @@ export function Letters({
   embeddedInSection = false,
 }: LettersProps) {
   const isMobile = useIsMobile();
-  const token = isNextOfKin
-    ? Cookies.get('nok_auth_token')
-    : Cookies.get('auth_token');
 
   const [letters, setLetters] = useState<Letter[]>(() => normalizeValue(value));
   const [currentLetter, setCurrentLetter] = useState<Letter | null>(null);
@@ -347,11 +343,11 @@ export function Letters({
   }, [letters]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!isNextOfKin) return;
 
     setIsLoading(true);
 
-    getMessages(token)
+    getMessages()
       .then((data: any[]) => {
         setLetters(data.map(normalizeLetter));
       })
@@ -361,7 +357,7 @@ export function Letters({
       .finally(() => {
         setIsLoading(false);
       });
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     if (!clearNonce) return;
@@ -380,9 +376,9 @@ export function Letters({
   }, [clearNonce]);
 
   const refreshMessages = async () => {
-    if (!token) return;
+    if (!isNextOfKin) return;
 
-    const data = await getMessages(token);
+    const data = await getMessages();
     setLetters(data.map(normalizeLetter));
   };
 
@@ -425,9 +421,9 @@ export function Letters({
     letters.find(item => item.id === letter?.id)?.media;
 
   const deleteStandaloneMedia = async (media?: LetterMedia) => {
-    if (!token || !media?.public_id) return;
+    if (!media?.public_id) return;
 
-    await deleteUploadedMessageMedia(token, media.public_id, media.type);
+    await deleteUploadedMessageMedia(media.public_id, media.type);
   };
 
   const cleanupUnsavedMedia = (letter?: Letter | null) => {
@@ -487,11 +483,6 @@ export function Letters({
     selectedFile: File,
     type: 'video' | 'audio',
   ) => {
-    if (!token) {
-      toast.error('You are not logged in');
-      return;
-    }
-
     if (type === 'video') {
       if (!isAllowedVideoMessageFile(selectedFile)) {
         toast.error('Please select a valid video or image file.');
@@ -512,7 +503,7 @@ export function Letters({
 
     try {
       setUploadingMedia(true);
-      const media = await uploadMessageMedia(token, file);
+      const media = await uploadMessageMedia(file);
       handleMediaUploaded(media);
     } catch (error) {
       console.error(`${mediaLabel} upload failed:`, error);
@@ -540,11 +531,6 @@ export function Letters({
   const removeAttachedMedia = async () => {
     if (!currentLetter?.media) return;
 
-    if (!token) {
-      toast.error('You are not logged in');
-      return;
-    }
-
     const media = currentLetter.media;
     const savedMedia = getSavedMediaForLetter(currentLetter);
     const isSavedAttachment =
@@ -555,7 +541,7 @@ export function Letters({
       setDeletingMedia(true);
 
       if (isSavedAttachment) {
-        await deleteMessageMedia(token, currentLetter.id);
+        await deleteMessageMedia(currentLetter.id);
 
         setLetters(prev =>
           prev.map(item =>
@@ -639,11 +625,6 @@ export function Letters({
   };
 
   const saveMessage = async () => {
-    if (!token) {
-      toast.error('You are not logged in');
-      return;
-    }
-
     if (!currentLetter) return;
     if (!validateBeforeSave(currentLetter)) return;
 
@@ -666,10 +647,10 @@ export function Letters({
       const alreadyExists = letters.some(item => item.id === currentLetter.id);
 
       if (alreadyExists) {
-        await updateMessage(token, currentLetter.id, payload);
+        await updateMessage(currentLetter.id, payload);
         toast.success('Message updated');
       } else {
-        await createMessage(token, payload);
+        await createMessage(payload);
         toast.success('Message saved');
       }
 
@@ -712,11 +693,6 @@ export function Letters({
   };
 
   const removeMessage = async (id: string) => {
-    if (!token) {
-      toast.error('You are not logged in');
-      return;
-    }
-
     if (!confirm('Delete this message?')) return;
 
     if (id.startsWith('local-')) {
@@ -726,7 +702,7 @@ export function Letters({
     }
 
     try {
-      await deleteMessage(token, id);
+      await deleteMessage(id);
       await refreshMessages();
       toast.success('Message deleted');
     } catch (error) {
@@ -1044,7 +1020,6 @@ export function Letters({
       {showVideoRecorder && (
         <SafeMediaRecorder
           type="video"
-          token={token}
           onUploaded={handleMediaUploaded}
           onClose={() => setShowVideoRecorder(false)}
         />
@@ -1062,7 +1037,6 @@ export function Letters({
       {showAudioRecorder && (
         <SafeMediaRecorder
           type="audio"
-          token={token}
           onUploaded={handleMediaUploaded}
           onClose={() => setShowAudioRecorder(false)}
         />

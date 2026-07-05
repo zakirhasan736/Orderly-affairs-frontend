@@ -16,13 +16,20 @@ export function TurnstileCaptcha({
   const turnstileRef = useRef<TurnstileInstance | null>(null);
 
   useEffect(() => {
-    if (!siteKey) {
+    if (!siteKey && process.env.NODE_ENV === 'development') {
       onTokenChange('dev-bypass');
     }
   }, [onTokenChange, siteKey]);
 
   if (!siteKey) {
-    return null;
+    if (process.env.NODE_ENV === 'development') {
+      return null;
+    }
+    return (
+      <p className="text-sm text-destructive">
+        Security verification is unavailable. Contact support.
+      </p>
+    );
   }
 
   return (

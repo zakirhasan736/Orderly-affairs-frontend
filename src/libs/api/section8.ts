@@ -1,71 +1,23 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { secureFetch } from '@/libs/secureFetch';
 
-const UPLOAD_KEYS = ['contact_info', 'documents'] as const;
-
-function normalizeUploadField(value: unknown) {
-  if (value === '' || value == null) {
-    return { text: '', files: [], _deleted_files: [] };
-  }
-
-  if (typeof value === 'object') {
-    const field = value as Record<string, unknown>;
-    return {
-      text: typeof field.text === 'string' ? field.text : '',
-      files: Array.isArray(field.files) ? field.files : [],
-      _deleted_files: Array.isArray(field._deleted_files)
-        ? field._deleted_files
-        : [],
-    };
-  }
-
-  return { text: '', files: [], _deleted_files: [] };
+export async function getSection8() {
+  const res = await secureFetch('/sections/section8-community-membership');
+  if (!res.ok) throw new Error('Failed to load Section 8');
+  return res.json();
 }
 
-function sanitizeSection8Payload(payload: Record<string, unknown>) {
-  const groups = payload['8A'];
-  if (!Array.isArray(groups)) return payload;
-
-  return {
-    ...payload,
-    '8A': groups.map(group => {
-      if (!group || typeof group !== 'object') return group;
-
-      const next = { ...(group as Record<string, unknown>) };
-      for (const key of UPLOAD_KEYS) {
-        if (key in next) {
-          next[key] = normalizeUploadField(next[key]);
-        }
-      }
-      return next;
-    }),
-  };
-}
-
-export async function saveSection8(token: string, payload: any) {
-  const res = await fetch(
-    `${API_BASE}/sections/section8-community-membership`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(sanitizeSection8Payload(payload)),
-    },
-  );
-
+export async function saveSection8(payload: any) {
+  const res = await secureFetch('/sections/section8-community-membership', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
   if (!res.ok) throw new Error('Failed to save Section 8');
   return res.json();
 }
 
-export async function getSection8(token: string) {
-  const res = await fetch(
-    `${API_BASE}/sections/section8-community-membership`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    },
-  );
-
-  if (!res.ok) throw new Error('Failed to load Section 8');
-  return res.json();
+export async function deleteSection8() {
+  const res = await secureFetch('/sections/section8-community-membership', {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete Section 8');
 }

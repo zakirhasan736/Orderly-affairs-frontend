@@ -1,5 +1,5 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import Cookies from 'js-cookie';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import { createSecureBaseQuery } from '@/libs/baseQueryWithReauth';
 
 export interface TourStatus {
   version: string | null;
@@ -10,19 +10,7 @@ export interface TourStatus {
 
 export const tourApi = createApi({
   reducerPath: 'tourApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: (process.env.NEXT_PUBLIC_API_BASE_URL || '') + '/onboarding',
-    prepareHeaders: headers => {
-      const token = Cookies.get('auth_token') || Cookies.get('nok_auth_token');
-
-      if (token) {
-        headers.set('Authorization', `Bearer ${token}`);
-      }
-
-      headers.set('Content-Type', 'application/json');
-      return headers;
-    },
-  }),
+  baseQuery: createSecureBaseQuery('/onboarding'),
   tagTypes: ['Tour'],
   endpoints: builder => ({
     getTourStatus: builder.query<TourStatus, void>({

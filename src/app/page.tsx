@@ -19,7 +19,9 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
+import { fetchSession } from '@/libs/secureFetch';
+import { useAppDispatch } from '@/store/hooks';
+import { setSession } from '@/store/slices/authSlice';
 import Image from 'next/image';
 import {
   useLoginMutation,
@@ -90,64 +92,40 @@ const isValidEmail = (email: string) =>
 
 const verifyTOTPCode = (code: string) => /^\d{6}$/.test(code);
 
-const getApiErrorMessage = (err: unknown, fallback: string) => {
-  if (err && typeof err === 'object') {
-    const error = err as {
-      data?: { detail?: unknown };
-      message?: unknown;
-    };
-    const detail = error.data?.detail;
+import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 
-    if (Array.isArray(detail)) {
-      const messages = detail
-        .map(item =>
-          item &&
-          typeof item === 'object' &&
-          'msg' in item &&
-          typeof item.msg === 'string'
-            ? item.msg
-            : null,
-        )
-        .filter((message): message is string => Boolean(message));
+const getApiErrorMessage = (err: unknown, fallback: string) =>
+  getSafeErrorMessage(err, fallback);
 
-      if (messages.length) return messages.join(', ');
-    }
-
-    if (typeof detail === 'string') return detail;
-    if (typeof error.message === 'string') return error.message;
+const completeOwnerAuth = async (
+  router: ReturnType<typeof useRouter>,
+  dispatch: ReturnType<typeof useAppDispatch>,
+) => {
+  const session = await fetchSession();
+  if (!session.authenticated || session.role !== 'owner') {
+    throw new Error('Session not established');
   }
 
-  if (err instanceof Error) return err.message;
+  dispatch(
+    setSession({
+      user: {
+        email: session.email,
+        role: 'owner',
+        owner_id: session.owner_id ?? null,
+      },
+    }),
+  );
 
-  return fallback;
-};
-
-const persistAuthToken = (accessToken: string | undefined) => {
-  if (!accessToken) {
-    throw new Error('Authentication token missing');
-  }
-
-  Cookies.set('auth_token', accessToken, {
-    secure: true,
-    sameSite: 'strict',
-    path: '/',
-  });
+  goToDashboard(router);
 };
 
 const goToDashboard = (router: ReturnType<typeof useRouter>) => {
   router.replace('/dashboard');
 };
 
-const hasValidOwnerSession = () => {
-  const token = Cookies.get('auth_token');
-  if (!token) return false;
-
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload?.role === 'owner';
-  } catch {
-    return false;
-  }
+const hasValidOwnerSession = async () => {
+  const session = await fetchSession();
+  return session.authenticated && session.role === 'owner';
 };
 
 const MFA_METHODS: MFAMethod[] = ['authenticator', 'email', 'sms'];
@@ -335,6 +313,7 @@ function PaymentForm({
 
 export default function LoginPage() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const stripePromise = loadStripe(
     process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
   );
@@ -387,7 +366,6 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [qrCodeUrl, setQrCodeUrl] = useState('');
-  const [mfaSecret, setMfaSecret] = useState('');
   const [mfaCode, setMfaCode] = useState('');
   const [emailCode, setEmailCode] = useState('');
   const [verificationSent, setVerificationSent] = useState(false);
@@ -412,9 +390,9 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   };
 
   useEffect(() => {
-    if (hasValidOwnerSession()) {
-      goToDashboard(router);
-    }
+    void hasValidOwnerSession().then(valid => {
+      if (valid) goToDashboard(router);
+    });
   }, [router]);
 
   // OTP UX
@@ -449,6 +427,9 @@ const handleSendEmailCode = async () => {
       email,
       captcha_token: captchaToken,
       otp_session_id: getOtpSessionId(),
+      ...(mfaChallengeToken
+        ? { mfa_challenge_token: mfaChallengeToken }
+        : {}),
     }).unwrap();
 
     setVerificationSent(true);
@@ -468,12 +449,20 @@ const handleSendEmailCode = async () => {
    setError('');
 
    if (email && isValidEmail(email)) {
+     if (!captchaToken) {
+       setError('Complete the CAPTCHA before requesting a reset code');
+       return;
+     }
      startAuthLoading('forgot_password');
 
      try {
-       await requestPasswordReset({ email }).unwrap();
+       await requestPasswordReset({
+         email,
+         captcha_token: captchaToken,
+         otp_session_id: getOtpSessionId(),
+       }).unwrap();
        setResetEmail(email);
-       alert('Reset code sent. Check your email.');
+       alert('If an account exists for that email, a reset code has been sent.');
        setStep('reset_password');
      } catch (err: unknown) {
        setError(getApiErrorMessage(err, 'Failed to send reset code'));
@@ -487,12 +476,20 @@ const handleSendEmailCode = async () => {
 
  const handleRequestReset = async () => {
    setError('');
+   if (!captchaToken) {
+     setError('Complete the CAPTCHA before requesting a reset code');
+     return;
+   }
    startAuthLoading('request_reset');
 
    try {
-     await requestPasswordReset({ email: resetEmail }).unwrap();
+     await requestPasswordReset({
+       email: resetEmail,
+       captcha_token: captchaToken,
+       otp_session_id: getOtpSessionId(),
+     }).unwrap();
      setResetEmailSent(true);
-     alert('Reset code sent. Check your email.');
+     alert('If an account exists for that email, a reset code has been sent.');
      setStep('reset_password');
    } catch (err: unknown) {
      setError(getApiErrorMessage(err, 'Failed to send reset code'));
@@ -513,6 +510,7 @@ const handleResetPassword = async () => {
       email: resetEmail,
       otp: resetOtp,
       new_password: newPassword,
+      captcha_token: captchaToken,
     }).unwrap();
 
     alert('Password reset successfully!');
@@ -698,7 +696,22 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
 
     startAuthLoading('sign_in');
 
-    const res = await login({ email, password }).unwrap();
+    if (!isNewUser && !captchaToken) {
+      setError('Complete the security check before signing in');
+      stopAuthLoading('sign_in');
+      return;
+    }
+
+    const res = await login({
+      email,
+      password,
+      ...(!isNewUser
+        ? {
+            captcha_token: captchaToken,
+            otp_session_id: getOtpSessionId(),
+          }
+        : {}),
+    }).unwrap();
 
     if (res.mfa_required) {
       const activeMethods = normalizeMfaMethods(
@@ -721,7 +734,7 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
       setAttempts(0);
 
       if (res.otp_error) {
-        setError(String(res.otp_error));
+        setError('Could not send verification code. Please try again.');
       }
 
       await beginLinkedLoginMfa(preferredMethod, {
@@ -733,9 +746,7 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
       return;
     }
 
-    persistAuthToken(res.access_token);
-
-    goToDashboard(router);
+    await completeOwnerAuth(router, dispatch);
   } catch (err: unknown) {
     setError(getApiErrorMessage(err, 'Authentication failed'));
   } finally {
@@ -799,7 +810,6 @@ const handleMFAMethodSelection = async () => {
       // ✅ NEW USER → AUTHENTICATOR
       if (selectedMFAMethod === 'authenticator') {
         setQrCodeUrl(signupRes.qrCodeUrl || '');
-        setMfaSecret(signupRes.secret || '');
         setHasLinkedAuthenticator(false);
         setMfaCode('');
         setStep('setupMfa');
@@ -849,7 +859,6 @@ const handleMFAMethodSelection = async () => {
     if (selectedMFAMethod === 'authenticator') {
       const qr = await generateMfa({ email }).unwrap();
       setQrCodeUrl(qr.qrCodeUrl);
-      setMfaSecret(qr.secret);
       setHasLinkedAuthenticator(false);
       setMfaCode('');
       setStep('setupMfa');
@@ -910,10 +919,13 @@ const handleMFAMethodSelection = async () => {
     ) {
     if (selectedMFAMethod === 'authenticator') {
       try {
-        const resumeRes = await resumePendingSignup({ email }).unwrap();
+        const resumeRes = await resumePendingSignup({
+          email,
+          captcha_token: captchaToken,
+          otp_session_id: getOtpSessionId(),
+        }).unwrap();
 
         setQrCodeUrl(resumeRes.qrCodeUrl || '');
-        setMfaSecret(resumeRes.secret || '');
         setHasLinkedAuthenticator(false);
         setMfaCode('');
         setError('');
@@ -964,18 +976,21 @@ const verifyMfaCode = useCallback(async () => {
     let res;
 
     if (hasLinkedAuthenticator) {
-      res = await verifyTotp({ email, code: mfaCode }).unwrap();
+      res = await verifyTotp({
+        email,
+        code: mfaCode,
+        ...(isLoginMfaChallenge
+          ? { mfa_challenge_token: mfaChallengeToken }
+          : {}),
+      }).unwrap();
     } else {
       res = await linkAuthenticator({
         email,
         code: mfaCode,
-        secret: mfaSecret,
       }).unwrap();
     }
 
-    persistAuthToken(res.access_token);
-
-    goToDashboard(router);
+    await completeOwnerAuth(router, dispatch);
   } catch (err: unknown) {
     setError(getApiErrorMessage(err, 'Invalid verification code'));
   } finally {
@@ -987,7 +1002,6 @@ const verifyMfaCode = useCallback(async () => {
   verifyTotp,
   email,
   linkAuthenticator,
-  mfaSecret,
   router,
 ]);
 
@@ -1014,13 +1028,14 @@ const verifyEmailOtpCode = useCallback(async () => {
       email,
       code,
       otp_session_id: getOtpSessionId(),
+      ...(isLoginMfaChallenge
+        ? { mfa_challenge_token: mfaChallengeToken }
+        : {}),
     }).unwrap();
 
     setAttempts(0);
 
-    persistAuthToken(res.access_token);
-
-    goToDashboard(router);
+    await completeOwnerAuth(router, dispatch);
   } catch (err: unknown) {
     const nextAttempts = attempts + 1;
     setAttempts(nextAttempts);
@@ -1062,13 +1077,14 @@ const verifySmsOtpCode = useCallback(async () => {
       email,
       code: smsCode,
       otp_session_id: getOtpSessionId(),
+      ...(isLoginMfaChallenge
+        ? { mfa_challenge_token: mfaChallengeToken }
+        : {}),
     }).unwrap();
 
     setAttempts(0);
 
-    persistAuthToken(res.access_token);
-
-    goToDashboard(router);
+    await completeOwnerAuth(router, dispatch);
   } catch (err: unknown) {
     const nextAttempts = attempts + 1;
     setAttempts(nextAttempts);
@@ -1101,7 +1117,7 @@ useEffect(() => {
   const verifyKey = [
     step,
     hasLinkedAuthenticator ? 'linked' : 'setup',
-    mfaSecret,
+    qrCodeUrl,
     mfaCode,
   ].join(':');
 
@@ -1109,7 +1125,7 @@ useEffect(() => {
 
   autoMfaVerifyKey.current = verifyKey;
   void verifyMfaCode();
-}, [step, mfaCode, loadingAction, hasLinkedAuthenticator, mfaSecret, verifyMfaCode]);
+}, [step, mfaCode, loadingAction, hasLinkedAuthenticator, qrCodeUrl, verifyMfaCode]);
 
 useEffect(() => {
   if (
@@ -1160,6 +1176,9 @@ const handleResendEmail = async () => {
       email,
       captcha_token: captchaToken,
       otp_session_id: getOtpSessionId(),
+      ...(mfaChallengeToken
+        ? { mfa_challenge_token: mfaChallengeToken }
+        : {}),
     }).unwrap();
 
     setCooldown(res.cooldown_seconds ?? 60);
@@ -1584,9 +1603,13 @@ const backButtonLabel =
                       </>
                     )}
 
+                    {!isNewUser && (
+                      <TurnstileCaptcha onTokenChange={setCaptchaToken} />
+                    )}
+
                     <Button
                       className="w-full btn-primary"
-                      disabled={isAuthBusy}
+                      disabled={isAuthBusy || (!isNewUser && !captchaToken)}
                     >
                       {isAuthLoading('sign_in')
                         ? 'Please wait…'
@@ -1734,9 +1757,6 @@ const backButtonLabel =
                           height={192}
                           className="mx-auto"
                         />
-                        <code className="text-xs bg-gray-100 px-2 py-1 rounded">
-                          {mfaSecret}
-                        </code>
                         <form onSubmit={handleVerifyMfa} className="space-y-3">
                           <Input
                             type="text"
@@ -1999,10 +2019,15 @@ const backButtonLabel =
                       placeholder="Enter your email"
                     />
 
+                    <TurnstileCaptcha
+                      onTokenChange={setCaptchaToken}
+                      className="flex justify-center"
+                    />
+
                     <Button
                       className="w-full btn-primary flex items-center justify-center"
                       onClick={handleRequestReset}
-                      disabled={isAuthBusy || !resetEmail}
+                      disabled={isAuthBusy || !resetEmail || !captchaToken}
                     >
                       {isAuthLoading('request_reset') && (
                         <span className="mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
@@ -2031,6 +2056,7 @@ const backButtonLabel =
 
                 {step === 'reset_password' && (
                   <div className="space-y-4">
+                    <TurnstileCaptcha onTokenChange={setCaptchaToken} />
                     {/* OTP */}
                     <Input
                       type="text"

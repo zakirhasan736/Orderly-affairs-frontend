@@ -1,30 +1,23 @@
-import { sanitizeSectionPayload } from '@/utils/sectionUploadFields';
+import { secureFetch } from '@/libs/secureFetch';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+export async function getSection11() {
+  const res = await secureFetch('/sections/section11-military-service');
+  if (!res.ok) throw new Error('Failed to load Section 11');
+  return res.json();
+}
 
-const UPLOAD_KEYS = ['military_documents', 'veteran_contacts'] as const;
-
-export async function saveSection11(token: string, payload: any) {
-  const res = await fetch(`${API_BASE}/sections/section11-military-service`, {
+export async function saveSection11(payload: any) {
+  const res = await secureFetch('/sections/section11-military-service', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(
-      sanitizeSectionPayload(payload, '11A', UPLOAD_KEYS),
-    ),
+    body: JSON.stringify(payload),
   });
-
   if (!res.ok) throw new Error('Failed to save Section 11');
   return res.json();
 }
 
-export async function getSection11(token: string) {
-  const res = await fetch(`${API_BASE}/sections/section11-military-service`, {
-    headers: { Authorization: `Bearer ${token}` },
+export async function deleteSection11() {
+  const res = await secureFetch('/sections/section11-military-service', {
+    method: 'DELETE',
   });
-
-  if (!res.ok) throw new Error('Failed to load Section 11');
-  return res.json();
+  if (!res.ok) throw new Error('Failed to delete Section 11');
 }

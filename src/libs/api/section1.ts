@@ -1,29 +1,22 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { secureFetch } from '@/libs/secureFetch';
 
-export async function getSection1(token: string) {
-  const res = await fetch(`${API_BASE}/sections/section1-vital-information`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function getSection1() {
+  const res = await secureFetch('/sections/section1-vital-information');
   if (!res.ok) throw new Error('Failed to load Section 1');
   return res.json();
 }
 
-export async function saveSection1(token: string, payload: any) {
-  const res = await fetch(`${API_BASE}/sections/section1-vital-information`, {
+export async function saveSection1(payload: any) {
+  const res = await secureFetch('/sections/section1-vital-information', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error('Failed to save Section 1');
   return res.json();
 }
 
-export async function deleteSection1(token: string) {
-  await fetch(`${API_BASE}/sections/section1-vital-information`, {
+export async function deleteSection1() {
+  await secureFetch('/sections/section1-vital-information', {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
   });
 }

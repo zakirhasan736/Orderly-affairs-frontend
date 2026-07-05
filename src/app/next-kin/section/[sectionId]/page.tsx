@@ -1,26 +1,31 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useGetKitForNokQuery } from '@/services/kitApi';
 import { useGetMyNextKinAccessQuery } from '@/services/authApi';
 import { EnhancedSectionView } from '@/components/EnhancedSectionView';
 import { isHiddenFromNokDashboard } from '@/config/nokConfig';
+import { nokLogout, fetchSession } from '@/libs/secureFetch';
 
 export default function NextKinSectionPage() {
   const router = useRouter();
   const { sectionId } = useParams<{ sectionId: string }>();
-
-  const token = Cookies.get('nok_auth_token');
+  const [sessionReady, setSessionReady] = useState(false);
 
   const { data: access } = useGetMyNextKinAccessQuery();
   const { data: kit, isLoading } = useGetKitForNokQuery();
 
   useEffect(() => {
-    if (!token) router.replace('/next-kin');
-  }, [token, router]);
+    fetchSession().then(session => {
+      if (!session.authenticated || session.role !== 'nextkin') {
+        router.replace('/next-kin');
+        return;
+      }
+      setSessionReady(true);
+    });
+  }, [router]);
 
   useEffect(() => {
     if (sectionId && isHiddenFromNokDashboard(sectionId)) {
@@ -28,7 +33,7 @@ export default function NextKinSectionPage() {
     }
   }, [sectionId, router]);
 
-  if (!token || isLoading || !kit) {
+  if (!sessionReady || isLoading || !kit) {
     return <div className="p-8 text-muted-foreground">Loading section…</div>;
   }
 
@@ -39,8 +44,10 @@ export default function NextKinSectionPage() {
       nokData={access?.nextkin}
       kit={kit}
       onBack={() => router.push('/next-kin/dashboard')}
-      onLogout={() => {
-        Cookies.remove('nok_auth_token');
+      onLogout={async () => {
+        try {
+          await nokLogout();
+        } catch {}
         router.replace('/next-kin');
       }}
       onOwnerLetterAccess={() => router.push('/next-kin/letter')}

@@ -2,10 +2,9 @@
 
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import Cookies from 'js-cookie';
-import * as jose from 'jose';
 import { useAppDispatch } from '@/store/hooks';
-import { logout } from '@/store/slices/authSlice';
+import { clearSession } from '@/store/slices/authSlice';
+import { fetchSession } from '@/libs/secureFetch';
 
 export default function AuthWatcher({
   children,
@@ -17,48 +16,38 @@ export default function AuthWatcher({
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    // ✅ ABSOLUTELY IGNORE ALL NEXT-KIN ROUTES
     if (pathname.startsWith('/next-kin')) {
       return;
     }
 
     const isOwnerArea = pathname.startsWith('/dashboard');
 
-    // 🔓 Public owner routes
     if (pathname === '/' || pathname.startsWith('/login')) {
       return;
     }
 
-    const token = Cookies.get('auth_token');
+    let cancelled = false;
 
-    // 🚫 Missing owner token
-    if (!token) {
-      router.replace('/');
-      return;
-    }
+    const verify = async () => {
+      const session = await fetchSession();
+      if (cancelled) return;
 
-    try {
-      const payload = jose.decodeJwt(token);
-      const exp = payload.exp ? payload.exp * 1000 : 0;
-
-      // ⏰ Expired
-      if (!exp || exp < Date.now()) {
-        Cookies.remove('auth_token');
-        dispatch(logout());
+      if (!session.authenticated) {
+        dispatch(clearSession());
         router.replace('/');
         return;
       }
 
-      // 🎭 Owner-only enforcement
-      if (isOwnerArea && payload.role !== 'owner') {
+      if (isOwnerArea && session.role !== 'owner') {
         router.replace('/');
-        return;
       }
-    } catch {
-      Cookies.remove('auth_token');
-      dispatch(logout());
-      router.replace('/');
-    }
+    };
+
+    void verify();
+
+    return () => {
+      cancelled = true;
+    };
   }, [pathname, router, dispatch]);
 
   return <>{children}</>;

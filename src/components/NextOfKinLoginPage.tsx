@@ -39,27 +39,10 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
       Array.isArray(accessData.authorized_people) &&
       accessData.authorized_people.length > 0);
 
-  // ✅ Demo fallback data
-  const demoPeople = [
-    {
-      person_name: 'Sarah Johnson',
-      relationship: 'Daughter',
-      email_address: 'sarah@example.com',
-      phone_number: '555-0123',
-      access_level: 'Full Kit Access',
-      master_password: 'demo123',
-    },
-    {
-      person_name: 'Michael Chen',
-      relationship: 'Son-in-law',
-      email_address: 'michael@example.com',
-      phone_number: '555-0456',
-      access_level: 'Specific Sections',
-      master_password: 'demo456',
-    },
-  ];
+  // Demo fallback removed — use real access management data only
+  const demoPeople: never[] = [];
 
-  // ✅ Build the list of people (real or demo)
+  // Build the list of people (real data only)
   const authorizedPeople =
     Array.isArray(accessData) && accessData.length > 0
       ? accessData

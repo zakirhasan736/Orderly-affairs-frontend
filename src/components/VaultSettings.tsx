@@ -2,7 +2,6 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import Cookies from 'js-cookie';
 import {
   ChevronRight,
   Mail,
@@ -107,21 +106,7 @@ const mfaOptions: Array<{
   },
 ];
 
-const getErrorMessage = (err: unknown, fallback: string) => {
-  if (
-    err &&
-    typeof err === 'object' &&
-    'data' in err &&
-    err.data &&
-    typeof err.data === 'object' &&
-    'detail' in err.data &&
-    typeof err.data.detail === 'string'
-  ) {
-    return err.data.detail;
-  }
-
-  return fallback;
-};
+const getErrorMessage = (_err: unknown, fallback: string) => fallback;
 
 /* ---------------- Component ---------------- */
 const VaultSettings = () => {
@@ -168,7 +153,6 @@ const VaultSettings = () => {
   const [emailCooldown, setEmailCooldown] = useState(0);
   const [emailAttempts, setEmailAttempts] = useState(0);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
-  const [mfaSecret, setMfaSecret] = useState('');
   const [authCode, setAuthCode] = useState('');
   const autoEmailVerifyKey = useRef('');
   const autoAuthenticatorVerifyKey = useRef('');
@@ -191,15 +175,6 @@ const openBillingPortal = async () => {
   const { url } = await openPortal().unwrap();
   window.location.href = url;
 };
-
-const saveToken = useCallback((token?: string) => {
-  if (!token) return;
-  Cookies.set('auth_token', token, {
-    secure: true,
-    sameSite: 'strict',
-    path: '/',
-  });
-}, []);
 
 const MAX_EMAIL_ATTEMPTS = 5;
 
@@ -279,7 +254,6 @@ const verifyEmailMfa = useCallback(async () => {
       otp_session_id: getOtpSessionId(),
     }).unwrap();
     setEmailAttempts(0);
-    saveToken(res.access_token);
     setSetupMethod(null);
     setMfaSheetMethod(null);
     setEmailCode('');
@@ -301,7 +275,6 @@ const verifyEmailMfa = useCallback(async () => {
   emailCode,
   emailAttempts,
   verifyEmailCode,
-  saveToken,
   refetchMe,
 ]);
 
@@ -311,7 +284,6 @@ const beginAuthenticatorMfa = async () => {
   try {
     const res = await generateMfa({ email: me.email }).unwrap();
     setQrCodeUrl(res.qrCodeUrl);
-    setMfaSecret(res.secret);
     setAuthCode('');
     setSetupMethod('authenticator');
   } catch (err: unknown) {
@@ -322,7 +294,7 @@ const beginAuthenticatorMfa = async () => {
 };
 
 const verifyAuthenticatorMfa = useCallback(async () => {
-  if (!me?.email || !mfaSecret) return;
+  if (!me?.email || !qrCodeUrl) return;
   if (authCode.length !== 6) {
     toast.error('Enter the 6-digit authenticator code');
     return;
@@ -333,13 +305,10 @@ const verifyAuthenticatorMfa = useCallback(async () => {
     const res = await linkAuthenticator({
       email: me.email,
       code: authCode,
-      secret: mfaSecret,
     }).unwrap();
-    saveToken(res.access_token);
     setSetupMethod(null);
     setMfaSheetMethod(null);
     setQrCodeUrl('');
-    setMfaSecret('');
     setAuthCode('');
     await refetchMe();
     toast.success('Authenticator MFA enabled');
@@ -350,10 +319,9 @@ const verifyAuthenticatorMfa = useCallback(async () => {
   }
 }, [
   me?.email,
-  mfaSecret,
+  qrCodeUrl,
   authCode,
   linkAuthenticator,
-  saveToken,
   refetchMe,
 ]);
 
@@ -417,7 +385,6 @@ const verifySmsMfa = useCallback(async () => {
       code: smsCode,
       otp_session_id: getOtpSessionId(),
     }).unwrap();
-    saveToken(res.access_token);
     setSetupMethod(null);
     setMfaSheetMethod(null);
     setSmsCode('');
@@ -428,7 +395,7 @@ const verifySmsMfa = useCallback(async () => {
   } finally {
     setSecurityLoading(null);
   }
-}, [me?.email, smsCode, verifySmsOtp, saveToken, refetchMe]);
+}, [me?.email, smsCode, verifySmsOtp, refetchMe]);
 
 useEffect(() => {
   if (emailCooldown <= 0) return;
@@ -461,14 +428,14 @@ useEffect(() => {
 }, [setupMethod, emailCode, securityLoading, me?.email, verifyEmailMfa, emailAttempts]);
 
 useEffect(() => {
-  if (setupMethod !== 'authenticator' || authCode.length !== 6 || !mfaSecret) {
+  if (setupMethod !== 'authenticator' || authCode.length !== 6 || !qrCodeUrl) {
     autoAuthenticatorVerifyKey.current = '';
     return;
   }
 
   if (securityLoading) return;
 
-  const verifyKey = [me?.email || '', mfaSecret, authCode].join(':');
+  const verifyKey = [me?.email || '', qrCodeUrl, authCode].join(':');
 
   if (autoAuthenticatorVerifyKey.current === verifyKey) return;
 
@@ -477,7 +444,7 @@ useEffect(() => {
 }, [
   setupMethod,
   authCode,
-  mfaSecret,
+  qrCodeUrl,
   securityLoading,
   me?.email,
   verifyAuthenticatorMfa,
@@ -511,9 +478,17 @@ const disableMethod = async (method: MFAMethod) => {
     return;
   }
 
+  const password = window.prompt(
+    'Enter your account password to disable this MFA method',
+  );
+  if (!password?.trim()) {
+    toast.error('Password is required to disable MFA');
+    return;
+  }
+
   setSecurityLoading(method);
   try {
-    await disableMfaMethod({ method }).unwrap();
+    await disableMfaMethod({ method, password }).unwrap();
     if (setupMethod === method) setSetupMethod(null);
     await refetchMe();
     toast.success('MFA method disabled');
@@ -690,11 +665,6 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
               height={200}
               className="mx-auto rounded-2xl border bg-white p-3"
             />
-          )}
-          {mfaSecret && (
-            <code className="block rounded-2xl bg-slate-100 px-3 py-2 text-center text-[11px] text-slate-700">
-              {mfaSecret}
-            </code>
           )}
           <div className="rounded-2xl border bg-muted/30 p-4">
             <p className="mb-4 text-center text-sm text-muted-foreground">

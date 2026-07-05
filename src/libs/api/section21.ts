@@ -1,62 +1,23 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { secureFetch } from '@/libs/secureFetch';
 
-/* ---------------- SAVE ---------------- */
-
-export async function saveSection21(token: string, payload: any) {
-  const res = await fetch(
-    `${API_BASE}/sections/section21-estate-planning-final-wishes`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    },
-  );
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
+export async function getSection21() {
+  const res = await secureFetch('/sections/section21-estate-planning-final-wishes');
+  if (!res.ok) throw new Error('Failed to load Section 21');
   return res.json();
 }
 
-/* ---------------- GET ---------------- */
-
-export async function getSection21(token: string) {
-  const res = await fetch(
-    `${API_BASE}/sections/section21-estate-planning-final-wishes`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
+export async function saveSection21(payload: any) {
+  const res = await secureFetch('/sections/section21-estate-planning-final-wishes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to save Section 21');
   return res.json();
 }
 
-/* ---------------- DELETE ---------------- */
-
-export async function deleteSection21(token: string) {
-  const res = await fetch(
-    `${API_BASE}/sections/section21-estate-planning-final-wishes`,
-    {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  return res.json();
+export async function deleteSection21() {
+  const res = await secureFetch('/sections/section21-estate-planning-final-wishes', {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete Section 21');
 }

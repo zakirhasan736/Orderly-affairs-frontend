@@ -1,17 +1,9 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import Cookies from 'js-cookie';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import { createSecureBaseQuery } from '@/libs/baseQueryWithReauth';
 
 export const billingApi = createApi({
   reducerPath: 'billingApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: (process.env.NEXT_PUBLIC_API_BASE_URL || '') + '/billing',
-    prepareHeaders: headers => {
-      const token = Cookies.get('auth_token');
-      if (token) headers.set('Authorization', `Bearer ${token}`);
-      headers.set('Content-Type', 'application/json');
-      return headers;
-    },
-  }),
+  baseQuery: createSecureBaseQuery('/billing'),
   endpoints: builder => ({
     getStatus: builder.query<any, void>({
       query: () => '/status',
@@ -31,10 +23,7 @@ export const billingApi = createApi({
       }),
     }),
 
-    confirmCard: builder.mutation<
-      { message: string },
-      { payment_method_id: string }
-    >({
+    confirmCard: builder.mutation<any, { payment_method_id: string }>({
       query: body => ({
         url: '/confirm-card',
         method: 'POST',
@@ -53,6 +42,20 @@ export const billingApi = createApi({
       }),
     }),
 
+    cancelSubscription: builder.mutation<any, void>({
+      query: () => ({
+        url: '/cancel',
+        method: 'POST',
+      }),
+    }),
+
+    reactivateSubscription: builder.mutation<any, void>({
+      query: () => ({
+        url: '/reactivate',
+        method: 'POST',
+      }),
+    }),
+
     changePlan: builder.mutation<any, { plan: 'monthly' | 'yearly' }>({
       query: body => ({
         url: '/change-plan',
@@ -61,14 +64,15 @@ export const billingApi = createApi({
       }),
     }),
 
-    getInvoices: builder.query<any[], void>({
+    getInvoices: builder.query<any, void>({
       query: () => '/invoices',
     }),
-    pauseSubscription: builder.mutation<any, void>({
+
+    pauseSubscription: builder.mutation<any, { resume_at?: string } | void>({
       query: body => ({
         url: '/pause',
         method: 'POST',
-        body,
+        body: body ?? {},
       }),
     }),
 
@@ -78,6 +82,7 @@ export const billingApi = createApi({
         method: 'POST',
       }),
     }),
+
     portal: builder.mutation<{ url: string }, void>({
       query: () => ({
         url: '/portal',
@@ -92,9 +97,11 @@ export const {
   useCreateCustomerMutation,
   useSetupIntentMutation,
   useConfirmCardMutation,
+  useStartSubscriptionMutation,
+  useCancelSubscriptionMutation,
+  useReactivateSubscriptionMutation,
   useChangePlanMutation,
   useGetInvoicesQuery,
-  useStartSubscriptionMutation,
   usePauseSubscriptionMutation,
   useResumeSubscriptionMutation,
   usePortalMutation,

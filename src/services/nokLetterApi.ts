@@ -1,6 +1,6 @@
 // src/services/nokLetterApi.ts
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import Cookies from 'js-cookie';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import { createSecureBaseQuery } from '@/libs/baseQueryWithReauth';
 
 export type NOKLetter = {
   id: string;
@@ -31,21 +31,15 @@ export type NOKLetter = {
   updated_at: string;
 };
 
-export type NOKLetterIn = Omit<NOKLetter, 'id' | 'owner_id' | 'created_at' | 'updated_at'>;
+export type NOKLetterIn = Omit<
+  NOKLetter,
+  'id' | 'owner_id' | 'created_at' | 'updated_at'
+>;
+
 export const nokLetterApi = createApi({
   reducerPath: 'nokLetterApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: (process.env.NEXT_PUBLIC_API_BASE_URL || '') + '/nok-letter',
-    credentials: 'include',
-    prepareHeaders: h => {
-      const token = Cookies.get('auth_token');
-      if (token) h.set('Authorization', `Bearer ${token}`);
-      h.set('Content-Type', 'application/json');
-      return h;
-    },
-  }),
+  baseQuery: createSecureBaseQuery('/nok-letter'),
   endpoints: b => ({
-    // accept optional nokId
     getNokLetter: b.query<NOKLetter, { nokId?: string } | void>({
       query: arg => {
         const nokId =

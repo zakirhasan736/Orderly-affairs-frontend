@@ -18,7 +18,6 @@ export function useSectionAutoSave(
     timeoutRef.current = setTimeout(async () => {
       try {
         await saveFunction(data);
-        console.log(`Section ${sectionId} auto-saved`);
       } catch (err) {
         console.error(`Auto-save failed for ${sectionId}`, err);
       }

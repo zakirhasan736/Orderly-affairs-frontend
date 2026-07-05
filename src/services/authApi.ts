@@ -1,5 +1,5 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import Cookies from 'js-cookie';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import { createSecureBaseQuery } from '@/libs/baseQueryWithReauth';
 import { otpSessionHeaders } from '@/utils/otpSession';
 
 export interface NextKinCreatePayload {
@@ -66,7 +66,7 @@ export interface NextKinAccessResponse {
     relationship?: string;
   };
   password_card_generated?: boolean;
-  master_password?: string | null;
+  has_master_password?: boolean;
   card_storage_location?: string | null;
   key_bag_location?: string | null;
   documents_bag_location?: string | null;
@@ -126,7 +126,7 @@ export interface EmailOtpResponse {
 
 export interface LoginResponse {
   message?: string;
-  access_token?: string;
+  authenticated?: boolean;
   mfa_required?: boolean;
   method?: MFAMethod;
   mfa_methods?: Partial<MFAMethods>;
@@ -135,12 +135,17 @@ export interface LoginResponse {
   cooldown_seconds?: number;
   mfa_challenge_token?: string;
   phone?: string;
+  role?: string;
+  email?: string;
+  billing_status?: string;
+  requires_billing?: boolean;
 }
 
 export interface VerifyEmailCodeRequest {
   email: string;
   code: number;
   otp_session_id?: string;
+  mfa_challenge_token?: string;
 }
 export type MFAMethod = 'authenticator' | 'email' | 'sms';
 
@@ -154,37 +159,26 @@ export interface OwnerMeResponse {
   primary_mfa?: MFAMethod | null;
   mfa_methods: Partial<MFAMethods>;
 }
-const NOK_SECURED = new Set([
-  'getMyNextKinAccess',
-  'nextkinLogout',
-  'reportOwnerDeceased',
-]);
-const PUBLIC = new Set([
-  'signup',
-  'login',
-  'nextkinLogin',
-]);
+const authBaseQuery = createSecureBaseQuery('/auth');
 
 export const authApi = createApi({
   reducerPath: 'authApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: (process.env.NEXT_PUBLIC_API_BASE_URL || '') + '/auth',
-    credentials: 'include',
-    prepareHeaders: (headers, api) => {
-      if (!PUBLIC.has(api.endpoint)) {
-        const token = NOK_SECURED.has(api.endpoint)
-          ? Cookies.get('nok_auth_token')
-          : Cookies.get('auth_token');
-        if (token) headers.set('Authorization', `Bearer ${token}`);
-      }
+  baseQuery: async (args, api, extraOptions) => {
+    const prepared = typeof args === 'string' ? { url: args } : { ...args };
+    const sessionHeaders = otpSessionHeaders();
+    const headers = new Headers(prepared.headers as HeadersInit | undefined);
+    if (!headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');
-      const sessionHeaders = otpSessionHeaders();
-      Object.entries(sessionHeaders).forEach(([key, value]) => {
-        headers.set(key, value);
-      });
-      return headers;
-    },
-  }),
+    }
+    Object.entries(sessionHeaders).forEach(([key, value]) => {
+      headers.set(key, value);
+    });
+    return authBaseQuery(
+      { ...prepared, headers, credentials: 'include' },
+      api,
+      extraOptions,
+    );
+  },
   tagTypes: ['NextKin', 'NextKinAccess'],
   endpoints: builder => ({
     // Owner auth
@@ -192,9 +186,13 @@ export const authApi = createApi({
       query: b => ({ url: '/signup', method: 'POST', body: b }),
     }),
     resumePendingSignup: builder.mutation({
-      query: b => ({ url: '/resume-pending-signup', method: 'POST', body: b }),
+      query: b => ({
+        url: '/resume-pending-signup',
+        method: 'POST',
+        body: b,
+      }),
     }),
-    login: builder.mutation<LoginResponse, { email: string; password: string }>({
+    login: builder.mutation<LoginResponse, { email: string; password: string; captcha_token?: string; otp_session_id?: string }>({
       query: b => ({ url: '/login', method: 'POST', body: b }),
     }),
     ownerLogout: builder.mutation({
@@ -203,7 +201,7 @@ export const authApi = createApi({
     // Password reset
     requestPasswordReset: builder.mutation<
       { message: string },
-      { email: string }
+      { email: string; captcha_token?: string; otp_session_id?: string }
     >({
       query: body => ({
         url: '/request-password-reset',
@@ -214,7 +212,12 @@ export const authApi = createApi({
 
     resetPassword: builder.mutation<
       { message: string },
-      { email: string; otp: string; new_password: string }
+      {
+        email: string;
+        otp: string;
+        new_password: string;
+        captcha_token?: string;
+      }
     >({
       query: body => ({
         url: '/reset-password',
@@ -234,8 +237,9 @@ export const authApi = createApi({
     }),
 
     verifySmsOtp: builder.mutation<
-      { access_token: string; message: string },
-      VerifySmsOtpRequest & OtpSecurityPayload
+      { authenticated?: boolean; message: string },
+      VerifySmsOtpRequest &
+        OtpSecurityPayload & { mfa_challenge_token?: string }
     >({
       query: body => ({
         url: '/verify-sms-otp',
@@ -353,7 +357,7 @@ export const authApi = createApi({
       query: b => ({ url: '/send-email', method: 'POST', body: b }),
     }),
     verifyEmailCode: builder.mutation<
-      { access_token: string; message: string },
+      { authenticated?: boolean; message: string },
       VerifyEmailCodeRequest
     >({
       query: b => ({ url: '/verify-email', method: 'POST', body: b }),
@@ -365,12 +369,28 @@ export const authApi = createApi({
         primary_mfa?: MFAMethod | null;
         mfa_methods: MFAMethods;
       },
-      { method: MFAMethod }
+      {
+        method: MFAMethod;
+        password?: string;
+        mfa_challenge_token?: string;
+        step_up_token?: string;
+      }
     >({
       query: b => ({ url: '/mfa/disable', method: 'POST', body: b }),
     }),
 
     // Session helpers
+    getSession: builder.query<
+      {
+        authenticated: boolean;
+        role?: string;
+        email?: string;
+        owner_id?: string;
+      },
+      void
+    >({
+      query: () => ({ url: '/session', method: 'GET' }),
+    }),
     refreshToken: builder.mutation({
       query: () => ({ url: '/refresh-token', method: 'POST' }),
     }),
@@ -383,10 +403,14 @@ export const authApi = createApi({
       query: () => ({ url: '/nextkin-access', method: 'GET' }),
       providesTags: ['NextKinAccess'],
     }),
-    reportOwnerDeceased: builder.mutation<ReportOwnerDeceasedResponse, void>({
-      query: () => ({
+    reportOwnerDeceased: builder.mutation<
+      ReportOwnerDeceasedResponse,
+      { master_password: string; confirm: boolean }
+    >({
+      query: body => ({
         url: '/nextkin/report-owner-deceased',
         method: 'POST',
+        body,
       }),
       invalidatesTags: ['NextKinAccess'],
     }),
@@ -409,6 +433,7 @@ export const {
   useVerifyTotpMutation,
   useSendEmailOtpMutation,
   useVerifyEmailCodeMutation,
+  useGetSessionQuery,
   useRefreshTokenMutation,
   useGetMeQuery,
   useRevokeNextKinAccessMutation,

@@ -4,7 +4,6 @@ import { Button } from '@common/ui/button';
 import { Input } from '@common/ui/input';
 import { Label } from '@common/ui/label';
 import { Upload, X } from 'lucide-react';
-import Cookies from 'js-cookie';
 import { uploadFile } from '@/libs/api/upload';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -23,8 +22,6 @@ export function TextInputWithUpload({
   placeholder,
 }: any) {
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const token = Cookies.get('auth_token') || Cookies.get('nok_auth_token');
 
   const files = value.files || [];
   const deleted = value._deleted_files || [];
@@ -48,15 +45,13 @@ export function TextInputWithUpload({
   }
 
   async function handleUpload(file: File) {
-    if (!token) return;
-
     const error = validateFile(file);
     if (error) {
       alert(error);
       return;
     }
 
-    const uploaded = await uploadFile(token, file);
+    const uploaded = await uploadFile(file);
 
     onChange({
       ...value,

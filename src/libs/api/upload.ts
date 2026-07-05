@@ -1,14 +1,11 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { secureFetch } from '@/libs/secureFetch';
 
-export async function uploadFile(token: string, file: File) {
+export async function uploadFile(file: File) {
   const form = new FormData();
   form.append('file', file);
 
-  const res = await fetch(`${API_BASE}/uploads`, {
+  const res = await secureFetch('/uploads', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
     body: form,
   });
 
@@ -16,13 +13,9 @@ export async function uploadFile(token: string, file: File) {
   return res.json();
 }
 
-export async function deleteUpload(token: string, public_id: string) {
-  await fetch(`${API_BASE}/uploads/delete`, {
+export async function deleteUpload(public_id: string) {
+  await secureFetch('/uploads/delete', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
     body: JSON.stringify({ public_id }),
   });
 }

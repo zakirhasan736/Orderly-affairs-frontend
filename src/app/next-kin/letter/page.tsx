@@ -1,38 +1,42 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useGetMyNextKinAccessQuery } from '@/services/authApi';
 import { useGetNokLetterQuery } from '@/services/nokLetterApi';
 import { Button } from '@common/ui/button';
+import { fetchSession } from '@/libs/secureFetch';
 
 export default function NextKinLetterPage() {
   const router = useRouter();
-  const token = Cookies.get('nok_auth_token');
+  const [sessionReady, setSessionReady] = useState(false);
 
   const { data: access } = useGetMyNextKinAccessQuery();
-  // const { data: letters, isLoading } = useGetNokLetterQuery();
 
   useEffect(() => {
-    if (!token) router.replace('/next-kin');
-  }, [token, router]);
+    fetchSession().then(session => {
+      if (!session.authenticated || session.role !== 'nextkin') {
+        router.replace('/next-kin');
+        return;
+      }
+      setSessionReady(true);
+    });
+  }, [router]);
 
-const { data: letter, isLoading } = useGetNokLetterQuery();
+  const { data: letter, isLoading } = useGetNokLetterQuery();
 
-if (!token || isLoading) {
-  return <div className="p-8">Loading letter…</div>;
-}
+  if (!sessionReady || isLoading) {
+    return <div className="p-8">Loading letter…</div>;
+  }
 
-if (!letter) {
-  return (
-    <div className="p-8 text-muted-foreground">
-      No personal letter available.
-    </div>
-  );
-}
-
+  if (!letter) {
+    return (
+      <div className="p-8 text-muted-foreground">
+        No personal letter available.
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-6 py-8 max-w-3xl">

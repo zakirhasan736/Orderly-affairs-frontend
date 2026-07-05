@@ -29,7 +29,8 @@ import { AiDocumentRoutingProvider } from '@/contexts/AiDocumentRoutingContext';
 import { AiPendingUploadSectionBanner } from '@/components/ai/AiPendingUploadSectionBanner';
 import { VaultExportMenu } from '@/components/VaultExportMenu';
 
-import Cookies from 'js-cookie';
+import { fetchSession, nokLogout as apiNokLogout, ownerLogout as apiOwnerLogout, secureFetch } from '@/libs/secureFetch';
+import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/common/ui/button';
 import { Card, CardContent } from '@/components/common/ui/card';
@@ -48,6 +49,8 @@ import {
 import { toast } from 'sonner';
 import Image from 'next/image';
 import { NextOfKinLoginPage } from '@/components/NextOfKinLoginPage';
+import { TurnstileCaptcha } from '@/components/TurnstileCaptcha';
+import { getOtpSessionId } from '@/utils/otpSession';
 import { OwnerNotificationModal } from '@/components/OwnerNotificationModal';
 import { EnhancedNOKDashboard } from '@/components/EnhancedNOKDashboard';
 import { EnhancedSectionView } from '@/components/EnhancedSectionView';
@@ -129,17 +132,7 @@ type AppMode =
   | 'nok_section_view'
   | 'test_access_management'
   | 'test_mfa';
-// Suppress Iterable SDK errors from browser extensions
-if (typeof window !== 'undefined') {
-  const originalError = console.error;
-  console.error = (...args: any[]) => {
-    const message = args[0]?.toString() || '';
-    if (message.includes('iterable') || message.includes('Iterable')) {
-      return; // Suppress Iterable-related errors
-    }
-    originalError.apply(console, args);
-  };
-}
+
 export default function DashboardPage() {
   const router = useRouter();
   // App mode and NOK state
@@ -154,6 +147,7 @@ export default function DashboardPage() {
   const [nokActiveSection, setNokActiveSection] = useState<string | null>(null);
   const [showOwnerLetter, setShowOwnerLetter] = useState(false);
   const [showMessagesDelivery, setShowMessagesDelivery] = useState(false);
+  const [nokCaptchaToken, setNokCaptchaToken] = useState('');
   const [showWelcome, setShowWelcome] = useState(false);
   const [tourStarted, setTourStarted] = useState(false);
   const derivedRole = useMemo(() => {
@@ -181,32 +175,32 @@ export default function DashboardPage() {
 
   const sectionSaveMap: Record<
     string,
-    (token: string, data: any) => Promise<any>
+    (data: any) => Promise<any>
   > = {
-    '1': async (token, data) =>
-      saveSection1(token, mapUIToSection1Payload(data)),
+    '1': async (data) =>
+      saveSection1(mapUIToSection1Payload(data)),
 
     '5': saveSection5,
-    '6': async (token, data) => saveSection6(token, { '6A': data?.['6A'] }),
-    '7': async (token, data) => saveSection7(token, { '7A': data?.['7A'] }),
-    '8': async (token, data) => saveSection8(token, { '8A': data?.['8A'] }),
-    '9': async (token, data) => saveSection9(token, { '9A': data?.['9A'] }),
-    '10': async (token, data) => saveSection10(token, { '10A': data?.['10A'] }),
-    '11': async (token, data) => saveSection11(token, { '11A': data?.['11A'] }),
-    '12': async (token, data) =>
-      saveSection12(token, {
+    '6': async (data) => saveSection6({ '6A': data?.['6A'] }),
+    '7': async (data) => saveSection7({ '7A': data?.['7A'] }),
+    '8': async (data) => saveSection8({ '8A': data?.['8A'] }),
+    '9': async (data) => saveSection9({ '9A': data?.['9A'] }),
+    '10': async (data) => saveSection10({ '10A': data?.['10A'] }),
+    '11': async (data) => saveSection11({ '11A': data?.['11A'] }),
+    '12': async (data) =>
+      saveSection12({
         ...(data?.['12A'] && { '12A': data['12A'] }),
         ...(data?.['12B'] && { '12B': data['12B'] }),
       }),
-    '13': async (token, data) => saveSection13(token, { '13A': data?.['13A'] }),
-    '14': async (token, data) => saveSection14(token, { '14A': data?.['14A'] }),
-    '15': async (token, data) =>
-      saveSection15(token, {
+    '13': async (data) => saveSection13({ '13A': data?.['13A'] }),
+    '14': async (data) => saveSection14({ '14A': data?.['14A'] }),
+    '15': async (data) =>
+      saveSection15({
         ...(data?.['15A'] && { '15A': data['15A'] }),
         ...(data?.['15B'] && { '15B': data['15B'] }),
       }),
-    '16': async (token, data) =>
-      saveSection16(token, {
+    '16': async (data) =>
+      saveSection16({
         ...(data?.['16A'] && { '16A': data['16A'] }),
         ...(data?.['16B'] && { '16B': data['16B'] }),
       }),
@@ -303,91 +297,88 @@ export default function DashboardPage() {
 
     if (sectionsPrefetchedRef.current) return;
 
-    const token = Cookies.get('auth_token');
-    if (!token) return;
-
     sectionsPrefetchedRef.current = true;
 
-    getSection1(token)
+    getSection1()
       .then(res => recordLoadedSection('1', mapSection1ResponseToUI(res)))
       .catch(err => console.error('Failed to load Section 1', err));
 
-    getSection5(token)
+    getSection5()
       .then(res => {
         if (res?.data) recordLoadedSection('5', res.data);
       })
       .catch(err => console.error('Failed to load Section 5', err));
 
-    getSection6(token)
+    getSection6()
       .then(res => recordLoadedSection('6', res.data))
       .catch(err => console.error('Failed to load Section 6', err));
-    getSection7(token)
+    getSection7()
       .then(res => recordLoadedSection('7', res.data))
       .catch(err => console.error('Failed to load Section 7', err));
-    getSection8(token)
+    getSection8()
       .then(res => recordLoadedSection('8', res.data))
       .catch(err => console.error('Failed to load Section 8', err));
-    getSection9(token)
+    getSection9()
       .then(res => recordLoadedSection('9', res.data))
       .catch(err => console.error('Failed to load Section 9', err));
-    getSection10(token)
+    getSection10()
       .then(res => recordLoadedSection('10', res.data))
       .catch(err => console.error('Failed to load Section 10', err));
-    getSection11(token)
+    getSection11()
       .then(res => recordLoadedSection('11', res.data))
       .catch(err => console.error('Failed to load Section 11', err));
-    getSection12(token)
+    getSection12()
       .then(res => {
         if (res?.data) recordLoadedSection('12', res.data);
       })
       .catch(err => console.error('Failed to load Section 12', err));
-    getSection13(token)
+    getSection13()
       .then(res => {
         if (res?.data) recordLoadedSection('13', res.data);
       })
       .catch(err => console.error('Failed to load Section 13', err));
-    getSection14(token)
+    getSection14()
       .then(res => {
         if (res?.data) recordLoadedSection('14', res.data);
       })
       .catch(err => console.error('Failed to load Section 14', err));
-    getSection15(token)
+    getSection15()
       .then(res => {
         if (res?.data) recordLoadedSection('15', res.data);
       })
       .catch(err => console.error('Failed to load Section 15', err));
-    getSection16(token)
+    getSection16()
       .then(res => {
         if (res?.data) recordLoadedSection('16', res.data);
       })
       .catch(err => console.error('Failed to load Section 16', err));
-    getSection17(token)
+    getSection17()
       .then(res => {
         if (res?.data) recordLoadedSection('17', res.data);
       })
       .catch(err => console.error('Failed to load Section 17', err));
-    getSection18(token)
+    getSection18()
       .then(res => {
         if (res?.data) recordLoadedSection('18', res.data);
       })
       .catch(err => console.error('Failed to load Section 18', err));
-    getSection19(token)
+    getSection19()
       .then(res => {
         if (res?.data) recordLoadedSection('19', res.data);
       })
       .catch(err => console.error('Failed to load Section 19', err));
-    getSection20(token)
+    getSection20()
       .then(res => {
         if (res?.data) recordLoadedSection('20', res.data);
       })
       .catch(err => console.error('Failed to load Section 20', err));
-    getSection21(token)
+    getSection21()
       .then(res => {
         if (res?.data) recordLoadedSection('21', res.data);
       })
       .catch(err => console.error('Failed to load Section 21', err));
 
-    getMessages(token)
+    getMessages()
       .then(messages => {
         if (Array.isArray(messages) && messages.length > 0) {
           recordLoadedSection('4', { '4A': { letters_data: messages } });
@@ -402,24 +393,16 @@ export default function DashboardPage() {
       return;
     }
 
-    const token = Cookies.get('auth_token');
-    if (!token) return;
-
     const letterReadyPeople = myNextKin.filter(
       person => !person.immediate_access && person.nok_letter_received,
     );
 
     if (letterReadyPeople.length === 0) return;
 
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-
     Promise.all(
       letterReadyPeople.map(person =>
-        fetch(
-          `${apiBase}/nok-letter?nok_id=${encodeURIComponent(person.id)}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
+        secureFetch(
+          `/nok-letter?nok_id=${encodeURIComponent(person.id)}`,
         ).then(res => (res.ok ? res.json() : null)),
       ),
     )
@@ -476,17 +459,14 @@ export default function DashboardPage() {
       return;
     }
 
-    const token = Cookies.get('auth_token') || Cookies.get('nok_auth_token');
-    if (!token) return;
-
     if (activeSection === '1') {
-      getSection1(token)
+      getSection1()
         .then(res => recordLoadedSection('1', mapSection1ResponseToUI(res)))
         .catch(err => console.error('Failed to refresh Section 1', err));
       return;
     }
 
-    const refreshMap: Record<string, (t: string) => Promise<{ data?: unknown }>> = {
+    const refreshMap: Record<string, () => Promise<{ data?: unknown }>> = {
       '5': getSection5,
       '6': getSection6,
       '7': getSection7,
@@ -509,7 +489,7 @@ export default function DashboardPage() {
     const loader = refreshMap[activeSection];
     if (!loader) return;
 
-    loader(token)
+    loader()
       .then(res => {
         if (res?.data) recordLoadedSection(activeSection, res.data);
       })
@@ -527,7 +507,6 @@ export default function DashboardPage() {
 
     setAutoSaving(true);
     try {
-      // localStorage.setItem('orderlyAffairsData', JSON.stringify(formData));
       const sanitizedFormData = { ...formData };
       delete sanitizedFormData['1']; // 🚫 NEVER STORE SECTION 1
       localStorage.setItem(
@@ -567,9 +546,6 @@ export default function DashboardPage() {
     if (!activeSection || activeSection === 'dashboard') return;
     if (!sectionSaveMap[activeSection]) return;
 
-    const token = Cookies.get('auth_token');
-    if (!token) return;
-
     if (autoSaveRef.current) {
       clearTimeout(autoSaveRef.current);
     }
@@ -586,7 +562,7 @@ export default function DashboardPage() {
           return;
         }
 
-        await sectionSaveMap[activeSection](token, sectionData);
+        await sectionSaveMap[activeSection](sectionData);
 
         sectionLoadedSnapshotRef.current[activeSection] = serialized;
         setLastSaved(new Date());
@@ -616,50 +592,43 @@ export default function DashboardPage() {
     };
   }, []);
 
-  //  Load backend auth (JWT) instead of localStorage
+  // Load session from HttpOnly cookies (server-side only)
   useEffect(() => {
-    // Check NOK first (so a NOK can be logged in while owner is also logged in)
-    const nokToken = Cookies.get('nok_auth_token');
-    if (nokToken) {
-      try {
-        const d = JSON.parse(atob(nokToken.split('.')[1]));
-        if (d?.role === 'nextkin') {
-          setCurrentNOK({ email: d.sub, owner_id: d.owner_id });
-          setAppMode('nok_dashboard');
-          return;
-        }
-      } catch (e) {
-        /* ignore */
-      }
-    }
+    let cancelled = false;
 
-    // Fallback to owner
-    const ownerToken = Cookies.get('auth_token');
-    if (ownerToken) {
-      try {
-        const d = JSON.parse(atob(ownerToken.split('.')[1]));
-        if (d?.role === 'owner') {
-          setCurrentUser({ email: d.sub });
-          setActiveSection('dashboard');
-          setActiveSubsection(null);
-          setActiveTopicId(null);
-          setSidebarOpen(false);
-          setMobileMoreOpen(false);
-          setAppMode('owner');
-          return;
-        }
-      } catch (e) {
-        /* ignore */
-      }
-    }
+    const hydrate = async () => {
+      const session = await fetchSession();
+      if (cancelled) return;
 
-    router.replace('/');
+      if (session.authenticated && session.role === 'nextkin') {
+        router.replace('/next-kin/dashboard');
+        return;
+      }
+
+      if (session.authenticated && session.role === 'owner') {
+        setCurrentUser({ email: session.email || '' });
+        setActiveSection('dashboard');
+        setActiveSubsection(null);
+        setActiveTopicId(null);
+        setSidebarOpen(false);
+        setMobileMoreOpen(false);
+        setAppMode('owner');
+        return;
+      }
+
+      router.replace('/');
+    };
+
+    void hydrate();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   // Load form data when switching to owner mode
   useEffect(() => {
     if (appMode === 'owner') {
-      const saved = localStorage.getItem('orderlyAffairsData');
       const savedDisabled = localStorage.getItem(
         'orderlyAffairsDisabledSections',
       );
@@ -670,15 +639,6 @@ export default function DashboardPage() {
         'orderlyAffairsCollapsedSubsections',
       );
 
-      if (saved) {
-        try {
-          const parsedData = JSON.parse(saved);
-          setFormData(parsedData);
-          setLastSaved(new Date());
-        } catch (error) {
-          console.error('Error loading saved data:', error);
-        }
-      }
       if (savedDisabled) {
         try {
           const parsedDisabled = JSON.parse(savedDisabled);
@@ -733,45 +693,44 @@ export default function DashboardPage() {
   // NOK LOGIN — store in nok_auth_token (do NOT touch auth_token)
   const handleNokLogin = useCallback(
     async (loginData: { email: string; password: string }) => {
+      if (!nokCaptchaToken) {
+        toast.error('Complete the security check before signing in');
+        return;
+      }
+
       try {
         const result = await nextkinLogin({
           email: loginData.email,
           master_password: loginData.password,
+          captcha_token: nokCaptchaToken,
+          otp_session_id: getOtpSessionId(),
         }).unwrap();
 
-        if (result.access_token) {
-          Cookies.set('nok_auth_token', result.access_token, {
-            expires: 7,
-            secure: true,
-            sameSite: 'strict',
-            path: '/',
-          });
-
-          const decoded = JSON.parse(atob(result.access_token.split('.')[1]));
-          if (decoded?.role === 'nextkin') {
+        if (result.authenticated) {
+          const session = await fetchSession();
+          if (session.role === 'nextkin') {
             setCurrentNOK({
-              email: decoded.sub,
-              owner_id: decoded.owner_id,
+              email: session.email || '',
+              owner_id: session.owner_id || '',
             });
             setAppMode('nok_dashboard');
             setActiveSection('dashboard');
             router.replace('/dashboard');
-            toast.success(`Welcome back, ${decoded.email}!`);
+            toast.success(`Welcome back, ${session.email}!`);
           } else {
-            toast.error('Invalid role in token.');
+            toast.error('Invalid role in session.');
             setAppMode('nok_login');
           }
         } else {
-          toast.error('No token received from server.');
+          toast.error('Session was not established.');
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast.error(
-          error?.data?.message ||
-            'Login failed. Please check your credentials.',
+          getSafeErrorMessage(error, 'Login failed. Please check your credentials.'),
         );
       }
     },
-    [nextkinLogin, router],
+    [nextkinLogin, router, nokCaptchaToken],
   );
   const handleOwnerApproval = useCallback(async () => {
     try {
@@ -792,11 +751,13 @@ export default function DashboardPage() {
   }, [pendingNOK, approveNextKinAccess, refetchNextKin]);
 
   // NOK LOGOUT — clear ONLY nok_auth_token
-  const handleNokLogout = useCallback(() => {
+  const handleNokLogout = useCallback(async () => {
     try {
-      nextkinLogout({});
+      await nextkinLogout({}).unwrap();
     } catch {}
-    Cookies.remove('nok_auth_token', { path: '/' });
+    try {
+      await apiNokLogout();
+    } catch {}
     setCurrentNOK(null);
     // setPendingNOK(null);
     setNokSessionTime(15 * 60);
@@ -834,11 +795,13 @@ export default function DashboardPage() {
     };
   }, [appMode]);
 
-  const handleOwnerLogout = () => {
+  const handleOwnerLogout = async () => {
     try {
-      ownerLogout({});
+      await ownerLogout({}).unwrap();
     } catch {}
-    Cookies.remove('auth_token', { path: '/' });
+    try {
+      await apiOwnerLogout();
+    } catch {}
     router.push('/');
   };
 
@@ -982,15 +945,11 @@ export default function DashboardPage() {
   }, [appMode]);
 
   useEffect(() => {
-    console.log('NextKin loaded:', myNextKin);
   }, [myNextKin]);
 
   const manualSave = useCallback(async () => {
     try {
       setAutoSaving(true);
-
-      const token = Cookies.get('auth_token');
-      if (!token) return;
 
       // 🔥 COLLECT ALL DELETED CLOUDINARY FILES (SECTION 1 ONLY)
       const deletedPublicIds: string[] = [];
@@ -1004,7 +963,7 @@ export default function DashboardPage() {
       // 🔥 DELETE FROM CLOUDINARY (OWNER ONLY)
       for (const public_id of deletedPublicIds) {
         try {
-          await deleteUpload(token, public_id);
+          await deleteUpload(public_id);
         } catch (err) {
           console.error('Cloudinary delete failed:', public_id, err);
         }
@@ -1012,101 +971,101 @@ export default function DashboardPage() {
 
       // 🔐 SAVE SECTION 1
       if (formData['1']) {
-        await saveSection1(token, mapUIToSection1Payload(formData['1']));
+        await saveSection1(mapUIToSection1Payload(formData['1']));
       }
 
       // 🚗 SAVE SECTION 5 (Vehicles)
       if (formData['5']) {
-        await saveSection5(token, formData['5']);
+        await saveSection5( formData['5']);
       }
       // 🚗 SAVE SECTION 5 (Vehicles)
       if (formData['6']?.['6A']) {
-        await saveSection6(token, {
+        await saveSection6( {
           '6A': formData['6']['6A'],
         });
       }
       // 🛡️ SAVE SECTION 7 (Insurance Policies)
       if (formData['7']?.['7A']) {
-        await saveSection7(token, {
+        await saveSection7( {
           '7A': formData['7']['7A'],
         });
       }
       // 🛡️ SAVE SECTION 8 (Insurance Policies)
       if (formData['8']?.['8A']) {
-        await saveSection8(token, {
+        await saveSection8( {
           '8A': formData['8']['8A'],
         });
       }
       // 🛡️ SAVE SECTION 9 (Insurance Policies)
       if (formData['9']?.['9A']) {
-        await saveSection9(token, {
+        await saveSection9( {
           '9A': formData['9']['9A'],
         });
       }
       // 🛡️ SAVE SECTION 10 (Insurance Policies)
       if (formData['10']?.['10A']) {
-        await saveSection10(token, {
+        await saveSection10( {
           '10A': formData['10']['10A'],
         });
       }
       // 🛡️ SAVE SECTION 11 (Insurance Policies)
       if (formData['11']?.['11A']) {
-        await saveSection11(token, {
+        await saveSection11( {
           '11A': formData['11']['11A'],
         });
       }
       // 🏦 SAVE SECTION 12 (Banking & Financial Accounts)
       if (formData['12']?.['12A'] || formData['12']?.['12B']) {
-        await saveSection12(token, {
+        await saveSection12( {
           ...(formData['12']['12A'] && { '12A': formData['12']['12A'] }),
           ...(formData['12']['12B'] && { '12B': formData['12']['12B'] }),
         });
       }
       // 🛡️ SAVE SECTION 13 (Insurance Policies)
       if (formData['13']?.['13A']) {
-        await saveSection13(token, {
+        await saveSection13( {
           '13A': formData['13']['13A'],
         });
       }
       // 🛡️ SAVE SECTION 14 (Insurance Policies)
       if (formData['14']?.['14A']) {
-        await saveSection14(token, {
+        await saveSection14( {
           '14A': formData['14']['14A'],
         });
       }
       // 🏥 SAVE SECTION 15 (Health Information)
       if (formData['15']?.['15A'] || formData['15']?.['15B']) {
-        await saveSection15(token, {
+        await saveSection15( {
           ...(formData['15']['15A'] && { '15A': formData['15']['15A'] }),
           ...(formData['15']['15B'] && { '15B': formData['15']['15B'] }),
         });
       }
       // 🏥 SAVE SECTION 16 (Health Information)
       if (formData['16']?.['16A'] || formData['16']?.['16B']) {
-        await saveSection16(token, {
+        await saveSection16( {
           ...(formData['16']['16A'] && { '16A': formData['16']['16A'] }),
           ...(formData['16']['16B'] && { '16B': formData['16']['16B'] }),
         });
       }
       // SAVE SECTION 17 (Family & Treasured Connections)
       if (formData['17']) {
-        await saveSection17(token, formData['17']);
+        await saveSection17( formData['17']);
       }
       // SAVE SECTION 18 (Employment & Business)
       if (formData['18']) {
-        await saveSection18(token, formData['18']);
+        await saveSection18( formData['18']);
       }
       // SAVE SECTION 19 (Employment & Business)
       if (formData['19']) {
-        await saveSection19(token, formData['19']);
+        await saveSection19( formData['19']);
       }
       // SAVE SECTION 20 (Legal Documents)
       if (formData['20']) {
-        await saveSection20(token, formData['20']);
+        await saveSection20( formData['20']);
       }
       // SAVE SECTION 21
       if (formData['21']) {
-        await saveSection21(token, formData['21']);
+        await saveSection21( formData['21']);
       }
 
       // 💾 SAVE NON-SENSITIVE UI STATE
@@ -1153,14 +1112,8 @@ export default function DashboardPage() {
       if (!confirmed) return;
 
       if (sectionId === '4' && subsectionId === '4A') {
-        const token = Cookies.get('auth_token');
-        if (!token) {
-          toast.error('You must be logged in to clear messages.');
-          return;
-        }
-
         try {
-          const result = await clearAllMessages(token);
+          const result = await clearAllMessages();
           setMessagesClearNonce(prev => prev + 1);
           toast.success(
             result?.count
@@ -1195,31 +1148,6 @@ export default function DashboardPage() {
         return newData;
       });
 
-      try {
-        const currentData = JSON.parse(
-          localStorage.getItem('orderlyAffairsData') || '{}',
-        );
-        if (subsectionId) {
-          if (
-            currentData[sectionId] &&
-            currentData[sectionId][subsectionId]
-          ) {
-            delete currentData[sectionId][subsectionId];
-            if (Object.keys(currentData[sectionId]).length === 0) {
-              delete currentData[sectionId];
-            }
-          }
-        } else {
-          delete currentData[sectionId];
-        }
-        localStorage.setItem(
-          'orderlyAffairsData',
-          JSON.stringify(currentData),
-        );
-      } catch (error) {
-        console.error('Error clearing localStorage:', error);
-      }
-
       if (!(sectionId === '4' && subsectionId === '4A')) {
         toast.success(
           subsectionId
@@ -1235,150 +1163,6 @@ export default function DashboardPage() {
     if (activeSection === 'dashboard') return null;
     return allSections.find(s => s.id === activeSection);
   }, [allSections, activeSection]);
-
-  // Render NOK Login Page
-  if (appMode === 'nok_login') {
-    return (
-      <>
-        <NextOfKinLoginPage
-          onLoginSuccess={handleNokLogin}
-          onBackToOwner={handleBackToOwner}
-          formData={formData}
-        />
-        {showRevocationModal && (
-          <RevocationModal
-            reason={revocationReason}
-            onClose={handleNokLogout}
-          />
-        )}
-      </>
-    );
-  }
-
-  // Render NOK Dashboard
-  if (appMode === 'nok_dashboard' && currentNOK) {
-    return (
-      <>
-        <EnhancedNOKDashboard
-          kit={{}}
-          nokData={currentNOK}
-          formData={formData}
-          onViewSection={handleNokSectionView}
-          onLogout={handleNokLogout}
-          onOwnerLetterAccess={() => setShowOwnerLetter(true)}
-          onDeliverMessages={() => setShowMessagesDelivery(true)}
-          sessionTime={nokSessionTime}
-        />
-
-        {/* Owner Letter Modal */}
-        {showOwnerLetter && (
-          <OwnerLetterModal
-            nokData={currentNOK}
-            onClose={() => setShowOwnerLetter(false)}
-          />
-        )}
-
-        {/* Messages Delivery Modal */}
-        {showMessagesDelivery && (
-          <MessagesDeliveryModal
-            nokData={currentNOK}
-            formData={formData}
-            kit={{
-              messages: formData?.['4']?.['4A']?.messages || [],
-            }}
-            onClose={() => setShowMessagesDelivery(false)}
-          />
-        )}
-
-        {/* Revocation Modal */}
-        {showRevocationModal && (
-          <RevocationModal
-            reason={revocationReason}
-            onClose={handleNokLogout}
-          />
-        )}
-      </>
-    );
-  }
-
-  // Render NOK Section View
-  if (appMode === 'nok_section_view' && currentNOK && nokActiveSection) {
-    return (
-      <>
-        <EnhancedSectionView
-          sectionId={nokActiveSection}
-          nokData={currentNOK}
-          formData={formData}
-          kit={{
-            sections: Object.entries(formData).map(([id, data]) => ({
-              id,
-              data,
-              subsections:
-                typeof data === 'object' && data !== null
-                  ? Object.entries(data).map(([subId, subData]) => ({
-                      id: subId,
-                      data: subData,
-                    }))
-                  : [],
-            })),
-          }}
-          onBack={handleNokBackToDashboard}
-          onLogout={handleNokLogout}
-          onOwnerLetterAccess={() => setShowOwnerLetter(true)}
-          onDeliverMessages={() => setShowMessagesDelivery(true)}
-          sessionTime={nokSessionTime}
-        />
-
-        {/* Owner Letter Modal */}
-        {showOwnerLetter && (
-          <OwnerLetterModal
-            nokData={currentNOK}
-            onClose={() => setShowOwnerLetter(false)}
-          />
-        )}
-
-        {/* Messages Delivery Modal */}
-        {showMessagesDelivery && (
-          <MessagesDeliveryModal
-            kit={{
-              messages: formData?.['4']?.['4A']?.messages || [],
-            }}
-            nokData={currentNOK}
-            formData={formData}
-            onClose={() => setShowMessagesDelivery(false)}
-          />
-        )}
-
-        {/* Revocation Modal */}
-        {showRevocationModal && (
-          <RevocationModal
-            reason={revocationReason}
-            onClose={handleNokLogout}
-          />
-        )}
-      </>
-    );
-  }
-
-  if (appMode === 'test_mfa') {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="border-b bg-card">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
-              <h1>🔐 Multi-Factor Authentication Test</h1>
-              <Button onClick={() => setAppMode('owner')} variant="outline">
-                Back to App
-              </Button>
-            </div>
-          </div>
-        </div>
-        <div className="container mx-auto px-4 py-6">
-          <MFATestComponent />
-        </div>
-      </div>
-    );
-  }
 
   const ExportIcon = () => (
     <svg

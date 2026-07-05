@@ -1,53 +1,23 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { secureFetch } from '@/libs/secureFetch';
 
-/* ---------------- SAVE ---------------- */
+export async function getSection19() {
+  const res = await secureFetch('/sections/section19-assets-valuables');
+  if (!res.ok) throw new Error('Failed to load Section 19');
+  return res.json();
+}
 
-export async function saveSection19(token: string, payload: any) {
-  const res = await fetch(`${API_BASE}/sections/section19-assets-valuables`, {
+export async function saveSection19(payload: any) {
+  const res = await secureFetch('/sections/section19-assets-valuables', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
     body: JSON.stringify(payload),
   });
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
+  if (!res.ok) throw new Error('Failed to save Section 19');
   return res.json();
 }
 
-/* ---------------- GET ---------------- */
-
-export async function getSection19(token: string) {
-  const res = await fetch(`${API_BASE}/sections/section19-assets-valuables`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  return res.json();
-}
-
-/* ---------------- DELETE ---------------- */
-
-export async function deleteSection19(token: string) {
-  const res = await fetch(`${API_BASE}/sections/section19-assets-valuables`, {
+export async function deleteSection19() {
+  const res = await secureFetch('/sections/section19-assets-valuables', {
     method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
   });
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  return res.json();
+  if (!res.ok) throw new Error('Failed to delete Section 19');
 }

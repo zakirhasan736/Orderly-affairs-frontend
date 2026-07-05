@@ -1,6 +1,6 @@
 import { validateMessageMediaSize } from '@/utils/mediaUpload';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { secureFetch } from '@/libs/secureFetch';
+import { readSafeErrorMessage } from '@/utils/sanitizeApiError';
 
 type MessageMediaUploadSignature = {
   signature: string;
@@ -21,25 +21,15 @@ type CloudinaryUploadResult = {
 };
 
 async function readErrorMessage(res: Response, fallback: string) {
-  try {
-    const payload = await res.json();
-    return payload?.error?.message || payload?.detail || payload?.message || fallback;
-  } catch {
-    const text = await res.text();
-    return text || fallback;
-  }
+  return readSafeErrorMessage(res, fallback);
 }
 
 async function getMessageMediaUploadSignature(
-  token: string,
   fileSize: number,
   resourceType: 'video' | 'image' = 'video',
 ): Promise<MessageMediaUploadSignature> {
-  const res = await fetch(
-    `${API_BASE}/message/media/signature?file_size=${fileSize}&resource_type=${resourceType}`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    },
+  const res = await secureFetch(
+    `/message/media/signature?file_size=${fileSize}&resource_type=${resourceType}`,
   );
 
   if (!res.ok) {
@@ -67,9 +57,7 @@ async function uploadMessageMediaToCloudinary(
   });
 
   if (!res.ok) {
-    throw new Error(
-      await readErrorMessage(res, 'Cloudinary upload failed'),
-    );
+    throw new Error(await readErrorMessage(res, 'Cloudinary upload failed'));
   }
 
   const result = (await res.json()) as CloudinaryUploadResult;
@@ -83,14 +71,9 @@ async function uploadMessageMediaToCloudinary(
   };
 }
 
-/* ---------------- CREATE ---------------- */
-export async function createMessage(token: string, payload: any) {
-  const res = await fetch(`${API_BASE}/message`, {
+export async function createMessage(payload: any) {
+  const res = await secureFetch('/message', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
     body: JSON.stringify(payload),
   });
 
@@ -98,24 +81,15 @@ export async function createMessage(token: string, payload: any) {
   return res.json();
 }
 
-/* ---------------- GET ---------------- */
-export async function getMessages(token: string) {
-  const res = await fetch(`${API_BASE}/message`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
+export async function getMessages() {
+  const res = await secureFetch('/message');
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
-/* ---------------- UPDATE ---------------- */
-export async function updateMessage(token: string, id: string, payload: any) {
-  const res = await fetch(`${API_BASE}/message/${id}`, {
+export async function updateMessage(id: string, payload: any) {
+  const res = await secureFetch(`/message/${id}`, {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
     body: JSON.stringify(payload),
   });
 
@@ -123,38 +97,25 @@ export async function updateMessage(token: string, id: string, payload: any) {
   return res.json();
 }
 
-/* ---------------- DELETE ---------------- */
-export async function deleteMessage(token: string, id: string) {
-  const res = await fetch(`${API_BASE}/message/${id}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
+export async function deleteMessage(id: string) {
+  const res = await secureFetch(`/message/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
-export async function clearAllMessages(token: string) {
-  const res = await fetch(`${API_BASE}/message`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
+export async function clearAllMessages() {
+  const res = await secureFetch('/message', { method: 'DELETE' });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
-export async function deleteMessageMedia(token: string, id: string) {
-  const res = await fetch(`${API_BASE}/message/${id}/media`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
+export async function deleteMessageMedia(id: string) {
+  const res = await secureFetch(`/message/${id}/media`, { method: 'DELETE' });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
-export async function uploadMessageMedia(token: string, file: File | Blob) {
+export async function uploadMessageMedia(file: File | Blob) {
   validateMessageMediaSize(file.size);
 
   const resourceType =
@@ -164,25 +125,16 @@ export async function uploadMessageMedia(token: string, file: File | Blob) {
       ? 'image'
       : 'video';
 
-  const signature = await getMessageMediaUploadSignature(
-    token,
-    file.size,
-    resourceType,
-  );
+  const signature = await getMessageMediaUploadSignature(file.size, resourceType);
   return uploadMessageMediaToCloudinary(file, signature);
 }
 
 export async function deleteUploadedMessageMedia(
-  token: string,
   publicId: string,
   resourceType?: string,
 ) {
-  const res = await fetch(`${API_BASE}/message/media/delete`, {
+  const res = await secureFetch('/message/media/delete', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
     body: JSON.stringify({
       public_id: publicId,
       resource_type: resourceType,

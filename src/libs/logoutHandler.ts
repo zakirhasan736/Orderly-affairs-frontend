@@ -1,17 +1,25 @@
-import Cookies from 'js-cookie';
 import { AppDispatch } from '@/store/store';
 import { useDispatch } from 'react-redux';
-import { logout } from '@/store/slices/authSlice';
+import { clearSession } from '@/store/slices/authSlice';
 import { useRouter } from 'next/navigation';
+import { ownerLogout } from '@/libs/secureFetch';
 
 export function useLogout() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
 
-  return () => {
-    dispatch(logout());
-    Cookies.remove('auth_token', { path: '/' });
-    localStorage.clear();
+  return async () => {
+    try {
+      await ownerLogout();
+    } catch {
+      // still clear local state if network fails
+    }
+
+    dispatch(clearSession());
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('orderlyAffairsData');
+      localStorage.removeItem('orderly_otp_session_id');
+    }
     router.push('/');
   };
 }

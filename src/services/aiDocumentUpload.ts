@@ -1,8 +1,6 @@
 // src/services/aiDocumentUpload.ts
 
-import Cookies from 'js-cookie';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { secureFetch } from '@/libs/secureFetch';
 
 const ALLOWED_TYPES = [
   'application/pdf',
@@ -21,23 +19,9 @@ export type AIDocumentUploadResponse = {
   expires_at: string;
 };
 
-function getOwnerToken() {
-  const token = Cookies.get('auth_token');
-
-  if (!token) {
-    throw new Error('You are not logged in. Please log in again.');
-  }
-
-  return token;
-}
-
 export async function uploadAIDocument(
   file: File,
 ): Promise<AIDocumentUploadResponse> {
-  if (!API_BASE_URL) {
-    throw new Error('NEXT_PUBLIC_API_BASE_URL is missing');
-  }
-
   if (!file) {
     throw new Error('Please select a file.');
   }
@@ -50,18 +34,12 @@ export async function uploadAIDocument(
     throw new Error('File too large. Max 15MB.');
   }
 
-  const token = getOwnerToken();
-
-  console.log('AI upload token exists:', Boolean(token));
-
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(`${API_BASE_URL}/ai/upload-document`, {
+  const res = await secureFetch('/ai/upload-document', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: {},
     body: formData,
   });
 
@@ -74,8 +52,6 @@ export async function uploadAIDocument(
   }
 
   if (!res.ok) {
-    console.error('AI upload failed:', res.status, json);
-
     if (res.status === 401) {
       throw new Error('Login expired or token invalid. Please log in again.');
     }

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Button } from '@common/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@common/ui/card';
 import { Badge } from '@common/ui/badge';
-import Cookies from 'js-cookie';
+import { secureFetch } from '@/libs/secureFetch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@common/ui/tabs';
 import { 
   ArrowLeft, 
@@ -350,30 +350,29 @@ const getSubsectionData = (subsectionId: string) => {
   const checklistProgress = checklist.length > 0 ? (completedItems / checklist.length) * 100 : 0;
 
 const saveChecklist = async (items: Record<string, boolean>) => {
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}/kit/checklist`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${Cookies.get('nok_auth_token')}`,
-      },
-      body: JSON.stringify({
-        section_id: sectionId,
-        items,
-      }),
-    },
-  );
+  const response = await secureFetch('/kit/checklist', {
+    method: 'POST',
+    body: JSON.stringify({
+      section_id: sectionId,
+      items,
+    }),
+  });
 
   if (!response.ok) {
     throw new Error('Failed to save checklist');
   }
 
   const data = (await response.json()) as {
+    death_signals_ready?: boolean;
     owner_deceased_triggered?: boolean;
   };
 
-  if (data.owner_deceased_triggered) {
+  if (data.death_signals_ready) {
+    toast.message(
+      'Passing-related checklist items recorded. Use Report Passing on the dashboard to confirm before any letters or access are released.',
+      { duration: 8000 },
+    );
+  } else if (data.owner_deceased_triggered) {
     toast.success(
       'Passing recorded. Death letters, messages, and upon-death access have been sent.',
     );

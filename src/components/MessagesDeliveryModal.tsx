@@ -3,7 +3,7 @@ import { Button } from '@common/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@common/ui/card';
 import { Alert, AlertDescription } from '@common/ui/alert';
 import { Badge } from '@common/ui/badge';
-import Cookies from 'js-cookie';
+import { secureFetch } from '@/libs/secureFetch';
 import { Checkbox } from '@common/ui/checkbox';
 import {
   X,
@@ -147,7 +147,6 @@ export const MessagesDeliveryModal: React.FC<MessagesDeliveryModalProps> = ({
   };
 
   const handleDeliverMessages = async () => {
-    console.log('🚀 Deliver clicked, selectedIds:', selectedIds);
     if (selectedIds.length === 0) {
       toast.error('Please select at least one message to deliver.');
       return;
@@ -157,24 +156,12 @@ export const MessagesDeliveryModal: React.FC<MessagesDeliveryModalProps> = ({
 
     try {
       for (const id of selectedIds) {
-        console.log('📤 Sending deliver request for ID:', id);
-
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/kit/deliver/${id}`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${Cookies.get('nok_auth_token')}`,
-            },
-          },
-        );
-
-        console.log('📬 Response status:', res.status);
+        const res = await secureFetch(`/kit/deliver/${id}`, {
+          method: 'POST',
+        });
 
         if (!res.ok) {
-          const txt = await res.text();
-          console.error('❌ Backend error:', txt);
-          throw new Error(txt);
+          throw new Error('Delivery failed');
         }
       }
 

@@ -17,7 +17,6 @@ export const OwnerLetterModal: React.FC<OwnerLetterModalProps> = ({
   if (!nokData) {
     return null;
   }
-console.log('📩 OwnerLetterModal nokData:', nokData);
 
   const handleDownloadPDF = () => {
     toast.success('Owner Letter PDF downloaded');

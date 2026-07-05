@@ -1,21 +1,9 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import Cookies from 'js-cookie';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import { createSecureBaseQuery } from '@/libs/baseQueryWithReauth';
 
 export const kitApi = createApi({
   reducerPath: 'kitApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: (process.env.NEXT_PUBLIC_API_BASE_URL || '') + '/kit',
-    credentials: 'include',
-    prepareHeaders: (h, api) => {
-      const isNok = api.endpoint === 'getKitForNok';
-      const token = isNok
-        ? Cookies.get('nok_auth_token')
-        : Cookies.get('auth_token');
-      if (token) h.set('Authorization', `Bearer ${token}`);
-      h.set('Content-Type', 'application/json');
-      return h;
-    },
-  }),
+  baseQuery: createSecureBaseQuery('/kit'),
   tagTypes: ['Kit'],
   endpoints: b => ({
     getKit: b.query<any, void>({
@@ -39,24 +27,30 @@ export const kitApi = createApi({
     }),
     upsertSubsection: b.mutation<
       { message: string },
-      { sectionId: string; subId: string; data: any }
+      { sectionId: string; subsectionId: string; data: any }
     >({
-      query: ({ sectionId, subId, data }) => ({
-        url: `/section/${sectionId}/subsection/${subId}`,
+      query: ({ sectionId, subsectionId, data }) => ({
+        url: `/section/${sectionId}/subsection/${subsectionId}`,
         method: 'PUT',
         body: { data },
       }),
       invalidatesTags: ['Kit'],
     }),
-    updateToggles: b.mutation<
-      { message: string },
-      { disabled_sections: any; disabled_subsections: any }
-    >({
-      query: body => ({ url: `/toggles`, method: 'PUT', body }),
+    deleteSection: b.mutation<{ message: string }, string>({
+      query: sectionId => ({
+        url: `/section/${sectionId}`,
+        method: 'DELETE',
+      }),
       invalidatesTags: ['Kit'],
     }),
-    migrateFromForms: b.mutation<{ message: string }, any>({
-      query: body => ({ url: `/migrate-from-forms`, method: 'POST', body }),
+    deleteSubsection: b.mutation<
+      { message: string },
+      { sectionId: string; subsectionId: string }
+    >({
+      query: ({ sectionId, subsectionId }) => ({
+        url: `/section/${sectionId}/subsection/${subsectionId}`,
+        method: 'DELETE',
+      }),
       invalidatesTags: ['Kit'],
     }),
   }),
@@ -67,6 +61,6 @@ export const {
   useGetKitForNokQuery,
   useUpsertSectionMutation,
   useUpsertSubsectionMutation,
-  useUpdateTogglesMutation,
-  useMigrateFromFormsMutation,
+  useDeleteSectionMutation,
+  useDeleteSubsectionMutation,
 } = kitApi;

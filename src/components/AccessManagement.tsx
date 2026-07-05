@@ -83,6 +83,7 @@ import {
   useIsMobile,
 } from './MobileBottomSheet';
 import { formConfig } from '../config/formConfig';
+import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 
 /* ------------------------------------------------------------------ */
 /* Types & constants                                                   */
@@ -100,6 +101,7 @@ interface AuthorizedPerson {
   immediate_access: boolean;
   nok_letter_received: boolean;
   master_password: string;
+  has_master_password?: boolean;
   password_card_generated: boolean;
   card_storage_location?: string;
   key_bag_location?: string;
@@ -303,22 +305,6 @@ function toNextKinApiBody(
     ...(master_password?.trim() ? { master_password } : {}),
     ...credentialExtras,
   };
-}
-
-function getApiErrorDetail(error: unknown) {
-  if (
-    error &&
-    typeof error === 'object' &&
-    'data' in error &&
-    error.data &&
-    typeof error.data === 'object' &&
-    'detail' in error.data
-  ) {
-    const detail = error.data.detail;
-    return typeof detail === 'string' ? detail : '';
-  }
-  if (error instanceof Error) return error.message;
-  return '';
 }
 
 function MobileIconAction({
@@ -532,10 +518,12 @@ function WizardStepper({
 
 function TrustedPersonLoginPassword({
   password,
+  passwordOnFile = false,
   className,
   compact = false,
 }: {
   password?: string;
+  passwordOnFile?: boolean;
   className?: string;
   compact?: boolean;
 }) {
@@ -564,7 +552,9 @@ function TrustedPersonLoginPassword({
             ? visible
               ? password
               : '•'.repeat(Math.min(password!.length, 12))
-            : 'Not set — edit to generate'}
+            : passwordOnFile
+              ? 'Saved on server — edit to set new'
+              : 'Not set — edit to generate'}
         </span>
         {hasPassword && (
           <Button
@@ -609,7 +599,9 @@ function TrustedPersonLoginPassword({
               ? visible
                 ? password
                 : '•'.repeat(Math.min(password!.length, 14))
-              : 'Not saved — edit and generate a password'}
+              : passwordOnFile
+                ? 'Saved on server — edit to set new'
+                : 'Not saved — edit and generate a password'}
           </p>
         </div>
         {hasPassword && (
@@ -891,7 +883,7 @@ function TrustedPersonMobileDetails({
       )}
 
       {person._id && (
-        <TrustedPersonLoginPassword password={person.master_password} compact />
+        <TrustedPersonLoginPassword password={person.master_password} passwordOnFile={person.has_master_password} compact />
       )}
 
       {(person.email || person.phone_number) && (
@@ -1079,6 +1071,7 @@ function TrustedPersonCard({
               {person._id && (
                 <TrustedPersonLoginPassword
                   password={person.master_password}
+                  passwordOnFile={person.has_master_password}
                   compact
                 />
               )}
@@ -1264,7 +1257,8 @@ export const AccessManagement = forwardRef<
             : [],
           immediate_access: !!nk.immediate_access,
           nok_letter_received: !!nk.nok_letter_received,
-          master_password: nk.master_password || '',
+          master_password: '',
+          has_master_password: !!(nk as { has_master_password?: boolean }).has_master_password,
           password_card_generated: !!nk.password_card_generated,
           card_storage_location: nk.card_storage_location || '',
           key_bag_location: nk.key_bag_location || '',
@@ -1577,15 +1571,7 @@ export const AccessManagement = forwardRef<
       refetch();
       closeWizard();
     } catch (error) {
-      console.error(error);
-      const detail = getApiErrorDetail(error);
-      if (detail === 'Next-of-Kin already exists') {
-        toast.error(
-          `A Next-of-Kin with ${draft.email} already exists. Use a different email.`,
-        );
-      } else {
-        toast.error(detail || 'Save failed');
-      }
+      toast.error(getSafeErrorMessage(error, 'Save failed'));
     } finally {
       setPersonAction(personKey);
     }

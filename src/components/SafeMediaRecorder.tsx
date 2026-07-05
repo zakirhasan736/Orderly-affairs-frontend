@@ -13,7 +13,6 @@ import { toast } from 'sonner';
 
 interface SafeMediaRecorderProps {
   type: 'video' | 'audio';
-  token?: string | null;
   onUploaded: (media: {
     url: string;
     public_id: string;
@@ -26,7 +25,6 @@ interface SafeMediaRecorderProps {
 
 export function SafeMediaRecorder({
   type,
-  token,
   onUploaded,
   onClose,
 }: SafeMediaRecorderProps) {
@@ -38,18 +36,13 @@ export function SafeMediaRecorder({
   const mediaLabel = isVideo ? 'Video' : 'Audio';
 
   const handleRecorded = async (blob: Blob) => {
-    if (!token) {
-      toast.error('Authentication expired. Please log in again.');
-      return false;
-    }
-
     try {
       validateMessageMediaSize(blob.size);
 
       setUploading(true);
 
       const file = blobToMediaFile(blob, type);
-      const media = await uploadMessageMedia(token, file);
+      const media = await uploadMessageMedia(file);
 
       onUploaded(media);
       toast.success(`${mediaLabel} saved successfully`);
@@ -101,27 +94,6 @@ export function SafeMediaRecorder({
       cancelled = true;
     };
   }, [isVideo]);
-
-  if (!token) {
-    return (
-      <ModalShell>
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
-          <AlertTriangle className="h-7 w-7" />
-        </div>
-
-        <div>
-          <h3 className="text-lg font-semibold">Authentication expired</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Please log in again before recording media.
-          </p>
-        </div>
-
-        <Button onClick={onClose} className="w-full">
-          Close
-        </Button>
-      </ModalShell>
-    );
-  }
 
   if (permissionError) {
     return (
