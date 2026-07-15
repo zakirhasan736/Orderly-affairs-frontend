@@ -85,23 +85,24 @@ export function createSecureBaseQuery(
           !Array.isArray(result.error.data)
             ? (result.error.data as Record<string, unknown>)
             : {};
+        // Construct an error-only result (do not spread `data` from the success union)
         result = {
-          ...result,
           error: {
-            ...result.error,
+            status: result.error.status,
             data: {
               ...existingData,
               retry_after_seconds: retryAfterSeconds,
             },
-          },
+          } as FetchBaseQueryError,
+          meta: result.meta,
         };
       }
     }
 
     if (result.error) {
       result = {
-        ...result,
         error: sanitizeFetchBaseQueryError(result.error),
+        meta: result.meta,
       };
     }
 

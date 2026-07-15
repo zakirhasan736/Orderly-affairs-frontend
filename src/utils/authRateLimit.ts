@@ -11,6 +11,9 @@ export type ParsedAuthError = {
 /** Default wait when a 429 has no parseable time (matches backend 10-minute window). */
 export const AUTH_RATE_LIMIT_FALLBACK_SECONDS = 600;
 
+/** Never show / block UI longer than this for auth UX (24h absolute ceiling). */
+export const AUTH_RATE_LIMIT_DISPLAY_CAP_SECONDS = 24 * 60 * 60;
+
 function readDataMessage(data: unknown): string | null {
   if (!data || typeof data !== 'object') return null;
   const record = data as Record<string, unknown>;
@@ -46,14 +49,34 @@ function parseSecondsFromText(text: string): number | null {
   const minutesMatch = text.match(/(\d+)\s*minutes?/i);
   if (minutesMatch) return Math.max(parseInt(minutesMatch[1], 10) * 60, 1);
 
+  const hoursMatch = text.match(/(\d+)\s*hours?/i);
+  if (hoursMatch) return Math.max(parseInt(hoursMatch[1], 10) * 3600, 1);
+
   return null;
 }
 
+function clampWaitSeconds(seconds: number): number {
+  return Math.min(
+    Math.max(Math.floor(seconds), 1),
+    AUTH_RATE_LIMIT_DISPLAY_CAP_SECONDS,
+  );
+}
+
+/** Human-friendly countdown (avoid "1110:45" looking like a bug). */
 export function formatRetryCountdown(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
-  const m = Math.floor(s / 60);
+  if (s < 60) return `${s}s`;
+
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
   const r = s % 60;
-  if (m <= 0) return `${r}s`;
+
+  if (h > 0) {
+    if (m <= 0) return `${h}h`;
+    return `${h}h ${m}m`;
+  }
+
+  // under 1 hour → m:ss
   return `${m}:${String(r).padStart(2, '0')}`;
 }
 
@@ -91,7 +114,9 @@ export function parseAuthApiError(
   }
 
   if (status === 429) {
-    const wait = retryAfterSeconds ?? AUTH_RATE_LIMIT_FALLBACK_SECONDS;
+    const wait = clampWaitSeconds(
+      retryAfterSeconds ?? AUTH_RATE_LIMIT_FALLBACK_SECONDS,
+    );
     return {
       status,
       message: `Too many requests. Try again in ${formatRetryCountdown(wait)}.`,
@@ -103,6 +128,7 @@ export function parseAuthApiError(
     status,
     message:
       rawMessage === 'Request failed' ? fallback : rawMessage || fallback,
-    retryAfterSeconds,
+    retryAfterSeconds:
+      retryAfterSeconds != null ? clampWaitSeconds(retryAfterSeconds) : null,
   };
 }
