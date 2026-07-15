@@ -48,7 +48,6 @@ export function parseAuthApiError(
     error?: unknown;
   };
 
-  // RTK unwrap errors often nest under `error` or are the FetchBaseQueryError itself
   const candidate =
     e.data !== undefined || typeof e.status === 'number'
       ? e
@@ -60,23 +59,24 @@ export function parseAuthApiError(
     typeof candidate.status === 'number' ? candidate.status : undefined;
   const rawMessage = readDataMessage(candidate.data) || fallback;
 
-  let retryAfterSeconds: number | null = null;
+  let retryAfterSeconds: number | null = parseSecondsFromText(rawMessage);
+  if (status === 429 && retryAfterSeconds == null) {
+    retryAfterSeconds = 45;
+  }
+
   if (status === 429) {
-    retryAfterSeconds = parseSecondsFromText(rawMessage) ?? 60;
-  } else {
-    retryAfterSeconds = parseSecondsFromText(rawMessage);
+    const wait = retryAfterSeconds ?? 45;
+    return {
+      status,
+      message: `Too many requests. Try again in ${formatRetryCountdown(wait)}.`,
+      retryAfterSeconds: wait,
+    };
   }
 
   return {
     status,
     message:
-      status === 429
-        ? rawMessage.includes('Too many')
-          ? rawMessage
-          : `Too many requests. Please try again in ${retryAfterSeconds ?? 60} seconds.`
-        : rawMessage === 'Request failed'
-          ? fallback
-          : rawMessage || fallback,
+      rawMessage === 'Request failed' ? fallback : rawMessage || fallback,
     retryAfterSeconds,
   };
 }

@@ -52,6 +52,10 @@ import {
 } from '@/utils/authRateLimit';
 import { isCaptchaEnabled } from '@/utils/captchaConfig';
 import { toast } from 'sonner';
+import {
+  RateLimitBanner,
+  rateLimitedButtonLabel,
+} from '@/components/RateLimitBanner';
 import { Label } from '@/components/common/ui/label';
 import { Button } from '@/components/common/ui/button';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
@@ -450,16 +454,20 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
 
   const applyAuthError = useCallback((err: unknown, fallback: string) => {
     const parsed = parseAuthApiError(err, fallback);
-    setError(parsed.message);
     if (parsed.status === 429) {
-      const wait = parsed.retryAfterSeconds ?? 60;
-      setRateLimitSeconds(wait);
-      setCooldown(wait);
-      toast.error(parsed.message, {
-        duration: Math.min(wait * 1000, 12_000),
+      const wait = parsed.retryAfterSeconds ?? 45;
+      // Prefer the banner + button countdown; avoid duplicate red alert + spam toast
+      setError('');
+      setRateLimitSeconds(prev => Math.max(prev, wait));
+      setCooldown(prev => Math.max(prev, wait));
+      toast.message('Please wait before trying again', {
+        description: `You can continue in ${formatRetryCountdown(wait)}.`,
+        duration: 4000,
+        id: 'auth-rate-limit',
       });
     } else {
-      toast.error(parsed.message);
+      setError(parsed.message);
+      toast.error(parsed.message, { id: 'auth-error' });
     }
     return parsed;
   }, []);
@@ -475,20 +483,33 @@ useEffect(() => {
 }, [cooldown]);
 
 useEffect(() => {
-  if (rateLimitSeconds <= 0) return;
+  if (rateLimitSeconds <= 0) return undefined;
   const timer = setInterval(() => {
-    setRateLimitSeconds(prev => (prev <= 1 ? 0 : prev - 1));
+    setRateLimitSeconds(prev => {
+      if (prev <= 1) {
+        toast.success('You can try again now', { id: 'auth-rate-limit-ready' });
+        return 0;
+      }
+      return prev - 1;
+    });
   }, 1000);
   return () => clearInterval(timer);
+  // Only start/stop when crossing zero — avoid resetting every tick
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [rateLimitSeconds > 0]);
+
+const guardRateLimit = useCallback(() => {
+  if (rateLimitSeconds <= 0) return false;
+  toast.message('Please wait', {
+    description: `Try again in ${formatRetryCountdown(rateLimitSeconds)}.`,
+    id: 'auth-rate-limit',
+    duration: 2500,
+  });
+  return true;
 }, [rateLimitSeconds]);
 
 const handleSendEmailCode = async () => {
-  if (rateLimitSeconds > 0) {
-    toast.error(
-      `Too many requests. Please try again in ${formatRetryCountdown(rateLimitSeconds)}.`,
-    );
-    return;
-  }
+  if (guardRateLimit()) return;
   if (!securityReady) {
     setError('Wait for the security check to finish before requesting a code');
     toast.error('Wait for the security check to finish');
@@ -525,12 +546,7 @@ const handleSendEmailCode = async () => {
  const handleForgotPasswordClick = async () => {
    setError('');
 
-   if (rateLimitSeconds > 0) {
-     toast.error(
-       `Too many requests. Please try again in ${formatRetryCountdown(rateLimitSeconds)}.`,
-     );
-     return;
-   }
+   if (guardRateLimit()) return;
 
    if (email && isValidEmail(email)) {
      if (!captchaToken) {
@@ -564,12 +580,7 @@ const handleSendEmailCode = async () => {
 
  const handleRequestReset = async () => {
    setError('');
-   if (rateLimitSeconds > 0) {
-     toast.error(
-       `Too many requests. Please try again in ${formatRetryCountdown(rateLimitSeconds)}.`,
-     );
-     return;
-   }
+   if (guardRateLimit()) return;
    if (!captchaToken) {
      setError('Complete the CAPTCHA before requesting a reset code');
      toast.error('Complete the security check before requesting a reset code');
@@ -600,12 +611,7 @@ const handleResetPassword = async () => {
     setError('Passwords do not match');
     return;
   }
-  if (rateLimitSeconds > 0) {
-    toast.error(
-      `Too many requests. Please try again in ${formatRetryCountdown(rateLimitSeconds)}.`,
-    );
-    return;
-  }
+  if (guardRateLimit()) return;
 
   startAuthLoading('reset_password');
 
@@ -780,12 +786,7 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
   setLoginPrimaryMFAMethod(null);
   setMfaChallengeToken('');
 
-  if (rateLimitSeconds > 0) {
-    toast.error(
-      `Too many requests. Please try again in ${formatRetryCountdown(rateLimitSeconds)}.`,
-    );
-    return;
-  }
+  if (guardRateLimit()) return;
 
   try {
     if (!isValidEmail(email)) throw new Error('Enter a valid email');
@@ -1145,12 +1146,7 @@ const handleVerifyMfa = async (e: React.FormEvent) => {
 const verifyEmailOtpCode = useCallback(async () => {
   setError('');
 
-  if (rateLimitSeconds > 0) {
-    toast.error(
-      `Too many requests. Please try again in ${formatRetryCountdown(rateLimitSeconds)}.`,
-    );
-    return;
-  }
+  if (guardRateLimit()) return;
 
   if (attempts >= MAX_ATTEMPTS) {
     setError('Too many failed attempts. Try again later.');
@@ -1584,24 +1580,13 @@ const backButtonLabel =
         </div>
         <Card className="glass-card shadow-[0_40px_80px_-20px_rgba(30,41,59,0.12)] border border-slate-100">
           <CardContent className="px-0 sm:px-6 pt-6 md:pt-9">
-            {error && (
+            {error && rateLimitSeconds <= 0 && (
               <Alert variant="destructive" className="mb-4">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            {rateLimitSeconds > 0 && (
-              <Alert className="mb-4 border-amber-200 bg-amber-50 text-amber-900">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Too many attempts. Try again in{' '}
-                  <span className="font-semibold tabular-nums">
-                    {formatRetryCountdown(rateLimitSeconds)}
-                  </span>
-                  .
-                </AlertDescription>
-              </Alert>
-            )}
+            <RateLimitBanner seconds={rateLimitSeconds} />
             {step !== 'credentials' && (
               <Button
                 variant="ghost"
@@ -1833,11 +1818,12 @@ const backButtonLabel =
                         !securityReady
                       }
                     >
-                      {isAuthLoading('sign_in')
-                        ? 'Please wait…'
-                        : isNewUser
-                          ? 'Create Account'
-                          : 'Sign In'}
+                      {rateLimitedButtonLabel(
+                        rateLimitSeconds,
+                        isNewUser ? 'Create Account' : 'Sign In',
+                        'Please wait…',
+                        isAuthLoading('sign_in'),
+                      )}
                     </Button>
 
                     <Button
@@ -2111,9 +2097,12 @@ const backButtonLabel =
                               !securityReady
                             }
                           >
-                            {isAuthLoading('send_email_code')
-                              ? 'Sending…'
-                              : 'Send Verification Code'}
+                            {rateLimitedButtonLabel(
+                              rateLimitSeconds,
+                              'Send Verification Code',
+                              'Sending…',
+                              isAuthLoading('send_email_code'),
+                            )}
                           </Button>
                         </div>
                       )
@@ -2137,13 +2126,17 @@ const backButtonLabel =
                           className="w-full btn-primary"
                           disabled={
                             isAuthLoading('verify_email') ||
+                            rateLimitSeconds > 0 ||
                             emailCode.length !== 6 ||
                             attempts >= MAX_ATTEMPTS
                           }
                         >
-                          {isAuthLoading('verify_email')
-                            ? 'Verifying…'
-                            : 'Verify & Continue'}
+                          {rateLimitedButtonLabel(
+                            rateLimitSeconds,
+                            'Verify & Continue',
+                            'Verifying…',
+                            isAuthLoading('verify_email'),
+                          )}
                         </Button>
                       </form>
                     )}
@@ -2159,9 +2152,10 @@ const backButtonLabel =
                           }
                           onClick={handleResendEmail}
                         >
-                          {cooldown > 0
-                            ? `Resend in ${cooldown}s`
-                            : 'Resend Code'}
+                          {rateLimitedButtonLabel(
+                            Math.max(cooldown, rateLimitSeconds),
+                            'Resend Code',
+                          )}
                         </Button>
 
                         <TurnstileCaptcha
@@ -2298,15 +2292,16 @@ const backButtonLabel =
                         !securityReady
                       }
                     >
-                      {isAuthLoading('request_reset') && (
+                      {isAuthLoading('request_reset') && rateLimitSeconds <= 0 && (
                         <span className="mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                       )}
 
-                      {isAuthLoading('request_reset')
-                        ? 'Sending Reset Code...'
-                        : resetEmailSent
-                          ? 'Code Sent'
-                          : 'Send Reset Code'}
+                      {rateLimitedButtonLabel(
+                        rateLimitSeconds,
+                        resetEmailSent ? 'Code Sent' : 'Send Reset Code',
+                        'Sending Reset Code...',
+                        isAuthLoading('request_reset'),
+                      )}
                     </Button>
 
                     {resetEmailSent && (
@@ -2402,9 +2397,12 @@ const backButtonLabel =
                         newPassword !== confirmPassword
                       }
                     >
-                      {isAuthLoading('reset_password')
-                        ? 'Resetting...'
-                        : 'Reset Password'}
+                      {rateLimitedButtonLabel(
+                        rateLimitSeconds,
+                        'Reset Password',
+                        'Resetting...',
+                        isAuthLoading('reset_password'),
+                      )}
                     </Button>
                   </div>
                 )}
