@@ -106,6 +106,7 @@ export interface SmsOtpResponse {
   phone?: string;
   requires_phone?: boolean;
   cooldown_seconds?: number;
+  already_sent?: boolean;
 }
 
 export interface OtpSecurityPayload {
@@ -122,6 +123,7 @@ export interface SendEmailOtpRequest {
 export interface EmailOtpResponse {
   message: string;
   cooldown_seconds?: number;
+  already_sent?: boolean;
 }
 
 export interface LoginResponse {

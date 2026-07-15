@@ -90,6 +90,8 @@ type AuthLoadingAction =
   | 'send_email_code'
   | 'login_mfa_email_send'
   | 'start_sms'
+  | 'resend_sms'
+  | 'resend_email'
   | 'verify_mfa'
   | 'verify_email'
   | 'verify_sms';
@@ -542,6 +544,7 @@ const guardRateLimit = useCallback(() => {
 
 const handleSendEmailCode = async () => {
   if (guardRateLimit()) return;
+  if (isAuthBusy) return;
   if (!securityReady) {
     setError('Wait for the security check to finish before requesting a code');
     toast.error('Wait for the security check to finish');
@@ -712,6 +715,10 @@ const beginLinkedLoginMfa = async (
     }
 
     if (useLoginChallenge && challengeToken) {
+      if (isAuthBusy) {
+        setStep('verifyEmail');
+        return;
+      }
       startAuthLoading('login_mfa_email_send');
       try {
         const res = await startEmailMfa({
@@ -751,6 +758,11 @@ const beginLinkedLoginMfa = async (
     setOtp(Array(OTP_LENGTH).fill(''));
     setAttempts(0);
     setCooldown(0);
+    setStep('verifySms');
+    return;
+  }
+
+  if (isAuthBusy) {
     setStep('verifySms');
     return;
   }
@@ -1410,7 +1422,7 @@ useEffect(() => {
 ]);
 
 const handleResendEmail = async () => {
-  if (cooldown > 0 || guardRateLimit()) return;
+  if (cooldown > 0 || guardRateLimit() || isAuthBusy) return;
 
   if (!captchaToken) {
     setError('Complete the CAPTCHA before resending the OTP');
@@ -1419,6 +1431,7 @@ const handleResendEmail = async () => {
 
   try {
     setError('');
+    startAuthLoading('resend_email');
 
     const res = await sendEmailOtp({
       email,
@@ -1437,6 +1450,8 @@ const handleResendEmail = async () => {
   } catch (err: unknown) {
     applyAuthError(err, 'Failed to resend OTP');
     refreshCaptcha();
+  } finally {
+    stopAuthLoading('resend_email');
   }
 };
 
@@ -1472,7 +1487,7 @@ useEffect(() => {
 ]);
 
 const handleResendSms = async () => {
-  if (cooldown > 0 || guardRateLimit()) return;
+  if (cooldown > 0 || guardRateLimit() || isAuthBusy) return;
 
   if (!captchaToken) {
     setError('Complete the CAPTCHA before resending the OTP');
@@ -1481,6 +1496,7 @@ const handleResendSms = async () => {
 
   try {
     setError('');
+    startAuthLoading('resend_sms');
 
     const res = await resendSmsMfa({
       email,
@@ -1495,6 +1511,8 @@ const handleResendSms = async () => {
   } catch (err: unknown) {
     applyAuthError(err, 'Failed to resend OTP');
     refreshCaptcha();
+  } finally {
+    stopAuthLoading('resend_sms');
   }
 };
   // Animation

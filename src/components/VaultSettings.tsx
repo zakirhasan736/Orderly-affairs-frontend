@@ -158,6 +158,8 @@ const VaultSettings = () => {
   const autoEmailVerifyKey = useRef('');
   const autoAuthenticatorVerifyKey = useRef('');
   const autoSmsVerifyKey = useRef('');
+  const emailSendInFlight = useRef(false);
+  const smsSendInFlight = useRef(false);
 const [pauseSub] = usePauseSubscriptionMutation();
 const [resumeSub] = useResumeSubscriptionMutation();
 const [openPortal] = usePortalMutation();
@@ -181,12 +183,14 @@ const MAX_EMAIL_ATTEMPTS = 5;
 
 const beginEmailMfa = async () => {
   if (!me?.email) return;
+  if (emailSendInFlight.current || securityLoading === 'email') return;
 
   if (!emailCaptchaToken) {
     toast.error('Complete the CAPTCHA before requesting an OTP');
     return;
   }
 
+  emailSendInFlight.current = true;
   setSecurityLoading('email');
   try {
     const res = await sendEmailOtp({
@@ -199,22 +203,29 @@ const beginEmailMfa = async () => {
     setEmailAttempts(0);
     setEmailCooldown(res.cooldown_seconds ?? 60);
     setEmailCaptchaToken('');
-    toast.success('Email verification code sent');
+    toast.success(
+      res.already_sent
+        ? 'Verification code already sent — check your email'
+        : 'Email verification code sent',
+    );
   } catch (err: unknown) {
     toast.error(getErrorMessage(err, 'Could not send email code'));
   } finally {
+    emailSendInFlight.current = false;
     setSecurityLoading(null);
   }
 };
 
 const resendEmailMfa = async () => {
   if (!me?.email || emailCooldown > 0) return;
+  if (emailSendInFlight.current || securityLoading === 'email') return;
 
   if (!emailCaptchaToken) {
     toast.error('Complete the CAPTCHA before resending the OTP');
     return;
   }
 
+  emailSendInFlight.current = true;
   setSecurityLoading('email');
   try {
     const res = await sendEmailOtp({
@@ -225,10 +236,15 @@ const resendEmailMfa = async () => {
     setEmailCode('');
     setEmailCooldown(res.cooldown_seconds ?? 60);
     setEmailCaptchaToken('');
-    toast.success('Email verification code resent');
+    toast.success(
+      res.already_sent
+        ? 'Verification code already sent — check your email'
+        : 'Email verification code resent',
+    );
   } catch (err: unknown) {
     toast.error(getErrorMessage(err, 'Could not resend email code'));
   } finally {
+    emailSendInFlight.current = false;
     setSecurityLoading(null);
   }
 };
@@ -328,6 +344,7 @@ const verifyAuthenticatorMfa = useCallback(async () => {
 
 const beginSmsMfa = async () => {
   if (!me?.email) return;
+  if (smsSendInFlight.current || securityLoading === 'sms') return;
 
   setShowSmsPhoneValidation(true);
 
@@ -347,6 +364,7 @@ const beginSmsMfa = async () => {
     return;
   }
 
+  smsSendInFlight.current = true;
   setSecurityLoading('sms');
   try {
     const res = await startSmsMfa({
@@ -364,10 +382,16 @@ const beginSmsMfa = async () => {
     setSmsPhone(res.phone || smsPhone);
     setSmsCode('');
     setSetupMethod('sms');
-    toast.success('SMS verification code sent');
+    setSmsCaptchaToken('');
+    toast.success(
+      res.already_sent
+        ? 'Verification code already sent — check your phone'
+        : 'SMS verification code sent',
+    );
   } catch (err: unknown) {
     toast.error(getErrorMessage(err, 'Could not send SMS code'));
   } finally {
+    smsSendInFlight.current = false;
     setSecurityLoading(null);
   }
 };
