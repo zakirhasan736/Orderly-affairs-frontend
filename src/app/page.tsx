@@ -46,6 +46,12 @@ import { SixDigitOtpInput } from '@/components/SixDigitOtpInput';
 import { TurnstileCaptcha } from '@/components/TurnstileCaptcha';
 import { isValidE164PhoneNumber } from '@/utils/phoneCountries';
 import { getOtpSessionId } from '@/utils/otpSession';
+import {
+  formatRetryCountdown,
+  parseAuthApiError,
+} from '@/utils/authRateLimit';
+import { isCaptchaEnabled } from '@/utils/captchaConfig';
+import { toast } from 'sonner';
 import { Label } from '@/components/common/ui/label';
 import { Button } from '@/components/common/ui/button';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
@@ -361,6 +367,14 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showPhoneValidation, setShowPhoneValidation] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaReady, setCaptchaReady] = useState(!isCaptchaEnabled);
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
+  const refreshCaptcha = useCallback(() => {
+    setCaptchaToken('');
+    if (isCaptchaEnabled) setCaptchaReady(false);
+    setCaptchaResetKey(k => k + 1);
+  }, []);
+  const securityReady = !isCaptchaEnabled || (captchaReady && !!captchaToken);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -398,10 +412,27 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   // OTP UX
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [cooldown, setCooldown] = useState(0);
+  const [rateLimitSeconds, setRateLimitSeconds] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const autoMfaVerifyKey = useRef('');
   const autoEmailVerifyKey = useRef('');
   const autoSmsVerifyKey = useRef('');
+
+  const applyAuthError = useCallback((err: unknown, fallback: string) => {
+    const parsed = parseAuthApiError(err, fallback);
+    setError(parsed.message);
+    if (parsed.status === 429) {
+      const wait = parsed.retryAfterSeconds ?? 60;
+      setRateLimitSeconds(wait);
+      setCooldown(wait);
+      toast.error(parsed.message, {
+        duration: Math.min(wait * 1000, 12_000),
+      });
+    } else {
+      toast.error(parsed.message);
+    }
+    return parsed;
+  }, []);
 
 useEffect(() => {
   if (cooldown <= 0) return;
@@ -413,9 +444,24 @@ useEffect(() => {
   return () => clearInterval(timer);
 }, [cooldown]);
 
+useEffect(() => {
+  if (rateLimitSeconds <= 0) return;
+  const timer = setInterval(() => {
+    setRateLimitSeconds(prev => (prev <= 1 ? 0 : prev - 1));
+  }, 1000);
+  return () => clearInterval(timer);
+}, [rateLimitSeconds]);
+
 const handleSendEmailCode = async () => {
-  if (!captchaToken) {
-    setError('Complete the CAPTCHA before requesting an OTP');
+  if (rateLimitSeconds > 0) {
+    toast.error(
+      `Too many requests. Please try again in ${formatRetryCountdown(rateLimitSeconds)}.`,
+    );
+    return;
+  }
+  if (!securityReady) {
+    setError('Wait for the security check to finish before requesting a code');
+    toast.error('Wait for the security check to finish');
     return;
   }
 
@@ -436,9 +482,10 @@ const handleSendEmailCode = async () => {
     setEmailCode('');
     setAttempts(0);
     setCooldown(res.cooldown_seconds ?? 60);
-    setCaptchaToken('');
+    refreshCaptcha();
   } catch (err: unknown) {
-    setError(getApiErrorMessage(err, 'Failed to send verification code'));
+    applyAuthError(err, 'Failed to send verification code');
+    refreshCaptcha();
   } finally {
     stopAuthLoading();
   }
@@ -448,9 +495,17 @@ const handleSendEmailCode = async () => {
  const handleForgotPasswordClick = async () => {
    setError('');
 
+   if (rateLimitSeconds > 0) {
+     toast.error(
+       `Too many requests. Please try again in ${formatRetryCountdown(rateLimitSeconds)}.`,
+     );
+     return;
+   }
+
    if (email && isValidEmail(email)) {
      if (!captchaToken) {
        setError('Complete the CAPTCHA before requesting a reset code');
+       toast.error('Complete the security check before requesting a reset code');
        return;
      }
      startAuthLoading('forgot_password');
@@ -462,12 +517,13 @@ const handleSendEmailCode = async () => {
          otp_session_id: getOtpSessionId(),
        }).unwrap();
        setResetEmail(email);
-       setCaptchaToken(''); // Turnstile tokens are single-use
+       refreshCaptcha();
        setResetOtp('');
-       alert('If an account exists for that email, a reset code has been sent.');
+       toast.success('If an account exists for that email, a reset code has been sent.');
        setStep('reset_password');
      } catch (err: unknown) {
-       setError(getApiErrorMessage(err, 'Failed to send reset code'));
+       applyAuthError(err, 'Failed to send reset code');
+       refreshCaptcha();
      } finally {
        stopAuthLoading();
      }
@@ -478,8 +534,15 @@ const handleSendEmailCode = async () => {
 
  const handleRequestReset = async () => {
    setError('');
+   if (rateLimitSeconds > 0) {
+     toast.error(
+       `Too many requests. Please try again in ${formatRetryCountdown(rateLimitSeconds)}.`,
+     );
+     return;
+   }
    if (!captchaToken) {
      setError('Complete the CAPTCHA before requesting a reset code');
+     toast.error('Complete the security check before requesting a reset code');
      return;
    }
    startAuthLoading('request_reset');
@@ -491,12 +554,13 @@ const handleSendEmailCode = async () => {
        otp_session_id: getOtpSessionId(),
      }).unwrap();
      setResetEmailSent(true);
-     setCaptchaToken(''); // Turnstile tokens are single-use
+     refreshCaptcha();
      setResetOtp('');
-     alert('If an account exists for that email, a reset code has been sent.');
+     toast.success('If an account exists for that email, a reset code has been sent.');
      setStep('reset_password');
    } catch (err: unknown) {
-     setError(getApiErrorMessage(err, 'Failed to send reset code'));
+     applyAuthError(err, 'Failed to send reset code');
+     refreshCaptcha();
    } finally {
      stopAuthLoading();
    }
@@ -504,6 +568,12 @@ const handleSendEmailCode = async () => {
 const handleResetPassword = async () => {
   if (newPassword !== confirmPassword) {
     setError('Passwords do not match');
+    return;
+  }
+  if (rateLimitSeconds > 0) {
+    toast.error(
+      `Too many requests. Please try again in ${formatRetryCountdown(rateLimitSeconds)}.`,
+    );
     return;
   }
 
@@ -517,10 +587,11 @@ const handleResetPassword = async () => {
       captcha_token: captchaToken,
     }).unwrap();
 
-    alert('Password reset successfully!');
+    toast.success('Password reset successfully!');
+    setRateLimitSeconds(0);
     setStep('credentials');
   } catch (err: unknown) {
-    setError(getApiErrorMessage(err, 'Reset failed'));
+    applyAuthError(err, 'Reset failed');
   } finally {
     stopAuthLoading();
   }
@@ -679,6 +750,13 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
   setLoginPrimaryMFAMethod(null);
   setMfaChallengeToken('');
 
+  if (rateLimitSeconds > 0) {
+    toast.error(
+      `Too many requests. Please try again in ${formatRetryCountdown(rateLimitSeconds)}.`,
+    );
+    return;
+  }
+
   try {
     if (!isValidEmail(email)) throw new Error('Enter a valid email');
     if (password.length < 8) {
@@ -702,6 +780,7 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
 
     if (!isNewUser && !captchaToken) {
       setError('Complete the security check before signing in');
+      toast.error('Complete the security check before signing in');
       stopAuthLoading('sign_in');
       return;
     }
@@ -752,7 +831,8 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
 
     await completeOwnerAuth(router, dispatch);
   } catch (err: unknown) {
-    setError(getApiErrorMessage(err, 'Authentication failed'));
+    applyAuthError(err, 'Authentication failed');
+    refreshCaptcha();
   } finally {
     stopAuthLoading('sign_in');
   }
@@ -913,7 +993,8 @@ const handleMFAMethodSelection = async () => {
       return;
     }
   } catch (err: unknown) {
-    const detail = getApiErrorMessage(err, 'Failed to continue');
+    const parsed = parseAuthApiError(err, 'Failed to continue');
+    const detail = parsed.message;
 
     // ✅ PENDING SIGNUP ALREADY EXISTS → CONTINUE INSTEAD OF FAILING
     if (
@@ -936,12 +1017,11 @@ const handleMFAMethodSelection = async () => {
         setStep('setupMfa');
         return;
       } catch (resumeErr: unknown) {
-        setError(
-          getApiErrorMessage(
-            resumeErr,
-            'Signup already started, but failed to restore QR code.',
-          ),
+        applyAuthError(
+          resumeErr,
+          'Signup already started, but failed to restore QR code.',
         );
+        refreshCaptcha();
         return;
       }
     }
@@ -962,7 +1042,8 @@ const handleMFAMethodSelection = async () => {
       }
     }
 
-    setError(detail);
+    applyAuthError(err, 'Failed to continue');
+    refreshCaptcha();
   } finally {
     stopAuthLoading('mfa_method');
   }
@@ -1017,18 +1098,28 @@ const handleVerifyMfa = async (e: React.FormEvent) => {
 const verifyEmailOtpCode = useCallback(async () => {
   setError('');
 
+  if (rateLimitSeconds > 0) {
+    toast.error(
+      `Too many requests. Please try again in ${formatRetryCountdown(rateLimitSeconds)}.`,
+    );
+    return;
+  }
+
   if (attempts >= MAX_ATTEMPTS) {
     setError('Too many failed attempts. Try again later.');
+    toast.error('Too many failed attempts. Try again later.');
     return;
   }
 
   startAuthLoading('verify_email');
 
   try {
-    const code = parseInt(emailCode);
-    if (isNaN(code)) throw new Error('Enter valid code');
+    const code = parseInt(emailCode, 10);
+    if (isNaN(code) || emailCode.length !== 6) {
+      throw new Error('Enter the 6-digit code from your email');
+    }
 
-    const res = await verifyEmailCode({
+    await verifyEmailCode({
       email,
       code,
       otp_session_id: getOtpSessionId(),
@@ -1038,21 +1129,35 @@ const verifyEmailOtpCode = useCallback(async () => {
     }).unwrap();
 
     setAttempts(0);
+    setRateLimitSeconds(0);
+    toast.success('Email verified');
 
     await completeOwnerAuth(router, dispatch);
   } catch (err: unknown) {
     const nextAttempts = attempts + 1;
     setAttempts(nextAttempts);
 
-    setError(
-      nextAttempts >= MAX_ATTEMPTS
-        ? 'Too many failed attempts. Try again later.'
-        : getApiErrorMessage(err, 'Verification failed'),
-    );
+    if (nextAttempts >= MAX_ATTEMPTS) {
+      setError('Too many failed attempts. Try again later.');
+      toast.error('Too many failed attempts. Try again later.');
+    } else {
+      applyAuthError(err, 'Invalid or expired code. Request a new one.');
+    }
   } finally {
     stopAuthLoading('verify_email');
   }
-}, [emailCode, verifyEmailCode, email, router, attempts]);
+}, [
+  emailCode,
+  verifyEmailCode,
+  email,
+  router,
+  attempts,
+  rateLimitSeconds,
+  isLoginMfaChallenge,
+  mfaChallengeToken,
+  dispatch,
+  applyAuthError,
+]);
 
 const handleVerifyEmail = async (e: React.FormEvent) => {
   e.preventDefault();
@@ -1190,7 +1295,8 @@ const handleResendEmail = async () => {
     setCaptchaToken('');
     setVerificationSent(true);
   } catch (err: unknown) {
-    setError(getApiErrorMessage(err, 'Failed to resend OTP'));
+    applyAuthError(err, 'Failed to resend OTP');
+    refreshCaptcha();
   }
 };
 
@@ -1244,9 +1350,10 @@ const handleResendSms = async () => {
 
     setCooldown(res.cooldown_seconds ?? 60);
     setOtp(Array(OTP_LENGTH).fill(''));
-    setCaptchaToken('');
+    refreshCaptcha();
   } catch (err: unknown) {
-    setError(getApiErrorMessage(err, 'Failed to resend OTP'));
+    applyAuthError(err, 'Failed to resend OTP');
+    refreshCaptcha();
   }
 };
   // Animation
@@ -1406,6 +1513,18 @@ const backButtonLabel =
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
+            {rateLimitSeconds > 0 && (
+              <Alert className="mb-4 border-amber-200 bg-amber-50 text-amber-900">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Too many attempts. Try again in{' '}
+                  <span className="font-semibold tabular-nums">
+                    {formatRetryCountdown(rateLimitSeconds)}
+                  </span>
+                  .
+                </AlertDescription>
+              </Alert>
+            )}
             {step !== 'credentials' && (
               <Button
                 variant="ghost"
@@ -1433,6 +1552,29 @@ const backButtonLabel =
                     onSubmit={handleCredentialsSubmit}
                     className="space-y-4"
                   >
+                    {!isNewUser && (
+                      <TurnstileCaptcha
+                        gateMode
+                        onTokenChange={setCaptchaToken}
+                        onReadyChange={setCaptchaReady}
+                        resetKey={captchaResetKey}
+                      />
+                    )}
+
+                    {(!isNewUser && !securityReady) ? (
+                      <p className="text-center text-sm text-muted-foreground">
+                        Sign-in form unlocks after the security check finishes.
+                      </p>
+                    ) : null}
+
+                    <div
+                      className={
+                        !isNewUser && !securityReady
+                          ? 'space-y-4 opacity-40 pointer-events-none select-none'
+                          : 'space-y-4'
+                      }
+                      aria-disabled={!isNewUser && !securityReady}
+                    >
                     <div className="space-y-2">
                       <Label htmlFor="email">Email Address</Label>
                       <div className="relative">
@@ -1607,13 +1749,13 @@ const backButtonLabel =
                       </>
                     )}
 
-                    {!isNewUser && (
-                      <TurnstileCaptcha onTokenChange={setCaptchaToken} />
-                    )}
-
                     <Button
                       className="w-full btn-primary"
-                      disabled={isAuthBusy || (!isNewUser && !captchaToken)}
+                      disabled={
+                        isAuthBusy ||
+                        rateLimitSeconds > 0 ||
+                        (!isNewUser && !securityReady)
+                      }
                     >
                       {isAuthLoading('sign_in')
                         ? 'Please wait…'
@@ -1625,13 +1767,17 @@ const backButtonLabel =
                     <Button
                       type="button"
                       variant="link"
-                      onClick={() => setIsNewUser(!isNewUser)}
+                      onClick={() => {
+                        setIsNewUser(!isNewUser);
+                        refreshCaptcha();
+                      }}
                       className="w-full text-sm cursor-pointer"
                     >
                       {isNewUser
                         ? 'Already have an account? Sign in'
                         : 'Need an account? Create one'}
                     </Button>
+                    </div>
                   </form>
                 )}
                 {step === 'mfa_method_selection' && (
@@ -1705,12 +1851,22 @@ const backButtonLabel =
                           label="Mobile Number"
                           showValidation={showPhoneValidation}
                         />
-                        <TurnstileCaptcha onTokenChange={setCaptchaToken} />
+                        <TurnstileCaptcha
+                          gateMode
+                          onTokenChange={setCaptchaToken}
+                          onReadyChange={setCaptchaReady}
+                          resetKey={captchaResetKey}
+                        />
                       </>
                     )}
 
                     {showEmailCaptcha && (
-                      <TurnstileCaptcha onTokenChange={setCaptchaToken} />
+                      <TurnstileCaptcha
+                          gateMode
+                          onTokenChange={setCaptchaToken}
+                          onReadyChange={setCaptchaReady}
+                          resetKey={captchaResetKey}
+                        />
                     )}
 
                     <Button
@@ -1718,8 +1874,8 @@ const backButtonLabel =
                       className="w-full btn-primary"
                       disabled={
                         isAuthBusy ||
-                        (showSmsPhoneInput && !captchaToken) ||
-                        (showEmailCaptcha && !captchaToken)
+                        (showSmsPhoneInput && !securityReady) ||
+                        (showEmailCaptcha && !securityReady)
                       }
                     >
                       {isAuthLoading('mfa_method')
@@ -1864,12 +2020,19 @@ const backButtonLabel =
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          <TurnstileCaptcha onTokenChange={setCaptchaToken} />
+                          <TurnstileCaptcha
+                          gateMode
+                          onTokenChange={setCaptchaToken}
+                          onReadyChange={setCaptchaReady}
+                          resetKey={captchaResetKey}
+                        />
                           <Button
                             onClick={handleSendEmailCode}
                             className="w-full btn-primary"
                             disabled={
-                              isAuthBusy || !captchaToken
+                              isAuthBusy ||
+                              rateLimitSeconds > 0 ||
+                              !securityReady
                             }
                           >
                             {isAuthLoading('send_email_code')
@@ -1913,7 +2076,11 @@ const backButtonLabel =
                       <>
                         <Button
                           variant="link"
-                          disabled={cooldown > 0 || !captchaToken}
+                          disabled={
+                            cooldown > 0 ||
+                            rateLimitSeconds > 0 ||
+                            !securityReady
+                          }
                           onClick={handleResendEmail}
                         >
                           {cooldown > 0
@@ -1921,7 +2088,12 @@ const backButtonLabel =
                             : 'Resend Code'}
                         </Button>
 
-                        <TurnstileCaptcha onTokenChange={setCaptchaToken} />
+                        <TurnstileCaptcha
+                          gateMode
+                          onTokenChange={setCaptchaToken}
+                          onReadyChange={setCaptchaReady}
+                          resetKey={captchaResetKey}
+                        />
 
                         {attempts > 0 && attempts < MAX_ATTEMPTS && (
                           <p className="text-xs text-muted-foreground">
@@ -1985,13 +2157,22 @@ const backButtonLabel =
 
                     <Button
                       variant="link"
-                      disabled={cooldown > 0 || !captchaToken}
+                      disabled={
+                        cooldown > 0 ||
+                        rateLimitSeconds > 0 ||
+                        !securityReady
+                      }
                       onClick={handleResendSms}
                     >
                       {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend Code'}
                     </Button>
 
-                    <TurnstileCaptcha onTokenChange={setCaptchaToken} />
+                    <TurnstileCaptcha
+                          gateMode
+                          onTokenChange={setCaptchaToken}
+                          onReadyChange={setCaptchaReady}
+                          resetKey={captchaResetKey}
+                        />
 
                     <Button
                       type="button"
@@ -2024,14 +2205,22 @@ const backButtonLabel =
                     />
 
                     <TurnstileCaptcha
+                      gateMode
                       onTokenChange={setCaptchaToken}
+                      onReadyChange={setCaptchaReady}
+                      resetKey={captchaResetKey}
                       className="flex justify-center"
                     />
 
                     <Button
                       className="w-full btn-primary flex items-center justify-center"
                       onClick={handleRequestReset}
-                      disabled={isAuthBusy || !resetEmail || !captchaToken}
+                      disabled={
+                        isAuthBusy ||
+                        rateLimitSeconds > 0 ||
+                        !resetEmail ||
+                        !securityReady
+                      }
                     >
                       {isAuthLoading('request_reset') && (
                         <span className="mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
@@ -2131,6 +2320,7 @@ const backButtonLabel =
                       onClick={handleResetPassword}
                       disabled={
                         isAuthBusy ||
+                        rateLimitSeconds > 0 ||
                         !resetOtp ||
                         !newPassword ||
                         newPassword !== confirmPassword

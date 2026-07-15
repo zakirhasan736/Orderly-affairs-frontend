@@ -8,6 +8,29 @@ import { sanitizeFetchBaseQueryError } from '@/utils/sanitizeApiError';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
+/** Auth routes where a 401 must NOT trigger refresh-token (avoids 429 spam). */
+const SKIP_REFRESH_PATHS = [
+  '/login',
+  '/signup',
+  '/request-password-reset',
+  '/reset-password',
+  '/nextkin-login',
+  '/refresh-token',
+  '/send-email-otp',
+  '/send-sms-otp',
+  '/verify-sms-otp',
+  '/verify-email',
+  '/verify-totp',
+];
+
+function shouldSkipRefresh(args: string | FetchArgs): boolean {
+  const url = typeof args === 'string' ? args : args.url;
+  if (!url) return false;
+  return SKIP_REFRESH_PATHS.some(
+    path => url === path || url.startsWith(`${path}?`) || url.endsWith(path),
+  );
+}
+
 let refreshPromise: Promise<boolean> | null = null;
 
 async function refreshSession(): Promise<boolean> {
@@ -41,7 +64,11 @@ export function createSecureBaseQuery(
   return async (args, api, extraOptions) => {
     let result = await rawBaseQuery(args, api, extraOptions);
 
-    if (result.error && result.error.status === 401) {
+    if (
+      result.error &&
+      result.error.status === 401 &&
+      !shouldSkipRefresh(args)
+    ) {
       const refreshed = await refreshSession();
       if (refreshed) {
         result = await rawBaseQuery(args, api, extraOptions);
