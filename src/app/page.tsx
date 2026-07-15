@@ -479,7 +479,7 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   const applyAuthError = useCallback((err: unknown, fallback: string) => {
     const parsed = parseAuthApiError(err, fallback);
     if (parsed.status === 429) {
-      const wait = parsed.retryAfterSeconds ?? 600;
+      const wait = parsed.retryAfterSeconds ?? 45;
       setError('');
       setRateLimitSeconds(wait);
       toast.message('Please wait before trying again', {

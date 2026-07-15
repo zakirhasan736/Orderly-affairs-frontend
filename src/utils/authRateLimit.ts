@@ -8,11 +8,11 @@ export type ParsedAuthError = {
   retryAfterSeconds: number | null;
 };
 
-/** Default wait when a 429 has no parseable time (matches backend 10-minute window). */
-export const AUTH_RATE_LIMIT_FALLBACK_SECONDS = 600;
+/** Default wait = short resend cooldown (45s), not a long lock. */
+export const AUTH_RATE_LIMIT_FALLBACK_SECONDS = 45;
 
-/** Never show / block UI longer than this for auth UX (24h absolute ceiling). */
-export const AUTH_RATE_LIMIT_DISPLAY_CAP_SECONDS = 24 * 60 * 60;
+/** Never show / block UI longer than 30 minutes. */
+export const AUTH_RATE_LIMIT_DISPLAY_CAP_SECONDS = 30 * 60;
 
 function readDataMessage(data: unknown): string | null {
   if (!data || typeof data !== 'object') return null;
