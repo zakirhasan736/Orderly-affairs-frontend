@@ -64,10 +64,35 @@ export async function fetchSession(): Promise<{
   return res.json();
 }
 
+/** First-party cookie so Next middleware allows /dashboard after API login. */
+export async function markPortalSession(): Promise<void> {
+  try {
+    await fetch('/api/auth/portal-session', {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch {
+    // non-fatal — AuthWatcher still validates against the API
+  }
+}
+
+export async function clearPortalSession(): Promise<void> {
+  try {
+    await fetch('/api/auth/portal-session', {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+  } catch {
+    // ignore
+  }
+}
+
 export async function ownerLogout(): Promise<void> {
   await secureFetch('/auth/owner-logout', { method: 'POST' });
+  await clearPortalSession();
 }
 
 export async function nokLogout(): Promise<void> {
   await secureFetch('/auth/nextkin-logout', { method: 'POST' });
+  await clearPortalSession();
 }

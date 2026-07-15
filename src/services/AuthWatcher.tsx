@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAppDispatch } from '@/store/hooks';
 import { clearSession } from '@/store/slices/authSlice';
-import { fetchSession } from '@/libs/secureFetch';
+import { fetchSession, markPortalSession } from '@/libs/secureFetch';
 
 export default function AuthWatcher({
   children,
@@ -40,6 +40,11 @@ export default function AuthWatcher({
 
       if (isOwnerArea && session.role !== 'owner') {
         router.replace('/');
+        return;
+      }
+
+      if (session.role === 'owner') {
+        await markPortalSession();
       }
     };
 

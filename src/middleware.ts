@@ -2,90 +2,49 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
- * Edge route guard — checks cookie *presence* only.
+ * Edge UX guard only.
  *
- * SECURITY: A cookie being set does NOT mean the session is valid.
- * Tokens may be expired, revoked, or otherwise rejected by the backend.
- * All API routes perform real JWT/session validation; this middleware
- * is a UX redirect layer only.
+ * Real auth cookies are set by the API host (api.*). Those often are NOT
+ * visible to portal middleware, so after login the old middleware bounced
+ * /dashboard → /. Client AuthWatcher validates via GET /auth/session.
  *
- * Set ENABLE_EDGE_SESSION_CHECK=true to additionally probe GET /auth/session
- * for protected routes (adds one backend round-trip per navigation).
+ * Optional portal marker cookie: oa_portal_session (set after successful session).
  */
-const ENABLE_EDGE_SESSION_CHECK =
-  process.env.ENABLE_EDGE_SESSION_CHECK === 'true';
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const PORTAL_SESSION_COOKIE = 'oa_portal_session';
 
-async function hasValidSession(req: NextRequest): Promise<boolean> {
-  if (!API_BASE) return true;
-
-  try {
-    const res = await fetch(`${API_BASE}/auth/session`, {
-      headers: { cookie: req.headers.get('cookie') || '' },
-      cache: 'no-store',
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { authenticated?: boolean };
-    return Boolean(data.authenticated);
-  } catch {
-    return false;
-  }
+function hasOwnerCue(req: NextRequest): boolean {
+  return Boolean(
+    req.cookies.get('auth_token')?.value ||
+      req.cookies.get(PORTAL_SESSION_COOKIE)?.value,
+  );
 }
 
 export async function middleware(req: NextRequest) {
-  const ownerToken = req.cookies.get('auth_token')?.value;
-  const nokToken = req.cookies.get('nok_auth_token')?.value;
   const { pathname } = req.nextUrl;
 
+  // Logged-in cue on login page → go dashboard (best-effort UX)
   if (pathname === '/' || pathname.startsWith('/login')) {
-    if (ownerToken) {
-      if (ENABLE_EDGE_SESSION_CHECK) {
-        const valid = await hasValidSession(req);
-        if (!valid) {
-          const res = NextResponse.next();
-          res.cookies.delete('auth_token');
-          return res;
-        }
-      }
+    if (hasOwnerCue(req)) {
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }
     return NextResponse.next();
   }
 
   if (pathname === '/next-kin') {
-    if (nokToken) {
+    if (req.cookies.get('nok_auth_token')?.value) {
       return NextResponse.redirect(new URL('/next-kin/dashboard', req.url));
     }
     return NextResponse.next();
   }
 
+  // /dashboard: NEVER hard-redirect to login here.
+  // Missing portal cookies used to send users in a loop after MFA/login.
+  // AuthWatcher + dashboard hydrate call the API with credentials instead.
   if (pathname.startsWith('/dashboard')) {
-    if (!ownerToken) {
-      return NextResponse.redirect(new URL('/', req.url));
-    }
-    if (ENABLE_EDGE_SESSION_CHECK) {
-      const valid = await hasValidSession(req);
-      if (!valid) {
-        const res = NextResponse.redirect(new URL('/', req.url));
-        res.cookies.delete('auth_token');
-        return res;
-      }
-    }
     return NextResponse.next();
   }
 
   if (pathname.startsWith('/next-kin/')) {
-    if (!nokToken) {
-      return NextResponse.redirect(new URL('/next-kin', req.url));
-    }
-    if (ENABLE_EDGE_SESSION_CHECK) {
-      const valid = await hasValidSession(req);
-      if (!valid) {
-        const res = NextResponse.redirect(new URL('/next-kin', req.url));
-        res.cookies.delete('nok_auth_token');
-        return res;
-      }
-    }
     return NextResponse.next();
   }
 

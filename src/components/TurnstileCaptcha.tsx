@@ -14,10 +14,14 @@ interface TurnstileCaptchaProps {
   className?: string;
   /** Bump to force a fresh widget after a single-use token was consumed. */
   resetKey?: string | number;
-  /** Prefer compact loading state above the fold before forms unlock. */
+  /** Show a large gate panel until ready (login / reset). */
   gateMode?: boolean;
 }
 
+/**
+ * Cloudflare Turnstile must finish BEFORE auth UI is usable.
+ * Keep the widget VISIBLE while loading — hidden/sr-only widgets often fail.
+ */
 export function TurnstileCaptcha({
   onTokenChange,
   onReadyChange,
@@ -28,12 +32,16 @@ export function TurnstileCaptcha({
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const turnstileRef = useRef<TurnstileInstance | null>(null);
   const [widgetKey, setWidgetKey] = useState(0);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
+    isCaptchaEnabled ? 'loading' : 'ready',
+  );
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevResetKey = useRef(resetKey);
+  const readyRef = useRef(false);
 
   const setReady = useCallback(
     (ready: boolean, nextStatus: 'loading' | 'ready' | 'error') => {
+      readyRef.current = ready;
       setStatus(nextStatus);
       onReadyChange?.(ready);
     },
@@ -90,15 +98,15 @@ export function TurnstileCaptcha({
       {status !== 'ready' && (
         <div
           className={`mb-3 flex flex-col items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-4 ${
-            gateMode ? 'py-10' : 'py-4'
+            gateMode ? 'min-h-[140px] py-8' : 'py-4'
           }`}
         >
           <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
           <p className="mt-3 text-sm font-medium text-slate-700">
-            Preparing security check…
+            Verifying you are human…
           </p>
-          <p className="mt-1 text-xs text-slate-500 text-center max-w-xs">
-            Cloudflare must finish before sign-in, signup, or reset can continue.
+          <p className="mt-1 max-w-xs text-center text-xs text-slate-500">
+            Cloudflare security check must finish before you can continue.
           </p>
           {status === 'error' && (
             <button
@@ -112,8 +120,8 @@ export function TurnstileCaptcha({
         </div>
       )}
 
-      {/* Keep widget mounted so the challenge can complete; hide until ready optional */}
-      <div className={status === 'ready' ? 'block' : 'sr-only'}>
+      {/* Always visible — hidden widgets break Cloudflare challenges */}
+      <div className={status === 'ready' ? 'block' : 'opacity-90'}>
         <Turnstile
           key={`${widgetKey}-${resetKey}`}
           ref={turnstileRef}
@@ -131,7 +139,7 @@ export function TurnstileCaptcha({
             onTokenChange('');
             setReady(false, 'error');
             if (retryTimer.current) clearTimeout(retryTimer.current);
-            retryTimer.current = setTimeout(() => remount(), 3000);
+            retryTimer.current = setTimeout(() => remount(), 2500);
           }}
           options={{
             theme: 'light',
@@ -146,8 +154,8 @@ export function TurnstileCaptcha({
       </div>
 
       {status === 'ready' && (
-        <p className="mb-2 text-center text-xs text-emerald-700">
-          Security check ready
+        <p className="mb-2 text-center text-xs font-medium text-emerald-700">
+          Security check complete — you can continue
         </p>
       )}
     </div>

@@ -357,7 +357,14 @@ export const authApi = createApi({
       query: b => ({ url: '/send-email', method: 'POST', body: b }),
     }),
     verifyEmailCode: builder.mutation<
-      { authenticated?: boolean; message: string },
+      {
+        authenticated?: boolean;
+        message: string;
+        requires_billing?: boolean;
+        billing_status?: string;
+        role?: string;
+        email?: string;
+      },
       VerifyEmailCodeRequest
     >({
       query: b => ({ url: '/verify-email', method: 'POST', body: b }),

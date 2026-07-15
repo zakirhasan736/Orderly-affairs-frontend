@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { fetchSession } from '@/libs/secureFetch';
+import { fetchSession, markPortalSession } from '@/libs/secureFetch';
 import { useAppDispatch } from '@/store/hooks';
 import { setSession } from '@/store/slices/authSlice';
 import Image from 'next/image';
@@ -106,26 +106,56 @@ const getApiErrorMessage = (err: unknown, fallback: string) =>
 const completeOwnerAuth = async (
   router: ReturnType<typeof useRouter>,
   dispatch: ReturnType<typeof useAppDispatch>,
-) => {
-  const session = await fetchSession();
-  if (!session.authenticated || session.role !== 'owner') {
+  options?: {
+    requiresBilling?: boolean;
+    email?: string;
+    onNeedsBilling?: () => void;
+  },
+): Promise<'dashboard' | 'billing'> => {
+  let session: Awaited<ReturnType<typeof fetchSession>> | null = null;
+
+  // Cookie Domain propagation can lag one tick after Set-Cookie
+  for (let attempt = 0; attempt < 4; attempt++) {
+    session = await fetchSession();
+    if (session.authenticated && session.role === 'owner') break;
+    await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+  }
+
+  if (!session?.authenticated || session.role !== 'owner') {
     throw new Error('Session not established');
   }
 
   dispatch(
     setSession({
       user: {
-        email: session.email,
+        email: session.email ?? options?.email ?? '',
         role: 'owner',
         owner_id: session.owner_id ?? null,
       },
     }),
   );
 
+  // Portal-domain cookie so middleware won't bounce /dashboard → /
+  await markPortalSession();
+
+  const needsBilling =
+    Boolean(options?.requiresBilling) || Boolean(session.requires_billing);
+
+  if (needsBilling) {
+    options?.onNeedsBilling?.();
+    return 'billing';
+  }
+
   goToDashboard(router);
+  return 'dashboard';
 };
 
 const goToDashboard = (router: ReturnType<typeof useRouter>) => {
+  // Full navigation so middleware/cookies settle after Set-Cookie from API
+  if (typeof window !== 'undefined') {
+    window.location.assign('/dashboard');
+    return;
+  }
   router.replace('/dashboard');
 };
 
@@ -772,15 +802,22 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
         throw new Error('Use a stronger password');
       }
 
+      if (!securityReady) {
+        setError('Complete the security check before continuing');
+        toast.error('Complete the security check before continuing');
+        return;
+      }
+
+      refreshCaptcha();
       setStep('mfa_method_selection');
       return;
     }
 
     startAuthLoading('sign_in');
 
-    if (!isNewUser && !captchaToken) {
+    if (!securityReady) {
       setError('Complete the security check before signing in');
-      toast.error('Complete the security check before signing in');
+      toast.error('Complete the security check before continuing');
       stopAuthLoading('sign_in');
       return;
     }
@@ -829,7 +866,11 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
       return;
     }
 
-    await completeOwnerAuth(router, dispatch);
+    await completeOwnerAuth(router, dispatch, {
+      email,
+      requiresBilling: Boolean(res.requires_billing),
+      onNeedsBilling: () => setStep('plan_selection'),
+    });
   } catch (err: unknown) {
     applyAuthError(err, 'Authentication failed');
     refreshCaptcha();
@@ -1075,7 +1116,13 @@ const verifyMfaCode = useCallback(async () => {
       }).unwrap();
     }
 
-    await completeOwnerAuth(router, dispatch);
+    await completeOwnerAuth(router, dispatch, {
+      email,
+      requiresBilling: Boolean(
+        (res as { requires_billing?: boolean })?.requires_billing,
+      ),
+      onNeedsBilling: () => setStep('plan_selection'),
+    });
   } catch (err: unknown) {
     setError(getApiErrorMessage(err, 'Invalid verification code'));
   } finally {
@@ -1119,7 +1166,7 @@ const verifyEmailOtpCode = useCallback(async () => {
       throw new Error('Enter the 6-digit code from your email');
     }
 
-    await verifyEmailCode({
+    const res = await verifyEmailCode({
       email,
       code,
       otp_session_id: getOtpSessionId(),
@@ -1132,8 +1179,31 @@ const verifyEmailOtpCode = useCallback(async () => {
     setRateLimitSeconds(0);
     toast.success('Email verified');
 
-    await completeOwnerAuth(router, dispatch);
+    const destination = await completeOwnerAuth(router, dispatch, {
+      email,
+      requiresBilling: Boolean(res.requires_billing),
+      onNeedsBilling: () => {
+        setIsNewUser(false);
+        setStep('plan_selection');
+      },
+    });
+
+    if (destination === 'dashboard') {
+      toast.success('Signed in');
+    }
   } catch (err: unknown) {
+    if (
+      err instanceof Error &&
+      err.message === 'Session not established'
+    ) {
+      setError('Verified, but sign-in session failed. Please sign in.');
+      toast.error('Verified, but sign-in session failed. Please sign in.');
+      setStep('credentials');
+      setIsNewUser(false);
+      refreshCaptcha();
+      return;
+    }
+
     const nextAttempts = attempts + 1;
     setAttempts(nextAttempts);
 
@@ -1157,6 +1227,7 @@ const verifyEmailOtpCode = useCallback(async () => {
   mfaChallengeToken,
   dispatch,
   applyAuthError,
+  refreshCaptcha,
 ]);
 
 const handleVerifyEmail = async (e: React.FormEvent) => {
@@ -1193,7 +1264,13 @@ const verifySmsOtpCode = useCallback(async () => {
 
     setAttempts(0);
 
-    await completeOwnerAuth(router, dispatch);
+    await completeOwnerAuth(router, dispatch, {
+      email,
+      requiresBilling: Boolean(
+        (res as { requires_billing?: boolean })?.requires_billing,
+      ),
+      onNeedsBilling: () => setStep('plan_selection'),
+    });
   } catch (err: unknown) {
     const nextAttempts = attempts + 1;
     setAttempts(nextAttempts);
@@ -1552,28 +1629,27 @@ const backButtonLabel =
                     onSubmit={handleCredentialsSubmit}
                     className="space-y-4"
                   >
-                    {!isNewUser && (
-                      <TurnstileCaptcha
-                        gateMode
-                        onTokenChange={setCaptchaToken}
-                        onReadyChange={setCaptchaReady}
-                        resetKey={captchaResetKey}
-                      />
-                    )}
+                    {/* Cloudflare first — then form unlocks */}
+                    <TurnstileCaptcha
+                      gateMode
+                      onTokenChange={setCaptchaToken}
+                      onReadyChange={setCaptchaReady}
+                      resetKey={captchaResetKey}
+                    />
 
-                    {(!isNewUser && !securityReady) ? (
+                    {!securityReady ? (
                       <p className="text-center text-sm text-muted-foreground">
-                        Sign-in form unlocks after the security check finishes.
+                        Form unlocks after Cloudflare security check finishes.
                       </p>
                     ) : null}
 
                     <div
                       className={
-                        !isNewUser && !securityReady
+                        !securityReady
                           ? 'space-y-4 opacity-40 pointer-events-none select-none'
                           : 'space-y-4'
                       }
-                      aria-disabled={!isNewUser && !securityReady}
+                      aria-disabled={!securityReady}
                     >
                     <div className="space-y-2">
                       <Label htmlFor="email">Email Address</Label>
@@ -1754,7 +1830,7 @@ const backButtonLabel =
                       disabled={
                         isAuthBusy ||
                         rateLimitSeconds > 0 ||
-                        (!isNewUser && !securityReady)
+                        !securityReady
                       }
                     >
                       {isAuthLoading('sign_in')
