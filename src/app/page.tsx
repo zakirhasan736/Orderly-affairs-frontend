@@ -112,10 +112,12 @@ const completeOwnerAuth = async (
   dispatch: ReturnType<typeof useAppDispatch>,
   options?: {
     requiresBilling?: boolean;
+    billingOnly?: boolean;
     email?: string;
     onNeedsBilling?: () => void;
+    onBillingOnly?: () => void;
   },
-): Promise<'dashboard' | 'billing'> => {
+): Promise<'dashboard' | 'billing' | 'billing_lock'> => {
   let session: Awaited<ReturnType<typeof fetchSession>> | null = null;
 
   // Cookie Domain propagation can lag one tick after Set-Cookie
@@ -141,6 +143,15 @@ const completeOwnerAuth = async (
 
   // Portal-domain cookie so middleware won't bounce /dashboard → /
   await markPortalSession();
+
+  const billingOnly =
+    Boolean(options?.billingOnly) || Boolean(session.billing_only);
+
+  if (billingOnly) {
+    options?.onBillingOnly?.();
+    goToDashboard(router);
+    return 'billing_lock';
+  }
 
   const needsBilling =
     Boolean(options?.requiresBilling) || Boolean(session.requires_billing);
@@ -222,10 +233,12 @@ function AuthStatusBanner({
 
 function PaymentForm({
   isTrial,
+  trialMode,
   selectedPlan,
   router,
 }: {
   isTrial: boolean;
+  trialMode: 'cardless' | 'card_on_file';
   selectedPlan: 'monthly' | 'yearly';
   router: ReturnType<typeof useRouter>;
 }) {
@@ -239,16 +252,16 @@ function PaymentForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const needsCardNow = !isTrial || trialMode === 'card_on_file';
+
   const handleSubmit = async () => {
     setError(null);
     setLoading(true);
 
     try {
-      // 1️⃣ Ensure Stripe customer exists
       await createCustomer().unwrap();
 
-      // 2️⃣ If NOT trial → collect & save card
-      if (!isTrial) {
+      if (needsCardNow) {
         if (!stripe || !elements) {
           throw new Error('Stripe not ready');
         }
@@ -272,20 +285,17 @@ function PaymentForm({
           throw new Error('Payment method not created');
         }
 
-        // ✅ SEND PAYMENT METHOD ID
         await confirmCard({
           payment_method_id: result.setupIntent.payment_method as string,
         }).unwrap();
-
       }
 
-      // 3️⃣ Start subscription (trial or paid)
       await startSubscription({
         plan: selectedPlan,
         is_trial: isTrial,
+        ...(isTrial ? { trial_mode: trialMode } : {}),
       }).unwrap();
 
-      // 4️⃣ Success → dashboard
       goToDashboard(router);
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'Payment failed. Please try again.'));
@@ -303,7 +313,30 @@ function PaymentForm({
         </Alert>
       )}
 
-      {!isTrial && (
+      {isTrial && trialMode === 'cardless' && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-left text-sm text-slate-700">
+          <p className="font-semibold text-slate-900">Cardless trial</p>
+          <p className="mt-1">
+            No card required today. When the trial ends without a card on file,
+            vault access pauses until you add payment. You can add a card anytime
+            in settings to avoid interruption.
+          </p>
+        </div>
+      )}
+
+      {isTrial && trialMode === 'card_on_file' && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-4 text-left text-sm text-emerald-950">
+          <p className="font-semibold">Card verified — no charge today</p>
+          <p className="mt-1">
+            Verify your card now to avoid interruption. You will not be charged
+            until the trial ends. After the trial, your card is charged
+            automatically if auto-renew stays on (you can turn auto-renew off in
+            settings).
+          </p>
+        </div>
+      )}
+
+      {needsCardNow && (
         <div className="border rounded-md p-4">
           <CardElement
             options={{
@@ -322,31 +355,19 @@ function PaymentForm({
         </div>
       )}
 
-      {isTrial && (
-        <Alert>
-          <Shield className="h-4 w-4" />
-          <AlertDescription>
-            You’re starting a <strong>15-day free trial</strong>. No payment
-            method required today.
-          </AlertDescription>
-        </Alert>
-      )}
-
       <Button
-        className="w-full btn-primary"
-        onClick={handleSubmit}
-        disabled={loading || (!isTrial && !stripe)}
+        className="w-full"
+        disabled={loading}
+        onClick={() => void handleSubmit()}
       >
         {loading
-          ? 'Processing…'
+          ? 'Please wait…'
           : isTrial
-            ? 'Activate Free Trial'
-            : 'Confirm & Pay'}
+            ? trialMode === 'cardless'
+              ? 'Start cardless trial'
+              : 'Verify card & start trial'
+            : 'Subscribe now'}
       </Button>
-
-      <p className="text-xs text-muted-foreground text-center">
-        Secure payment powered by Stripe. You can cancel anytime.
-      </p>
     </div>
   );
 }
@@ -384,6 +405,9 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
     'yearly',
   );
   const [isTrial, setIsTrial] = useState(false);
+  const [trialMode, setTrialMode] = useState<'cardless' | 'card_on_file'>(
+    'cardless',
+  );
 
   const [isNewUser, setIsNewUser] = useState(false);
   const [selectedMFAMethod, setSelectedMFAMethod] =
@@ -455,15 +479,23 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   const applyAuthError = useCallback((err: unknown, fallback: string) => {
     const parsed = parseAuthApiError(err, fallback);
     if (parsed.status === 429) {
-      const wait = parsed.retryAfterSeconds ?? 45;
-      // Prefer the banner + button countdown; avoid duplicate red alert + spam toast
+      const wait = parsed.retryAfterSeconds ?? 600;
       setError('');
-      setRateLimitSeconds(prev => Math.max(prev, wait));
-      setCooldown(prev => Math.max(prev, wait));
+      setRateLimitSeconds(wait);
       toast.message('Please wait before trying again', {
         description: `You can continue in ${formatRetryCountdown(wait)}.`,
         duration: 4000,
         id: 'auth-rate-limit',
+      });
+    } else if (
+      parsed.status === 403 &&
+      /payment|billing|plan|paused|email|vault access/i.test(parsed.message)
+    ) {
+      setError(parsed.message);
+      toast.message('Vault access paused', {
+        description: parsed.message,
+        duration: 8000,
+        id: 'auth-billing-lock',
       });
     } else {
       setError(parsed.message);
@@ -532,7 +564,8 @@ const handleSendEmailCode = async () => {
     setVerificationSent(true);
     setEmailCode('');
     setAttempts(0);
-    setCooldown(res.cooldown_seconds ?? 60);
+    setRateLimitSeconds(0);
+    setCooldown(res.cooldown_seconds ?? 45);
     refreshCaptcha();
   } catch (err: unknown) {
     applyAuthError(err, 'Failed to send verification code');
@@ -565,6 +598,7 @@ const handleSendEmailCode = async () => {
        setResetEmail(email);
        refreshCaptcha();
        setResetOtp('');
+       setRateLimitSeconds(0);
        toast.success('If an account exists for that email, a reset code has been sent.');
        setStep('reset_password');
      } catch (err: unknown) {
@@ -597,6 +631,7 @@ const handleSendEmailCode = async () => {
      setResetEmailSent(true);
      refreshCaptcha();
      setResetOtp('');
+     setRateLimitSeconds(0);
      toast.success('If an account exists for that email, a reset code has been sent.');
      setStep('reset_password');
    } catch (err: unknown) {
@@ -637,6 +672,8 @@ const beginLinkedLoginMfa = async (
   method: MFAMethod,
   options?: {
     otpAlreadySent?: boolean;
+    /** Login already tried to send and failed — do not auto-send again */
+    otpSendFailed?: boolean;
     cooldownSeconds?: number;
     loginChallenge?: boolean;
     challengeToken?: string;
@@ -661,7 +698,15 @@ const beginLinkedLoginMfa = async (
 
     if (options?.otpAlreadySent) {
       setVerificationSent(true);
-      setCooldown(options.cooldownSeconds ?? 60);
+      setCooldown(options.cooldownSeconds ?? 45);
+      setStep('verifyEmail');
+      return;
+    }
+
+    // Failed send → wait for user to resend; never treat as "code sent"
+    if (options?.otpSendFailed) {
+      setVerificationSent(false);
+      setCooldown(0);
       setStep('verifyEmail');
       return;
     }
@@ -674,7 +719,8 @@ const beginLinkedLoginMfa = async (
           mfa_challenge_token: challengeToken,
         }).unwrap();
         setVerificationSent(true);
-        setCooldown(res.cooldown_seconds ?? 60);
+        setRateLimitSeconds(0);
+        setCooldown(res.cooldown_seconds ?? 45);
       } catch (err: unknown) {
         setVerificationSent(false);
         setError(getApiErrorMessage(err, 'Failed to send verification code'));
@@ -695,7 +741,16 @@ const beginLinkedLoginMfa = async (
     setSmsSent(true);
     setOtp(Array(OTP_LENGTH).fill(''));
     setAttempts(0);
-    setCooldown(options.cooldownSeconds ?? 60);
+    setCooldown(options.cooldownSeconds ?? 45);
+    setStep('verifySms');
+    return;
+  }
+
+  if (options?.otpSendFailed) {
+    setSmsSent(false);
+    setOtp(Array(OTP_LENGTH).fill(''));
+    setAttempts(0);
+    setCooldown(0);
     setStep('verifySms');
     return;
   }
@@ -712,10 +767,13 @@ const beginLinkedLoginMfa = async (
     setSmsSent(true);
     setOtp(Array(OTP_LENGTH).fill(''));
     setAttempts(0);
-    setCooldown(smsRes.cooldown_seconds ?? 60);
+    setRateLimitSeconds(0);
+    setCooldown(smsRes.cooldown_seconds ?? 45);
     setStep('verifySms');
   } catch (err: unknown) {
+    setSmsSent(false);
     setError(getApiErrorMessage(err, 'Failed to send SMS code'));
+    setStep('verifySms');
   } finally {
     stopAuthLoading();
   }
@@ -855,11 +913,16 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
       setAttempts(0);
 
       if (res.otp_error) {
-        setError('Could not send verification code. Please try again.');
+        setError(
+          typeof res.otp_error === 'string'
+            ? res.otp_error
+            : 'Could not send verification code. Please try again.',
+        );
       }
 
       await beginLinkedLoginMfa(preferredMethod, {
-        otpAlreadySent: Boolean(res.otp_sent),
+        otpAlreadySent: Boolean(res.otp_sent) && !res.otp_error,
+        otpSendFailed: Boolean(res.otp_error) && !res.otp_sent,
         cooldownSeconds: res.cooldown_seconds,
         loginChallenge: true,
         challengeToken: res.mfa_challenge_token ?? '',
@@ -872,6 +935,7 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
       requiresBilling: Boolean(res.requires_billing),
       onNeedsBilling: () => setStep('plan_selection'),
     });
+    setRateLimitSeconds(0);
   } catch (err: unknown) {
     applyAuthError(err, 'Authentication failed');
     refreshCaptcha();
@@ -947,7 +1011,8 @@ const handleMFAMethodSelection = async () => {
         setVerificationSent(true);
         setEmailCode('');
         setAttempts(0);
-        setCooldown(signupRes.cooldown_seconds ?? 60);
+        setRateLimitSeconds(0);
+        setCooldown(signupRes.cooldown_seconds ?? 45);
         setStep('verifyEmail');
         return;
       }
@@ -957,7 +1022,8 @@ const handleMFAMethodSelection = async () => {
         setSmsSent(true); // backend already sent it during signup
         setOtp(Array(OTP_LENGTH).fill(''));
         setAttempts(0);
-        setCooldown(signupRes.cooldown_seconds ?? 60);
+        setRateLimitSeconds(0);
+        setCooldown(signupRes.cooldown_seconds ?? 45);
         setStep('verifySms');
         return;
       }
@@ -1344,7 +1410,7 @@ useEffect(() => {
 ]);
 
 const handleResendEmail = async () => {
-  if (cooldown > 0) return;
+  if (cooldown > 0 || guardRateLimit()) return;
 
   if (!captchaToken) {
     setError('Complete the CAPTCHA before resending the OTP');
@@ -1363,7 +1429,8 @@ const handleResendEmail = async () => {
         : {}),
     }).unwrap();
 
-    setCooldown(res.cooldown_seconds ?? 60);
+    setRateLimitSeconds(0);
+    setCooldown(res.cooldown_seconds ?? 45);
     setEmailCode('');
     setCaptchaToken('');
     setVerificationSent(true);
@@ -1405,7 +1472,7 @@ useEffect(() => {
 ]);
 
 const handleResendSms = async () => {
-  if (cooldown > 0) return;
+  if (cooldown > 0 || guardRateLimit()) return;
 
   if (!captchaToken) {
     setError('Complete the CAPTCHA before resending the OTP');
@@ -1421,7 +1488,8 @@ const handleResendSms = async () => {
       otp_session_id: getOtpSessionId(),
     }).unwrap();
 
-    setCooldown(res.cooldown_seconds ?? 60);
+    setRateLimitSeconds(0);
+    setCooldown(res.cooldown_seconds ?? 45);
     setOtp(Array(OTP_LENGTH).fill(''));
     refreshCaptcha();
   } catch (err: unknown) {
@@ -2440,16 +2508,56 @@ const backButtonLabel =
                       Continue to Payment
                     </Button>
 
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => {
-                        setIsTrial(true);
-                        setStep('payment');
-                      }}
-                    >
-                      Start 15-Day Free Trial
-                    </Button>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-left space-y-3">
+                      <p className="text-sm font-semibold text-slate-900">
+                        Or start a free trial
+                      </p>
+                      <button
+                        type="button"
+                        className={`w-full rounded-lg border p-3 text-left text-sm ${
+                          trialMode === 'cardless'
+                            ? 'border-slate-900 bg-white'
+                            : 'border-slate-200 bg-white/60'
+                        }`}
+                        onClick={() => setTrialMode('cardless')}
+                      >
+                        <span className="font-medium">Cardless trial</span>
+                        <span className="mt-1 block text-slate-600">
+                          No card now. Access pauses after trial until you
+                          pay.
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`w-full rounded-lg border p-3 text-left text-sm ${
+                          trialMode === 'card_on_file'
+                            ? 'border-emerald-700 bg-emerald-50'
+                            : 'border-slate-200 bg-white/60'
+                        }`}
+                        onClick={() => setTrialMode('card_on_file')}
+                      >
+                        <span className="font-medium">
+                          Card on file (recommended)
+                        </span>
+                        <span className="mt-1 block text-slate-600">
+                          Verify card now — no charge today. After trial,
+                          auto-charge if auto-renew is on (you can turn it off).
+                        </span>
+                      </button>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          setIsTrial(true);
+                          setStep('payment');
+                        }}
+                      >
+                        Continue with{' '}
+                        {trialMode === 'cardless'
+                          ? 'cardless trial'
+                          : 'card-verified trial'}
+                      </Button>
+                    </div>
                   </div>
                 )}
 
@@ -2457,6 +2565,7 @@ const backButtonLabel =
                   <Elements stripe={stripePromise}>
                     <PaymentForm
                       isTrial={isTrial}
+                      trialMode={trialMode}
                       selectedPlan={selectedPlan}
                       router={router}
                     />

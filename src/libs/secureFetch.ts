@@ -56,6 +56,10 @@ export async function fetchSession(): Promise<{
   owner_id?: string;
   billing_status?: string;
   requires_billing?: boolean;
+  billing_only?: boolean;
+  auto_renew?: boolean;
+  trial_mode?: string | null;
+  lock_message?: string | null;
 }> {
   if (!API_BASE) return { authenticated: false };
 

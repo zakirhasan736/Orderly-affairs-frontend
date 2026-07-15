@@ -33,10 +33,33 @@ export const billingApi = createApi({
 
     startSubscription: builder.mutation<
       any,
-      { plan: 'monthly' | 'yearly'; is_trial: boolean }
+      {
+        plan: 'monthly' | 'yearly';
+        is_trial: boolean;
+        trial_mode?: 'cardless' | 'card_on_file';
+      }
     >({
       query: body => ({
         url: '/start-subscription',
+        method: 'POST',
+        body,
+      }),
+    }),
+
+    setAutoRenew: builder.mutation<any, { enabled: boolean }>({
+      query: body => ({
+        url: '/auto-renew',
+        method: 'POST',
+        body,
+      }),
+    }),
+
+    attachCardDuringTrial: builder.mutation<
+      any,
+      { payment_method_id: string }
+    >({
+      query: body => ({
+        url: '/attach-card-during-trial',
         method: 'POST',
         body,
       }),
@@ -98,6 +121,8 @@ export const {
   useSetupIntentMutation,
   useConfirmCardMutation,
   useStartSubscriptionMutation,
+  useSetAutoRenewMutation,
+  useAttachCardDuringTrialMutation,
   useCancelSubscriptionMutation,
   useReactivateSubscriptionMutation,
   useChangePlanMutation,

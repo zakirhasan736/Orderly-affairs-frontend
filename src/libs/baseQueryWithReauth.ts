@@ -75,6 +75,29 @@ export function createSecureBaseQuery(
       }
     }
 
+    if (result.error?.status === 429 && result.meta?.response) {
+      const retryHeader = result.meta.response.headers.get('Retry-After');
+      if (retryHeader && /^\d+$/.test(retryHeader)) {
+        const retryAfterSeconds = Math.max(parseInt(retryHeader, 10), 1);
+        const existingData =
+          result.error.data &&
+          typeof result.error.data === 'object' &&
+          !Array.isArray(result.error.data)
+            ? (result.error.data as Record<string, unknown>)
+            : {};
+        result = {
+          ...result,
+          error: {
+            ...result.error,
+            data: {
+              ...existingData,
+              retry_after_seconds: retryAfterSeconds,
+            },
+          },
+        };
+      }
+    }
+
     if (result.error) {
       result = {
         ...result,

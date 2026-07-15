@@ -1,5 +1,6 @@
 'use client';
 import AuthWatcher from '@services/AuthWatcher';
+import { BillingAccessGate } from '@/components/BillingAccessGate';
 import { Elements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 const stripePromise = loadStripe(
@@ -12,10 +13,11 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="min-h-screen flex flex-col">
-      {/* <Navbar /> */}
       <AuthWatcher>
         <Elements stripe={stripePromise}>
-          <main className="">{children}</main>
+          <BillingAccessGate>
+            <main className="">{children}</main>
+          </BillingAccessGate>
         </Elements>
       </AuthWatcher>
     </div>

@@ -8,6 +8,9 @@ export type ParsedAuthError = {
   retryAfterSeconds: number | null;
 };
 
+/** Default wait when a 429 has no parseable time (matches backend 10-minute window). */
+export const AUTH_RATE_LIMIT_FALLBACK_SECONDS = 600;
+
 function readDataMessage(data: unknown): string | null {
   if (!data || typeof data !== 'object') return null;
   const record = data as Record<string, unknown>;
@@ -16,9 +19,29 @@ function readDataMessage(data: unknown): string | null {
   return null;
 }
 
+function readRetryAfterFromData(data: unknown): number | null {
+  if (!data || typeof data !== 'object') return null;
+  const record = data as Record<string, unknown>;
+  const raw =
+    record.retry_after_seconds ?? record.retryAfterSeconds ?? record.retry_after;
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+    return Math.ceil(raw);
+  }
+  if (typeof raw === 'string' && /^\d+$/.test(raw)) {
+    return Math.max(parseInt(raw, 10), 1);
+  }
+  return null;
+}
+
 function parseSecondsFromText(text: string): number | null {
+  const tryAgainMatch = text.match(/try again in\s+(\d+)\s*seconds?/i);
+  if (tryAgainMatch) return Math.max(parseInt(tryAgainMatch[1], 10), 1);
+
   const secondsMatch = text.match(/(\d+)\s*seconds?/i);
   if (secondsMatch) return Math.max(parseInt(secondsMatch[1], 10), 1);
+
+  const compactSecondsMatch = text.match(/(\d+)\s*s\b/i);
+  if (compactSecondsMatch) return Math.max(parseInt(compactSecondsMatch[1], 10), 1);
 
   const minutesMatch = text.match(/(\d+)\s*minutes?/i);
   if (minutesMatch) return Math.max(parseInt(minutesMatch[1], 10) * 60, 1);
@@ -59,13 +82,16 @@ export function parseAuthApiError(
     typeof candidate.status === 'number' ? candidate.status : undefined;
   const rawMessage = readDataMessage(candidate.data) || fallback;
 
-  let retryAfterSeconds: number | null = parseSecondsFromText(rawMessage);
+  let retryAfterSeconds: number | null =
+    readRetryAfterFromData(candidate.data) ??
+    parseSecondsFromText(rawMessage);
+
   if (status === 429 && retryAfterSeconds == null) {
-    retryAfterSeconds = 45;
+    retryAfterSeconds = AUTH_RATE_LIMIT_FALLBACK_SECONDS;
   }
 
   if (status === 429) {
-    const wait = retryAfterSeconds ?? 45;
+    const wait = retryAfterSeconds ?? AUTH_RATE_LIMIT_FALLBACK_SECONDS;
     return {
       status,
       message: `Too many requests. Try again in ${formatRetryCountdown(wait)}.`,

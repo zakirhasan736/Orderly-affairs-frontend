@@ -16,8 +16,13 @@ export function sanitizeFetchBaseQueryError(
 ): FetchBaseQueryError {
   if (!isProd) return error;
 
-  if (typeof error.status === 'number' && (error.status === 429 || error.status === 400)) {
-    const data = error.data as { detail?: unknown; message?: unknown } | undefined;
+  if (
+    typeof error.status === 'number' &&
+    (error.status === 429 || error.status === 400 || error.status === 403)
+  ) {
+    const data = error.data as
+      | { detail?: unknown; message?: unknown; retry_after_seconds?: unknown }
+      | undefined;
     const detail =
       typeof data?.detail === 'string'
         ? data.detail
@@ -26,16 +31,26 @@ export function sanitizeFetchBaseQueryError(
           : error.status === 429
             ? 'Too many attempts. Please try again later.'
             : GENERIC;
-    // Keep user-actionable auth errors (rate limit / captcha / OTP)
+    const retryAfterSeconds =
+      typeof data?.retry_after_seconds === 'number'
+        ? data.retry_after_seconds
+        : undefined;
+    // Keep user-actionable auth errors (rate limit / captcha / OTP / billing)
     if (
       error.status === 429 ||
-      /captcha|security|otp|code|password|reset|attempt|signup|expired|verification/i.test(
+      error.status === 403 ||
+      /captcha|security|otp|code|password|reset|attempt|signup|expired|verification|payment|billing|plan|paused|email/i.test(
         detail,
       )
     ) {
       return {
         status: error.status,
-        data: { detail },
+        data: {
+          detail,
+          ...(retryAfterSeconds != null
+            ? { retry_after_seconds: retryAfterSeconds }
+            : {}),
+        },
       } as FetchBaseQueryError;
     }
   }

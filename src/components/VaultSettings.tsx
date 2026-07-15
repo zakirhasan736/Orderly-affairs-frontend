@@ -24,11 +24,11 @@ import {
   useGetStatusQuery,
   useGetInvoicesQuery,
   useCreateCustomerMutation,
-  // useStartSubscriptionMutation,
   useChangePlanMutation,
   usePauseSubscriptionMutation,
   useResumeSubscriptionMutation,
   usePortalMutation,
+  useSetAutoRenewMutation,
 } from '@/services/billingApi';
 import {
   type MFAMethod,
@@ -123,8 +123,9 @@ const VaultSettings = () => {
   } = useGetMeQuery();
 
   const [createCustomer] = useCreateCustomerMutation();
-  // const [startSubscription] = useStartSubscriptionMutation();
   const [changePlan] = useChangePlanMutation();
+  const [setAutoRenew, { isLoading: autoRenewLoading }] =
+    useSetAutoRenewMutation();
   const [sendEmailOtp] = useSendEmailOtpMutation();
   const [verifyEmailCode] = useVerifyEmailCodeMutation();
   const [generateMfa] = useGenerateMfaMutation();
@@ -924,6 +925,42 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
             method to avoid interruption.
           </div>
         )}
+
+        {(billing.status === 'trialing' || billing.status === 'active') && (
+          <div className="mt-5 flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-left">
+              <p className="text-sm font-semibold text-slate-900">Auto-renew</p>
+              <p className="text-xs text-slate-600">
+                {billing.auto_renew !== false
+                  ? 'On — your card will be charged when the current period ends (or when the trial ends if a card is on file).'
+                  : 'Off — you will not be charged automatically. Access may pause when the period ends until you pay.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={autoRenewLoading || disableActions}
+              onClick={async () => {
+                const next = !(billing.auto_renew !== false);
+                try {
+                  const res = await setAutoRenew({ enabled: next }).unwrap();
+                  toast.success(res?.message || (next ? 'Auto-renew on' : 'Auto-renew off'));
+                  await refetchStatus();
+                } catch (err: unknown) {
+                  toast.error(getErrorMessage(err, 'Could not update auto-renew'));
+                }
+              }}
+              className={cn(
+                'rounded-xl px-5 py-2.5 text-xs font-black uppercase',
+                billing.auto_renew !== false
+                  ? 'bg-emerald-700 text-white'
+                  : 'bg-slate-300 text-slate-800',
+              )}
+            >
+              {billing.auto_renew !== false ? 'On' : 'Off'}
+            </button>
+          </div>
+        )}
+
         <div className="mt-6 flex flex-col gap-3 sm:flex-row  sm:items-center">
           <button
             disabled={!canChangePlan || disableActions}
