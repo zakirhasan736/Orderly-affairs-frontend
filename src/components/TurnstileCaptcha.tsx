@@ -2,6 +2,10 @@
 
 import React, { useEffect, useRef } from 'react';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
+import {
+  CAPTCHA_DISABLED_TOKEN,
+  isCaptchaEnabled,
+} from '@/utils/captchaConfig';
 
 interface TurnstileCaptchaProps {
   onTokenChange: (token: string) => void;
@@ -16,10 +20,19 @@ export function TurnstileCaptcha({
   const turnstileRef = useRef<TurnstileInstance | null>(null);
 
   useEffect(() => {
+    // Emergency / local: captcha off → always allow auth forms to submit
+    if (!isCaptchaEnabled) {
+      onTokenChange(CAPTCHA_DISABLED_TOKEN);
+      return;
+    }
     if (!siteKey && process.env.NODE_ENV === 'development') {
       onTokenChange('dev-bypass');
     }
   }, [onTokenChange, siteKey]);
+
+  if (!isCaptchaEnabled) {
+    return null;
+  }
 
   if (!siteKey) {
     if (process.env.NODE_ENV === 'development') {

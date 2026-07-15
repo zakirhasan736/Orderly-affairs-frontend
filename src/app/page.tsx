@@ -462,6 +462,8 @@ const handleSendEmailCode = async () => {
          otp_session_id: getOtpSessionId(),
        }).unwrap();
        setResetEmail(email);
+       setCaptchaToken(''); // Turnstile tokens are single-use
+       setResetOtp('');
        alert('If an account exists for that email, a reset code has been sent.');
        setStep('reset_password');
      } catch (err: unknown) {
@@ -489,6 +491,8 @@ const handleSendEmailCode = async () => {
        otp_session_id: getOtpSessionId(),
      }).unwrap();
      setResetEmailSent(true);
+     setCaptchaToken(''); // Turnstile tokens are single-use
+     setResetOtp('');
      alert('If an account exists for that email, a reset code has been sent.');
      setStep('reset_password');
    } catch (err: unknown) {
@@ -2056,11 +2060,10 @@ const backButtonLabel =
 
                 {step === 'reset_password' && (
                   <div className="space-y-4">
-                    <TurnstileCaptcha onTokenChange={setCaptchaToken} />
                     {/* OTP */}
                     <Input
                       type="text"
-                      placeholder="Enter OTP"
+                      placeholder="Enter OTP from email"
                       value={resetOtp}
                       onChange={e =>
                         setResetOtp(
