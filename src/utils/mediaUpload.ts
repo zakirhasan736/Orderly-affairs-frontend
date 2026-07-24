@@ -19,7 +19,7 @@ export function blobToMediaFile(blob: Blob, kind: 'video' | 'audio'): File {
   let mimeType = blob.type?.trim() || '';
 
   if (!mimeType || mimeType === 'application/octet-stream') {
-    mimeType = kind === 'video' ? 'video/mp4' : 'audio/mp4';
+    mimeType = kind === 'video' ? 'video/webm' : 'audio/webm';
   }
 
   const rawExt = mimeType.split('/')[1]?.split(';')[0]?.trim().toLowerCase();
@@ -29,8 +29,8 @@ export function blobToMediaFile(blob: Blob, kind: 'video' | 'audio'): File {
         ? 'mov'
         : rawExt
       : kind === 'video'
-        ? 'mp4'
-        : 'm4a';
+        ? 'webm'
+        : 'webm';
 
   return new File([blob], `${kind}-message-${Date.now()}.${ext}`, {
     type: mimeType,

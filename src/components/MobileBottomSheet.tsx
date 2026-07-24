@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useSyncExternalStore } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@common/ui/utils';
 
@@ -11,16 +12,22 @@ export const MOBILE_SHEET_SPRING = {
   mass: 0.85,
 };
 
-/** Above dashboard mobile bottom nav (z-50 / z-[55]) */
-export const MOBILE_SHEET_Z = 'z-[70]';
+/**
+ * Above dashboard mobile chrome (header/nav z-55, more menu z-80).
+ * Sheets are portaled to document.body so parent transforms cannot trap stacking.
+ */
+export const MOBILE_SHEET_Z = 'z-[100]';
 
+/** Extra room so last fields clear the sticky footer + home indicator */
 export const MOBILE_SHEET_SCROLL_PADDING =
-  'pb-[max(2rem,env(safe-area-inset-bottom))]';
+  'pb-[max(6.5rem,calc(5rem+env(safe-area-inset-bottom)))]';
 
 /** Opaque panel/footer classes — safe on Safari/WebKit with transform animations */
 export const MOBILE_SHEET_PANEL_CLASS = 'mobile-sheet-panel';
 export const MOBILE_SHEET_OVERLAY_CLASS = 'mobile-sheet-overlay';
 export const MOBILE_SHEET_FOOTER_CLASS = 'mobile-sheet-footer';
+
+const BODY_SHEET_OPEN_CLASS = 'mobile-sheet-open';
 
 export function useIsMobile(breakpoint = 768) {
   const query = `(max-width: ${breakpoint - 1}px)`;
@@ -59,19 +66,31 @@ export function MobileBottomSheet({
   labelledBy?: string;
   zClassName?: string;
 }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
+
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    document.body.classList.add(BODY_SHEET_OPEN_CLASS);
+
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevOverflow;
+      document.body.classList.remove(BODY_SHEET_OPEN_CLASS);
     };
   }, [open]);
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
-        <div className={cn('fixed inset-0 lg:hidden', zClassName)}>
+        <div className={cn('fixed inset-0 md:hidden', zClassName)}>
           <motion.button
             type="button"
             aria-label="Close dialog"
@@ -91,7 +110,7 @@ export function MobileBottomSheet({
             exit={{ y: '100%' }}
             transition={MOBILE_SHEET_SPRING}
             className={cn(
-              'absolute inset-x-0 bottom-0 flex max-h-[96dvh] flex-col overflow-hidden rounded-t-[1.75rem] shadow-2xl',
+              'absolute inset-x-0 bottom-0 flex max-h-[min(96dvh,100svh)] flex-col overflow-hidden rounded-t-[1.75rem] shadow-2xl',
               'pb-[env(safe-area-inset-bottom)]',
               className,
             )}
@@ -109,6 +128,7 @@ export function MobileBottomSheet({
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

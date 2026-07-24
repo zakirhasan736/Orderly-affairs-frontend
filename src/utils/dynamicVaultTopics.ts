@@ -14,7 +14,20 @@ type SubsectionTopicConfig = {
   fallbackPrefix: string;
 };
 
-const str = (value: unknown) => String(value ?? '').trim();
+const str = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).trim();
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const key of ['label', 'name', 'value', 'text', 'title', 'type']) {
+      const nested = str(record[key]);
+      if (nested) return nested;
+    }
+  }
+  return '';
+};
 
 function joinFields(item: Record<string, unknown>, fields: string[]) {
   return fields.map(field => str(item[field])).filter(Boolean).join(' · ');

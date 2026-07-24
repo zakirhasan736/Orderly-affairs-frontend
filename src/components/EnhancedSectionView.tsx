@@ -1,32 +1,31 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@common/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@common/ui/card';
-import { Badge } from '@common/ui/badge';
 import { secureFetch } from '@/libs/secureFetch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@common/ui/tabs';
-import { 
-  ArrowLeft, 
-  Clock, 
-  LogOut, 
-  CheckCircle, 
-  Circle, 
-  FileText,
+import {
+  ArrowLeft,
+  CheckCircle,
+  Clock,
   Download,
   Eye,
-  EyeOff
+  EyeOff,
+  Heart,
+  LogOut,
 } from 'lucide-react';
 import { Checkbox } from '@common/ui/checkbox';
 import { formConfig } from '../config/formConfig';
-import { 
-  nokConfig, 
-  getNOKSectionConfig, 
-  hasChecklist, 
-  hasDoveTag, 
-  getChecklistReference 
+import {
+  getNOKSectionConfig,
+  hasChecklist,
+  hasDoveTag,
+  getChecklistReference,
 } from '../config/nokConfig';
 import { NOKInstructions } from './NOKInstructions';
 import { isDeathSignalChecklistItem } from '../config/nokDeathSignals';
 import { toast } from 'sonner';
+import { useNokSessionTimer } from '@/hooks/useNokSessionTimer';
+import { NokBottomNav } from '@/components/nok/NokBottomNav';
+import { cn } from '@common/ui/utils';
 interface Subsection {
   id: string;
   title: string;
@@ -71,21 +70,25 @@ export function EnhancedSectionView({
   onLogout,
   onOwnerLetterAccess,
   onDeliverMessages,
-  sessionTime
+  sessionTime,
 }: EnhancedSectionViewProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('content');
   const savedChecklist = kit?.checklists?.[sectionId] ?? {};
   const [checklistState, setChecklistState] =
     useState<Record<string, boolean>>(savedChecklist);
-
   const [showEmptySections, setShowEmptySections] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
-  // Format session time
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
+  const handleExpire = React.useCallback(() => {
+    toast.message('Session expired. Please sign in again.');
+    void onLogout();
+  }, [onLogout]);
+
+  const { formatted: timerLabel } = useNokSessionTimer(
+    sessionTime || 15 * 60,
+    handleExpire,
+  );
 
   // Get section from formConfig
   const section = useMemo(() => 
@@ -453,395 +456,473 @@ const sectionHasData = useMemo(() => {
 
   const visibleSubsections = getVisibleSubsections();
 
+  const formatFieldLabel = (key: string) =>
+    key.replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+  const renderValue = (value: unknown): React.ReactNode => {
+    if (value == null || value === '') return null;
+    if (typeof value === 'string' || typeof value === 'number') {
+      return (
+        <span className="text-[14px] leading-6 text-[#10213f]">
+          {String(value)}
+        </span>
+      );
+    }
+    if (Array.isArray(value)) {
+      return (
+        <div className="mt-1 space-y-2">
+          {value.map((item, i) => (
+            <div
+              key={i}
+              className="rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-100"
+            >
+              {typeof item === 'object' && item !== null
+                ? Object.entries(item as Record<string, unknown>).map(
+                    ([k, v]) =>
+                      v ? (
+                        <div key={k} className="py-0.5 text-[13px]">
+                          <span className="font-medium text-slate-500">
+                            {formatFieldLabel(k)}:{' '}
+                          </span>
+                          <span className="text-[#10213f]">{String(v)}</span>
+                        </div>
+                      ) : null,
+                  )
+                : String(item)}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    if (typeof value === 'object') {
+      return (
+        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-[12px] text-slate-700">
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      );
+    }
+    return (
+      <span className="text-[14px] text-[#10213f]">{String(value)}</span>
+    );
+  };
+
   if (!section) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="grid min-h-[100dvh] place-items-center bg-[#f6f8fb] px-5">
         <div className="text-center">
-          <p className="text-muted-foreground">Section not found</p>
-          <Button onClick={onBack} className="mt-4">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Dashboard
+          <p className="text-sm text-slate-500">Section not found</p>
+          <Button
+            onClick={onBack}
+            className="mt-4 w-auto rounded-xl bg-[#10213f]"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Button>
         </div>
       </div>
     );
   }
 
+  const personLabel =
+    nokData?.full_name ||
+    nokData?.person_name ||
+    nokData?.email ||
+    'Next of Kin';
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button onClick={onBack} variant="ghost" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-              <div>
-                <h1 className="text-xl font-semibold flex items-center gap-2">
-                  {sectionHasDove && <span>🕊️</span>}
-                  {section.id}. {section.title}
-                  {sectionHasChecklist && (
-                    <Badge variant="secondary" className="text-xs">
-                      📋 Checklist Available
-                    </Badge>
-                  )}
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  {nokData.person_name} • Next of Kin Access
-                </p>
-              </div>
+    <div className="min-h-[100dvh] bg-[#f4f6f9] pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+      <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/95 backdrop-blur-md">
+        <div className="mx-auto flex w-full max-w-[1480px] items-start gap-2.5 px-3 py-2.5 pt-[max(0.65rem,env(safe-area-inset-top))] sm:px-5 md:px-6 lg:px-8">
+          <button
+            type="button"
+            onClick={onBack}
+            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#10213f] shadow-sm"
+            aria-label="Back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+
+          <div className="min-w-0 flex-1 pt-0.5">
+            <h1 className="text-[15px] font-bold leading-snug tracking-tight text-[#10213f] sm:text-[17px]">
+              {sectionHasDove ? '🕊️ ' : ''}
+              {section.id}. {section.title}
+            </h1>
+            {sectionHasChecklist ? (
+              <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
+                <CheckCircle className="h-3.5 w-3.5" />
+                Checklist Available
+              </p>
+            ) : (
+              <p className="mt-1 truncate text-[11px] text-slate-500">
+                {personLabel}
+              </p>
+            )}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+            <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-[12px] font-bold tabular-nums text-[#10213f] shadow-sm">
+              <Clock className="h-3.5 w-3.5" />
+              {timerLabel}
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm">
-                <Clock className="h-4 w-4" />
-                {formatTime(sessionTime)}
-              </div>
-              <Button onClick={onLogout} variant="outline" size="sm">
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
-              </Button>
-            </div>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#10213f] shadow-sm"
+              aria-label="Log out"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
         </div>
-      </div>
 
-      <div className="container mx-auto px-4 py-6">
-        <Tabs
-          value={activeTab}
-          onValueChange={setActiveTab}
-          className="space-y-6"
-        >
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="content">
-              <FileText className="h-4 w-4 mr-2" />
-              Section Content
-            </TabsTrigger>
-            {sectionHasChecklist && (
-              <TabsTrigger value="checklist">
-                📋 Action Checklist ({completedItems}/{checklist.length})
-              </TabsTrigger>
-            )}
-          </TabsList>
-
-          <TabsContent value="content" className="space-y-6">
-            {/* Content Controls */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <Badge
-                  variant={
-                    visibleSubsections.length > 0 ? 'default' : 'secondary'
-                  }
-                >
-                  {visibleSubsections.length} subsection
-                  {visibleSubsections.length !== 1 ? 's' : ''} with data
-                </Badge>
-                {!sectionHasData &&
-                  section.subsections &&
-                  section.subsections.length > visibleSubsections.length && (
-                    <Button
-                      onClick={() => setShowEmptySections(!showEmptySections)}
-                      variant="outline"
-                      size="sm"
-                    >
-                      {showEmptySections ? (
-                        <>
-                          <EyeOff className="h-4 w-4 mr-2" />
-                          Hide Empty Sections
-                        </>
-                      ) : (
-                        <>
-                          <Eye className="h-4 w-4 mr-2" />
-                          Show All Sections
-                        </>
-                      )}
-                    </Button>
+        <div className="mx-auto w-full max-w-[1480px] px-3 pb-3 sm:px-5 md:px-6 lg:px-8">
+          <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-0.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab('content')}
+              className={cn(
+                'rounded-[10px] px-2 py-2.5 text-center text-[12px] font-semibold transition',
+                activeTab === 'content'
+                  ? 'bg-white text-[#10213f] shadow-sm ring-1 ring-slate-200/80'
+                  : 'text-slate-500',
+              )}
+            >
+              <span
+                className={cn(
+                  'inline-block border-b-2 pb-0.5',
+                  activeTab === 'content'
+                    ? 'border-[#10213f]'
+                    : 'border-transparent',
+                )}
+              >
+                Section Content
+              </span>
+            </button>
+            {sectionHasChecklist ? (
+              <button
+                type="button"
+                onClick={() => setActiveTab('checklist')}
+                className={cn(
+                  'rounded-[10px] px-2 py-2.5 text-center text-[12px] font-semibold transition',
+                  activeTab === 'checklist'
+                    ? 'bg-white text-[#10213f] shadow-sm ring-1 ring-slate-200/80'
+                    : 'text-slate-500',
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-block border-b-2 pb-0.5',
+                    activeTab === 'checklist'
+                      ? 'border-[#10213f]'
+                      : 'border-transparent',
                   )}
-              </div>
+                >
+                  Action Checklist ({completedItems}/{checklist.length})
+                </span>
+              </button>
+            ) : (
+              <div />
+            )}
+          </div>
+        </div>
+      </header>
 
+      <main className="mx-auto w-full max-w-[1480px] px-3 py-4 sm:px-5 md:px-6 md:py-6 lg:px-8">
+        {activeTab === 'content' && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-[#10213f] px-3 py-1 text-[11px] font-semibold text-white">
+                {visibleSubsections.length} subsection
+                {visibleSubsections.length !== 1 ? 's' : ''} with data
+              </span>
+              {!sectionHasData &&
+                section.subsections &&
+                section.subsections.length > visibleSubsections.length && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEmptySections(!showEmptySections)}
+                    className="inline-flex w-auto items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200"
+                  >
+                    {showEmptySections ? (
+                      <EyeOff className="h-3 w-3" />
+                    ) : (
+                      <Eye className="h-3 w-3" />
+                    )}
+                    {showEmptySections ? 'Hide empty' : 'Show all'}
+                  </button>
+                )}
               {nokSectionConfig?.exports_allowed && (
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export Section
-                </Button>
+                <button
+                  type="button"
+                  className="inline-flex w-auto items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200"
+                >
+                  <Download className="h-3 w-3" /> Export
+                </button>
               )}
             </div>
 
-            {/* Special NOK Instructions for Section 1 */}
-            {sectionId === '1' && onOwnerLetterAccess && onDeliverMessages && (
-              <NOKInstructions
-                onOwnerLetterAccess={onOwnerLetterAccess}
-                onDeliverMessages={onDeliverMessages}
-              />
-            )}
+            {sectionId === '1' &&
+              onOwnerLetterAccess &&
+              onDeliverMessages && (
+                <NOKInstructions
+                  onOwnerLetterAccess={onOwnerLetterAccess}
+                  onDeliverMessages={onDeliverMessages}
+                />
+              )}
 
-            {/* Subsections Content */}
             {visibleSubsections.length > 0 ? (
-              <div className="grid gap-6">
-                {(showEmptySections
-                  ? section.subsections
-                  : visibleSubsections
-                ).map((subsection: any) => {
-                  const subsectionData = getSubsectionData(subsection.id);
+              (showEmptySections
+                ? section.subsections
+                : visibleSubsections
+              ).map((subsection: any) => {
+                const subsectionData = getSubsectionData(subsection.id);
+                const hasData =
+                  subsectionData &&
+                  (Array.isArray(subsectionData)
+                    ? subsectionData.length > 0
+                    : typeof subsectionData === 'object'
+                      ? Object.values(subsectionData).some(v =>
+                          Array.isArray(v)
+                            ? v.length > 0
+                            : typeof v === 'object' && v !== null
+                              ? Object.keys(v).length > 0
+                              : Boolean(v),
+                        )
+                      : Boolean(subsectionData));
 
-                 const hasData =
-                   subsectionData &&
-                   (Array.isArray(subsectionData)
-                     ? subsectionData.length > 0
-                     : typeof subsectionData === 'object'
-                       ? Object.values(subsectionData).some(v =>
-                           Array.isArray(v)
-                             ? v.length > 0
-                             : typeof v === 'object' && v !== null
-                               ? Object.keys(v).length > 0
-                               : Boolean(v),
-                         )
-                       : Boolean(subsectionData));
-
-
-                  return (
-                    <Card
-                      key={subsection.id}
-                      className={!hasData ? 'opacity-60' : ''}
-                    >
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          {hasDoveTag(sectionId, subsection.id) && (
-                            <span>🕊️</span>
-                          )}
-                          {subsection.id}. {subsection.title}
-                          {hasChecklist(sectionId, subsection.id) && (
-                            <Badge variant="outline" className="text-xs">
-                              📋
-                            </Badge>
-                          )}
-                          {!hasData && (
-                            <Badge variant="secondary" className="text-xs">
-                              No Data
-                            </Badge>
-                          )}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        {hasData ? (
-                          <div className="space-y-4">
-                            {/* Render subsection data */}
-                            {Array.isArray(subsectionData) ? (
-                              <div className="space-y-3">
-                                {subsectionData.map(
-                                  (item: any, index: number) => (
-                                    <div
-                                      key={index}
-                                      className="p-3 bg-muted/50 rounded-lg"
-                                    >
-                                      <div className="space-y-1">
-                                        {Object.entries(item).map(
-                                          ([key, value]) => {
-                                            if (!value || key === 'id')
-                                              return null;
-                                            return (
-                                              <div
-                                                key={key}
-                                                className="flex flex-col"
-                                              >
-                                                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                                                  {key.replace(/[_-]/g, ' ')}
-                                                </span>
-                                                <span className="text-sm">
-                                                  {typeof value === 'string'
-                                                    ? value
-                                                    : JSON.stringify(value)}
-                                                </span>
-                                              </div>
-                                            );
-                                          },
-                                        )}
+                return (
+                  <section
+                    key={subsection.id}
+                    className={cn(
+                      'overflow-hidden rounded-[18px] border border-sky-100/80 bg-white shadow-sm',
+                      !hasData && 'opacity-70',
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5 border-b border-slate-100 px-4 py-3.5">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#10213f] text-[11px] font-bold text-white">
+                        {subsection.id}
+                      </span>
+                      <h2 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[#10213f]">
+                        {hasDoveTag(sectionId, subsection.id) ? '🕊️ ' : ''}
+                        {subsection.title}
+                      </h2>
+                      {!hasData && (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                          Empty
+                        </span>
+                      )}
+                    </div>
+                    <div className="px-4 py-3.5">
+                      {hasData ? (
+                        Array.isArray(subsectionData) ? (
+                          <div className="space-y-2.5">
+                            {subsectionData.map((item: any, index: number) => (
+                              <div
+                                key={index}
+                                className="space-y-2 rounded-2xl bg-slate-50/90 p-3.5 ring-1 ring-slate-100"
+                              >
+                                {Object.entries(item).map(([key, value]) => {
+                                  if (!value || key === 'id') return null;
+                                  return (
+                                    <div key={key}>
+                                      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                                        {formatFieldLabel(key)}
+                                      </p>
+                                      <div className="mt-0.5">
+                                        {renderValue(value)}
                                       </div>
                                     </div>
-                                  ),
-                                )}
+                                  );
+                                })}
                               </div>
-                            ) : typeof subsectionData === 'object' ? (
-                              <div className="grid gap-3">
-                                {Object.entries(subsectionData).map(
-                                  ([key, value]) => {
-                                    if (!value || key === 'id') return null;
-                                    return (
-                                      <div
-                                        key={key}
-                                        className="p-3 bg-muted/50 rounded-lg"
-                                      >
-                                        <div className="flex flex-col">
-                                          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                                            {key.replace(/[_-]/g, ' ')}
-                                          </span>
-                                          <span className="text-sm">
-                                            {Array.isArray(value)
-                                              ? value.map((item, i) => (
-                                                  <div
-                                                    key={i}
-                                                    className="mt-1 p-2 bg-background rounded border"
-                                                  >
-                                                    {typeof item === 'object'
-                                                      ? Object.entries(
-                                                          item,
-                                                        ).map(([k, v]) =>
-                                                          v ? (
-                                                            <div key={k}>
-                                                              <strong>
-                                                                {k.replace(
-                                                                  /[_-]/g,
-                                                                  ' ',
-                                                                )}
-                                                                :
-                                                              </strong>{' '}
-                                                              {String(v)}
-                                                            </div>
-                                                          ) : null,
-                                                        )
-                                                      : String(item)}
-                                                  </div>
-                                                ))
-                                              : typeof value === 'string'
-                                                ? value
-                                                : JSON.stringify(value)}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    );
-                                  },
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-sm">
-                                {String(subsectionData)}
-                              </p>
+                            ))}
+                          </div>
+                        ) : typeof subsectionData === 'object' ? (
+                          <div className="divide-y divide-slate-100">
+                            {Object.entries(subsectionData).map(
+                              ([key, value]) => {
+                                if (!value || key === 'id') return null;
+                                return (
+                                  <div
+                                    key={key}
+                                    className="py-3 first:pt-0 last:pb-0"
+                                  >
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                                      {formatFieldLabel(key)}
+                                    </p>
+                                    <div className="mt-1">
+                                      {renderValue(value)}
+                                    </div>
+                                  </div>
+                                );
+                              },
                             )}
                           </div>
                         ) : (
-                          <p className="text-sm text-muted-foreground italic">
-                            No information has been provided for this
-                            subsection.
+                          <p className="text-sm text-[#10213f]">
+                            {String(subsectionData)}
                           </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                        )
+                      ) : (
+                        <p className="text-[13px] italic text-slate-400">
+                          No information provided for this part.
+                        </p>
+                      )}
+                    </div>
+                  </section>
+                );
+              })
+            ) : sectionId !== '1' ? (
+              <div className="rounded-[18px] bg-white px-5 py-12 text-center shadow-sm ring-1 ring-slate-200/80">
+                <p className="text-sm text-slate-500">
+                  No information has been provided for this section yet.
+                </p>
               </div>
-            ) : (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <p className="text-muted-foreground">
-                    No information has been provided for this section yet.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
+            ) : null}
+          </div>
+        )}
 
-          {sectionHasChecklist && (
-            <TabsContent value="checklist" className="space-y-6">
-              <div className="flex items-center justify-between">
+        {activeTab === 'checklist' && sectionHasChecklist && (
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/80">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold">Action Checklist</h2>
-                  <p className="text-sm text-muted-foreground">
+                  <h2 className="text-[15px] font-semibold text-[#10213f]">
+                    Action checklist
+                  </h2>
+                  <p className="mt-0.5 text-[12px] text-slate-500">
                     {getChecklistReference(sectionId) ||
-                      'Tasks for managing this section'}
+                      'Recommended tasks for this section'}
                   </p>
                 </div>
-                <Badge variant="outline">
-                  {completedItems}/{checklist.length} completed (
-                  {Math.round(checklistProgress)}%)
-                </Badge>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-[#10213f]">
+                  {Math.round(checklistProgress)}%
+                </span>
               </div>
-
-              <p className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm leading-6 text-amber-900">
-                If you check at least two passing-related items (marked
-                &quot;Passing signal&quot;), the system will treat the owner as
-                deceased and send death letters, personal messages, and
-                upon-death access emails. Separately, if the owner has not
-                signed in for 90 days they receive a check-in email; if they do
-                not sign in within 15 more days, the same upon-death workflows
-                run automatically.
-              </p>
-
-              <div className="space-y-3">
-                {checklist.map(item => (
-                  <Card
-                    key={item.id}
-                    className={
-                      item.important
-                        ? 'border-orange-200 bg-orange-50/50 dark:border-orange-800 dark:bg-orange-950/50'
-                        : ''
-                    }
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <Checkbox
-                          id={item.id}
-                          checked={checklistState[item.id] || false}
-                          onCheckedChange={() => toggleChecklistItem(item.id)}
-                          className="mt-0.5"
-                        />
-                        <div className="flex-1 space-y-1">
-                          <label
-                            htmlFor={item.id}
-                            className={`text-sm font-medium cursor-pointer flex items-center gap-2 ${
-                              checklistState[item.id]
-                                ? 'line-through text-muted-foreground'
-                                : ''
-                            }`}
-                          >
-                            {item.label}
-                            {item.important && (
-                              <Badge variant="destructive" className="text-xs">
-                                Important
-                              </Badge>
-                            )}
-                            {(item.deathSignal ||
-                              isDeathSignalChecklistItem(item.id)) && (
-                              <Badge
-                                variant="outline"
-                                className="border-amber-300 text-xs text-amber-800"
-                              >
-                                Passing signal
-                              </Badge>
-                            )}
-                          </label>
-                          {item.description && (
-                            <p
-                              className={`text-xs ${checklistState[item.id] ? 'text-muted-foreground' : 'text-muted-foreground'}`}
-                            >
-                              {item.description}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-[#10213f] transition-all"
+                  style={{ width: `${checklistProgress}%` }}
+                />
               </div>
+            </div>
 
-              {checklistProgress === 100 && (
-                <Card className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
-                  <CardContent className="p-4 text-center">
-                    <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                    <p className="font-medium text-green-700 dark:text-green-300">
-                      All checklist items completed!
-                    </p>
-                    <p className="text-sm text-green-600 dark:text-green-400">
-                      You've finished all the recommended tasks for this
-                      section.
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-          )}
-        </Tabs>
-      </div>
+            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-[12px] leading-5 text-amber-900 ring-1 ring-amber-200/80">
+              Checking two or more &quot;Passing signal&quot; items records
+              death-related progress. Confirm on the dashboard before letters
+              and access are released.
+            </p>
+
+            <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/80">
+              {checklist.map((item, index) => (
+                <label
+                  key={item.id}
+                  htmlFor={item.id}
+                  className={cn(
+                    'flex cursor-pointer items-start gap-3 px-4 py-3.5 transition active:bg-slate-50',
+                    index < checklist.length - 1 &&
+                      'border-b border-slate-100',
+                    item.important && 'bg-orange-50/40',
+                  )}
+                >
+                  <Checkbox
+                    id={item.id}
+                    checked={checklistState[item.id] || false}
+                    onCheckedChange={() => toggleChecklistItem(item.id)}
+                    className="mt-0.5"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={cn(
+                        'flex flex-wrap items-center gap-1.5 text-[13px] font-semibold',
+                        checklistState[item.id]
+                          ? 'text-slate-400 line-through'
+                          : 'text-[#10213f]',
+                      )}
+                    >
+                      {item.label}
+                      {item.important && (
+                        <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 no-underline">
+                          Important
+                        </span>
+                      )}
+                      {(item.deathSignal ||
+                        isDeathSignalChecklistItem(item.id)) && (
+                        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 no-underline">
+                          Passing signal
+                        </span>
+                      )}
+                    </span>
+                    {item.description ? (
+                      <span className="mt-1 block text-[12px] leading-5 text-slate-500">
+                        {item.description}
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            {checklistProgress === 100 && (
+              <div className="rounded-2xl bg-emerald-50 px-4 py-5 text-center ring-1 ring-emerald-200/80">
+                <CheckCircle className="mx-auto mb-2 h-7 w-7 text-emerald-500" />
+                <p className="text-sm font-semibold text-emerald-800">
+                  Checklist complete
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      <NokBottomNav
+        active="sections"
+        onDashboard={() => router.push('/next-kin/dashboard')}
+        onSections={onBack}
+        onMessages={() =>
+          onDeliverMessages
+            ? onDeliverMessages()
+            : router.push('/next-kin/messages')
+        }
+        onChecklists={() => {
+          setActiveTab('checklist');
+        }}
+        onMore={() => setMoreOpen(v => !v)}
+      />
+
+      {moreOpen ? (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-[60] bg-slate-950/40 md:hidden"
+            aria-label="Close"
+            onClick={() => setMoreOpen(false)}
+          />
+          <div className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[70] overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-slate-200 md:hidden">
+            {onOwnerLetterAccess ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  onOwnerLetterAccess();
+                }}
+                className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3.5 text-left text-[14px] font-medium text-[#10213f]"
+              >
+                <Heart className="h-4 w-4 text-rose-500" /> Personal letter
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false);
+                onLogout();
+              }}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-left text-[14px] font-medium text-rose-700"
+            >
+              <LogOut className="h-4 w-4" /> Log out
+            </button>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

@@ -23,13 +23,24 @@ export function TextInputWithUpload({
 }: any) {
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const files = value.files || [];
-  const deleted = value._deleted_files || [];
+  // AI often returns a plain string; form state expects { text, files }.
+  const normalizedValue =
+    typeof value === 'string' || typeof value === 'number'
+      ? { text: String(value), files: [], _deleted_files: [] }
+      : value && typeof value === 'object'
+        ? value
+        : { text: '', files: [], _deleted_files: [] };
+
+  const files = normalizedValue.files || [];
+  const deleted = normalizedValue._deleted_files || [];
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = { ...value };
-    newValue.text = e.target.value;
-    onChange(newValue);
+    onChange({
+      ...normalizedValue,
+      text: e.target.value,
+      files: normalizedValue.files || [],
+      _deleted_files: normalizedValue._deleted_files || [],
+    });
   };
 
   function validateFile(file: File): string | null {
@@ -54,7 +65,7 @@ export function TextInputWithUpload({
     const uploaded = await uploadFile(file);
 
     onChange({
-      ...value,
+      ...normalizedValue,
       files: [
         {
           ...uploaded,
@@ -69,7 +80,7 @@ export function TextInputWithUpload({
 
   function removeFile(file: any, index: number) {
     onChange({
-      ...value,
+      ...normalizedValue,
       files: files.filter((_: any, i: number) => i !== index),
       _deleted_files: file.public_id ? [...deleted, file.public_id] : deleted,
     });
@@ -83,7 +94,7 @@ export function TextInputWithUpload({
       )}
 
       <Input
-        value={value?.text || ''}
+        value={normalizedValue?.text || ''}
         onChange={handleTextChange}
         placeholder={placeholder}
         className="w-full"

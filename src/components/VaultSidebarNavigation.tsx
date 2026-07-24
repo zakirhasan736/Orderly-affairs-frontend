@@ -4,15 +4,15 @@ import React, { useRef, useState } from 'react';
 import Image from 'next/image';
 import {
   CheckCircle,
-  ChevronRight,
   Circle,
   GripVertical,
+  Headphones,
   Home,
   X,
 } from 'lucide-react';
-import { Progress } from '@/components/common/ui/progress';
 import { cn } from '@common/ui/utils';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import { useOptionalHelpAssistant } from '@/components/help/HelpAssistantContext';
 import {
   getDynamicTopicsForSubsection,
   subsectionHasDynamicTopics,
@@ -144,7 +144,7 @@ function ReorderableNavItem({
     >
       <span
         aria-hidden
-        className="pointer-events-none flex h-8 w-5 shrink-0 items-center justify-center text-slate-300"
+        className="pointer-events-none flex h-8 w-5 shrink-0 items-center justify-center text-white/25"
       >
         <GripVertical className="h-4 w-4" />
       </span>
@@ -192,6 +192,7 @@ export interface VaultSidebarNavigationProps {
     fromTopicId: string,
     toTopicId: string,
   ) => void;
+  onOpenHelp?: () => void;
 }
 
 export function VaultSidebarNavigation({
@@ -217,11 +218,13 @@ export function VaultSidebarNavigation({
   goToTopic,
   onReorderSubsection,
   onReorderTopic,
+  onOpenHelp,
 }: VaultSidebarNavigationProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const activeDragRef = useRef<DragPayload | null>(null);
   const aiRouting = useOptionalAiDocumentRouting();
+  const help = useOptionalHelpAssistant();
 
   const handleDragStart = (payload: DragPayload) => {
     activeDragRef.current = payload;
@@ -275,73 +278,79 @@ export function VaultSidebarNavigation({
   return (
     <aside
       className={cn(
-        'sidebar-navigation fixed inset-y-0 left-0 z-[70] w-[88vw] max-w-[330px] transform border-r border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out lg:sticky lg:top-0 lg:z-20 lg:h-screen lg:w-72 lg:max-w-none lg:translate-x-0 lg:shadow-none',
+        'sidebar-navigation fixed inset-y-0 left-0 z-[70] w-[88vw] max-w-[330px] transform border-r border-black/20 bg-[#0b1222] text-white shadow-2xl transition-transform duration-300 ease-out md:sticky md:top-0 md:z-20 md:h-screen md:w-[272px] md:max-w-none md:translate-x-0 md:shadow-none',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full',
       )}
     >
       <div className="flex h-full flex-col">
-        <div className="border-b border-slate-100 px-4 pb-4 pt-5">
+        <div className="px-5 pb-3 pt-6">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={goToDashboard}
+              className="flex min-w-0 items-center gap-2.5 text-left"
+              aria-label="Orderly Affairs home"
+            >
               <Image
                 src="/images/brand-logo.png"
                 alt="Orderly Affairs"
-                width={44}
-                height={44}
-                className="h-10 w-10 object-contain"
+                width={40}
+                height={40}
+                className="h-9 w-9 rounded-lg bg-white object-contain p-0.5"
               />
-              <div className="min-w-0">
-                <h2 className="truncate text-[14px] font-semibold text-[#10213f]">
-                  Vault Navigation
-                </h2>
-                <p className="text-[11px] font-medium text-slate-400">
-                  {completedSectionsCount} of {totalSectionsCount} completed
-                </p>
-              </div>
-            </div>
+              <span className="truncate text-[15px] font-semibold tracking-tight text-white">
+                Orderly Affairs
+              </span>
+            </button>
 
             <button
               type="button"
               onClick={onCloseSidebar}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-slate-500 lg:hidden"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/80 md:hidden"
               aria-label="Close navigation"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          <div className="mt-4 flex items-center gap-3">
-            <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
-              <Progress value={progress} className="h-full w-full" />
+          <div className="mt-6">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
+              Vault Navigation
+            </p>
+            <div className="mt-3 mb-1.5 flex items-center justify-between text-[12px] font-medium text-white/80">
+              <span>
+                {completedSectionsCount} of {totalSectionsCount} completed
+              </span>
             </div>
-            <span className="text-xs font-semibold text-[#10213f]">
-              {progress}%
-            </span>
+            <div className="h-1 overflow-hidden rounded-full bg-white/15">
+              <div
+                className="h-full rounded-full bg-[#3b82f6] transition-all"
+                style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+              />
+            </div>
           </div>
-
-          <p className="mt-3 text-[10px] leading-4 text-slate-400">
-            Drag any subsection or item row to a new position to reorder.
-          </p>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 py-4">
+        <div className="flex-1 overflow-y-auto px-3 pb-4 pt-2">
           <button
             type="button"
             onClick={goToDashboard}
             className={cn(
-              'owner-dashboard-item mb-3 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition',
+              'owner-dashboard-item mb-2 flex w-full items-center gap-3 rounded-full px-3.5 py-2.5 text-left transition',
               activeSection === 'dashboard'
-                ? 'bg-[#10213f] text-white shadow-lg shadow-slate-900/10'
-                : 'bg-slate-50 text-slate-700 hover:bg-slate-100',
+                ? 'bg-[#3b82f6] text-white shadow-lg shadow-blue-950/40'
+                : 'text-white/85 hover:bg-white/10 hover:text-white',
             )}
           >
-            <span className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
-                <Home className="h-4 w-4" />
-              </span>
-              <span className="text-sm font-semibold">Dashboard Overview</span>
+            <span
+              className={cn(
+                'flex h-7 w-7 items-center justify-center rounded-full',
+                activeSection === 'dashboard' ? 'bg-white/20' : 'bg-white/10',
+              )}
+            >
+              <Home className="h-3.5 w-3.5" />
             </span>
-            <ChevronRight className="h-4 w-4 opacity-60" />
+            <span className="text-[13px] font-semibold">Dashboard</span>
           </button>
 
           <div className="space-y-2">
@@ -361,30 +370,31 @@ export function VaultSidebarNavigation({
                 <div key={`main-section-${section.id}`} className="space-y-1">
                   <button
                     type="button"
+                    data-cy={`vault-nav-${section.id}`}
                     onClick={() => goToSection(section.id)}
                     className={cn(
-                      `section-${section.id}-nav flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition`,
+                      `section-${section.id}-nav flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-left transition`,
                       isSelected
-                        ? 'bg-[#10213f] text-white shadow-lg shadow-slate-900/10'
-                        : 'text-slate-700 hover:bg-slate-50',
+                        ? 'bg-[#3b82f6] text-white shadow-lg shadow-blue-950/30'
+                        : 'text-white/80 hover:bg-white/10 hover:text-white',
                       disabledSections[section.id] && 'opacity-55',
                     )}
                   >
                     <span
                       className={cn(
-                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl',
-                        isSelected ? 'bg-white/15' : 'bg-slate-100',
+                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
+                        isSelected ? 'bg-white/20' : 'bg-white/10',
                       )}
                     >
                       {isComplete ? (
-                        <CheckCircle className="h-4 w-4 text-emerald-500" />
+                        <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
                       ) : (
-                        <Circle className="h-4 w-4" />
+                        <Circle className="h-3.5 w-3.5 opacity-70" />
                       )}
                     </span>
 
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold">
+                      <span className="block truncate text-[13px] font-medium">
                         {(obituarySections.has(section.id) ||
                           hasDoveTag(section.id)) && (
                           <span className="mr-1">🕊️</span>
@@ -392,17 +402,17 @@ export function VaultSidebarNavigation({
                         {section.id}. {section.title}
                       </span>
                       {disabledSections[section.id] && (
-                        <span className="text-[10px] font-semibold text-slate-400">
+                        <span className="text-[10px] font-semibold text-white/45">
                           Not Applicable
                         </span>
                       )}
                       {hasAiReady && (
                         <span className="mt-1 inline-flex items-center gap-1.5">
                           <span className="relative flex h-2 w-2 shrink-0">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
-                            <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-600" />
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-300 opacity-75" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-300" />
                           </span>
-                          <span className="text-[10px] font-semibold text-blue-600">
+                          <span className="text-[10px] font-semibold text-sky-200">
                             New data
                           </span>
                         </span>
@@ -411,7 +421,7 @@ export function VaultSidebarNavigation({
                   </button>
 
                   {section.subsections && isExpanded && (
-                    <div className="ml-4 space-y-1 border-l border-slate-100 pl-3">
+                    <div className="ml-4 space-y-1 border-l border-white/15 pl-3">
                       {section.subsections.map(subsection => {
                         const dynamicTopics = subsectionHasDynamicTopics(
                           section.id,
@@ -458,10 +468,10 @@ export function VaultSidebarNavigation({
                                 isSubsectionActive ||
                                   (activeSubsection === subsection.id &&
                                     dynamicTopics.length === 0)
-                                  ? 'bg-slate-100 font-semibold text-[#10213f]'
+                                  ? 'bg-white/15 font-semibold text-white'
                                   : activeSubsection === subsection.id
-                                    ? 'font-semibold text-[#10213f]'
-                                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800',
+                                    ? 'font-semibold text-white'
+                                    : 'text-white/55 hover:bg-white/10 hover:text-white/90',
                                 disabledSubsections[subsection.id] &&
                                   'opacity-50',
                               )}
@@ -508,8 +518,8 @@ export function VaultSidebarNavigation({
                                       className={cn(
                                         'px-1 py-0.5 text-xs',
                                         activeTopicId === topic.id
-                                          ? 'bg-blue-50 font-semibold text-[#10213f]'
-                                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800',
+                                          ? 'bg-sky-500/30 font-semibold text-white'
+                                          : 'text-white/50 hover:bg-white/10 hover:text-white/85',
                                       )}
                                     >
                                       <span className="h-1 w-1 shrink-0 rounded-full bg-current opacity-50" />
@@ -529,6 +539,31 @@ export function VaultSidebarNavigation({
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        <div className="border-t border-white/10 p-4">
+          <p className="text-[12px] leading-snug text-white/70">
+            Need help? Our support team is here to guide you.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                help?.openHelp({ mode: 'chat' });
+                onOpenHelp?.();
+                window.dispatchEvent(
+                  new CustomEvent('orderly-open-help', {
+                    detail: { mode: 'chat' },
+                  }),
+                );
+                onCloseSidebar();
+              }}
+              className="inline-flex h-10 w-auto items-center justify-center gap-2 rounded-xl border border-white/25 bg-[#10213f] px-4 text-[12px] font-semibold text-white transition hover:bg-[#152a4d]"
+            >
+              <Headphones className="h-3.5 w-3.5" />
+              Contact Support
+            </button>
           </div>
         </div>
       </div>

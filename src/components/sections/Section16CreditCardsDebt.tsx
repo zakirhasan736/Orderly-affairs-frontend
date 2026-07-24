@@ -1,5 +1,6 @@
 'use client';
 
+import { AiUploadedAttachmentList } from '@/components/ai/AiUploadedAttachmentList';
 import React, { useRef, useState } from 'react';
 import {
   Card,
@@ -40,6 +41,7 @@ import {
 } from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import {
+  buildUploadedAiFile,
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
 import { AiDocumentDropZoneInput } from '@/components/ai/AiDocumentDropZoneInput';
@@ -296,9 +298,23 @@ const SECTION_16B = {
     },
     {
       key: 'payment_due_date',
-      label: 'Payment Due Date',
+      label: 'Payment Due Day (of month)',
       type: 'TextInput',
-      helperText: 'Day of the month payment is due',
+      helperText: 'Day of the month payment is due (e.g. 15) — not used for email reminders',
+    },
+    {
+      key: 'next_payment_due_date',
+      label: 'Next Payment Due Date',
+      type: 'DatePicker',
+      helperText:
+        'Full calendar date of the next payment — triggers reminder emails at 10, 5, 1 days and on the day',
+    },
+    {
+      key: 'loan_maturity_date',
+      label: 'Loan Maturity / Payoff Date',
+      type: 'DatePicker',
+      helperText:
+        'When this loan matures or must be refinanced — used for deadline reminder emails',
     },
     {
       key: 'interest_rate',
@@ -360,6 +376,8 @@ type UploadedAIFile = {
   file_id: string;
   mime_type: string;
   expires_at?: string;
+  file_name?: string;
+  uploaded_at?: number;
 };
 
 const ALLOWED_UPLOAD_TYPES = [
@@ -561,11 +579,7 @@ export default function Section16CreditCardsDebt({
 
       const uploaded = await uploadAIDocument(file);
 
-      const uploadedRecord: UploadedAIFile = {
-        file_id: uploaded.file_id,
-        mime_type: uploaded.mime_type,
-        expires_at: uploaded.expires_at,
-      };
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -783,14 +797,9 @@ export default function Section16CreditCardsDebt({
             ].join(' ')}
             iconClassName={iconClass}
           />
-
-          {uploadedFile && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              <FileText className="h-4 w-4" />
-              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
-            </div>
-          )}
         </div>
+
+        <AiUploadedAttachmentList file={uploadedFile} />
 
         {isUploading && (
           <div className="relative flex items-center gap-2 text-xs text-slate-500">

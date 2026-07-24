@@ -206,6 +206,7 @@ export function processNationalNumberInput(
 ) {
   const currentCountry = (currentCountryCode ||
     detectDefaultCountryCode()) as CountryCode;
+  const trimmed = String(rawInput ?? '').trim();
   const digits = extractDigits(rawInput);
 
   if (!digits) {
@@ -215,8 +216,15 @@ export function processNationalNumberInput(
     };
   }
 
-  if (digits.length >= 8) {
-    const intlParsed = parsePhoneNumberFromString(`+${digits}`);
+  // Only re-detect country from an explicit international prefix.
+  // Otherwise US national input like 5628835494 is misread as +562 (Chile).
+  const looksInternational =
+    trimmed.startsWith('+') || trimmed.startsWith('00');
+
+  if (looksInternational && digits.length >= 8) {
+    const intlParsed = parsePhoneNumberFromString(
+      trimmed.startsWith('+') ? `+${digits}` : `+${digits}`,
+    );
     if (intlParsed?.country && intlParsed.nationalNumber) {
       const dialCode = getCountryCallingCode(intlParsed.country);
 

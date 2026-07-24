@@ -1,4 +1,8 @@
-import type { UploadedAIFile } from '@/utils/aiDocumentUploadUi';
+import {
+  getAiUploadMeta,
+  mergeAiUploadMeta,
+  type UploadedAIFile,
+} from '@/utils/aiDocumentUploadUi';
 
 export type AiExtractedFieldPreview = {
   field_path: string;
@@ -6,7 +10,7 @@ export type AiExtractedFieldPreview = {
   value: string;
 };
 
-export type AiNavigateIntent = 'autofill' | null;
+export type AiNavigateIntent = 'autofill' | 'review' | null;
 
 export type AiAdditionalSection = {
   section_key: string;
@@ -48,6 +52,8 @@ export type AiPendingUpload = {
   file_id: string;
   mime_type: string;
   expires_at?: string;
+  file_name?: string;
+  uploaded_at?: number;
   targetSectionId: string;
   targetSectionKey: string;
   targetSubsection?: string;
@@ -212,11 +218,16 @@ export function purgePendingUploadsForFile(
 }
 
 export function pendingUploadToAiFile(upload: AiPendingUpload): UploadedAIFile {
-  return {
+  const storedMeta = getAiUploadMeta(upload.file_id);
+
+  return mergeAiUploadMeta({
     file_id: upload.file_id,
     mime_type: upload.mime_type,
     expires_at: upload.expires_at,
-  };
+    file_name: upload.file_name || storedMeta?.file_name,
+    uploaded_at:
+      upload.uploaded_at || storedMeta?.uploaded_at || upload.createdAt,
+  });
 }
 
 export function pendingUploadKey(sectionId: string, scope = 'full') {

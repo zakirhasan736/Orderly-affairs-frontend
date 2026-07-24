@@ -1,5 +1,6 @@
 'use client';
 
+import { AiUploadedAttachmentList } from '@/components/ai/AiUploadedAttachmentList';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Card,
@@ -36,6 +37,7 @@ import {
 } from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import {
+  buildUploadedAiFile,
   type UploadedAIFile,
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
@@ -773,11 +775,7 @@ export default function Section18EmploymentBusiness({
 
       const uploaded = await uploadAIDocument(file);
 
-      const uploadedRecord: UploadedAIFile = {
-        file_id: uploaded.file_id,
-        mime_type: uploaded.mime_type,
-        expires_at: uploaded.expires_at,
-      };
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -961,14 +959,9 @@ export default function Section18EmploymentBusiness({
             ].join(' ')}
             iconClassName={tone.icon}
           />
-
-          {uploadedFile && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              <FileText className="h-4 w-4" />
-              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
-            </div>
-          )}
         </div>
+
+        <AiUploadedAttachmentList file={uploadedFile} />
 
         {isUploading && (
           <div className="relative flex items-center gap-2 text-xs text-slate-500">

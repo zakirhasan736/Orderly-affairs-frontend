@@ -34,6 +34,10 @@ import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services
 import {
   createEmptyItemFromFields,
   mergeAiPatchWithDefaults,
+  buildAiFieldPatch,
+  unwrapAiAutofillPatch,
+  extractSubsectionPatch,
+  aiPatchHasValues,
 } from '@/utils/aiPatchNormalizer';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
@@ -43,6 +47,7 @@ import {
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
+  buildUploadedAiFile,
   type UploadedAIFile,
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
@@ -1118,35 +1123,6 @@ export default function Section21EstatePlanningFinalWishes({
     });
   };
 
-  const cleanPatchObject = (patch: any) => {
-    if (!patch || typeof patch !== 'object') return {};
-
-    return Object.fromEntries(
-      Object.entries(patch).filter(([key, value]) => {
-        if (key === '__rowId') return false;
-        if (key.endsWith('_instructions')) return false;
-        if (key.endsWith('_header')) return false;
-        if (value === null || value === undefined || value === '') return false;
-        if (Array.isArray(value) && value.length === 0) return false;
-        return true;
-      }),
-    );
-  };
-
-  const extractObjectFromPatch = (subsection: SubsectionId, patch: any) => {
-    const raw = patch?.[subsection];
-
-    if (Array.isArray(raw)) {
-      return cleanPatchObject(raw[0] || {});
-    }
-
-    if (raw && typeof raw === 'object') {
-      return cleanPatchObject(raw);
-    }
-
-    return {};
-  };
-
   const handleDocumentUpload = async (
     file?: File | null,
     scope?: UploadScope,
@@ -1168,11 +1144,7 @@ export default function Section21EstatePlanningFinalWishes({
 
       const uploaded = await uploadAIDocument(file);
 
-      const uploadedRecord: UploadedAIFile = {
-        file_id: uploaded.file_id,
-        mime_type: uploaded.mime_type,
-        expires_at: uploaded.expires_at,
-      };
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -1220,15 +1192,16 @@ export default function Section21EstatePlanningFinalWishes({
 
       if (!json) return;
 
-      const patch = json?.result?.patch ?? {};
-      const extracted = extractObjectFromPatch(subsection, patch);
+      const patch = unwrapAiAutofillPatch(json?.result);
+      const extracted = extractSubsectionPatch(patch, subsection);
+      const normalized = buildAiFieldPatch(extracted, config.fields as any);
 
-      if (Object.keys(extracted).length === 0) {
+      if (!aiPatchHasValues(normalized)) {
         setAiError(config.emptyError);
         return;
       }
 
-      updateSectionWithPatch(subsection, extracted);
+      updateSectionWithPatch(subsection, normalized);
       setAiNotice(config.successMessage);
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');
@@ -1258,7 +1231,7 @@ export default function Section21EstatePlanningFinalWishes({
         disabled={isAnyAIActionRunning}
         isUploading={uploadingScope === scope}
         isReading={aiLoadingScope === scope}
-        uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+        uploadedFile={getUploadedFileForScope(scope)}
       highlightUpload={aiRouting?.shouldHighlightUpload('21', String(scope)) ?? false}
         onUpload={file =>
           handleDocumentUpload(file, scope, () => handleAutofill(subsection))

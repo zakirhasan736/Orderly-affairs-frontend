@@ -41,20 +41,20 @@ export default function NextKinLoginPageWrapper() {
       toast.success('Login successful');
       router.push('/next-kin/dashboard');
     } catch (err: unknown) {
-      toast.error(getSafeErrorMessage(err, 'Login failed. Check your credentials.'));
+      toast.error(
+        getSafeErrorMessage(err, 'Login failed. Check your credentials.'),
+      );
     }
   };
 
   return (
-    <>
-      <div className="mx-auto mb-4 max-w-md px-4">
+    <NextOfKinLoginPage
+      onLoginSuccess={handleLoginSuccess}
+      onBackToOwner={() => router.push('/dashboard')}
+      formData={{}}
+      captchaSlot={
         <TurnstileCaptcha onTokenChange={setCaptchaToken} />
-      </div>
-      <NextOfKinLoginPage
-        onLoginSuccess={handleLoginSuccess}
-        onBackToOwner={() => router.push('/dashboard')}
-        formData={{}}
-      />
-    </>
+      }
+    />
   );
 }

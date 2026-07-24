@@ -29,9 +29,9 @@ function getSupportedAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return '';
 
   const types = [
-    'audio/mp4',
     'audio/webm;codecs=opus',
     'audio/webm',
+    'audio/mp4',
     'audio/mpeg',
   ];
 
@@ -184,10 +184,16 @@ export function AudioRecorder({
         pauseTimer();
         stopStream();
 
-        const finalMimeType = recorder.mimeType || mimeType || 'audio/webm';
+        const finalMimeType = (
+          recorder.mimeType ||
+          mimeType ||
+          'audio/webm'
+        )
+          .split(';')[0]
+          .trim();
 
         const blob = new Blob(chunksRef.current, {
-          type: finalMimeType,
+          type: finalMimeType || 'audio/webm',
         });
 
         chunksRef.current = [];
@@ -257,6 +263,13 @@ export function AudioRecorder({
     }
 
     if (recorder.state === 'recording' || recorder.state === 'paused') {
+      try {
+        if (typeof recorder.requestData === 'function') {
+          recorder.requestData();
+        }
+      } catch {
+        // ignore
+      }
       recorder.stop();
     } else {
       stopStream();
@@ -277,11 +290,20 @@ export function AudioRecorder({
     if (!recordedBlob || saving || uploading) return;
 
     setSaving(true);
+    setError('');
     try {
       const success = await onAudioRecorded(recordedBlob);
       if (!success) {
-        setError('Upload failed. Your recording is still here — try Save again.');
+        setError(
+          'Upload failed. Your recording is still here — try Save again. If this keeps happening, check your connection and try a shorter clip.',
+        );
       }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Upload failed. Your recording is still here — try Save again.',
+      );
     } finally {
       setSaving(false);
     }

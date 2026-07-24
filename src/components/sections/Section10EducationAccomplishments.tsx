@@ -43,6 +43,7 @@ import {
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
+  buildUploadedAiFile,
   type UploadedAIFile,
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
@@ -322,11 +323,7 @@ export default function Section10EducationAccomplishments({
 
       const uploaded = await uploadAIDocument(file);
 
-      const uploadedRecord: UploadedAIFile = {
-        file_id: uploaded.file_id,
-        mime_type: uploaded.mime_type,
-        expires_at: uploaded.expires_at,
-      };
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -428,7 +425,7 @@ export default function Section10EducationAccomplishments({
       disabled={isAnyAIActionRunning}
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}
-      uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      uploadedFile={getUploadedFileForScope(scope)}
       highlightUpload={aiRouting?.shouldHighlightUpload('10', String(scope)) ?? false}
       onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
       onAutofill={onAutofill}

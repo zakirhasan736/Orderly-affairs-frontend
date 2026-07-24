@@ -18,7 +18,17 @@ function isEmptyValue(value: unknown): boolean {
 
 function normalizeComparable(value: unknown): string {
   if (value === null || value === undefined) return '';
-  return String(value).trim().toLowerCase().replace(/\s+/g, ' ');
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const key of ['label', 'name', 'value', 'text', 'title', 'type']) {
+      const nested = normalizeComparable(record[key]);
+      if (nested) return nested;
+    }
+  }
+  return '';
 }
 
 function getUploadText(value: unknown): string {
@@ -26,6 +36,40 @@ function getUploadText(value: unknown): string {
     return normalizeComparable((value as { text?: string }).text);
   }
   return normalizeComparable(value);
+}
+
+function normalizePolicyNumber(value: unknown): string {
+  return getUploadText(value).replace(/[\s\-_.#]/g, '');
+}
+
+function getInsuranceCompany(item: Record<string, unknown>): string {
+  return normalizeComparable(
+    item.policy_company ??
+      item.insurance_company ??
+      item.provider ??
+      item.carrier ??
+      item.company,
+  );
+}
+
+function getPolicyType(item: Record<string, unknown>): string {
+  return normalizeComparable(item.policy_type ?? item.type);
+}
+
+function companiesMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  // "State Farm Insurance" vs "State Farm"
+  return a.includes(b) || b.includes(a);
+}
+
+function isUploadShape(value: unknown): value is { text?: string; files?: unknown[] } {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    ('text' in value || 'files' in value)
+  );
 }
 
 export function vehiclesAreDuplicates(
@@ -70,32 +114,33 @@ export function vehiclesAreDuplicates(
   return false;
 }
 
+/**
+ * Same insurance topic when:
+ * - both have the same policy number, OR
+ * - company + policy type match (fuzzy company), and policy numbers don't conflict
+ */
 export function insurancePoliciesAreDuplicates(
   existing: Record<string, unknown>,
   incoming: Record<string, unknown>,
 ): boolean {
-  const existingPolicy = getUploadText(existing.policy_number);
-  const incomingPolicy = getUploadText(incoming.policy_number);
+  const existingPolicy = normalizePolicyNumber(existing.policy_number);
+  const incomingPolicy = normalizePolicyNumber(incoming.policy_number);
 
-  if (existingPolicy && incomingPolicy && existingPolicy === incomingPolicy) {
-    return true;
+  if (existingPolicy && incomingPolicy) {
+    return existingPolicy === incomingPolicy;
   }
 
-  const existingCompany = normalizeComparable(
-    existing.insurance_company ?? existing.policy_company ?? existing.provider,
-  );
-  const incomingCompany = normalizeComparable(
-    incoming.insurance_company ?? incoming.policy_company ?? incoming.provider,
-  );
-  const existingType = normalizeComparable(existing.policy_type);
-  const incomingType = normalizeComparable(incoming.policy_type);
+  const existingCompany = getInsuranceCompany(existing);
+  const incomingCompany = getInsuranceCompany(incoming);
+  const existingType = getPolicyType(existing);
+  const incomingType = getPolicyType(incoming);
 
   if (
     existingCompany &&
     incomingCompany &&
     existingType &&
     incomingType &&
-    existingCompany === incomingCompany &&
+    companiesMatch(existingCompany, incomingCompany) &&
     existingType === incomingType
   ) {
     return true;
@@ -104,6 +149,91 @@ export function insurancePoliciesAreDuplicates(
   return false;
 }
 
+/** Merge non-empty incoming fields into an existing card (never wipe with empties). */
+export function mergeAutofillItemFields<T extends Record<string, unknown>>(
+  existing: T,
+  incoming: T,
+): T {
+  const next: Record<string, unknown> = { ...existing };
+
+  for (const [key, value] of Object.entries(incoming)) {
+    if (key === '__rowId') continue;
+    // Owner-configured email recipients must survive AI merges.
+    if (key === 'reminder_recipients') continue;
+    if (isEmptyValue(value)) continue;
+
+    const current = next[key];
+
+    if (isUploadShape(value) || isUploadShape(current)) {
+      const incomingUpload = isUploadShape(value)
+        ? value
+        : { text: String(value ?? ''), files: [] as unknown[] };
+      const existingUpload = isUploadShape(current)
+        ? current
+        : { text: '', files: [] as unknown[] };
+
+      const incomingText =
+        typeof incomingUpload.text === 'string' ? incomingUpload.text.trim() : '';
+      const existingText =
+        typeof existingUpload.text === 'string' ? existingUpload.text.trim() : '';
+      const incomingFiles = Array.isArray(incomingUpload.files)
+        ? incomingUpload.files
+        : [];
+      const existingFiles = Array.isArray(existingUpload.files)
+        ? existingUpload.files
+        : [];
+
+      next[key] = {
+        text: incomingText || existingText,
+        files: incomingFiles.length > 0 ? incomingFiles : existingFiles,
+      };
+      continue;
+    }
+
+    next[key] = value;
+  }
+
+  const existingRowId = (existing as Record<string, unknown>).__rowId;
+  const incomingRowId = (incoming as Record<string, unknown>).__rowId;
+  if (existingRowId && !incomingRowId) {
+    next.__rowId = existingRowId;
+  }
+
+  return next as T;
+}
+
+/**
+ * Update matching items in place; append only when no same-topic match exists.
+ */
+export function upsertAutofillItems<T extends Record<string, unknown>>(
+  currentItems: T[],
+  incomingItems: T[],
+  isDuplicate: (existing: T, incoming: T) => boolean,
+): { items: T[]; added: number; updated: number } {
+  const items = [...currentItems];
+  let added = 0;
+  let updated = 0;
+
+  for (const incoming of incomingItems) {
+    const hasData = Object.entries(incoming).some(
+      ([key, value]) => key !== '__rowId' && !isEmptyValue(value),
+    );
+    if (!hasData) continue;
+
+    const matchIndex = items.findIndex(existing => isDuplicate(existing, incoming));
+    if (matchIndex >= 0) {
+      items[matchIndex] = mergeAutofillItemFields(items[matchIndex], incoming);
+      updated += 1;
+    } else {
+      items.push(incoming);
+      added += 1;
+    }
+  }
+
+  return { items, added, updated };
+}
+
+/** @deprecated Prefer upsertAutofillItems — kept for tests/callers that only need unique appends. */
 export function filterDuplicateAutofillItems<T extends Record<string, unknown>>(
   currentItems: T[],
   incomingItems: T[],
@@ -145,4 +275,40 @@ export function buildDuplicateSkippedNotice(
   return skipped === 1
     ? `1 ${label} was already on file and was skipped.`
     : `${skipped} ${label}s were already on file and were skipped.`;
+}
+
+export function buildUpsertAutofillNotice(
+  added: number,
+  updated: number,
+  itemLabel: string,
+  targetIndex?: number,
+): string | null {
+  const label = itemLabel.toLowerCase();
+
+  if (typeof targetIndex === 'number' && added + updated > 0) {
+    if (updated > 0 && added === 0) {
+      return `AI updated ${itemLabel} #${targetIndex + 1}. Please review the fields.`;
+    }
+    if (added === 1 && updated === 0) {
+      return `AI filled ${itemLabel} #${targetIndex + 1}. Please review the fields.`;
+    }
+  }
+
+  if (updated > 0 && added === 0) {
+    return updated === 1
+      ? `AI updated 1 existing ${label} with the latest document details. Please review the fields.`
+      : `AI updated ${updated} existing ${label}s with the latest document details. Please review the fields.`;
+  }
+
+  if (added > 0 && updated === 0) {
+    return added === 1
+      ? `AI added 1 ${label}. Please review the fields.`
+      : `AI added ${added} ${label}s. Please review the fields.`;
+  }
+
+  if (added > 0 && updated > 0) {
+    return `AI updated ${updated} and added ${added} ${label}${added + updated === 1 ? '' : 's'}. Please review the fields.`;
+  }
+
+  return null;
 }

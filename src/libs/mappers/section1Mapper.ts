@@ -1,4 +1,19 @@
-const CONTACT_KEYS = ['next_of_kin', 'executor_trustee', 'additional_contacts'];
+function coerceDisplayValue(value: unknown): unknown {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if ('files' in record || 'text' in record) return value;
+    for (const key of ['label', 'name', 'value', 'text', 'title']) {
+      if (typeof record[key] === 'string') return record[key];
+    }
+    return '';
+  }
+  return '';
+}
 
 export function mapUIToSection1Payload(data: any) {
   return {
@@ -12,8 +27,13 @@ export function mapUIToSection1Payload(data: any) {
 export function mapSection1ResponseToUI(apiResponse: any) {
   if (!apiResponse?.data) return {};
 
+  const vitalRaw = apiResponse.data.vital_info || {};
+  const vital_info = Object.fromEntries(
+    Object.entries(vitalRaw).map(([key, value]) => [key, coerceDisplayValue(value)]),
+  );
+
   return {
-    vital_info: apiResponse.data.vital_info || {},
+    vital_info,
     next_of_kin: apiResponse.data.next_of_kin || [],
     executor_trustee: apiResponse.data.executor_trustee || [],
     additional_contacts: apiResponse.data.additional_contacts || [],

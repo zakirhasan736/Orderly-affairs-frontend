@@ -1,5 +1,6 @@
 'use client';
 
+import { AiUploadedAttachmentList } from '@/components/ai/AiUploadedAttachmentList';
 import React, { useRef, useState } from 'react';
 import {
   Card,
@@ -41,6 +42,7 @@ import {
 } from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import {
+  buildUploadedAiFile,
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
 import { AiDocumentDropZoneInput } from '@/components/ai/AiDocumentDropZoneInput';
@@ -205,6 +207,13 @@ const SECTION_20B_FIELDS = [
     helperText: 'Information about quarterly estimated tax payments',
   },
   {
+    key: 'tax_filing_deadline',
+    label: 'Next Tax Filing Deadline',
+    type: 'DatePicker',
+    helperText:
+      'Next federal/state tax filing or estimated-payment deadline — reminder emails at 10, 5, 1 days and on the day',
+  },
+  {
     key: 'tax_debt_issues',
     label: 'Tax Debt or Issues',
     type: 'TextInputWithUpload',
@@ -310,6 +319,7 @@ const SECTION_20B_GROUPS: FieldGroup[] = [
     fieldKeys: [
       'business_tax_documents',
       'estimated_tax_payments',
+      'tax_filing_deadline',
       'tax_debt_issues',
     ],
   },
@@ -386,6 +396,13 @@ const SECTION_20C = {
         'Effective dates, expiration dates, or other important deadlines',
     },
     {
+      key: 'expiration_date',
+      label: 'Expiration / Renewal Date',
+      type: 'DatePicker',
+      helperText:
+        'Primary expiration or renewal deadline — triggers reminder emails at 10, 5, 1 days and on the day',
+    },
+    {
       key: 'document_location',
       label: 'Document Location',
       type: 'TextArea',
@@ -423,6 +440,7 @@ interface Props {
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
   activeTopicId?: string | null;
+  disabledSubsections?: Record<string, boolean>;
 }
 
 type SubsectionId = '20A' | '20B' | '20C';
@@ -433,6 +451,8 @@ type UploadedAIFile = {
   file_id: string;
   mime_type: string;
   expires_at?: string;
+  file_name?: string;
+  uploaded_at?: number;
 };
 
 const ALLOWED_UPLOAD_TYPES = [
@@ -498,6 +518,7 @@ export default function Section20LegalDocumentsRecords({
   onChange = () => {},
   activeSubsection,
   activeTopicId,
+  disabledSubsections = {},
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -531,6 +552,7 @@ export default function Section20LegalDocumentsRecords({
     uploadingScope !== null || aiLoadingScope !== null;
 
   const showSubsection = (id: SubsectionId) => {
+    if (disabledSubsections[id]) return false;
     return !activeSubsection || activeSubsection === id;
   };
 
@@ -687,11 +709,7 @@ export default function Section20LegalDocumentsRecords({
 
       const uploaded = await uploadAIDocument(file);
 
-      const uploadedRecord: UploadedAIFile = {
-        file_id: uploaded.file_id,
-        mime_type: uploaded.mime_type,
-        expires_at: uploaded.expires_at,
-      };
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -743,9 +761,25 @@ export default function Section20LegalDocumentsRecords({
       const extracted = extractStaticObjectFromPatch(subsection, patch);
 
       if (Object.keys(extracted).length === 0) {
+        // POA and similar docs belong in 20C — recover if model put them there
+        // while the user was autofilling 20A/20B.
+        const recoveredDocuments = extractDocumentsFromPatch(patch);
+        if (recoveredDocuments.length > 0) {
+          const nextDocuments =
+            documents.length === 0
+              ? recoveredDocuments
+              : [...documents, ...recoveredDocuments];
+          updateDocuments(nextDocuments);
+          setAiError('');
+          setAiNotice(
+            `This looks like an Other Important Document (for example Power of Attorney). Added under 20C — open “Other Important Documents” to review.`,
+          );
+          return;
+        }
+
         setAiError(
           subsection === '20A'
-            ? 'AI could not find personal legal document information in this file.'
+            ? 'AI could not find personal legal document information in this file. If this is a Power of Attorney or similar, try Autofill under 20C Other Important Documents.'
             : 'AI could not find tax document information in this file.',
         );
         return;
@@ -970,14 +1004,9 @@ export default function Section20LegalDocumentsRecords({
             ].join(' ')}
             iconClassName={tone.icon}
           />
-
-          {uploadedFile && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              <FileText className="h-4 w-4" />
-              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
-            </div>
-          )}
         </div>
+
+        <AiUploadedAttachmentList file={uploadedFile} />
 
         {isUploading && (
           <div className="relative flex items-center gap-2 text-xs text-slate-500">
@@ -1306,7 +1335,16 @@ export default function Section20LegalDocumentsRecords({
       )}
 
       {renderStaticSection('20A')}
-      {renderStaticSection('20B')}
+      {activeSubsection === '20B' && disabledSubsections['20B'] ? (
+        <div className="rounded-[24px] border border-slate-200 bg-white p-6 text-center shadow-sm">
+          <p className="text-sm text-slate-500">
+            Business Taxes & Issues is marked as not applicable. Uncheck the box
+            above to enable these fields.
+          </p>
+        </div>
+      ) : (
+        renderStaticSection('20B')
+      )}
       {renderRepeatable20C()}
     </div>
   );

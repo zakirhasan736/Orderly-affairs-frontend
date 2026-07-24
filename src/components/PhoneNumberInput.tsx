@@ -169,9 +169,10 @@ export function PhoneNumberInput({
     numberPlaceholder || getNationalNumberPlaceholder(countryCode);
   const validationError = getPhoneValidationError(countryCode, nationalNumber);
   const isValid = isValidPhoneForCountry(countryCode, nationalNumber);
-  const shouldShowError =
-    (showValidation || touched) && Boolean(validationError);
   const hasNumber = Boolean(extractDigits(nationalNumber));
+  const shouldShowError =
+    Boolean(validationError) &&
+    (showValidation || (touched && hasNumber));
 
   useEffect(() => {
     onValidationChange?.(isValid);

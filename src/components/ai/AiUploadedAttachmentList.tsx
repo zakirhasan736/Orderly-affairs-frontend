@@ -1,0 +1,56 @@
+'use client';
+
+import React from 'react';
+import { FileText, Paperclip } from 'lucide-react';
+import { cn } from '@common/ui/utils';
+import {
+  formatAiUploadDate,
+  getReadableAiDocumentType,
+  type UploadedAIFile,
+} from '@/utils/aiDocumentUploadUi';
+
+type AiUploadedAttachmentListProps = {
+  file?: UploadedAIFile | null;
+  className?: string;
+};
+
+export function AiUploadedAttachmentList({
+  file,
+  className,
+}: AiUploadedAttachmentListProps) {
+  if (!file?.file_id) return null;
+
+  const displayName =
+    file.file_name?.trim() ||
+    `${getReadableAiDocumentType(file.mime_type)} document`;
+  const uploadedLabel = formatAiUploadDate(file.uploaded_at);
+
+  return (
+    <div
+      className={cn(
+        'rounded-xl border border-slate-200 bg-white/90 px-3 py-2.5 shadow-sm',
+        className,
+      )}
+      data-ai-upload-attachment
+    >
+      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+        <Paperclip className="h-3 w-3" />
+        Attached file
+      </div>
+      <div className="flex items-start gap-2.5">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 ring-1 ring-emerald-100">
+          <FileText className="h-4 w-4 text-emerald-700" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-slate-900" title={displayName}>
+            {displayName}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {getReadableAiDocumentType(file.mime_type)}
+            {uploadedLabel ? ` · Uploaded ${uploadedLabel}` : ''}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

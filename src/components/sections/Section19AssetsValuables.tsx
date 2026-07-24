@@ -1,5 +1,6 @@
 'use client';
 
+import { AiUploadedAttachmentList } from '@/components/ai/AiUploadedAttachmentList';
 import React, { useRef, useState } from 'react';
 import {
   Card,
@@ -22,6 +23,8 @@ import {
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
+import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
+import { extractAutofillArrayFromPatch } from '@/utils/aiMultiItemAutofill';
 import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
 import {
   createEmptyItemFromFields,
@@ -34,6 +37,7 @@ import {
 } from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import {
+  buildUploadedAiFile,
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
 import { AiDocumentDropZoneInput } from '@/components/ai/AiDocumentDropZoneInput';
@@ -229,6 +233,13 @@ const SECTION_19B = createRepeatableSection(
       helperText: 'Outstanding mortgage balance, lender, payment details',
     },
     {
+      key: 'mortgage_maturity_date',
+      label: 'Mortgage Maturity Date',
+      type: 'DatePicker',
+      helperText:
+        'When the mortgage or home loan matures — reminder emails at 10, 5, 1 days and on the day',
+    },
+    {
       key: 'rental_info',
       label: 'Rental Information',
       type: 'TextArea',
@@ -247,6 +258,13 @@ const SECTION_19B = createRepeatableSection(
       label: 'Property Tax Information',
       type: 'TextInputWithUpload',
       helperText: 'Annual property taxes, payment method, and upload tax bills',
+    },
+    {
+      key: 'property_tax_due_date',
+      label: 'Next Property Tax Due Date',
+      type: 'DatePicker',
+      helperText:
+        'Next property tax due date — used for deadline reminder emails',
     },
     {
       key: 'insurance_info',
@@ -290,6 +308,8 @@ type UploadedAIFile = {
   file_id: string;
   mime_type: string;
   expires_at?: string;
+  file_name?: string;
+  uploaded_at?: number;
 };
 
 const ALLOWED_UPLOAD_TYPES = [
@@ -385,6 +405,29 @@ export default function Section19AssetsValuables({
     };
   };
 
+  const createEmptyValuable = () => makeEmptyItem(SECTION_19A.fields);
+  const createEmptyProperty = () => makeEmptyItem(SECTION_19B.fields);
+
+  const valuableAutofill = useAiMultiItemAutofill({
+    itemLabel: SECTION_19A.itemLabel,
+    createEmpty: createEmptyValuable,
+    getCurrentItems: () => valuableItems,
+    setItems: next => updateSubsection('19A', next),
+    setAiNotice,
+    describeFields: ['item_type', 'item_description', 'estimated_value'],
+    onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
+  });
+
+  const propertyAutofill = useAiMultiItemAutofill({
+    itemLabel: SECTION_19B.itemLabel,
+    createEmpty: createEmptyProperty,
+    getCurrentItems: () => properties,
+    setItems: next => updateSubsection('19B', next),
+    setAiNotice,
+    describeFields: ['property_address', 'property_type', 'estimated_value'],
+    onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
+  });
+
   const addItem = (subsection: SubsectionId) => {
     const config = getConfig(subsection);
     const items = getItems(subsection);
@@ -449,29 +492,25 @@ export default function Section19AssetsValuables({
   };
 
   const extractArrayFromPatch = (subsection: SubsectionId, patch: any) => {
-    const rawItems = patch?.[subsection];
+    const config = getConfig(subsection);
+    const detectKeys =
+      subsection === '19A'
+        ? ['item_type', 'item_description', 'estimated_value']
+        : ['property_address', 'property_type', 'estimated_value'];
 
-    if (Array.isArray(rawItems)) {
-      return rawItems
-        .map(item => normalizePatchItem(subsection, item))
-        .filter(item => {
-          return Object.entries(item).some(([key, value]) => {
-            return key !== '__rowId' && value !== '';
-          });
-        });
-    }
-
-    if (rawItems && typeof rawItems === 'object') {
-      const item = normalizePatchItem(subsection, rawItems);
-
-      const hasValue = Object.entries(item).some(([key, value]) => {
-        return key !== '__rowId' && value !== '';
-      });
-
-      return hasValue ? [item] : [];
-    }
-
-    return [];
+    return extractAutofillArrayFromPatch({
+      patch,
+      subsectionKey: subsection,
+      normalizeItem: raw =>
+        normalizePatchItem(
+          subsection,
+          raw && typeof raw === 'object' ? raw : {},
+        ),
+      singleObjectDetectKeys: detectKeys,
+    }).map(item => ({
+      ...item,
+      __rowId: (item as any).__rowId || createRowId(),
+    }));
   };
 
   const handleDocumentUpload = async (file?: File | null,
@@ -494,11 +533,7 @@ export default function Section19AssetsValuables({
 
       const uploaded = await uploadAIDocument(file);
 
-      const uploadedRecord: UploadedAIFile = {
-        file_id: uploaded.file_id,
-        mime_type: uploaded.mime_type,
-        expires_at: uploaded.expires_at,
-      };
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -549,50 +584,30 @@ export default function Section19AssetsValuables({
 
       const patch = json?.result?.patch ?? {};
       const extractedItems = extractArrayFromPatch(subsection, patch);
-
-      if (extractedItems.length === 0) {
-        setAiError(
-          subsection === '19A'
-            ? 'AI could not find valuable item information in this document.'
-            : 'AI could not find real estate property information in this document.',
-        );
-        return;
-      }
-
+      const multiItem =
+        subsection === '19A' ? valuableAutofill : propertyAutofill;
       const config = getConfig(subsection);
-      const items = getItems(subsection);
 
-      if (typeof itemIndex === 'number') {
-        const firstPatch = cleanPatchObject(extractedItems[0]);
-        const next = [...items];
-
-        next[itemIndex] = {
-          ...(next[itemIndex] || makeEmptyItem(config.fields)),
-          ...firstPatch,
-          __rowId: next[itemIndex]?.__rowId || createRowId(),
-        };
-
-        updateSubsection(subsection, next);
-
-        setAiNotice(
-          `AI filled ${config.itemLabel} #${itemIndex + 1}. Please review the fields.`,
-        );
-
-        return;
-      }
-
-      updateSubsection(subsection, [...items, ...extractedItems]);
-
-      setAiNotice(
-        extractedItems.length === 1
-          ? `AI added 1 ${config.itemLabel.toLowerCase()}. Please review the fields.`
-          : `AI added ${extractedItems.length} ${config.itemLabel.toLowerCase()}s. Please review the fields.`,
+      const disposition = multiItem.processExtraction(
+        extractedItems,
+        itemIndex,
+        {
+          setAiError,
+          setAiNotice,
+          emptyError:
+            subsection === '19A'
+              ? 'AI could not find valuable item information in this document.'
+              : 'AI could not find real estate property information in this document.',
+          itemLabel: config.itemLabel,
+        },
       );
+      if (disposition !== 'pending_user') {
+        releaseDeferredAiRoutingDialog(aiRouting);
+      }
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');
     } finally {
       setAiLoadingScope(null);
-      releaseDeferredAiRoutingDialog(aiRouting);
     }
   };
 
@@ -716,14 +731,9 @@ export default function Section19AssetsValuables({
             ].join(' ')}
             iconClassName={iconClass}
           />
-
-          {uploadedFile && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              <FileText className="h-4 w-4" />
-              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
-            </div>
-          )}
         </div>
+
+        <AiUploadedAttachmentList file={uploadedFile} />
 
         {isUploading && (
           <div className="relative flex items-center gap-2 text-xs text-slate-500">
@@ -782,7 +792,7 @@ export default function Section19AssetsValuables({
           </CardHeader>
 
           <CardContent className="space-y-8 p-5">
-            {/* {renderUploader({
+            {renderUploader({
               subsection,
               scope: fullScope,
               title: isValuable
@@ -795,7 +805,7 @@ export default function Section19AssetsValuables({
                 ? 'Extract Valuable Items'
                 : 'Extract Properties',
               onAutofill: () => handleAutofill(subsection, fullScope),
-            })} */}
+            })}
 
             {items.length === 0 && (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
@@ -890,6 +900,9 @@ export default function Section19AssetsValuables({
 
   return (
     <div className="space-y-10">
+      {valuableAutofill.dialog}
+      {propertyAutofill.dialog}
+
       {(aiNotice || aiError) && (
         <div className="space-y-3">
           {aiNotice && (

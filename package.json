@@ -6,7 +6,23 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "cypress:open": "cypress open",
+    "cypress:open:e2e": "cypress open --e2e",
+    "cypress:open:component": "cypress open --component",
+    "cypress:run": "cypress run --e2e",
+    "cypress:run:component": "cypress run --component",
+    "test:e2e": "cross-env CYPRESS_DIST_DIR=.next-cypress NEXT_PUBLIC_OTP_CAPTCHA_ENABLED=false start-server-and-test \"next dev -H 127.0.0.1 -p 3001\" http://127.0.0.1:3001 \"cypress run --e2e --config baseUrl=http://127.0.0.1:3001\"",
+    "test:e2e:open": "cross-env CYPRESS_DIST_DIR=.next-cypress NEXT_PUBLIC_OTP_CAPTCHA_ENABLED=false start-server-and-test \"next dev -H 127.0.0.1 -p 3001\" http://127.0.0.1:3001 \"cypress open --e2e --config baseUrl=http://127.0.0.1:3001\"",
+    "test:e2e:existing": "cypress run --e2e --config baseUrl=http://127.0.0.1:3000",
+    "test:component:cy": "cypress run --component",
+    "test:playwright": "playwright test",
+    "test:playwright:ui": "playwright test --ui",
+    "test:playwright:smoke": "playwright test e2e/08-smoke-vault-flow.spec.ts",
+    "test:all": "npm test && npm run test:component:cy && npm run test:e2e && npm run test:playwright"
   },
   "dependencies": {
     "-": "^0.0.1",
@@ -71,16 +87,27 @@
     "vaul": "^1.1.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/canvas-confetti": "^1.9.0",
     "@types/js-cookie": "^3.0.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4.5.2",
     "baseline-browser-mapping": "^2.9.14",
+    "cross-env": "^10.1.0",
+    "cypress": "^15.19.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.1",
+    "jsdom": "^29.1.1",
+    "start-server-and-test": "^3.0.11",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }

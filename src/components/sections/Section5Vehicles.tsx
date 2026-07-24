@@ -36,6 +36,7 @@ import {
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
+  buildUploadedAiFile,
   type UploadedAIFile,
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
@@ -329,11 +330,7 @@ export default function Section5Vehicles({
 
       const uploaded = await uploadAIDocument(file);
 
-      const uploadedRecord: UploadedAIFile = {
-        file_id: uploaded.file_id,
-        mime_type: uploaded.mime_type,
-        expires_at: uploaded.expires_at,
-      };
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -451,7 +448,7 @@ export default function Section5Vehicles({
       disabled={isAnyAIActionRunning}
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}
-      uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      uploadedFile={getUploadedFileForScope(scope)}
       highlightUpload={aiRouting?.shouldHighlightUpload('5', String(scope)) ?? false}
       onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
       onAutofill={onAutofill}
@@ -547,10 +544,8 @@ export default function Section5Vehicles({
                     <strong className="text-slate-900">{itemLabel}</strong>
 
                     <p className="text-sm text-slate-500">
-                      Upload a registration, insurance card, title, loan
-                      document, or maintenance receipt. If the document lists
-                      multiple vehicles, AI can create and fill additional
-                      cards.
+                      Fill in the details for this vehicle, or use the document
+                      uploader above to extract information automatically.
                     </p>
                   </div>
 
@@ -567,14 +562,10 @@ export default function Section5Vehicles({
                 </div>
 
                 <CardContent className="space-y-6 p-5">
-                  {renderUploader({
-                    scope: itemScope,
-                    title: `Upload document for ${itemLabel}`,
-                    description: `AI will fill ${itemLabel} first. If multiple vehicles are found (for example, an insurance card with 2 cars), you can add them all as separate cards.`,
-                    buttonLabel: `Auto-fill ${itemLabel}`,
-                    compact: true,
-                    onAutofill: () => handleAutofill(itemScope, index),
-                  })}
+                  <p className="text-sm text-slate-500">
+                    Use the uploader at the top of this page to extract one or
+                    more vehicles. Edit the fields below for this vehicle card.
+                  </p>
 
                   <div className="grid gap-4 md:grid-cols-2">
                     {SECTION_5.fields.map(field => (

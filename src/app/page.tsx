@@ -50,7 +50,7 @@ import {
   formatRetryCountdown,
   parseAuthApiError,
 } from '@/utils/authRateLimit';
-import { isCaptchaEnabled } from '@/utils/captchaConfig';
+import { isCaptchaEnabledNow } from '@/utils/captchaConfig';
 import { toast } from 'sonner';
 import {
   RateLimitBanner,
@@ -358,6 +358,7 @@ function PaymentForm({
       )}
 
       <Button
+        data-cy="checkout-submit"
         className="w-full"
         disabled={loading}
         onClick={() => void handleSubmit()}
@@ -427,14 +428,17 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showPhoneValidation, setShowPhoneValidation] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
-  const [captchaReady, setCaptchaReady] = useState(!isCaptchaEnabled);
+  const [captchaReady, setCaptchaReady] = useState(
+    () => !isCaptchaEnabledNow(),
+  );
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
   const refreshCaptcha = useCallback(() => {
     setCaptchaToken('');
-    if (isCaptchaEnabled) setCaptchaReady(false);
+    if (isCaptchaEnabledNow()) setCaptchaReady(false);
     setCaptchaResetKey(k => k + 1);
   }, []);
-  const securityReady = !isCaptchaEnabled || (captchaReady && !!captchaToken);
+  const securityReady =
+    !isCaptchaEnabledNow() || (captchaReady && !!captchaToken);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -945,7 +949,10 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
     await completeOwnerAuth(router, dispatch, {
       email,
       requiresBilling: Boolean(res.requires_billing),
-      onNeedsBilling: () => setStep('plan_selection'),
+      onNeedsBilling: () => {
+        setError('');
+        setStep('plan_selection');
+      },
     });
     setRateLimitSeconds(0);
   } catch (err: unknown) {
@@ -1200,7 +1207,10 @@ const verifyMfaCode = useCallback(async () => {
       requiresBilling: Boolean(
         (res as { requires_billing?: boolean })?.requires_billing,
       ),
-      onNeedsBilling: () => setStep('plan_selection'),
+      onNeedsBilling: () => {
+        setError('');
+        setStep('plan_selection');
+      },
     });
   } catch (err: unknown) {
     setError(getApiErrorMessage(err, 'Invalid verification code'));
@@ -1257,6 +1267,7 @@ const verifyEmailOtpCode = useCallback(async () => {
       email,
       requiresBilling: Boolean(res.requires_billing),
       onNeedsBilling: () => {
+        setError('');
         setIsNewUser(false);
         setStep('plan_selection');
       },
@@ -1343,7 +1354,10 @@ const verifySmsOtpCode = useCallback(async () => {
       requiresBilling: Boolean(
         (res as { requires_billing?: boolean })?.requires_billing,
       ),
-      onNeedsBilling: () => setStep('plan_selection'),
+      onNeedsBilling: () => {
+        setError('');
+        setStep('plan_selection');
+      },
     });
   } catch (err: unknown) {
     const nextAttempts = attempts + 1;
@@ -1666,7 +1680,10 @@ const backButtonLabel =
         </div>
         <Card className="glass-card shadow-[0_40px_80px_-20px_rgba(30,41,59,0.12)] border border-slate-100">
           <CardContent className="px-0 sm:px-6 pt-6 md:pt-9">
-            {error && rateLimitSeconds <= 0 && (
+            {error &&
+              rateLimitSeconds <= 0 &&
+              step !== 'payment' &&
+              step !== 'plan_selection' && (
               <Alert variant="destructive" className="mb-4">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
@@ -1697,6 +1714,7 @@ const backButtonLabel =
                 {/* STEP 1: Credentials */}
                 {step === 'credentials' && (
                   <form
+                    data-cy="auth-credentials-form"
                     onSubmit={handleCredentialsSubmit}
                     className="space-y-4"
                   >
@@ -1728,6 +1746,7 @@ const backButtonLabel =
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
                           id="email"
+                          data-cy="auth-email"
                           type="email"
                           value={email}
                           onChange={e => setEmail(e.target.value)}
@@ -1744,6 +1763,7 @@ const backButtonLabel =
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
                           id="password"
+                          data-cy="auth-password"
                           type={showPassword ? 'text' : 'password'}
                           value={password}
                           onChange={e => {
@@ -1771,6 +1791,7 @@ const backButtonLabel =
                       {!isNewUser && (
                         <Button
                           type="button"
+                          data-cy="auth-forgot-password"
                           variant="link"
                           className="text-xs cursor-pointer flex items-center gap-2"
                           onClick={handleForgotPasswordClick}
@@ -1869,6 +1890,7 @@ const backButtonLabel =
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                               id="confirmPassword"
+                              data-cy="auth-confirm-password"
                               type={showConfirmPassword ? 'text' : 'password'}
                               value={confirmPassword}
                               onChange={e => setConfirmPassword(e.target.value)}
@@ -1897,6 +1919,7 @@ const backButtonLabel =
                     )}
 
                     <Button
+                      data-cy="auth-submit"
                       className="w-full btn-primary"
                       disabled={
                         isAuthBusy ||
@@ -1914,6 +1937,7 @@ const backButtonLabel =
 
                     <Button
                       type="button"
+                      data-cy="auth-toggle-mode"
                       variant="link"
                       onClick={() => {
                         setIsNewUser(!isNewUser);
@@ -2018,6 +2042,7 @@ const backButtonLabel =
                     )}
 
                     <Button
+                      data-cy="auth-mfa-continue"
                       onClick={handleMFAMethodSelection}
                       className="w-full btn-primary"
                       disabled={
@@ -2493,10 +2518,11 @@ const backButtonLabel =
                   </div>
                 )}
                 {step === 'plan_selection' && (
-                  <div className="space-y-4 text-center">
+                  <div data-cy="checkout-plan-selection" className="space-y-4 text-center">
                     <h2 className="text-xl font-bold">Choose Your Plan</h2>
 
                     <Button
+                      data-cy="checkout-plan-monthly"
                       variant={
                         selectedPlan === 'monthly' ? 'default' : 'outline'
                       }
@@ -2507,6 +2533,7 @@ const backButtonLabel =
                     </Button>
 
                     <Button
+                      data-cy="checkout-plan-yearly"
                       variant={
                         selectedPlan === 'yearly' ? 'default' : 'outline'
                       }
@@ -2516,9 +2543,11 @@ const backButtonLabel =
                       Yearly — $94.95 (Save 20%)
                     </Button>
 
-                    <Button
+                      <Button
+                      data-cy="checkout-continue-payment"
                       className="w-full"
                       onClick={() => {
+                        setError('');
                         setIsTrial(false);
                         setStep('payment');
                       }}
@@ -2532,6 +2561,7 @@ const backButtonLabel =
                       </p>
                       <button
                         type="button"
+                        data-cy="checkout-trial-cardless"
                         className={`w-full rounded-lg border p-3 text-left text-sm ${
                           trialMode === 'cardless'
                             ? 'border-slate-900 bg-white'
@@ -2563,9 +2593,11 @@ const backButtonLabel =
                         </span>
                       </button>
                       <Button
+                        data-cy="checkout-continue-trial"
                         variant="outline"
                         className="w-full"
                         onClick={() => {
+                          setError('');
                           setIsTrial(true);
                           setStep('payment');
                         }}

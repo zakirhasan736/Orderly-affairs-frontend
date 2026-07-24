@@ -1,10 +1,13 @@
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query';
 
-const isProd =
-  process.env.NODE_ENV === 'production' ||
-  process.env.NEXT_PUBLIC_HIDE_CLIENT_LOGS === 'true';
-
 const GENERIC = 'Request failed';
+
+function isProd(): boolean {
+  return (
+    process.env.NODE_ENV === 'production' ||
+    process.env.NEXT_PUBLIC_HIDE_CLIENT_LOGS === 'true'
+  );
+}
 
 /**
  * Strip backend error bodies in production so the Network tab / Redux DevTools
@@ -14,7 +17,7 @@ const GENERIC = 'Request failed';
 export function sanitizeFetchBaseQueryError(
   error: FetchBaseQueryError,
 ): FetchBaseQueryError {
-  if (!isProd) return error;
+  if (!isProd()) return error;
 
   if (
     typeof error.status === 'number' &&
@@ -84,7 +87,7 @@ export async function readSafeErrorMessage(
     }
   }
 
-  if (!isProd) {
+  if (!isProd()) {
     try {
       const payload = await res.clone().json();
       const detail = payload?.detail;

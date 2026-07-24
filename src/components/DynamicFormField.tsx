@@ -9,7 +9,7 @@ import { DatePicker } from './DatePicker';
 import { TextInputWithUpload } from './TextInputWithUpload';
 import { PODInstructionsModal } from './PODInstructionsModal';
 import { FieldDefinition } from '@/types/formTypes';
-import { getAiFieldDisplayLabel } from '@/utils/aiPatchNormalizer';
+import { getAiFieldDisplayLabel, resolveClosestOption } from '@/utils/aiPatchNormalizer';
 import { MultiSelect } from './MultiSelect';
 import { AccessManagement } from './AccessManagement';
 import { LettersToNextOfKinField } from './LettersToNextOfKinField';
@@ -193,16 +193,41 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
           />
         );
 
-      case 'Dropdown':
+      case 'Dropdown': {
+        let selectValue = '';
+        if (typeof value === 'string' || typeof value === 'number') {
+          selectValue = String(value);
+        } else if (value && typeof value === 'object') {
+          const record = value as Record<string, unknown>;
+          selectValue = String(
+            record.label ??
+              record.name ??
+              record.value ??
+              record.text ??
+              record.title ??
+              '',
+          );
+        }
+        const options = field.options || [];
+        const knownValue =
+          resolveClosestOption(selectValue, options) ||
+          (options.includes(selectValue) ? selectValue : '');
         return (
-          <Select value={value || ''} onValueChange={onChange}>
+          <Select
+            value={knownValue}
+            onValueChange={onChange}
+          >
             <SelectTrigger className="w-full">
               <SelectValue
-                placeholder={field.placeholder || 'Select an option'}
+                placeholder={
+                  selectValue && !knownValue
+                    ? selectValue
+                    : field.placeholder || 'Select an option'
+                }
               />
             </SelectTrigger>
             <SelectContent className="z-[200] max-h-[min(60dvh,320px)]">
-              {field.options?.map(option => (
+              {options.map(option => (
                 <SelectItem key={option} value={option}>
                   {field.optionLabels?.[option] ?? option}
                 </SelectItem>
@@ -210,6 +235,7 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
             </SelectContent>
           </Select>
         );
+      }
 
       case 'MultiSelect':
         return (
@@ -226,7 +252,14 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
           <div className="flex items-center space-x-2">
             <Checkbox
               id={field.key}
-              checked={value === true}
+              checked={
+                value === true ||
+                value === 'true' ||
+                value === 'yes' ||
+                value === 'Yes' ||
+                value === 1 ||
+                value === '1'
+              }
               onCheckedChange={checked => onChange(checked === true)}
             />
             <Label htmlFor={field.key}>{field.label}</Label>
@@ -238,14 +271,22 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
 
         if (options.length === 1) {
           const singleOption = options[0];
+          const checked =
+            value === singleOption ||
+            value === true ||
+            value === 'true' ||
+            value === 'yes' ||
+            value === 'Yes' ||
+            value === 1 ||
+            value === '1';
 
           return (
             <div className="flex items-center space-x-2">
               <Checkbox
                 id={field.key}
-                checked={value === singleOption}
-                onCheckedChange={checked =>
-                  onChange(checked ? singleOption : '')
+                checked={checked}
+                onCheckedChange={checkedNext =>
+                  onChange(checkedNext ? singleOption : '')
                 }
               />
               <Label htmlFor={field.key}>{singleOption}</Label>
@@ -253,10 +294,15 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
           );
         }
 
+        const radioValue =
+          resolveClosestOption(value, options) ||
+          (typeof value === 'string' ? value : '') ||
+          '';
+
         return (
           <RadioGroup
             key={`${field.key}-${rowId}`}
-            value={value || ''}
+            value={radioValue}
             onValueChange={onChange}
             className="space-y-3"
           >

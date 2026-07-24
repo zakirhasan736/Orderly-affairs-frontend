@@ -8,7 +8,7 @@ import {
   buildMultiItemFoundNotice,
   describeAutofillItem,
 } from '@/utils/aiMultiItemAutofill';
-import { buildDuplicateSkippedNotice } from '@/utils/aiItemDedup';
+import { buildUpsertAutofillNotice } from '@/utils/aiItemDedup';
 
 type PromptState<T> = {
   items: T[];
@@ -52,9 +52,11 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
 
   const applyExtracted = useCallback(
     (items: T[], targetIndex?: number) => {
-      if (items.length === 0) return 0;
+      if (items.length === 0) {
+        return { added: 0, updated: 0 };
+      }
 
-      const { items: nextItems, skipped } = applyItemsToIndexedList({
+      const { items: nextItems, added, updated } = applyItemsToIndexedList({
         currentItems: getCurrentItems(),
         extractedItems: normalizeItems(items),
         targetIndex,
@@ -64,7 +66,7 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
       });
 
       setItems(nextItems);
-      return skipped;
+      return { added, updated };
     },
     [createEmpty, getCurrentItems, isDuplicate, normalizeItems, preserveRowId, setItems],
   );
@@ -103,24 +105,11 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
         return 'pending_user';
       }
 
-      const skipped = applyExtracted(extracted, targetIndex);
-      const duplicateNotice = buildDuplicateSkippedNotice(skipped, activeLabel);
-      if (skipped > 0 && skipped >= extracted.length) {
-        setAiNotice(
-          duplicateNotice ||
-            `All ${activeLabel.toLowerCase()} entries were already on file.`,
-        );
-        return 'applied';
-      }
-
-      setAiNotice(
-        [
-          buildAutofillSuccessNotice(1, activeLabel, targetIndex),
-          duplicateNotice,
-        ]
-          .filter(Boolean)
-          .join(' '),
-      );
+      const { added, updated } = applyExtracted(extracted, targetIndex);
+      const notice =
+        buildUpsertAutofillNotice(added, updated, activeLabel, targetIndex) ||
+        buildAutofillSuccessNotice(1, activeLabel, targetIndex);
+      setAiNotice(notice);
       return 'applied';
     },
     [applyExtracted, itemLabel],
@@ -145,45 +134,45 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
       targetIndex={prompt?.targetIndex}
       onAddAll={() => {
         if (!prompt) return;
-        const skipped = applyExtracted(prompt.items, prompt.targetIndex);
-        const duplicateNotice = buildDuplicateSkippedNotice(
-          skipped,
-          prompt.itemLabel,
+        const { added, updated } = applyExtracted(
+          prompt.items,
+          prompt.targetIndex,
         );
         setAiNotice(
-          [
+          buildUpsertAutofillNotice(
+            added,
+            updated,
+            prompt.itemLabel,
+            prompt.targetIndex,
+          ) ||
             buildAutofillSuccessNotice(
               prompt.items.length,
               prompt.itemLabel,
               prompt.targetIndex,
               true,
             ),
-            duplicateNotice,
-          ]
-            .filter(Boolean)
-            .join(' '),
         );
         closePrompt();
       }}
       onAddFirstOnly={() => {
         if (!prompt) return;
-        const skipped = applyExtracted([prompt.items[0]], prompt.targetIndex);
-        const duplicateNotice = buildDuplicateSkippedNotice(
-          skipped,
-          prompt.itemLabel,
+        const { added, updated } = applyExtracted(
+          [prompt.items[0]],
+          prompt.targetIndex,
         );
         setAiNotice(
-          [
+          buildUpsertAutofillNotice(
+            added,
+            updated,
+            prompt.itemLabel,
+            prompt.targetIndex,
+          ) ||
             buildAutofillSuccessNotice(
               1,
               prompt.itemLabel,
               prompt.targetIndex,
               false,
             ),
-            duplicateNotice,
-          ]
-            .filter(Boolean)
-            .join(' '),
         );
         closePrompt();
       }}

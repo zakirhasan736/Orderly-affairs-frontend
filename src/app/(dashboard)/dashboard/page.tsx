@@ -24,10 +24,43 @@ import {
   saveSubsectionOrder,
 } from '@/utils/vaultNavOrder';
 import { VaultSidebarNavigation } from '@/components/VaultSidebarNavigation';
-import { AiDetectedInformationPanel } from '@/components/ai/AiDetectedInformationPanel';
 import { AiDocumentRoutingProvider } from '@/contexts/AiDocumentRoutingContext';
+import { HelpAssistantProvider } from '@/components/help/HelpAssistantContext';
+import { HelpAssistantHost } from '@/components/help/HelpAssistantHost';
+import { AiActiveSectionProvider } from '@/contexts/AiActiveSectionContext';
 import { AiPendingUploadSectionBanner } from '@/components/ai/AiPendingUploadSectionBanner';
+import {
+  peekDashboardAiPatch,
+  takeDashboardAiPatch,
+} from '@/utils/aiDashboardPatchCache';
+import {
+  markAiSectionFilled,
+  wasAiSectionRecentlyFilled,
+} from '@/utils/aiSectionFillGuard';
+import {
+  applyAiResultToSectionForm,
+  countFilledAiFields,
+} from '@/utils/aiSectionFormApply';
+import {
+  listSectionLastUpdated,
+  setSectionLastUpdated,
+} from '@/utils/sectionLastUpdated';
+import { fetchSectionsUpdatedAt } from '@/services/sectionMeta';
 import { VaultExportMenu } from '@/components/VaultExportMenu';
+import {
+  DashboardTopBar,
+  MobileTopBar,
+} from '@/components/dashboard/DashboardTopBar';
+import {
+  buildBillingNotices,
+  buildEventNotices,
+  buildExpiryNotices,
+  buildMessageNotices,
+  mergeDashboardNotices,
+  type DashboardNotice,
+} from '@/utils/dashboardNotifications';
+import { useGetStatusQuery } from '@/services/billingApi';
+import { fetchMySupportThread } from '@/libs/api/supportChat';
 
 import { fetchSession, nokLogout as apiNokLogout, ownerLogout as apiOwnerLogout, secureFetch } from '@/libs/secureFetch';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
@@ -35,19 +68,16 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/common/ui/button';
 import { Card, CardContent } from '@/components/common/ui/card';
 import { Badge } from '@/components/common/ui/badge';
-import { Progress } from '@/components/common/ui/progress';
 import {
   Save,
   FileText,
   User,
   Home,
   LayoutList,
-  Clock3,
   MoreHorizontal,
   ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import Image from 'next/image';
 import { NextOfKinLoginPage } from '@/components/NextOfKinLoginPage';
 import { TurnstileCaptcha } from '@/components/TurnstileCaptcha';
 import { getOtpSessionId } from '@/utils/otpSession';
@@ -138,6 +168,9 @@ export default function DashboardPage() {
   // App mode and NOK state
   const [appMode, setAppMode] = useState<AppMode>('owner_login');
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [sectionLastUpdatedMap, setSectionLastUpdatedMap] = useState<
+    Record<string, string>
+  >({});
   const [currentNOK, setCurrentNOK] = useState<any>(null);
   const [pendingNOK, setPendingNOK] = useState<any>(null);
   const [showOwnerNotification, setShowOwnerNotification] = useState(false);
@@ -161,6 +194,11 @@ export default function DashboardPage() {
 
   const { data: status, isLoading: loading } = useGetTourStatusQuery();
   const [updateStatus] = useUpdateTourStatusMutation();
+  const { data: billingStatus } = useGetStatusQuery(undefined, {
+    skip: appMode !== 'owner',
+  });
+  const [pendingMessageCount, setPendingMessageCount] = useState(0);
+  const [supportUnread, setSupportUnread] = useState(0);
 
   // backed next kin handler
   const [nextkinLogin] = useNextkinLoginMutation();
@@ -278,11 +316,31 @@ export default function DashboardPage() {
         return;
       }
 
+      // Never clobber a just-applied AI autofill with a late GET response.
+      if (wasAiSectionRecentlyFilled(sectionId)) {
+        return;
+      }
+
+      if (peekDashboardAiPatch(sectionId)) {
+        return;
+      }
+
       sectionLoadedSnapshotRef.current[sectionId] = JSON.stringify(data);
-      setFormData(prev => ({
-        ...prev,
-        [sectionId]: data,
-      }));
+      setFormData(prev => {
+        const existing = prev[sectionId];
+        if (
+          existing &&
+          typeof existing === 'object' &&
+          wasAiSectionRecentlyFilled(sectionId)
+        ) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [sectionId]: data,
+        };
+      });
     },
     [],
   );
@@ -430,7 +488,8 @@ export default function DashboardPage() {
       .catch(err => console.error('Failed to load Section 3 letters', err));
   }, [appMode, myNextKin, recordLoadedSection]);
 
-  // Refresh the active section when navigated (keeps data current after edits).
+  // Refresh the active section when navigated — but skip when AI fill is pending
+  // or already applied, otherwise a late GET overwrites autofilled fields.
   useEffect(() => {
     if (appMode !== 'owner') return;
 
@@ -456,6 +515,14 @@ export default function DashboardPage() {
         '21',
       ].includes(activeSection)
     ) {
+      return;
+    }
+
+    if (wasAiSectionRecentlyFilled(activeSection)) {
+      return;
+    }
+
+    if (peekDashboardAiPatch(activeSection)) {
       return;
     }
 
@@ -607,11 +674,8 @@ export default function DashboardPage() {
 
       if (session.authenticated && session.role === 'owner') {
         setCurrentUser({ email: session.email || '' });
-        setActiveSection('dashboard');
-        setActiveSubsection(null);
-        setActiveTopicId(null);
-        setSidebarOpen(false);
-        setMobileMoreOpen(false);
+        // Do not reset activeSection here — remounts/re-hydrates must not
+        // yank the owner off the section they are editing.
         setAppMode('owner');
         return;
       }
@@ -676,6 +740,95 @@ export default function DashboardPage() {
   const updateSectionData = useCallback((sectionId: string, data: any) => {
     setFormData(prev => ({ ...prev, [sectionId]: data }));
   }, []);
+
+  // When owner opens a section after overview upload: apply temp-stored AI
+  // extraction into the exact section form fields automatically.
+  useEffect(() => {
+    if (appMode !== 'owner') return;
+    if (!activeSection || activeSection === 'dashboard') return;
+    if (!/^\d+$/.test(activeSection)) return;
+
+    const stash = peekDashboardAiPatch(activeSection);
+    if (!stash?.result) return;
+
+    const applied = applyAiResultToSectionForm(
+      activeSection,
+      formData[activeSection],
+      stash.result,
+      stash.subsection,
+    );
+
+    if (!applied) return;
+
+    takeDashboardAiPatch(activeSection);
+    markAiSectionFilled(activeSection);
+    updateSectionData(activeSection, applied);
+
+    if (stash.subsection) {
+      // UI subsection ids are like 21A / 1A; map vital_info → 1A for nav.
+      const uiSubsection =
+        stash.subsection === 'vital_info'
+          ? '1A'
+          : stash.subsection === 'next_of_kin' ||
+              stash.subsection === 'executor_trustee' ||
+              stash.subsection === 'additional_contacts'
+            ? '1C'
+            : stash.subsection;
+      setActiveSubsection(uiSubsection);
+    }
+
+    const filledCount = countFilledAiFields(applied);
+    toast.success(
+      filledCount > 0
+        ? `AI filled ${filledCount} field${filledCount === 1 ? '' : 's'} in this section`
+        : 'AI data applied — please review this section',
+    );
+    // Only when navigating into a section — stash is the trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection, appMode]);
+
+  // Background AI saves update in-memory form without user opening the section.
+  useEffect(() => {
+    if (appMode !== 'owner') return;
+
+    const onPersisted = (event: Event) => {
+      const detail = (event as CustomEvent).detail as
+        | { sectionId?: string; data?: Record<string, unknown> }
+        | undefined;
+      if (!detail?.sectionId || !detail.data) return;
+      setFormData(prev => ({
+        ...prev,
+        [detail.sectionId as string]: detail.data,
+      }));
+      setSectionLastUpdated(detail.sectionId);
+      setSectionLastUpdatedMap(listSectionLastUpdated());
+    };
+
+    window.addEventListener('orderly-ai-section-persisted', onPersisted);
+    return () =>
+      window.removeEventListener('orderly-ai-section-persisted', onPersisted);
+  }, [appMode]);
+
+  // Load last-updated timestamps for overview cards.
+  useEffect(() => {
+    if (appMode !== 'owner') return;
+
+    let cancelled = false;
+    const load = async () => {
+      const map = await fetchSectionsUpdatedAt();
+      if (!cancelled) setSectionLastUpdatedMap(map);
+    };
+    void load();
+
+    const onLocalUpdate = () => {
+      setSectionLastUpdatedMap(listSectionLastUpdated());
+    };
+    window.addEventListener('orderly-section-last-updated', onLocalUpdate);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('orderly-section-last-updated', onLocalUpdate);
+    };
+  }, [appMode]);
 
   const toggleSectionDisabled = useCallback(
     (sectionId: string, disabled: boolean) => {
@@ -934,8 +1087,13 @@ export default function DashboardPage() {
 
     return `${section.id}. ${section.title}`;
   }, [activeSection, activeSubsection, activeTopicId, allSections, formData]);
+  // Only jump to the overview when entering owner mode from another mode
+  // (e.g. NOK → owner). Do not reset when owner mode is already active.
+  const prevAppModeRef = useRef<AppMode>(appMode);
   useEffect(() => {
-    if (appMode === 'owner') {
+    const prev = prevAppModeRef.current;
+    prevAppModeRef.current = appMode;
+    if (appMode === 'owner' && prev !== 'owner') {
       setActiveSection('dashboard');
       setActiveSubsection(null);
       setActiveTopicId(null);
@@ -978,10 +1136,24 @@ export default function DashboardPage() {
       if (formData['5']) {
         await saveSection5( formData['5']);
       }
-      // 🚗 SAVE SECTION 5 (Vehicles)
+      // 🏠 SAVE SECTION 6 (Main Residence)
       if (formData['6']?.['6A']) {
-        await saveSection6( {
-          '6A': formData['6']['6A'],
+        const raw6A = formData['6']['6A'] as Record<string, unknown>;
+        const normalized6A = Object.fromEntries(
+          Object.entries(raw6A).map(([key, value]) => {
+            if (typeof value !== 'string') return [key, value];
+            const looksUploadKey =
+              /deeds|mortgage|tax|inventory|warranty|manual|shutoff|breaker|security|builder|realtor|heloc|closing|paid_off|reverse|lienholder|property_deeds|home_inventory|appliance|utility|circuit/i.test(
+                key,
+              );
+            if (looksUploadKey) {
+              return [key, { text: value, files: [] }];
+            }
+            return [key, value];
+          }),
+        );
+        await saveSection6({
+          '6A': normalized6A,
         });
       }
       // 🛡️ SAVE SECTION 7 (Insurance Policies)
@@ -1083,6 +1255,12 @@ export default function DashboardPage() {
       );
 
       setLastSaved(new Date());
+      Object.keys(formData).forEach(sectionId => {
+        if (formData[sectionId] != null) {
+          setSectionLastUpdated(sectionId);
+        }
+      });
+      setSectionLastUpdatedMap(listSectionLastUpdated());
       toast.success('Saved successfully!');
     } catch (error) {
       console.error('Manual save failed:', error);
@@ -1186,6 +1364,7 @@ export default function DashboardPage() {
         return (
           <Section0PersonalInformation
             onFullyRead={() => setInstructionRead(true)}
+            onContinue={() => goToSection('1')}
           />
         );
       case '1':
@@ -1247,6 +1426,12 @@ export default function DashboardPage() {
             onChange={data => updateSectionData('7', data)}
             activeSubsection={activeSubsection}
             activeTopicId={activeTopicId}
+            ownerEmail={currentUser?.email || ''}
+            ownerName={currentUser?.full_name || currentUser?.email || 'Owner'}
+            accessPeople={(myNextKin || []).filter(
+              (person: { immediate_access?: boolean }) =>
+                Boolean(person.immediate_access),
+            )}
           />
         );
       case '8':
@@ -1364,6 +1549,7 @@ export default function DashboardPage() {
             onChange={data => updateSectionData('20', data)}
             activeSubsection={activeSubsection}
             activeTopicId={activeTopicId}
+            disabledSubsections={disabledSubsections}
           />
         );
       case '21':
@@ -1408,6 +1594,22 @@ export default function DashboardPage() {
   const completedSectionsCount = allSections.filter(s =>
     getSectionCompletionStatus(s.id),
   ).length;
+
+  const completedSectionIds = useMemo(
+    () =>
+      allSections
+        .filter(s => getSectionCompletionStatus(s.id))
+        .map(s => s.id),
+    [
+      allSections,
+      formData,
+      disabledSections,
+      myNextKin,
+      instructionRead,
+      dashboardNokLetter,
+      getSectionCompletionStatus,
+    ],
+  );
 
   const getSectionDescription = (sectionId: string) => {
     switch (sectionId) {
@@ -1458,21 +1660,113 @@ export default function DashboardPage() {
     }
   };
 
-  const goToDashboard = () => {
+  const goToDashboard = useCallback(() => {
     setActiveSection('dashboard');
     setActiveSubsection(null);
     setActiveTopicId(null);
     setSidebarOpen(false);
     setMobileMoreOpen(false);
-  };
+    window.setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const overview = document.querySelector(
+        '.owner-dashboard-overview-area',
+      );
+      if (overview instanceof HTMLElement) {
+        overview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }, 60);
+  }, []);
 
-  const goToSection = (sectionId: string) => {
+  const goToSection = useCallback((sectionId: string) => {
     setActiveSection(sectionId);
     setActiveSubsection(null);
     setActiveTopicId(null);
     setSidebarOpen(false);
     setMobileMoreOpen(false);
-  };
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      const main = document.querySelector('main');
+      if (main instanceof HTMLElement) {
+        main.scrollTo({ top: 0, behavior: 'auto' });
+      }
+    });
+  }, []);
+
+  const handleNoticeSelect = useCallback(
+    (notice: DashboardNotice) => {
+      if (!notice.sectionId) return;
+      if (notice.sectionId === 'dashboard') {
+        goToDashboard();
+        return;
+      }
+      goToSection(notice.sectionId);
+    },
+    [goToDashboard, goToSection],
+  );
+
+  const headerNotices = useMemo(() => {
+    if (appMode !== 'owner') return [] as DashboardNotice[];
+    return mergeDashboardNotices([
+      buildExpiryNotices(formData),
+      buildBillingNotices(billingStatus),
+      buildMessageNotices(pendingMessageCount),
+      buildEventNotices({
+        pendingNokName:
+          showOwnerNotification && pendingNOK
+            ? pendingNOK.full_name || pendingNOK.email || 'Next of kin'
+            : null,
+        supportUnread,
+      }),
+    ]);
+  }, [
+    appMode,
+    formData,
+    billingStatus,
+    pendingMessageCount,
+    showOwnerNotification,
+    pendingNOK,
+    supportUnread,
+  ]);
+
+  useEffect(() => {
+    if (appMode !== 'owner') return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const messages = await getMessages();
+        if (cancelled) return;
+        const list = Array.isArray(messages) ? messages : [];
+        setPendingMessageCount(
+          list.filter((item: { status?: string }) => item.status !== 'sent')
+            .length,
+        );
+      } catch {
+        /* ignore */
+      }
+      try {
+        const { thread } = await fetchMySupportThread();
+        if (!cancelled) setSupportUnread(Number(thread?.unread || 0));
+      } catch {
+        /* ignore when no support thread */
+      }
+    };
+    void load();
+    const id = window.setInterval(() => void load(), 45000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [appMode]);
+
+  // Cypress E2E: deterministic vault navigation (avoid flaky overlay/sidebar clicks)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!(window as Window & { Cypress?: unknown }).Cypress) return;
+    (window as Window & { __oaGoToSection?: (id: string) => void }).__oaGoToSection =
+      goToSection;
+  }, [goToSection]);
 
   const goToSubsection = (sectionId: string, subsectionId: string) => {
     setActiveSection(sectionId);
@@ -1569,175 +1863,30 @@ export default function DashboardPage() {
           goToSection(sectionId);
         }}
       >
-      <div className="min-h-screen bg-[#f6f8fb] text-slate-950 pb-24 md:pb-0">
-        {/* Mobile header — matches the clean app-style screenshot */}
-        <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/95 backdrop-blur-xl md:hidden">
-          <div className="flex h-[74px] items-center justify-between px-4">
-            <button
-              type="button"
-              onClick={goToDashboard}
-              className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70 active:scale-95"
-              aria-label="Go to dashboard overview"
-            >
-              <Image
-                src="/images/brand-logo.png"
-                alt="Orderly Affairs Logo"
-                width={42}
-                height={42}
-                className="h-9 w-9 object-contain"
-                priority
-              />
-            </button>
+      <HelpAssistantProvider>
+      <div className="min-h-screen bg-[#f6f8fb] text-slate-950 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+        <MobileTopBar
+          title={
+            activeSection === 'dashboard' ? 'Dashboard' : currentSectionLabel
+          }
+          subtitle={
+            activeSection === 'dashboard'
+              ? 'Overview'
+              : activeSubsection
+                ? 'Subsection'
+                : 'Section'
+          }
+          completedCount={completedSectionsCount}
+          totalCount={allSections.length}
+          showProgress={activeSection === 'dashboard'}
+          onMenuClick={() => setSidebarOpen(true)}
+          onLogoClick={goToDashboard}
+          onAccountClick={() => setMobileMoreOpen(prev => !prev)}
+          notices={headerNotices}
+          onNoticeSelect={handleNoticeSelect}
+        />
 
-            <div className="min-w-0 flex-1 px-3 text-center">
-              <h1 className="truncate text-[14px] font-semibold leading-5 text-[#10213f]">
-                {activeSection === 'dashboard'
-                  ? 'Dashboard'
-                  : currentSectionLabel}
-              </h1>
-              <p className="truncate text-[11px] font-medium text-slate-400">
-                {activeSection === 'dashboard'
-                  ? 'Overview'
-                  : activeSubsection
-                    ? 'Subsection'
-                    : 'Section'}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setMobileMoreOpen(prev => !prev)}
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#10213f] shadow-sm ring-1 ring-slate-200/80 active:scale-95"
-              aria-label="Open account menu"
-            >
-              <User className="h-5 w-5" />
-            </button>
-          </div>
-        </header>
-
-        {/* Desktop header */}
-        <header className="hidden border-b border-slate-200/80 bg-white/95 backdrop-blur-xl relative z-9999 md:block">
-          <div className="flex h-[76px] items-center justify-between pl-[304px] pr-6 xl:pr-10">
-            <div className="flex min-w-0 items-center gap-4">
-              <div className="hidden items-center gap-3 xl:flex">
-                <Image
-                  src="/images/brand-logo.png"
-                  alt="Orderly Affairs Logo"
-                  width={120}
-                  height={64}
-                  className="h-14 w-auto object-contain"
-                  priority
-                />
-                <div className="h-8 w-px bg-slate-200" />
-              </div>
-
-              <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-400">
-                  Current Area
-                </p>
-                <h1 className="mt-1 truncate text-[18px] font-semibold text-[#10213f]">
-                  {currentSectionLabel}
-                </h1>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="hidden items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-2 lg:flex">
-                <div className="h-2 w-28 overflow-hidden rounded-full bg-slate-200">
-                  <Progress value={progress} className="h-full w-full" />
-                </div>
-                <span className="text-xs font-semibold text-[#10213f]">
-                  {progress}%
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  await updateStatus({ manually_started: true });
-                  startTour(derivedRole ?? 'owner');
-                  setTourStarted(true);
-                }}
-                className="rounded-2xl bg-[#10213f] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
-              >
-                Run Tour
-              </button>
-
-              <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
-                <button
-                  type="button"
-                  onClick={manualSave}
-                  className="owners-states-save flex h-9 items-center gap-2 rounded-xl px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#10213f] active:scale-95"
-                >
-                  <Save className="h-4 w-4" />
-                  <span className="hidden xl:inline">
-                    {autoSaving ? 'Saving...' : 'Save'}
-                  </span>
-                </button>
-
-                <VaultExportMenu
-                  payload={exportPayload}
-                  trigger={
-                    <button
-                      type="button"
-                      className="owners-states-export flex h-9 items-center gap-2 rounded-xl px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#10213f] active:scale-95"
-                    >
-                      <ExportIcon />
-                      <span className="hidden xl:inline">Export</span>
-                    </button>
-                  }
-                />
-              </div>
-
-              <div className="owner-state-information group relative">
-                <button className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-[#10213f] shadow-sm transition hover:ring-4 hover:ring-slate-100">
-                  <User className="h-5 w-5" />
-                </button>
-
-                <div className="invisible absolute right-0 top-full z-[60] mt-3 translate-y-2 opacity-0 transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
-                  <div className="min-w-[230px] rounded-3xl border border-slate-100 bg-white p-2 shadow-2xl">
-                    <div className="mb-1 border-b border-slate-100 px-4 py-3">
-                      {currentUser && (
-                        <p className="truncate text-[12px] font-semibold text-[#10213f]">
-                          {currentUser.email}
-                        </p>
-                      )}
-                      <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                        Premium Member
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => goToSection('vault-settings')}
-                      className="w-full rounded-2xl px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#10213f]"
-                    >
-                      Account Info
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => goToSection('vault-settings')}
-                      className="w-full rounded-2xl px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#10213f]"
-                    >
-                      Security Keys
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleOwnerLogout}
-                      className="w-full rounded-2xl px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-rose-500 transition hover:bg-rose-50"
-                    >
-                      Log Out
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <div className="flex min-h-[calc(100vh-76px)]">
+        <div className="flex min-h-screen md:min-h-0">
           <VaultSidebarNavigation
             sections={allSections}
             activeSection={activeSection}
@@ -1761,60 +1910,83 @@ export default function DashboardPage() {
             goToTopic={goToTopic}
             onReorderSubsection={handleReorderSubsection}
             onReorderTopic={handleReorderTopic}
+            onOpenHelp={() => {
+              window.dispatchEvent(
+                new CustomEvent('orderly-open-help', {
+                  detail: { mode: 'chat' },
+                }),
+              );
+            }}
           />
 
           {/* Drawer overlay */}
           {sidebarOpen && (
             <button
               type="button"
-              className="fixed inset-0 z-[60] bg-slate-950/55 backdrop-blur-sm lg:hidden"
+              className="fixed inset-0 z-[60] bg-slate-950/55 backdrop-blur-sm md:hidden"
               onClick={() => setSidebarOpen(false)}
               aria-label="Close navigation overlay"
             />
           )}
+
+          <div className="flex min-w-0 flex-1 flex-col">
+            <DashboardTopBar
+              currentSectionLabel={
+                activeSection === 'dashboard'
+                  ? 'Dashboard'
+                  : currentSectionLabel
+              }
+              completedSectionsCount={completedSectionsCount}
+              totalSectionsCount={allSections.length}
+              onRunTour={async () => {
+                await updateStatus({ manually_started: true });
+                startTour(derivedRole ?? 'owner');
+                setTourStarted(true);
+              }}
+              exportPayload={exportPayload}
+              currentUserEmail={currentUser?.email}
+              onAccountInfo={() => goToSection('vault-settings')}
+              onLogout={handleOwnerLogout}
+              notices={headerNotices}
+              onNoticeSelect={handleNoticeSelect}
+            />
 
           {/* Main content */}
           <main className="min-w-0 flex-1">
             <div className="mx-auto w-full max-w-[1480px] px-4 py-4 sm:px-5 md:px-6 md:py-6 lg:px-8 xl:px-10">
               {activeSection === 'dashboard' ? (
                 <div className="owner-dashboard-overview-area space-y-5 md:space-y-6">
-                  <div className="rounded-[28px] border border-white/70 bg-white p-4 shadow-sm sm:p-6 md:hidden">
-                    <div className="mb-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-                          Orderly Affairs
-                        </p>
-                        <h2 className="mt-1 text-[22px] font-semibold leading-tight text-[#10213f]">
-                          Dashboard Overview
-                        </h2>
-                      </div>
-                      {progress === 100 ? (
-                        <Badge variant="default" className="bg-emerald-500">
-                          Complete
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline">{progress}%</Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
-                        <Progress value={progress} className="h-full w-full" />
-                      </div>
-                      <span className="text-xs font-semibold text-[#10213f]">
-                        {completedSectionsCount}/{allSections.length}
-                      </span>
-                    </div>
-                  </div>
-
-                  {appMode === 'owner' && <AiDetectedInformationPanel />}
-
-                  <DataBindingDashboard
-                    formData={formData}
-                    nextKinList={myNextKin || []}
-                    nokLetter={dashboardNokLetter || null}
-                    nextTask={nextTask}
-                    onNavigateToSection={sectionId => goToSection(sectionId)}
-                  />
+                  {/* Overview upload + task cards live inside DataBindingDashboard */}
+                  {appMode === 'owner' ? (
+                    <DataBindingDashboard
+                      formData={formData}
+                      nextKinList={myNextKin || []}
+                      nokLetter={dashboardNokLetter || null}
+                      nextTask={nextTask}
+                      progress={progress}
+                      completedCount={completedSectionsCount}
+                      completedSectionIds={completedSectionIds}
+                      lastUpdatedBySection={sectionLastUpdatedMap}
+                      totalCount={allSections.length}
+                      ownerEmail={currentUser?.email}
+                      onNavigateToSection={sectionId => goToSection(sectionId)}
+                    />
+                  ) : (
+                    <DataBindingDashboard
+                      formData={formData}
+                      nextKinList={myNextKin || []}
+                      nokLetter={dashboardNokLetter || null}
+                      nextTask={nextTask}
+                      progress={progress}
+                      completedCount={completedSectionsCount}
+                      completedSectionIds={completedSectionIds}
+                      lastUpdatedBySection={sectionLastUpdatedMap}
+                      totalCount={allSections.length}
+                      isNextOfKin
+                      ownerEmail={currentUser?.email}
+                      onNavigateToSection={sectionId => goToSection(sectionId)}
+                    />
+                  )}
                 </div>
               ) : activeSection === 'vault-settings' ? (
                 <div className="space-y-4 sm:space-y-5">
@@ -1950,6 +2122,55 @@ export default function DashboardPage() {
                     </div>
                   )}
 
+                  {activeSection === '18' && (
+                    <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-[20px] border border-slate-200 bg-slate-50/80 p-4 shadow-sm sm:items-center sm:rounded-[24px] sm:p-5">
+                      <input
+                        type="checkbox"
+                        id="business-owner-opt-out"
+                        checked={disabledSections['18'] || false}
+                        onChange={e =>
+                          toggleSectionDisabled('18', e.target.checked)
+                        }
+                        className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-primary focus:ring-primary sm:mt-0"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-[#10213f] sm:text-[15px]">
+                          I am not a business owner
+                        </span>
+                        <span className="mt-1 block text-sm leading-6 text-slate-500">
+                          Marks Employment & Business as not applicable when
+                          business ownership and related records do not apply.
+                        </span>
+                      </span>
+                    </label>
+                  )}
+
+                  {activeSection === '20' && activeSubsection === '20B' && (
+                    <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-[20px] border border-slate-200 bg-slate-50/80 p-4 shadow-sm sm:items-center sm:rounded-[24px] sm:p-5">
+                      <input
+                        type="checkbox"
+                        id="business-taxes-opt-out"
+                        checked={Boolean(disabledSubsections['20B'])}
+                        onChange={e =>
+                          setDisabledSubsections(prev => ({
+                            ...prev,
+                            '20B': e.target.checked,
+                          }))
+                        }
+                        className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-primary focus:ring-primary sm:mt-0"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-[#10213f] sm:text-[15px]">
+                          I am not a business owner — business taxes do not
+                          apply
+                        </span>
+                        <span className="mt-1 block text-sm leading-6 text-slate-500">
+                          Marks Business Taxes & Issues as not applicable.
+                        </span>
+                      </span>
+                    </label>
+                  )}
+
                   <div
                     className={`transition-all duration-300 ${
                       disabledSections[activeSection]
@@ -1957,7 +2178,9 @@ export default function DashboardPage() {
                         : ''
                     }`}
                   >
-                    {renderSection()}
+                    <AiActiveSectionProvider sectionId={activeSection}>
+                      {renderSection()}
+                    </AiActiveSectionProvider>
                   </div>
 
                   {activeSection === '4' && (
@@ -1999,6 +2222,19 @@ export default function DashboardPage() {
               )}
             </div>
           </main>
+
+        {/* Summary footer for desktop — sits under content column only */}
+        <footer className="mt-auto hidden border-t border-slate-200 bg-white md:block">
+          <div className="flex items-center justify-between px-6 py-3.5 lg:px-8 xl:px-10">
+            <span className="text-sm font-medium text-slate-600">
+              {completedSectionsCount} of {allSections.length} sections completed
+            </span>
+            <span className="text-xs text-slate-400">
+              Last updated · keep saving as you go
+            </span>
+          </div>
+        </footer>
+          </div>
         </div>
 
         {/* Mobile More Sheet */}
@@ -2062,74 +2298,77 @@ export default function DashboardPage() {
         )}
 
         {/* Mobile bottom navigation */}
-        <nav className="fixed inset-x-3 bottom-3 z-50 rounded-[24px] border border-white/80 bg-white/95 px-3 py-2 shadow-[0_16px_40px_rgba(15,23,42,0.18)] backdrop-blur-xl md:hidden">
-          <div className="grid grid-cols-4 gap-1">
+        <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/80 bg-white/95 px-2 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl md:hidden">
+          <div className="grid grid-cols-5 gap-0.5">
             <button
               type="button"
-              onClick={goToDashboard}
-              className={`flex flex-col items-center justify-center rounded-2xl px-2 py-2 transition active:scale-95 ${
+              onClick={() => {
+                goToDashboard();
+              }}
+              className={`relative flex flex-col items-center justify-center rounded-xl px-1 py-2 transition active:scale-95 ${
                 activeSection === 'dashboard'
                   ? 'text-[#10213f]'
                   : 'text-slate-400'
               }`}
             >
+              {activeSection === 'dashboard' ? (
+                <span className="absolute left-1/2 top-0 h-0.5 w-6 -translate-x-1/2 rounded-full bg-[#10213f]" />
+              ) : null}
               <Home className="h-5 w-5" />
-              <span className="mt-1 text-[10px] font-semibold">Home</span>
+              <span className="mt-1 text-[9px] font-semibold">Dashboard</span>
             </button>
 
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="flex flex-col items-center justify-center rounded-2xl px-2 py-2 text-slate-500 transition active:scale-95"
+              className="flex flex-col items-center justify-center rounded-xl px-1 py-2 text-slate-400 transition active:scale-95"
             >
               <LayoutList className="h-5 w-5" />
-              <span className="mt-1 text-[10px] font-semibold">Sections</span>
+              <span className="mt-1 text-[9px] font-semibold">Sections</span>
             </button>
 
             <button
               type="button"
               onClick={() => {
                 goToDashboard();
-                toast.info(
-                  'Activity summary is shown on the dashboard overview.',
-                );
+                window.setTimeout(() => {
+                  window.dispatchEvent(
+                    new CustomEvent('orderly-open-people-hub'),
+                  );
+                  document
+                    .getElementById('mobile-hub')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 120);
               }}
-              className="flex flex-col items-center justify-center rounded-2xl px-2 py-2 text-slate-500 transition active:scale-95"
+              className="flex flex-col items-center justify-center rounded-xl px-1 py-2 text-slate-400 transition active:scale-95"
             >
-              <Clock3 className="h-5 w-5" />
-              <span className="mt-1 text-[10px] font-semibold">Activity</span>
+              <User className="h-5 w-5" />
+              <span className="mt-1 text-[9px] font-semibold">People</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => goToSection('4')}
+              className={`flex flex-col items-center justify-center rounded-xl px-1 py-2 transition active:scale-95 ${
+                activeSection === '4' ? 'text-[#10213f]' : 'text-slate-400'
+              }`}
+            >
+              <FileText className="h-5 w-5" />
+              <span className="mt-1 text-[9px] font-semibold">Messages</span>
             </button>
 
             <button
               type="button"
               onClick={() => setMobileMoreOpen(prev => !prev)}
-              className={`flex flex-col items-center justify-center rounded-2xl px-2 py-2 transition active:scale-95 ${
-                mobileMoreOpen ? 'text-[#10213f]' : 'text-slate-500'
+              className={`flex flex-col items-center justify-center rounded-xl px-1 py-2 transition active:scale-95 ${
+                mobileMoreOpen ? 'text-[#10213f]' : 'text-slate-400'
               }`}
             >
               <MoreHorizontal className="h-5 w-5" />
-              <span className="mt-1 text-[10px] font-semibold">More</span>
+              <span className="mt-1 text-[9px] font-semibold">More</span>
             </button>
           </div>
         </nav>
-
-        {/* Summary footer for desktop */}
-        <footer className="hidden border-t border-slate-200 bg-white md:block">
-          <div className="mx-auto flex max-w-[1480px] items-center justify-between px-6 py-4 lg:px-8 xl:px-10">
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-semibold text-slate-600">
-                {completedSectionsCount} of {allSections.length} sections
-                completed
-              </span>
-              <Progress value={progress} className="w-40" />
-            </div>
-            {progress === 100 && (
-              <Badge variant="default" className="bg-emerald-500">
-                All Complete!
-              </Badge>
-            )}
-          </div>
-        </footer>
 
         {showWelcome && (
           <WelcomeModal
@@ -2171,7 +2410,31 @@ export default function DashboardPage() {
             onClose={() => setShowOwnerNotification(false)}
           />
         )}
+
+        <HelpAssistantHost
+          currentSectionId={activeSection}
+          onStartTour={() => {
+            startTour(derivedRole ?? 'owner');
+            setTourStarted(true);
+          }}
+          onNavigateToSection={sectionId => {
+            if (sectionId === 'dashboard') {
+              goToDashboard();
+              return;
+            }
+            goToSection(sectionId);
+          }}
+          onFocusUpload={() => {
+            goToDashboard();
+            window.setTimeout(() => {
+              document
+                .querySelector('[data-ai-overview-upload]')
+                ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 250);
+          }}
+        />
       </div>
+      </HelpAssistantProvider>
       </AiDocumentRoutingProvider>
     </>
   );

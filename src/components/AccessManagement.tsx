@@ -73,6 +73,11 @@ import {
   useRevokeNextKinAccessMutation,
   useUpdateNextKinMutation,
 } from '@/services/authApi';
+import {
+  isDuplicateAccessEmail,
+  validateAccessWizardStep,
+  type WizardStepId,
+} from '@/utils/accessManagementValidation';
 
 import { PasswordCard } from './PasswordCard';
 import {
@@ -110,7 +115,6 @@ interface AuthorizedPerson {
 }
 
 type PersonAction = 'saving' | 'deleting' | 'approving' | 'revoking';
-type WizardStepId = 'person' | 'access' | 'credentials' | 'review';
 type WizardMode = 'add' | 'edit';
 
 const WIZARD_STEPS: { id: WizardStepId; label: string }[] = [
@@ -274,8 +278,21 @@ function toNextKinApiBody(
     documents_bag_location,
     special_instructions,
     password_card_generated,
+    phone_number,
     ...shared
   } = person;
+
+  const digits = String(phone_number || '').replace(/\D/g, '');
+  const normalizedPhone =
+    phone_number && String(phone_number).trim().startsWith('+')
+      ? String(phone_number).trim()
+      : digits
+        ? digits.length === 10
+          ? `+1${digits}`
+          : digits.length === 11 && digits.startsWith('1')
+            ? `+${digits}`
+            : `+${digits}`
+        : '';
 
   const credentialExtras = {
     card_storage_location,
@@ -285,9 +302,14 @@ function toNextKinApiBody(
     password_card_generated,
   };
 
+  const withPhone = {
+    ...shared,
+    ...(normalizedPhone ? { phone_number: normalizedPhone } : {}),
+  };
+
   if (options?.isCreate) {
     return {
-      ...shared,
+      ...withPhone,
       master_password,
       ...credentialExtras,
     };
@@ -295,13 +317,13 @@ function toNextKinApiBody(
 
   if (person.immediate_access) {
     if (options?.passwordChanged && master_password?.trim()) {
-      return { ...shared, master_password };
+      return { ...withPhone, master_password };
     }
-    return shared;
+    return withPhone;
   }
 
   return {
-    ...shared,
+    ...withPhone,
     ...(master_password?.trim() ? { master_password } : {}),
     ...credentialExtras,
   };
@@ -674,7 +696,7 @@ function TrustedPersonMobileListItem({
   const displayName = person.full_name || `Person ${index + 1}`;
   const sectionCount = person.authorized_sections.length;
   const accessLabel = isFullAccess ? 'Full Kit' : `${sectionCount} Sections`;
-  const timingLabel = person.immediate_access ? 'Immediate' : 'Upon Death';
+  const timingLabel = person.immediate_access ? 'Immediate' : 'Upon Death access';
 
   return (
     <button
@@ -870,7 +892,7 @@ function TrustedPersonMobileDetails({
             ) : (
               <Clock className="h-3.5 w-3.5 text-amber-600" />
             )}
-            {person.immediate_access ? 'Immediate' : 'Upon Death'}
+            {person.immediate_access ? 'Immediate' : 'Upon Death access'}
           </p>
         </div>
       </div>
@@ -878,7 +900,7 @@ function TrustedPersonMobileDetails({
       {hasNokLetter && (
         <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
           <CheckCircle className="h-3.5 w-3.5 shrink-0" />
-          Next of Kin letter received
+          Will Receive Next of Kin Letter
         </div>
       )}
 
@@ -1043,7 +1065,7 @@ function TrustedPersonCard({
                 {hasNokLetter && (
                   <>
                     <span className="mx-1.5 text-slate-300">·</span>
-                    <span className="text-emerald-600">NOK letter</span>
+                    <span className="text-emerald-600">Next of Kin letter</span>
                   </>
                 )}
               </p>
@@ -1455,40 +1477,11 @@ export const AccessManagement = forwardRef<
   };
 
   const validateWizardStep = (stepId: WizardStepId | undefined): boolean => {
-    if (!draft || !stepId) return false;
-
-    if (stepId === 'person') {
-      if (!draft.full_name?.trim() || !draft.email?.trim() || !draft.relationship?.trim()) {
-        toast.error('Full name, email, and relationship are required');
-        return false;
-      }
-      return true;
+    const result = validateAccessWizardStep(stepId, draft);
+    if (!result.ok && result.message) {
+      toast.error(result.message);
     }
-
-    if (stepId === 'access') {
-      if (
-        draft.access_level === 'Section-Specific Access' &&
-        draft.authorized_sections.length === 0
-      ) {
-        toast.error('Select at least one section for section-specific access');
-        return false;
-      }
-      return true;
-    }
-
-    if (stepId === 'credentials') {
-      if (!draft.master_password?.trim()) {
-        toast.error(
-          draft.immediate_access
-            ? 'Generate or enter a login password'
-            : 'Generate or enter a master password',
-        );
-        return false;
-      }
-      return true;
-    }
-
-    return true;
+    return result.ok;
   };
 
   const goNextStep = () => {
@@ -1513,13 +1506,12 @@ export const AccessManagement = forwardRef<
       if (!validateWizardStep(step.id)) return;
     }
 
-    const normalizedEmail = draft.email.trim().toLowerCase();
-    const duplicateInList = authorizedPeople.some((candidate, idx) => {
-      if (wizardMode === 'edit' && wizardIndex === idx) return false;
-      return candidate.email.trim().toLowerCase() === normalizedEmail;
-    });
-
-    if (!draft._id && duplicateInList) {
+    if (
+      !draft._id &&
+      isDuplicateAccessEmail(draft.email, authorizedPeople, {
+        excludeIndex: wizardMode === 'edit' ? wizardIndex ?? undefined : undefined,
+      })
+    ) {
       toast.error(
         `A trusted person with ${draft.email} is already in your list.`,
       );
@@ -1761,7 +1753,9 @@ export const AccessManagement = forwardRef<
           <div
             className={cn(
               'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6',
-              isMobile ? 'py-3' : 'py-5',
+              isMobile
+                ? cn('py-3', MOBILE_SHEET_SCROLL_PADDING)
+                : 'py-5',
             )}
           >
             <div className={cn(isMobile ? 'space-y-4' : 'space-y-6')}>
@@ -1852,8 +1846,8 @@ export const AccessManagement = forwardRef<
                             onSelect={() =>
                               patchDraft({ immediate_access: false })
                             }
-                            title="Upon Death"
-                            description="Access after your Next of Kin letter is received."
+                            title="Upon Death access"
+                            description="Access after they will receive a Next of Kin letter."
                             icon={Clock}
                             iconClassName="bg-blue-100 text-blue-700"
                           />
@@ -1871,7 +1865,7 @@ export const AccessManagement = forwardRef<
                               className="h-4 w-4"
                             />
                             <span className="text-sm">
-                              Next of Kin letter received
+                              Will Receive Next of Kin Letter
                             </span>
                           </label>
                         )}
@@ -2300,7 +2294,7 @@ export const AccessManagement = forwardRef<
                             'Access timing',
                             draft.immediate_access
                               ? 'Immediate Access'
-                              : 'Upon Death',
+                              : 'Upon Death access',
                           ],
                           ['Access level', draft.access_level],
                           [
@@ -2374,7 +2368,7 @@ export const AccessManagement = forwardRef<
               isMobile
                 ? cn(
                     MOBILE_SHEET_FOOTER_CLASS,
-                    'sticky bottom-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+                    'pb-[max(0.75rem,env(safe-area-inset-bottom))]',
                   )
                 : 'bg-background/95 backdrop-blur',
             )}
@@ -2493,7 +2487,7 @@ export const AccessManagement = forwardRef<
           >
             {savedCount >= 1
               ? `${savedCount} ${savedCount === 1 ? 'person' : 'people'}`
-              : 'Add at least 1 person'}
+              : 'Add at least 1 trusted person to enable emergency access'}
           </span>
         ) : (
           <div className="min-w-0">
@@ -2710,8 +2704,8 @@ export const AccessManagement = forwardRef<
               />
             </div>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              Add at least one trusted person. Use Revoke All if you need to
-              immediately lock everyone out.
+              Add at least 1 trusted person to enable emergency access. Use
+              Revoke All if you need to immediately lock everyone out.
             </p>
           </div>
         </aside>
@@ -2723,7 +2717,7 @@ export const AccessManagement = forwardRef<
         <MobileBottomSheet
           open={wizardOpen}
           onClose={closeWizard}
-          className="h-[96dvh]"
+          className="h-[min(96dvh,100svh)]"
           labelledBy="wizard-sheet-title"
         >
           <div className="flex h-full min-h-0 flex-col">

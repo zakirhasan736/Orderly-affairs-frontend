@@ -32,6 +32,7 @@ export function AiRoutingFloatingNotifications() {
     navigateToPendingSection,
     dismissHighlight,
     currentSectionId,
+    batchSilentMode,
   } = useAiDocumentRouting();
 
   const notifications = useMemo(
@@ -42,7 +43,12 @@ export function AiRoutingFloatingNotifications() {
     [currentSectionId, pendingUploads],
   );
 
-  if (!notifications.length) {
+  // Overview batch upload fills silently via task cards — no floating popups.
+  if (
+    batchSilentMode ||
+    currentSectionId === 'dashboard' ||
+    !notifications.length
+  ) {
     return null;
   }
 

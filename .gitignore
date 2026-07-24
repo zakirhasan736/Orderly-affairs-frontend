@@ -12,9 +12,16 @@
 
 # testing
 /coverage
+/cypress/videos
+/cypress/screenshots
+/cypress/downloads
+/playwright-report/
+/test-results/
 
 # next.js
 /.next/
+/.next-cypress/
+/.next-playwright/
 /out/
 
 # production

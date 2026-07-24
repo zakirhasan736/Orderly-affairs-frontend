@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ArrowDown, Sparkles, X } from 'lucide-react';
+import { ArrowDown, Eye, Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/common/ui/button';
 import { getReadableAiDocumentType } from '@/utils/aiDocumentUploadUi';
 import type { AiPendingUpload } from '@/utils/aiDocumentRouting';
@@ -12,6 +12,7 @@ type Props = {
   onDismiss: () => void;
   onScrollToUpload: () => void;
   onAutofillNow?: () => void;
+  mode?: 'autofill' | 'review';
 };
 
 export function AiPendingUploadBanner({
@@ -19,34 +20,39 @@ export function AiPendingUploadBanner({
   onDismiss,
   onScrollToUpload,
   onAutofillNow,
+  mode = 'autofill',
 }: Props) {
   const fileLabel = getReadableAiDocumentType(pendingUpload.mime_type);
+  const isReview = mode === 'review';
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50 via-white to-violet-50 p-3.5 shadow-sm sm:p-4">
       <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-indigo-100/80 blur-2xl" />
 
-      <div className="relative flex flex-col gap-3.5 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
-        <div className="flex min-w-0 items-start gap-3">
+      <div className="relative flex flex-col gap-3.5 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100">
-            <Sparkles className="h-5 w-5" />
+            {isReview ? <Eye className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
           </div>
 
-          <div className="min-w-0 space-y-1">
+          <div className="min-w-0 flex-1 space-y-1">
             <p className="font-semibold text-slate-900">
-              Ready to auto-fill
+              {isReview ? 'AI found information to review' : 'Ready to auto-fill'}
             </p>
-            <p className="text-sm leading-relaxed text-slate-600">
-              {fileLabel} saved
+            <p className="break-words text-sm leading-relaxed text-slate-600">
+              {fileLabel}
+              {pendingUpload.file_name ? ` · ${pendingUpload.file_name}` : ''}
               {pendingUpload.documentSummary
                 ? ` · ${pendingUpload.documentSummary}`
                 : ''}
-              . Tap below — no re-upload needed.
+              {isReview
+                ? '. Fields were already filled — review them below. Do not re-run Auto-fill for this file.'
+                : '. Tap below — no re-upload needed.'}
             </p>
           </div>
         </div>
 
-        <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap lg:w-auto lg:shrink-0">
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap lg:w-auto lg:max-w-sm lg:shrink-0">
           {onAutofillNow ? (
             <Button
               type="button"
@@ -55,7 +61,7 @@ export function AiPendingUploadBanner({
               onClick={onAutofillNow}
             >
               <Sparkles className="mr-2 h-4 w-4" />
-              Auto-fill now
+              {isReview ? 'Review & auto-fill' : 'Auto-fill now'}
             </Button>
           ) : null}
           <Button

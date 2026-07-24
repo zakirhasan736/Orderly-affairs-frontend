@@ -36,12 +36,14 @@ type RecorderStatus =
 function getSupportedVideoMimeType() {
   if (typeof MediaRecorder === 'undefined') return '';
 
+  // Prefer WebM on Chromium — more reliable for MediaRecorder + blob preview.
+  // MP4 first can report "supported" but produce blobs Chrome cannot play back.
   const types = [
-    'video/mp4',
-    'video/mp4;codecs=avc1,mp4a',
     'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
     'video/webm',
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4',
   ];
 
   return types.find(type => MediaRecorder.isTypeSupported(type)) || '';
@@ -262,12 +264,51 @@ export function VideoRecorder({
     if (!previewUrl || !recordedVideoRef.current) return;
 
     const videoEl = recordedVideoRef.current;
+    let cancelled = false;
 
-    videoEl.load();
-    videoEl.currentTime = 0;
+    const preparePreview = async () => {
+      try {
+        videoEl.muted = false;
+        videoEl.playsInline = true;
+        videoEl.setAttribute('playsinline', 'true');
+        videoEl.setAttribute('webkit-playsinline', 'true');
+        videoEl.load();
 
-    // Let the browser show the first frame. Autoplay may be blocked, so controls remain visible.
-    videoEl.play().catch(() => {});
+        await new Promise<void>(resolve => {
+          if (videoEl.readyState >= 1) {
+            resolve();
+            return;
+          }
+          const onMeta = () => {
+            videoEl.removeEventListener('loadedmetadata', onMeta);
+            resolve();
+          };
+          videoEl.addEventListener('loadedmetadata', onMeta);
+        });
+
+        if (cancelled) return;
+
+        // Seek slightly so the first frame paints (avoids black preview).
+        if (Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
+          videoEl.currentTime = Math.min(0.05, videoEl.duration);
+        }
+
+        try {
+          await videoEl.play();
+          if (!cancelled) videoEl.pause();
+        } catch {
+          // Autoplay may be blocked; native controls still work.
+        }
+      } catch (err) {
+        console.error('Recorded preview failed to load', err);
+      }
+    };
+
+    void preparePreview();
+
+    return () => {
+      cancelled = true;
+    };
   }, [previewUrl]);
 
   const startRecording = () => {
@@ -383,6 +424,14 @@ export function VideoRecorder({
     }
 
     if (recorder.state === 'recording' || recorder.state === 'paused') {
+      try {
+        // Flush the final timeslice before stop so the blob is complete.
+        if (typeof recorder.requestData === 'function') {
+          recorder.requestData();
+        }
+      } catch {
+        // ignore
+      }
       recorder.stop();
     }
   };
@@ -404,11 +453,20 @@ export function VideoRecorder({
     if (!recordedBlob || saving || uploading) return;
 
     setSaving(true);
+    setError('');
     try {
       const success = await onVideoRecorded(recordedBlob);
       if (!success) {
-        setError('Upload failed. Your recording is still here — try Save again.');
+        setError(
+          'Upload failed. Your recording is still here — try Save again. If this keeps happening, check your connection and try a shorter clip.',
+        );
       }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Upload failed. Your recording is still here — try Save again.',
+      );
     } finally {
       setSaving(false);
     }
@@ -513,7 +571,7 @@ export function VideoRecorder({
                       ref={recordedVideoRef}
                       controls
                       playsInline
-                      preload="metadata"
+                      preload="auto"
                       src={previewUrl || undefined}
                       className={cn(
                         'w-full bg-black',
@@ -522,6 +580,11 @@ export function VideoRecorder({
                           : 'aspect-video object-contain',
                       )}
                       style={{ WebkitTransform: 'translateZ(0)' }}
+                      onError={() => {
+                        setError(
+                          'Preview could not play this recording in your browser. Try Record Again, or save and play after upload.',
+                        );
+                      }}
                     />
                   ) : (
                     <video

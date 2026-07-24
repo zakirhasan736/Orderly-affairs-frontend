@@ -10,7 +10,7 @@ export const AI_SECTION_REGISTRY: AiSectionRegistryEntry[] = [
     key: 'vital_information',
     id: '1',
     label: 'Vital Information & Key Contacts',
-    defaultSubsection: '1A',
+    defaultSubsection: 'vital_info',
   },
   {
     key: 'vehicles',

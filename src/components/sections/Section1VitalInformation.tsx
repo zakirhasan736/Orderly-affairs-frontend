@@ -1,5 +1,6 @@
 'use client';
 
+import { AiUploadedAttachmentList } from '@/components/ai/AiUploadedAttachmentList';
 import React, { useRef, useState } from 'react';
 import {
   Card,
@@ -36,6 +37,8 @@ import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services
 import {
   createEmptyItemFromFields,
   mergeAiPatchWithDefaults,
+  unwrapAiAutofillPatch,
+  aiPatchHasValues,
 } from '@/utils/aiPatchNormalizer';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
@@ -44,6 +47,7 @@ import {
 } from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import {
+  buildUploadedAiFile,
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
 import { AiDocumentDropZoneInput } from '@/components/ai/AiDocumentDropZoneInput';
@@ -601,6 +605,8 @@ type UploadedAIFile = {
   file_id: string;
   mime_type: string;
   expires_at?: string;
+  file_name?: string;
+  uploaded_at?: number;
 };
 
 type ContactAutofillTarget = {
@@ -876,11 +882,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
 
       const uploaded = await uploadAIDocument(file);
 
-      const uploadedRecord: UploadedAIFile = {
-        file_id: uploaded.file_id,
-        mime_type: uploaded.mime_type,
-        expires_at: uploaded.expires_at,
-      };
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -935,7 +937,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
 
       if (!json) return;
 
-      const patch = json?.result?.patch ?? {};
+      const patch = unwrapAiAutofillPatch(json?.result);
 
       if (contactTarget) {
         const itemPatch = extractSingleContactPatch(
@@ -958,6 +960,13 @@ const [uploadedFiles, setUploadedFiles] = useState<
           `AI filled ${contactTarget.label}. Please review the fields.`,
         );
 
+        return;
+      }
+
+      if (!aiPatchHasValues(patch)) {
+        setAiError(
+          'AI read the document but found no fillable fields for this section. Try a clearer document or another section.',
+        );
         return;
       }
 
@@ -1077,14 +1086,9 @@ const [uploadedFiles, setUploadedFiles] = useState<
             uploadTitle="Drag and drop or click to upload PDF, TXT, PNG, JPG, JPEG, or WEBP"
             uploadSubtitle="Maximum file size 15MB"
           />
-
-          {uploadedFile && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              <FileText className="h-4 w-4" />
-              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
-            </div>
-          )}
         </div>
+
+        <AiUploadedAttachmentList file={uploadedFile} />
 
         {isUploading && (
           <div className="relative flex items-center gap-2 text-xs text-slate-500">
@@ -1100,11 +1104,41 @@ const [uploadedFiles, setUploadedFiles] = useState<
     const field = VITAL_FIELD_MAP[fieldKey];
     if (!field) return null;
 
+    const rawValue = vitalInfo[field.key];
+    let safeValue: any = rawValue;
+    if (
+      rawValue !== null &&
+      rawValue !== undefined &&
+      typeof rawValue === 'object' &&
+      !Array.isArray(rawValue) &&
+      !('files' in rawValue) &&
+      !('text' in rawValue)
+    ) {
+      const record = rawValue as Record<string, unknown>;
+      safeValue =
+        record.label ??
+        record.name ??
+        record.value ??
+        record.text ??
+        record.title ??
+        '';
+    }
+
+    if (
+      field.type === 'Dropdown' &&
+      Array.isArray((field as { options?: string[] }).options) &&
+      safeValue &&
+      !(field as { options?: string[] }).options!.includes(String(safeValue))
+    ) {
+      // Keep value visible but avoid Radix Select crash on unknown option
+      safeValue = String(safeValue);
+    }
+
     return (
       <DynamicFormField
         key={field.key}
         field={field}
-        value={vitalInfo[field.key]}
+        value={safeValue ?? ''}
         onChange={(value: any) => updateVital(field.key, value)}
         className="space-y-2"
       />
@@ -1190,10 +1224,10 @@ const [uploadedFiles, setUploadedFiles] = useState<
         <CardContent className="p-5">
           {renderUploader({
             scope: 'full',
-            title: 'Upload one document for full Section 1',
+            title: 'Auto-fill all of Section 1 from one document',
             description:
-              'Use this only when one document contains information for all Section 1 areas. It can fill vital information and all contact groups together.',
-            buttonLabel: 'Auto-fill Section 1',
+              'Best when one file covers the whole section (vital information and all contact groups). This fills every subsection in Section 1 at once.',
+            buttonLabel: 'Auto-fill entire Section 1',
             onAutofill: () => handleAutofill('full'),
           })}
         </CardContent>
@@ -1242,10 +1276,10 @@ const [uploadedFiles, setUploadedFiles] = useState<
 
             {renderUploader({
               scope: 'vital_info',
-              title: 'Upload document for 1A Vital Information',
+              title: 'Auto-fill 1A Vital Information only',
               description:
-                'Autofill personal details, device access, email accounts, safe locations, digital IDs, and security notes.',
-              buttonLabel: 'Auto-fill 1A',
+                'Use this for documents that cover just this subsection — personal details, device access, email accounts, safe locations, digital IDs, and security notes. It does not fill other contact groups.',
+              buttonLabel: 'Auto-fill Vital Information (1A only)',
               onAutofill: () => handleAutofill('vital_info'),
             })}
 

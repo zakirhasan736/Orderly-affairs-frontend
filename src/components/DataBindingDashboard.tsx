@@ -3,36 +3,41 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getMessages } from '@/libs/api/lettersOfNaxtKinMessage';
 
-import { Card, CardContent } from '@common/ui/card';
 import { Button } from '@common/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@common/ui/tabs';
-import { Badge } from '@common/ui/badge';
-import { Progress } from '@common/ui/progress';
 
 import {
-  ArrowRight,
+  Activity,
+  AlarmClock,
   CheckCircle2,
   ChevronRight,
-  CircleCheck,
-  Clock3,
   FileText,
-  Fingerprint,
-  LockKeyhole,
+  FolderOpen,
   Mail,
-  MessageCircleHeart,
   MessageSquare,
   Mic,
-  Search,
-  ShieldCheck,
-  Sparkles,
+  Pencil,
+  Plus,
+  ShieldAlert,
   Users,
   Video,
-  X,
 } from 'lucide-react';
 
 import { AccessPersonCard } from './AccessPersonCard';
 import { NOKLetterCard } from './NOKLetterCard';
 import { MessageCard } from './MessageCard';
+import { OverviewAiUploadCard } from './ai/OverviewAiUploadCard';
+import { OverviewTaskBoard } from './ai/OverviewTaskBoard';
+import { useDashboardAiBatchRunner } from '@/hooks/useDashboardAiBatchRunner';
+import {
+  buildExpiryReminderMailto,
+  collectOverviewExpiryAlerts,
+  markExpiryEmailPromptShown,
+  wasExpiryEmailPromptShown,
+  type OverviewExpiryAlert,
+} from '@/utils/overviewExpiryAlerts';
+import { cn } from '@common/ui/utils';
+import { toast } from 'sonner';
 
 interface DataBindingDashboardProps {
   formData: any;
@@ -41,6 +46,13 @@ interface DataBindingDashboardProps {
   isNextOfKin?: boolean;
   nextTask: { id: string; title: string } | null;
   onNavigateToSection: (sectionId: string) => void;
+  progress?: number;
+  completedCount?: number;
+  totalCount?: number;
+  completedSectionIds?: string[];
+  lastUpdatedBySection?: Record<string, string>;
+  afterHero?: React.ReactNode;
+  ownerEmail?: string | null;
 }
 
 interface ApiMessage {
@@ -59,96 +71,85 @@ interface ApiMessage {
   subject?: string;
 }
 
-type MessageFilter = 'all' | 'letter' | 'audio' | 'video';
-
-function cn(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(' ');
-}
-
-function safeText(value: any) {
-  return String(value || '').toLowerCase();
-}
-
-function accessPersonName(item: any) {
-  return item?.full_name || item?.person_name || '';
-}
-
-function accessPersonEmail(item: any) {
-  return item?.email || item?.email_address || '';
-}
-
-function accessPersonPhone(item: any) {
-  return item?.phone_number || item?.phone || '';
-}
-
-function hasData(value: any) {
-  if (!value) return false;
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === 'object') return Object.keys(value).length > 0;
-  return Boolean(value);
-}
+type PeopleTab = 'access' | 'nok-letters' | 'messages';
+type MobileHubTab = 'activity' | 'people';
 
 export function DataBindingDashboard({
-  formData,
+  formData: formDataProp,
   nextKinList,
   nokLetter,
   onNavigateToSection,
   isNextOfKin = false,
-  nextTask,
+  completedCount = 0,
+  totalCount = 0,
+  progress = 0,
+  completedSectionIds = [],
+  lastUpdatedBySection = {},
+  ownerEmail = null,
 }: DataBindingDashboardProps) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [messageFilter, setMessageFilter] = useState<MessageFilter>('all');
+  const [activeTab, setActiveTab] = useState<PeopleTab>('access');
+  const [mobileHubTab, setMobileHubTab] = useState<MobileHubTab>('people');
   const [messages, setMessages] = useState<ApiMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const batch = useDashboardAiBatchRunner();
+
+  const expiryAlerts = useMemo(
+    () => collectOverviewExpiryAlerts(formDataProp),
+    [formDataProp],
+  );
+
+  const vaultPct = useMemo(() => {
+    if (typeof progress === 'number' && progress > 0) {
+      return Math.min(100, Math.round(progress));
+    }
+    if (totalCount > 0) {
+      return Math.min(100, Math.round((completedCount / totalCount) * 100));
+    }
+    return 0;
+  }, [progress, completedCount, totalCount]);
+
+  const docsFilledCount = useMemo(
+    () => batch.jobs.filter(job => job.status === 'done').length,
+    [batch.jobs],
+  );
+
+  const docsWorkingCount = useMemo(
+    () =>
+      batch.jobs.filter(
+        job => job.status !== 'done' && job.status !== 'error',
+      ).length,
+    [batch.jobs],
+  );
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchMessages = async () => {
       try {
         setLoadingMessages(true);
         const response = await getMessages();
-        setMessages(Array.isArray(response) ? response : []);
+        if (!cancelled) {
+          setMessages(Array.isArray(response) ? response : []);
+        }
       } catch (error) {
         console.error('Failed to fetch messages:', error);
       } finally {
-        setLoadingMessages(false);
+        if (!cancelled) setLoadingMessages(false);
       }
     };
 
     fetchMessages();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const accessManagementData = useMemo(() => {
-    return Array.isArray(nextKinList) ? nextKinList : [];
-  }, [nextKinList]);
+  const accessPeople = useMemo(
+    () => (Array.isArray(nextKinList) ? nextKinList : []),
+    [nextKinList],
+  );
 
-  const nextOfKinLetterData = nokLetter;
-
-  const fallbackLettersData = useMemo(() => {
-    return (
-      formData?.['4']?.['4A']?.letters_data ||
-      formData?.['4A']?.letters_data ||
-      []
-    );
-  }, [formData]);
-
-  const hasMessagesData = useMemo(() => {
-    return messages.length > 0 || hasData(fallbackLettersData);
-  }, [messages.length, fallbackLettersData]);
-
-  const computedProgress = useMemo(() => {
-    const checks = [
-      hasData(accessManagementData),
-      hasData(nextOfKinLetterData),
-      hasMessagesData,
-    ];
-
-    const completed = checks.filter(Boolean).length;
-    return Math.round((completed / checks.length) * 100);
-  }, [accessManagementData, nextOfKinLetterData, hasMessagesData]);
-
-  const remainingProgress = Math.max(0, 100 - computedProgress);
-
-  const allPendingMessages = useMemo(() => {
+  const pendingMessages = useMemo(() => {
     return messages
       .map((item: ApiMessage) => ({
         id: item._id,
@@ -176,711 +177,984 @@ export function DataBindingDashboard({
       .filter(item => !item.isDelivered);
   }, [messages]);
 
-  const filteredAccessData = useMemo(() => {
-    const search = searchTerm.trim().toLowerCase();
+  const recentActivity = useMemo(() => {
+    const items: Array<{
+      id: string;
+      label: string;
+      at: number;
+      sectionId: string;
+      tone: 'ok' | 'warn' | 'info';
+    }> = [];
 
-    if (!search) return accessManagementData;
-
-    return accessManagementData.filter((item: any) => {
-      return (
-        safeText(accessPersonName(item)).includes(search) ||
-        safeText(item.relationship).includes(search) ||
-        safeText(accessPersonEmail(item)).includes(search) ||
-        safeText(accessPersonPhone(item)).includes(search)
-      );
-    });
-  }, [accessManagementData, searchTerm]);
-
-  const pendingMessages = useMemo(() => {
-    const search = searchTerm.trim().toLowerCase();
-
-    return allPendingMessages
-      .filter(item =>
-        messageFilter === 'all' ? true : item.messageType === messageFilter,
-      )
-      .filter(item => {
-        if (!search) return true;
-
-        return (
-          safeText(item.title).includes(search) ||
-          safeText(item.recipient).includes(search) ||
-          safeText(item.recipientEmail).includes(search) ||
-          safeText(item.content).includes(search) ||
-          safeText(item.subject).includes(search)
-        );
+    Object.entries(lastUpdatedBySection || {}).forEach(([sectionId, iso]) => {
+      const at = Date.parse(iso);
+      if (Number.isNaN(at)) return;
+      const titles: Record<string, string> = {
+        '1': 'Vital information updated',
+        '2': 'Access people updated',
+        '3': 'Next of kin letter updated',
+        '4': 'Personal messages updated',
+        '5': 'Vehicles updated',
+        '7': 'Insurance policies updated',
+        '12': 'Bank accounts updated',
+      };
+      items.push({
+        id: `sec-${sectionId}-${iso}`,
+        label: titles[sectionId] || `Section ${sectionId} updated`,
+        at,
+        sectionId,
+        tone: 'ok',
       });
-  }, [allPendingMessages, messageFilter, searchTerm]);
+    });
 
-  const letterCount = allPendingMessages.filter(
-    item => item.messageType === 'letter',
-  ).length;
+    batch.jobs.slice(0, 6).forEach(job => {
+      if (job.status !== 'done' && job.status !== 'error') return;
+      const stamp = Date.parse(String(job.updatedAt || job.createdAt || ''));
+      if (!Number.isFinite(stamp)) return;
+      items.push({
+        id: `job-${job.id}`,
+        label:
+          job.status === 'done'
+            ? `Document filled · ${job.fileName}`
+            : `Upload issue · ${job.fileName}`,
+        at: stamp,
+        sectionId: String(job.targetSectionId || '1'),
+        tone: job.status === 'done' ? 'ok' : 'warn',
+      });
+    });
 
-  const audioCount = allPendingMessages.filter(
-    item => item.messageType === 'audio',
-  ).length;
+    pendingMessages.slice(0, 3).forEach(msg => {
+      const at = Date.parse(msg.lastModified);
+      if (Number.isNaN(at)) return;
+      items.push({
+        id: `msg-${msg.id}`,
+        label:
+          msg.messageType === 'audio'
+            ? 'Audio message recorded'
+            : msg.messageType === 'video'
+              ? 'Video message recorded'
+              : `Message drafted · ${msg.title}`,
+        at,
+        sectionId: '4',
+        tone:
+          msg.messageType === 'audio' || msg.messageType === 'video'
+            ? 'warn'
+            : 'info',
+      });
+    });
 
-  const videoCount = allPendingMessages.filter(
-    item => item.messageType === 'video',
-  ).length;
+    return items.sort((a, b) => b.at - a.at).slice(0, 6);
+  }, [batch.jobs, lastUpdatedBySection, pendingMessages]);
 
-  const clearFilters = () => {
-    setSearchTerm('');
-    setMessageFilter('all');
+  const formatActivityTime = (at: number) =>
+    new Date(at).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+
+  const openPeopleTab = (tab: PeopleTab) => {
+    setMobileHubTab('people');
+    setActiveTab(tab);
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById('people-messages')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
-  const goToNextIncompleteSection = () => {
-    const sections = [
-      { id: '2', data: accessManagementData },
-      { id: '3', data: nextOfKinLetterData },
-      { id: '4', data: hasMessagesData },
-    ];
-
-    const incomplete = sections.find(section => !hasData(section.data));
-
-    if (incomplete) {
-      onNavigateToSection(incomplete.id);
-      return;
-    }
-
-    onNavigateToSection(nextTask?.id || '0');
-  };
+  useEffect(() => {
+    const onOpenPeople = () => {
+      setMobileHubTab('people');
+      setActiveTab('access');
+    };
+    window.addEventListener('orderly-open-people-hub', onOpenPeople);
+    return () =>
+      window.removeEventListener('orderly-open-people-hub', onOpenPeople);
+  }, []);
 
   return (
-    <div className="space-y-5 sm:space-y-6">
-      {/* HERO */}
-      <section className="relative overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(15,23,42,0.08),transparent_34%)]" />
+    <div className="space-y-4 sm:space-y-6">
+      {!isNextOfKin && (
+        <>
+          <OverviewAlertRow
+            alerts={expiryAlerts}
+            ownerEmail={ownerEmail}
+            onOpenSection={onNavigateToSection}
+          />
 
-        <div className="relative grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:p-8">
-          <div className="min-w-0 space-y-5">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="rounded-full bg-slate-950 px-3 py-1 text-white hover:bg-slate-950">
-                <Sparkles className="mr-1 h-3.5 w-3.5" />
-                Dashboard Overview
-              </Badge>
+          {/* 1) Overview snapshot — vault health (mobile + desktop) */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <OverviewStatCard
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              accent="sky"
+              value={`${vaultPct}%`}
+              label="Vault complete"
+              detail={
+                totalCount > 0
+                  ? `${completedCount} of ${totalCount} sections`
+                  : 'Track your progress'
+              }
+              action="Continue"
+              onClick={() => {
+                const done = new Set(
+                  (completedSectionIds || []).map(id => String(id)),
+                );
+                const nextId = Array.from(
+                  { length: Math.max(totalCount || 22, 1) },
+                  (_, i) => String(i === 0 ? 1 : i),
+                ).find(id => !done.has(id) && id !== '0');
+                onNavigateToSection(nextId || '1');
+              }}
+            />
+            <OverviewStatCard
+              icon={
+                expiryAlerts.length > 0 ? (
+                  <ShieldAlert className="h-4 w-4" />
+                ) : (
+                  <AlarmClock className="h-4 w-4" />
+                )
+              }
+              accent={expiryAlerts.length > 0 ? 'amber' : 'emerald'}
+              value={String(expiryAlerts.length)}
+              label={expiryAlerts.length === 1 ? 'Reminder due' : 'Reminders due'}
+              detail={
+                expiryAlerts.length > 0
+                  ? 'Review dates in Alerts'
+                  : 'Nothing urgent'
+              }
+              action={expiryAlerts.length > 0 ? 'Review' : 'All clear'}
+              onClick={() => {
+                if (expiryAlerts[0]?.sectionId) {
+                  onNavigateToSection(expiryAlerts[0].sectionId);
+                }
+              }}
+            />
+            <OverviewStatCard
+              icon={<FolderOpen className="h-4 w-4" />}
+              accent="violet"
+              value={String(docsFilledCount)}
+              label={docsFilledCount === 1 ? 'Doc filled' : 'Docs filled'}
+              detail={
+                docsWorkingCount > 0
+                  ? `${docsWorkingCount} in progress`
+                  : 'AI document fill'
+              }
+              action="Upload"
+              onClick={() => {
+                document
+                  .querySelector<HTMLElement>('[data-ai-overview-upload]')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }}
+            />
+          </div>
 
-              <Badge
-                variant="outline"
-                className="rounded-full border-slate-200 bg-white/80 px-3 py-1 text-slate-600"
-              >
-                {computedProgress}% organized
-              </Badge>
+          {/* 2) Upload document */}
+          <OverviewAiUploadCard
+            jobs={batch.jobs}
+            enqueueFiles={batch.enqueueFiles}
+            dismissJob={batch.dismissJob}
+            maxConcurrent={batch.maxConcurrent}
+          />
+
+          {/* 3) Continue where you left off slider (+ desktop grids) */}
+          <OverviewTaskBoard
+            jobs={batch.jobs}
+            completedSectionIds={completedSectionIds}
+            lastUpdatedBySection={lastUpdatedBySection}
+            onNavigateToSection={onNavigateToSection}
+          />
+
+          {/* 4) Quick actions */}
+          <section className="md:hidden">
+            <div className="grid grid-cols-4 gap-2">
+              <QuickAction
+                icon={<Plus className="h-4 w-4" />}
+                label="Add a person"
+                onClick={() => onNavigateToSection('2')}
+              />
+              <QuickAction
+                icon={<Pencil className="h-4 w-4" />}
+                label="Write letter"
+                onClick={() => onNavigateToSection('3')}
+              />
+              <QuickAction
+                icon={<Mail className="h-4 w-4" />}
+                label="Send message"
+                onClick={() => onNavigateToSection('4')}
+              />
+              <QuickAction
+                icon={<Activity className="h-4 w-4" />}
+                label="View activity"
+                onClick={() => {
+                  setMobileHubTab('activity');
+                  window.requestAnimationFrame(() => {
+                    document
+                      .getElementById('mobile-hub')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  });
+                }}
+              />
+            </div>
+          </section>
+
+          {/* 5–6) People & messages (default) + Recent activity */}
+          <section
+            id="mobile-hub"
+            className="scroll-mt-24 space-y-3 md:hidden"
+          >
+            <div className="rounded-[22px] border border-slate-200 bg-white p-1.5 shadow-sm">
+              <div className="grid grid-cols-2 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setMobileHubTab('people')}
+                  className={cn(
+                    'rounded-xl px-3 py-2.5 text-[12px] font-semibold transition',
+                    mobileHubTab === 'people'
+                      ? 'bg-[#10213f] text-white shadow-sm'
+                      : 'text-slate-500',
+                  )}
+                >
+                  People & messages
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileHubTab('activity')}
+                  className={cn(
+                    'rounded-xl px-3 py-2.5 text-[12px] font-semibold transition',
+                    mobileHubTab === 'activity'
+                      ? 'bg-[#10213f] text-white shadow-sm'
+                      : 'text-slate-500',
+                  )}
+                >
+                  Recent activity
+                </button>
+              </div>
             </div>
 
-            <div>
-              <h1 className="max-w-3xl text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl lg:text-4xl">
-                Your secure vault overview.
-              </h1>
+            {mobileHubTab === 'activity' ? (
+              <div
+                id="recent-activity"
+                className="overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-sm"
+              >
+                {recentActivity.length ? (
+                  recentActivity.map((item, index) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        if (item.sectionId && item.sectionId !== 'dashboard') {
+                          onNavigateToSection(item.sectionId);
+                        }
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-3 px-3.5 py-3 text-left transition active:bg-slate-50',
+                        index > 0 && 'border-t border-slate-100',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+                          item.tone === 'ok'
+                            ? 'bg-emerald-50 text-emerald-600'
+                            : item.tone === 'warn'
+                              ? 'bg-rose-50 text-rose-500'
+                              : 'bg-sky-50 text-sky-600',
+                        )}
+                      >
+                        {item.tone === 'ok' ? (
+                          <CheckCircle2 className="h-4 w-4" />
+                        ) : item.tone === 'warn' ? (
+                          <Mic className="h-4 w-4" />
+                        ) : (
+                          <MessageSquare className="h-4 w-4" />
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-[#10213f]">
+                          {item.label}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[11px] font-medium text-slate-400">
+                        {formatActivityTime(item.at)}
+                      </span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-4 py-8 text-center text-sm text-slate-500">
+                    Activity will show here as you update your vault.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div id="people-messages" className="scroll-mt-24 space-y-3">
+                <Tabs
+                  value={activeTab}
+                  onValueChange={value => setActiveTab(value as PeopleTab)}
+                >
+                  <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
+                    <TabsTrigger
+                      value="access"
+                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#10213f]"
+                    >
+                      Access ({accessPeople.length})
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="nok-letters"
+                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#10213f]"
+                    >
+                      Letter ({nokLetter ? 1 : 0})
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="messages"
+                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#10213f]"
+                    >
+                      Messages ({pendingMessages.length})
+                    </TabsTrigger>
+                  </TabsList>
 
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
-                Review trusted access, next-of-kin letters, and personal
-                messages from one clear place before opening any section.
+                  <TabsContent value="access" className="mt-3 space-y-3">
+                    <ListPanelHeader
+                      title="People you trust"
+                      action="Manage"
+                      onAction={() => onNavigateToSection('2')}
+                    />
+                    {accessPeople.length > 0 ? (
+                      <div className="overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-sm">
+                        {accessPeople
+                          .slice(0, 4)
+                          .map((item: any, index: number) => {
+                            const name =
+                              item.full_name ||
+                              item.person_name ||
+                              'Unnamed person';
+                            const relationship =
+                              item.relationship || 'Trusted person';
+                            return (
+                              <OverviewListRow
+                                key={
+                                  item.id || item._id || item.email || index
+                                }
+                                index={index}
+                                icon={
+                                  <span className="text-[13px] font-bold uppercase">
+                                    {String(name).charAt(0)}
+                                  </span>
+                                }
+                                iconClassName="bg-[#10213f] text-white"
+                                title={name}
+                                subtitle={relationship}
+                                onClick={() => onNavigateToSection('2')}
+                              />
+                            );
+                          })}
+                      </div>
+                    ) : (
+                      <EmptyBlock
+                        title="No access people yet"
+                        description="Add trusted people who can access your kit."
+                        action="Add access people"
+                        onClick={() => onNavigateToSection('2')}
+                      />
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="nok-letters" className="mt-3 space-y-3">
+                    <ListPanelHeader
+                      title="Next of kin letter"
+                      action="Manage"
+                      onAction={() => onNavigateToSection('3')}
+                    />
+                    {nokLetter ? (
+                      <div className="overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-sm">
+                        <OverviewListRow
+                          index={0}
+                          icon={<FileText className="h-4 w-4" />}
+                          iconClassName="bg-emerald-50 text-emerald-600"
+                          title={`Letter to ${nokLetter.letter_to || 'Next of Kin'}`}
+                          subtitle={
+                            nokLetter.nok_email ||
+                            'Tap to review or edit your letter'
+                          }
+                          onClick={() => onNavigateToSection('3')}
+                        />
+                      </div>
+                    ) : (
+                      <EmptyBlock
+                        title="No letter yet"
+                        description="Write a letter so your next of kin knows what to do."
+                        action="Create letter"
+                        onClick={() => onNavigateToSection('3')}
+                      />
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="messages" className="mt-3 space-y-3">
+                    <ListPanelHeader
+                      title="Personal messages"
+                      action="Manage"
+                      onAction={() => onNavigateToSection('4')}
+                    />
+                    {loadingMessages ? (
+                      <div className="flex items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 py-10 text-sm text-slate-500">
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#10213f] border-t-transparent" />
+                        Loading…
+                      </div>
+                    ) : pendingMessages.length > 0 ? (
+                      <div className="overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-sm">
+                        {pendingMessages
+                          .slice(0, 4)
+                          .map((item, index) => (
+                            <OverviewListRow
+                              key={item.id || index}
+                              index={index}
+                              icon={
+                                item.messageType === 'video' ? (
+                                  <Video className="h-4 w-4" />
+                                ) : item.messageType === 'audio' ? (
+                                  <Mic className="h-4 w-4" />
+                                ) : (
+                                  <MessageSquare className="h-4 w-4" />
+                                )
+                              }
+                              iconClassName={
+                                item.messageType === 'video'
+                                  ? 'bg-rose-50 text-rose-600'
+                                  : item.messageType === 'audio'
+                                    ? 'bg-sky-50 text-sky-600'
+                                    : 'bg-violet-50 text-violet-600'
+                              }
+                              title={item.title || 'Untitled message'}
+                              subtitle={
+                                item.recipient
+                                  ? `To ${item.recipient}`
+                                  : 'Draft message'
+                              }
+                              onClick={() => onNavigateToSection('4')}
+                            />
+                          ))}
+                      </div>
+                    ) : (
+                      <EmptyBlock
+                        title="No messages yet"
+                        description="Create letters, audio, or video for loved ones."
+                        action="Create message"
+                        onClick={() => onNavigateToSection('4')}
+                      />
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </div>
+            )}
+          </section>
+        </>
+      )}
+
+      {/* Desktop people & messages panel */}
+      <section
+        id={isNextOfKin ? 'people-messages' : undefined}
+        className={cn(
+          'scroll-mt-24 rounded-2xl border border-slate-200 bg-white shadow-sm',
+          !isNextOfKin && 'hidden md:block',
+        )}
+      >
+        <div className="border-b border-slate-100 px-5 py-4">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold text-[#10213f]">
+                People & messages
+              </h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Access people, next of kin letter, and personal messages.
               </p>
             </div>
+          </div>
+        </div>
 
-            <div className="max-w-xl rounded-[26px] border border-slate-200 bg-white/75 p-4 shadow-sm backdrop-blur">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-950 text-white">
-                    <ShieldCheck className="h-4 w-4" />
-                  </div>
+        <div className="p-5">
+          <Tabs
+            value={activeTab}
+            onValueChange={value => setActiveTab(value as PeopleTab)}
+          >
+            <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
+              <TabsTrigger
+                value="access"
+                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#10213f]"
+              >
+                <Users className="mr-1.5 h-4 w-4" />
+                Access ({accessPeople.length})
+              </TabsTrigger>
+              <TabsTrigger
+                value="nok-letters"
+                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#10213f]"
+              >
+                <FileText className="mr-1.5 h-4 w-4" />
+                Letter ({nokLetter ? 1 : 0})
+              </TabsTrigger>
+              <TabsTrigger
+                value="messages"
+                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#10213f]"
+              >
+                <MessageSquare className="mr-1.5 h-4 w-4" />
+                Messages ({pendingMessages.length})
+              </TabsTrigger>
+            </TabsList>
 
-                  <div>
-                    <p className="text-sm font-bold text-slate-900">
-                      Legacy setup progress
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {remainingProgress > 0
-                        ? `${remainingProgress}% left to complete`
-                        : 'Core overview completed'}
-                    </p>
-                  </div>
+            <TabsContent value="access" className="mt-5">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)]">
+                <div>
+                  <PanelActions
+                    onAction={() => onNavigateToSection('2')}
+                    label="Manage access"
+                  />
+                  {accessPeople.length > 0 ? (
+                    <div className="mt-4 grid gap-4">
+                      {accessPeople.map((item: any, index: number) => (
+                        <AccessPersonCard
+                          key={item.id || item._id || item.email || index}
+                          item={item}
+                          onEdit={() => onNavigateToSection('2')}
+                          showSensitiveInfo={false}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyBlock
+                      title="No access people yet"
+                      description="Add trusted people who can access your kit."
+                      action="Add access people"
+                      onClick={() => onNavigateToSection('2')}
+                    />
+                  )}
                 </div>
 
-                <span className="text-lg font-semibold text-slate-950">
-                  {computedProgress}%
-                </span>
-              </div>
-
-              <Progress value={computedProgress} className="mt-4 h-2.5" />
-
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <ProgressPill
-                  active={accessManagementData.length > 0}
-                  label="Access"
-                />
-                <ProgressPill
-                  active={Boolean(nextOfKinLetterData)}
-                  label="NOK"
-                />
-                <ProgressPill active={hasMessagesData} label="Messages" />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button
-                type="button"
-                onClick={goToNextIncompleteSection}
-                className="h-12 rounded-2xl bg-slate-950 px-5 text-white shadow-sm hover:bg-slate-800"
-              >
-                Continue organizing
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onNavigateToSection('0')}
-                className="h-12 rounded-2xl border-slate-200 bg-white px-5"
-              >
-                Open guide
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2 rounded-[26px] border border-slate-200 bg-white/75 p-2 shadow-sm backdrop-blur">
-              <HeroMetric
-                icon={<Users className="h-4 w-4" />}
-                label="Access"
-                value={accessManagementData.length}
-              />
-              <HeroMetric
-                icon={<FileText className="h-4 w-4" />}
-                label="NOK"
-                value={nextOfKinLetterData ? 1 : 0}
-              />
-              <HeroMetric
-                icon={<MessageCircleHeart className="h-4 w-4" />}
-                label="Messages"
-                value={allPendingMessages.length}
-              />
-            </div>
-
-            <div className="rounded-[28px] bg-slate-950 p-5 text-white shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-                    Next best action
-                  </p>
-
-                  <h3 className="mt-3 text-base font-bold leading-6">
-                    {nextTask
-                      ? `Complete ${nextTask.title}`
-                      : 'Your core overview is ready'}
+                <aside className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-5 shadow-sm">
+                  <div className="mx-auto mb-4 flex h-28 w-28 items-center justify-center rounded-full bg-white shadow-inner ring-1 ring-emerald-100">
+                    <div className="relative flex h-16 w-12 items-end justify-center rounded-md bg-[#10213f]">
+                      <span className="mb-2 h-5 w-5 rounded-full border-2 border-emerald-400 bg-emerald-500 shadow" />
+                    </div>
+                  </div>
+                  <h3 className="text-center text-base font-semibold text-[#10213f]">
+                    Your information is secure
                   </h3>
-
-                  <p className="mt-2 text-sm leading-6 text-slate-400">
-                    {nextTask
-                      ? 'Jump to the next section that needs your attention.'
-                      : 'You can continue reviewing or editing your details.'}
+                  <p className="mt-2 text-center text-sm leading-relaxed text-slate-500">
+                    Access people only see what you allow. You can change
+                    permissions anytime.
                   </p>
-                </div>
-
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10">
-                  <Clock3 className="h-5 w-5" />
-                </div>
+                  <Button
+                    type="button"
+                    onClick={() => onNavigateToSection('2')}
+                    className="mt-4 h-11 w-full rounded-xl bg-[#10213f] text-white hover:bg-[#0c1a33]"
+                  >
+                    Manage Access
+                  </Button>
+                </aside>
               </div>
+            </TabsContent>
 
-              <Button
-                type="button"
-                onClick={() => onNavigateToSection(nextTask?.id || '0')}
-                className="mt-5 h-11 w-full rounded-2xl bg-white text-slate-950 hover:bg-slate-100"
-              >
-                {nextTask ? 'Open next section' : 'Open guide'}
-                <ChevronRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-                  <LockKeyhole className="h-5 w-5" />
-                </div>
-
-                <div>
-                  <p className="text-sm font-bold text-slate-950">
-                    Vault protected
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Sensitive information stays secured.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* QUICK ACTIONS */}
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <QuickActionCard
-          title="Instructions"
-          description="Guide and setup notes"
-          icon={<FileText className="h-5 w-5" />}
-          tone="emerald"
-          onClick={() => onNavigateToSection('0')}
-        />
-
-        <QuickActionCard
-          title="Access People"
-          description={`${accessManagementData.length} authorized ${
-            accessManagementData.length === 1 ? 'person' : 'people'
-          }`}
-          icon={<Fingerprint className="h-5 w-5" />}
-          tone="indigo"
-          onClick={() => onNavigateToSection('2')}
-        />
-
-        <QuickActionCard
-          title="Next of Kin"
-          description={
-            nextOfKinLetterData ? 'Letter configured' : 'No letter yet'
-          }
-          icon={<ShieldCheck className="h-5 w-5" />}
-          tone="rose"
-          onClick={() => onNavigateToSection('3')}
-        />
-
-        <QuickActionCard
-          title="Messages"
-          description={`${allPendingMessages.length} pending ${
-            allPendingMessages.length === 1 ? 'message' : 'messages'
-          }`}
-          icon={<MessageCircleHeart className="h-5 w-5" />}
-          tone="blue"
-          onClick={() => onNavigateToSection('4')}
-        />
-      </section>
-
-      {/* SEARCH + FILTER */}
-      <section className="sticky top-[84px] z-20 rounded-[26px] border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur-xl md:static md:p-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-
-            <input
-              value={searchTerm}
-              onChange={event => setSearchTerm(event.target.value)}
-              placeholder="Search people, recipients, emails, messages..."
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-11 pr-11 text-sm font-medium text-slate-700 outline-none transition focus:bg-white focus:ring-2 focus:ring-slate-900/10"
-            />
-
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm hover:text-slate-900"
-                aria-label="Clear search"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-
-          <div className="flex gap-2 overflow-x-auto pb-1 xl:pb-0">
-            <FilterChip
-              active={messageFilter === 'all'}
-              onClick={() => setMessageFilter('all')}
-            >
-              All {allPendingMessages.length}
-            </FilterChip>
-
-            <FilterChip
-              active={messageFilter === 'letter'}
-              onClick={() => setMessageFilter('letter')}
-            >
-              <Mail className="mr-1.5 h-4 w-4" />
-              Letters {letterCount}
-            </FilterChip>
-
-            <FilterChip
-              active={messageFilter === 'audio'}
-              onClick={() => setMessageFilter('audio')}
-            >
-              <Mic className="mr-1.5 h-4 w-4" />
-              Audio {audioCount}
-            </FilterChip>
-
-            <FilterChip
-              active={messageFilter === 'video'}
-              onClick={() => setMessageFilter('video')}
-            >
-              <Video className="mr-1.5 h-4 w-4" />
-              Video {videoCount}
-            </FilterChip>
-          </div>
-        </div>
-
-        {(searchTerm || messageFilter !== 'all') && (
-          <div className="mt-3 flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-            <p className="text-xs font-medium text-slate-500">
-              Showing filtered results
-            </p>
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={clearFilters}
-              className="h-8 rounded-xl"
-            >
-              Clear
-            </Button>
-          </div>
-        )}
-      </section>
-
-      {/* CONTENT TABS */}
-      <Tabs defaultValue="access" className="w-full">
-        <TabsList className="grid h-auto w-full grid-cols-3 rounded-[22px] bg-slate-100 p-1">
-          <TabsTrigger
-            value="access"
-            className="min-h-12 rounded-2xl px-2 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm sm:text-sm"
-          >
-            <Users className="mr-1.5 h-4 w-4" />
-            <span>Access</span>
-          </TabsTrigger>
-
-          <TabsTrigger
-            value="nok-letters"
-            className="min-h-12 rounded-2xl px-2 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm sm:text-sm"
-          >
-            <FileText className="mr-1.5 h-4 w-4" />
-            <span className="hidden sm:inline">NOK Letter</span>
-            <span className="sm:hidden">NOK</span>
-          </TabsTrigger>
-
-          <TabsTrigger
-            value="messages"
-            className="min-h-12 rounded-2xl px-2 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm sm:text-sm"
-          >
-            <MessageSquare className="mr-1.5 h-4 w-4" />
-            <span>Messages</span>
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="access" className="mt-5">
-          <SectionHeader
-            title="Access Management"
-            description="Trusted people who may access or help manage your important information."
-            count={filteredAccessData.length}
-            actionLabel="Manage Access"
-            onAction={() => onNavigateToSection('2')}
-          />
-
-          {filteredAccessData.length > 0 ? (
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              {filteredAccessData.map((item: any, index: number) => (
-                <AccessPersonCard
-                  key={item.id || item._id || item.email || `access-${index}`}
-                  item={item}
-                  onEdit={() => onNavigateToSection('2')}
-                  showSensitiveInfo={false}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon={<Users className="h-8 w-8" />}
-              title="No access people found"
-              description={
-                searchTerm
-                  ? 'No authorized people match your current search.'
-                  : 'Add trusted people who can access or help manage your kit.'
-              }
-              buttonLabel={searchTerm ? 'Clear search' : 'Add access people'}
-              onClick={
-                searchTerm
-                  ? () => setSearchTerm('')
-                  : () => onNavigateToSection('2')
-              }
-            />
-          )}
-        </TabsContent>
-
-        <TabsContent value="nok-letters" className="mt-5">
-          <SectionHeader
-            title="Next of Kin Letter"
-            description="A clear letter to guide your designated next of kin."
-            count={nextOfKinLetterData ? 1 : 0}
-            actionLabel="Manage Letter"
-            onAction={() => onNavigateToSection('3')}
-          />
-
-          {nextOfKinLetterData ? (
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <NOKLetterCard
-                obj={nextOfKinLetterData}
-                onEdit={() => onNavigateToSection('3')}
-                onView={() => onNavigateToSection('3')}
+            <TabsContent value="nok-letters" className="mt-5">
+              <PanelActions
+                onAction={() => onNavigateToSection('3')}
+                label="Manage letter"
               />
-            </div>
-          ) : (
-            <EmptyState
-              icon={<FileText className="h-8 w-8" />}
-              title="No next of kin letter yet"
-              description="Create a helpful letter so your next of kin knows what to do first."
-              buttonLabel="Create letter"
-              onClick={() => onNavigateToSection('3')}
-            />
-          )}
-        </TabsContent>
-
-        <TabsContent value="messages" className="mt-5">
-          <SectionHeader
-            title="Personal Messages"
-            description="Letters, audio, and video messages prepared for loved ones."
-            count={pendingMessages.length}
-            actionLabel="Manage Messages"
-            onAction={() => onNavigateToSection('4')}
-          />
-
-          {loadingMessages ? (
-            <Card className="mt-4 rounded-[28px] border-dashed border-slate-200">
-              <CardContent className="flex items-center justify-center gap-3 p-10 text-slate-500">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />
-                Loading personal messages...
-              </CardContent>
-            </Card>
-          ) : pendingMessages.length > 0 ? (
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              {pendingMessages.map((item, index) => (
-                <MessageCard
-                  key={item.id || index}
-                  item={item}
-                  onEdit={() => onNavigateToSection('4')}
-                  onView={() => onNavigateToSection('4')}
-                  onDelete={() => onNavigateToSection('4')}
+              {nokLetter ? (
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <NOKLetterCard
+                    obj={nokLetter}
+                    onEdit={() => onNavigateToSection('3')}
+                    onView={() => onNavigateToSection('3')}
+                  />
+                </div>
+              ) : (
+                <EmptyBlock
+                  title="No next of kin letter yet"
+                  description="Write a letter so your next of kin knows what to do."
+                  action="Create letter"
+                  onClick={() => onNavigateToSection('3')}
                 />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon={<MessageCircleHeart className="h-8 w-8" />}
-              title="No messages found"
-              description={
-                searchTerm || messageFilter !== 'all'
-                  ? 'No messages match your current filters.'
-                  : 'Create heartfelt letters, voice notes, or videos for loved ones.'
-              }
-              buttonLabel={
-                searchTerm || messageFilter !== 'all'
-                  ? 'Clear filters'
-                  : 'Create message'
-              }
-              onClick={
-                searchTerm || messageFilter !== 'all'
-                  ? clearFilters
-                  : () => onNavigateToSection('4')
-              }
-            />
-          )}
-        </TabsContent>
-      </Tabs>
+              )}
+            </TabsContent>
+
+            <TabsContent value="messages" className="mt-5">
+              <PanelActions
+                onAction={() => onNavigateToSection('4')}
+                label="Manage messages"
+              />
+              {loadingMessages ? (
+                <div className="mt-4 flex items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 py-12 text-sm text-slate-500">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#10213f] border-t-transparent" />
+                  Loading messages…
+                </div>
+              ) : pendingMessages.length > 0 ? (
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  {pendingMessages.map((item, index) => (
+                    <MessageCard
+                      key={item.id || index}
+                      item={item}
+                      onEdit={() => onNavigateToSection('4')}
+                      onView={() => onNavigateToSection('4')}
+                      onDelete={() => onNavigateToSection('4')}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyBlock
+                  title="No messages yet"
+                  description="Create letters, audio, or video for loved ones."
+                  action="Create message"
+                  onClick={() => onNavigateToSection('4')}
+                />
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+      </section>
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* SMALL COMPONENTS                                                    */
-/* ------------------------------------------------------------------ */
-
-function ProgressPill({ active, label }: { active: boolean; label: string }) {
-  return (
-    <div
-      className={cn(
-        'flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[11px] font-bold',
-        active ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-400',
-      )}
-    >
-      {active ? (
-        <CircleCheck className="h-3.5 w-3.5" />
-      ) : (
-        <span className="h-3.5 w-3.5 rounded-full border border-current" />
-      )}
-      {label}
-    </div>
-  );
-}
-
-function HeroMetric({
+function OverviewStatCard({
   icon,
-  label,
+  accent,
   value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="rounded-[22px] bg-slate-50 p-3 text-center">
-      <div className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-2xl bg-white text-slate-950 shadow-sm">
-        {icon}
-      </div>
-
-      <p className="text-lg font-semibold leading-none text-slate-950">{value}</p>
-      <p className="mt-1 text-[11px] font-semibold text-slate-400">{label}</p>
-    </div>
-  );
-}
-
-function QuickActionCard({
-  title,
-  description,
-  icon,
-  tone,
+  label,
+  detail,
+  action,
   onClick,
 }: {
-  title: string;
-  description: string;
   icon: React.ReactNode;
-  tone: 'emerald' | 'indigo' | 'rose' | 'blue';
+  accent: 'sky' | 'emerald' | 'violet' | 'amber';
+  value: string;
+  label: string;
+  detail: string;
+  action: string;
   onClick: () => void;
 }) {
-  const toneClass = {
-    emerald: 'bg-emerald-50 text-emerald-600',
-    indigo: 'bg-indigo-50 text-indigo-600',
-    rose: 'bg-rose-50 text-rose-600',
-    blue: 'bg-blue-50 text-blue-600',
-  }[tone];
+  const accents = {
+    sky: {
+      shell:
+        'border-sky-100/80 bg-[linear-gradient(165deg,#ffffff_0%,#f0f9ff_100%)]',
+      icon: 'bg-sky-500/10 text-sky-600 ring-sky-100',
+      action: 'text-sky-700',
+    },
+    emerald: {
+      shell:
+        'border-emerald-100/80 bg-[linear-gradient(165deg,#ffffff_0%,#ecfdf5_100%)]',
+      icon: 'bg-emerald-500/10 text-emerald-600 ring-emerald-100',
+      action: 'text-emerald-700',
+    },
+    violet: {
+      shell:
+        'border-violet-100/80 bg-[linear-gradient(165deg,#ffffff_0%,#f5f3ff_100%)]',
+      icon: 'bg-violet-500/10 text-violet-600 ring-violet-100',
+      action: 'text-violet-700',
+    },
+    amber: {
+      shell:
+        'border-amber-100/80 bg-[linear-gradient(165deg,#ffffff_0%,#fffbeb_100%)]',
+      icon: 'bg-amber-500/10 text-amber-600 ring-amber-100',
+      action: 'text-amber-700',
+    },
+  }[accent];
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group rounded-[28px] border border-slate-200 bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-5"
+      className={cn(
+        'relative flex min-h-[118px] flex-col overflow-hidden rounded-[18px] border p-2.5 text-left shadow-[0_8px_22px_rgba(15,23,42,0.04)] transition active:scale-[0.98] sm:min-h-[128px] sm:rounded-[20px] sm:p-3.5',
+        accents.shell,
+      )}
     >
-      <div className="flex items-start gap-4">
-        <div
-          className={cn(
-            'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition group-hover:scale-105',
-            toneClass,
-          )}
-        >
-          {icon}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <h3 className="line-clamp-1 text-sm font-semibold text-slate-950 sm:text-base">
-            {title}
-          </h3>
-
-          <p className="mt-1 line-clamp-2 text-xs font-medium leading-5 text-slate-500 sm:text-sm">
-            {description}
-          </p>
-        </div>
-
-        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-slate-900" />
-      </div>
+      <span
+        className={cn(
+          'flex h-8 w-8 items-center justify-center rounded-xl ring-1 sm:h-9 sm:w-9 sm:rounded-2xl',
+          accents.icon,
+        )}
+      >
+        {icon}
+      </span>
+      <span className="mt-2.5 text-[20px] font-bold leading-none tracking-tight text-[#10213f] sm:mt-3 sm:text-[24px]">
+        {value}
+      </span>
+      <span className="mt-1 truncate text-[10px] font-semibold text-slate-700 sm:text-[11px]">
+        {label}
+      </span>
+      <span className="mt-0.5 line-clamp-1 text-[9px] font-medium text-slate-400 sm:text-[10px]">
+        {detail}
+      </span>
+      <span
+        className={cn(
+          'mt-auto inline-flex items-center gap-0.5 pt-2 text-[10px] font-semibold sm:text-[11px]',
+          accents.action,
+        )}
+      >
+        {action}
+        <ChevronRight className="h-3 w-3" />
+      </span>
     </button>
   );
 }
 
-function FilterChip({
-  active,
-  children,
+function QuickAction({
+  icon,
+  label,
   onClick,
 }: {
-  active: boolean;
-  children: React.ReactNode;
+  icon: React.ReactNode;
+  label: string;
   onClick: () => void;
 }) {
   return (
-    <Button
+    <button
       type="button"
-      size="sm"
-      variant={active ? 'default' : 'outline'}
       onClick={onClick}
-      className={cn(
-        'h-10 shrink-0 rounded-2xl px-4 text-xs font-bold sm:text-sm',
-        active
-          ? 'bg-slate-950 text-white hover:bg-slate-800'
-          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-      )}
+      className="flex flex-col items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-1 py-3 shadow-sm active:scale-[0.98]"
     >
-      {children}
-    </Button>
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-sky-600">
+        {icon}
+      </span>
+      <span className="text-center text-[10px] font-semibold leading-tight text-[#10213f]">
+        {label}
+      </span>
+    </button>
   );
 }
 
-function SectionHeader({
+function ListPanelHeader({
   title,
-  description,
-  count,
-  actionLabel,
+  action,
   onAction,
 }: {
   title: string;
-  description: string;
-  count: number;
-  actionLabel: string;
+  action: string;
   onAction: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
-      <div className="min-w-0">
-        <Badge variant="secondary" className="mb-2 rounded-full">
-          {count} {count === 1 ? 'item' : 'items'}
-        </Badge>
+    <div className="flex items-center justify-between gap-2 px-0.5">
+      <h2 className="text-[15px] font-semibold text-[#10213f]">{title}</h2>
+      <button
+        type="button"
+        onClick={onAction}
+        className="inline-flex items-center gap-0.5 rounded-lg px-2 py-1 text-[11px] font-semibold text-sky-700 active:bg-sky-50"
+      >
+        {action}
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
 
-        <h2 className="text-base font-semibold text-slate-950 sm:text-lg">
+function OverviewListRow({
+  index,
+  icon,
+  iconClassName,
+  title,
+  subtitle,
+  onClick,
+}: {
+  index: number;
+  icon: React.ReactNode;
+  iconClassName: string;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex w-full min-h-[68px] items-center gap-3 px-3.5 py-3 text-left transition active:bg-slate-50',
+        index > 0 && 'border-t border-slate-100',
+      )}
+    >
+      <span
+        className={cn(
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl',
+          iconClassName,
+        )}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[14px] font-semibold text-[#10213f]">
           {title}
-        </h2>
+        </span>
+        <span className="mt-0.5 block truncate text-[12px] text-slate-500">
+          {subtitle}
+        </span>
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+    </button>
+  );
+}
 
-        <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-          {description}
-        </p>
+function OverviewAlertRow({
+  alerts,
+  ownerEmail,
+  onOpenSection,
+}: {
+  alerts: OverviewExpiryAlert[];
+  ownerEmail?: string | null;
+  onOpenSection: (sectionId: string) => void;
+}) {
+  useEffect(() => {
+    const due = alerts.filter(
+      alert =>
+        alert.emailDue &&
+        !wasExpiryEmailPromptShown(alert.id, alert.daysUntil),
+    );
+    if (!due.length) return;
+
+    const top = due[0];
+    markExpiryEmailPromptShown(top.id, top.daysUntil);
+    window.setTimeout(() => {
+      window.location.href = buildExpiryReminderMailto(top, ownerEmail);
+      toast.message('Email reminder opened', {
+        description: top.text,
+      });
+    }, 600);
+  }, [alerts, ownerEmail]);
+
+  const startEmail = (alert: OverviewExpiryAlert) => {
+    markExpiryEmailPromptShown(alert.id, alert.daysUntil);
+    window.location.href = buildExpiryReminderMailto(alert, ownerEmail);
+    toast.message('Email reminder opened');
+  };
+
+  if (!alerts.length) {
+    return (
+      <div className="hidden flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm sm:flex">
+        <AlertPill
+          tone="ok"
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+          text="Nothing due in the next 2 weeks."
+        />
       </div>
+    );
+  }
 
+  return (
+    <div className="hidden flex-col gap-2 sm:flex">
+      {alerts.map(alert => (
+        <div
+          key={alert.id}
+          className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2 shadow-sm"
+        >
+          <button
+            type="button"
+            onClick={() => onOpenSection(alert.sectionId)}
+            className="min-w-0 flex-1 text-left"
+          >
+            <AlertPill
+              tone={alert.tone === 'critical' ? 'critical' : 'warn'}
+              icon={<AlarmClock className="h-3.5 w-3.5" />}
+              text={alert.text}
+            />
+          </button>
+          <button
+            type="button"
+            onClick={() => startEmail(alert)}
+            className={cn(
+              'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold transition',
+              alert.emailDue
+                ? 'bg-[#10213f] text-white hover:bg-[#0c1a33]'
+                : 'border border-slate-200 bg-slate-50 text-[#10213f] hover:bg-white',
+            )}
+          >
+            <Mail className="h-3.5 w-3.5" />
+            {alert.emailDue ? 'Email now' : 'Email'}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AlertPill({
+  tone,
+  icon,
+  text,
+}: {
+  tone: 'warn' | 'ok' | 'critical';
+  icon: React.ReactNode;
+  text: string;
+}) {
+  const classes =
+    tone === 'ok'
+      ? 'inline-flex w-full max-w-full items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800'
+      : tone === 'critical'
+        ? 'inline-flex w-full max-w-full items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-900'
+        : 'inline-flex w-full max-w-full items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900';
+
+  return (
+    <div className={classes}>
+      <span
+        className={cn(
+          'shrink-0',
+          tone === 'ok'
+            ? 'text-emerald-600'
+            : tone === 'critical'
+              ? 'text-rose-600'
+              : 'text-rose-500',
+        )}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0 break-words">{text}</span>
+    </div>
+  );
+}
+
+function PanelActions({
+  label,
+  onAction,
+}: {
+  label: string;
+  onAction: () => void;
+}) {
+  return (
+    <div className="flex justify-end">
       <Button
         type="button"
         variant="outline"
         onClick={onAction}
-        className="h-11 rounded-2xl border-slate-200 bg-white"
+        className="h-9 rounded-lg border-slate-200 text-xs sm:text-sm"
       >
-        {actionLabel}
+        {label}
+        <ChevronRight className="ml-1 h-4 w-4" />
       </Button>
     </div>
   );
 }
 
-function EmptyState({
-  icon,
+function EmptyBlock({
   title,
   description,
-  buttonLabel,
+  action,
   onClick,
 }: {
-  icon: React.ReactNode;
   title: string;
   description: string;
-  buttonLabel: string;
+  action: string;
   onClick: () => void;
 }) {
   return (
-    <Card className="mt-4 rounded-[32px] border-dashed border-slate-200 bg-slate-50/60">
-      <CardContent className="p-8 text-center sm:p-12">
-        <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-[28px] bg-white text-slate-950 shadow-sm">
-          {icon}
-        </div>
-
-        <h3 className="text-base font-semibold text-slate-950 sm:text-lg">
-          {title}
-        </h3>
-
-        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-          {description}
-        </p>
-
-        <Button
-          type="button"
-          onClick={onClick}
-          className="mt-5 rounded-2xl bg-slate-950 text-white hover:bg-slate-800"
-        >
-          {buttonLabel}
-        </Button>
-      </CardContent>
-    </Card>
+    <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center sm:mt-4 sm:px-6 sm:py-10">
+      <p className="text-sm font-semibold text-slate-900">{title}</p>
+      <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
+        {description}
+      </p>
+      <Button
+        type="button"
+        onClick={onClick}
+        className="mt-4 rounded-xl bg-[#10213f] text-white hover:bg-[#0c1a33]"
+      >
+        {action}
+      </Button>
+    </div>
   );
 }

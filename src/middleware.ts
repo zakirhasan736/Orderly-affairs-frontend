@@ -48,6 +48,11 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Admin support inbox — auth checked client-side via API (role: admin).
+  if (pathname.startsWith('/admin')) {
+    return NextResponse.next();
+  }
+
   return NextResponse.next();
 }
 
@@ -58,5 +63,6 @@ export const config = {
     '/dashboard/:path*',
     '/next-kin',
     '/next-kin/:path*',
+    '/admin/:path*',
   ],
 };

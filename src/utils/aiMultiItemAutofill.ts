@@ -1,7 +1,8 @@
 /** Shared helpers for AI autofill when documents contain multiple repeatable entries. */
 
 import {
-  filterDuplicateAutofillItems,
+  mergeAutofillItemFields,
+  upsertAutofillItems,
 } from '@/utils/aiItemDedup';
 
 const DEFAULT_DESCRIBE_FIELDS = [
@@ -154,75 +155,108 @@ export function applyItemsToIndexedList<T extends Record<string, unknown>>({
   createEmpty: () => T;
   preserveRowId?: boolean;
   isDuplicate?: (existing: T, incoming: T) => boolean;
-}): { items: T[]; skipped: number } {
+}): { items: T[]; added: number; updated: number; skipped: number } {
   if (extractedItems.length === 0) {
-    return { items: currentItems, skipped: 0 };
+    return { items: currentItems, added: 0, updated: 0, skipped: 0 };
   }
 
-  let itemsToApply = extractedItems;
-  let skipped = 0;
+  const mergeAt = (base: T[], index: number, item: T): T[] => {
+    const next = [...base];
+    const existing = next[index] || createEmpty();
+    const merged = mergeAutofillItemFields(existing, item);
+
+    const existingRowId = (existing as Record<string, unknown>).__rowId;
+    const itemRowId = (item as Record<string, unknown>).__rowId;
+
+    if (preserveRowId && existingRowId && !itemRowId) {
+      (merged as Record<string, unknown>).__rowId = existingRowId;
+    }
+
+    if (index < next.length) {
+      next[index] = merged;
+    } else {
+      while (next.length < index) {
+        next.push(createEmpty());
+      }
+      next.push(merged);
+    }
+
+    return next;
+  };
+
+  // Explicit card target: always fill that card with the first extracted item
+  // (user chose this card). Remaining items upsert (update same topic / add new).
+  if (typeof targetIndex === 'number') {
+    const hadTarget = targetIndex < currentItems.length;
+    let next = mergeAt(currentItems, targetIndex, extractedItems[0]);
+    let added = hadTarget ? 0 : 1;
+    let updated = hadTarget ? 1 : 0;
+    const remaining = extractedItems.slice(1);
+
+    if (remaining.length > 0) {
+      if (isDuplicate) {
+        const upserted = upsertAutofillItems(next, remaining, isDuplicate);
+        next = upserted.items;
+        added += upserted.added;
+        updated += upserted.updated;
+      } else {
+        next = [...next, ...remaining];
+        added += remaining.length;
+      }
+    }
+
+    return { items: next, added, updated, skipped: 0 };
+  }
 
   if (isDuplicate) {
-    const filtered = filterDuplicateAutofillItems(
+    const upserted = upsertAutofillItems(
       currentItems,
       extractedItems,
       isDuplicate,
     );
-    itemsToApply = filtered.unique;
-    skipped = filtered.skipped;
+    return {
+      items: upserted.items,
+      added: upserted.added,
+      updated: upserted.updated,
+      skipped: 0,
+    };
   }
 
-  if (itemsToApply.length === 0) {
-    return { items: currentItems, skipped };
-  }
-
-  if (typeof targetIndex === 'number') {
-    const next = [...currentItems];
-
-    itemsToApply.forEach((item, offset) => {
-      const index = targetIndex + offset;
-      const existing = next[index] || createEmpty();
-      const merged = {
-        ...existing,
-        ...item,
-      } as T;
-
-      const existingRowId = (existing as Record<string, unknown>).__rowId;
-      const itemRowId = (item as Record<string, unknown>).__rowId;
-
-      if (preserveRowId && existingRowId && !itemRowId) {
-        (merged as Record<string, unknown>).__rowId = existingRowId;
-      }
-
-      if (index < next.length) {
-        next[index] = merged;
-      } else {
-        next.push(merged);
-      }
-    });
-
-    return { items: next, skipped };
-  }
-
-  return { items: [...currentItems, ...itemsToApply], skipped };
+  return {
+    items: [...currentItems, ...extractedItems],
+    added: extractedItems.length,
+    updated: 0,
+    skipped: 0,
+  };
 }
 
 export function describeAutofillItem(
   item: Record<string, unknown>,
   preferredFields: string[] = DEFAULT_DESCRIBE_FIELDS,
 ): string {
-  for (const field of preferredFields) {
-    const value = item[field];
-    if (!isEmptyAutofillValue(value)) {
-      return String(value);
+  const asLabel = (value: unknown): string => {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return String(value).trim();
     }
+    if (typeof value === 'object') {
+      const record = value as Record<string, unknown>;
+      for (const key of ['label', 'name', 'value', 'text', 'title', 'type']) {
+        const nested = asLabel(record[key]);
+        if (nested) return nested;
+      }
+    }
+    return '';
+  };
+
+  for (const field of preferredFields) {
+    const label = asLabel(item[field]);
+    if (label) return label;
   }
 
   for (const field of DEFAULT_DESCRIBE_FIELDS) {
-    const value = item[field];
-    if (!isEmptyAutofillValue(value)) {
-      return String(value);
-    }
+    const label = asLabel(item[field]);
+    if (label) return label;
   }
 
   return 'Entry';

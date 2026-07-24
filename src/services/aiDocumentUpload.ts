@@ -61,3 +61,16 @@ export async function uploadAIDocument(
 
   return json;
 }
+
+export async function deleteAIDocument(fileId: string): Promise<boolean> {
+  if (!fileId) return false;
+
+  try {
+    const res = await secureFetch(`/ai/document/${encodeURIComponent(fileId)}`, {
+      method: 'DELETE',
+    });
+    return res.ok || res.status === 404;
+  } catch {
+    return false;
+  }
+}

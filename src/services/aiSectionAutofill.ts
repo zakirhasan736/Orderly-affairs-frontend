@@ -6,6 +6,19 @@ import type { AiDocumentRoutingContextValue } from '@/contexts/AiDocumentRouting
 import type { FieldDefinition } from '@/types/formTypes';
 import { buildFieldCatalogForAi } from '@/utils/aiPatchNormalizer';
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import {
+  peekDashboardAiPatch,
+  takeDashboardAiPatch,
+} from '@/utils/aiDashboardPatchCache';
+import {
+  aiPatchHasValues,
+  unwrapAiAutofillPatch,
+} from '@/utils/aiPatchNormalizer';
+import { markAiSectionFilled } from '@/utils/aiSectionFillGuard';
+import {
+  isAiAutofillDoneForSection,
+  markAiAutofillDoneForSection,
+} from '@/utils/aiAutofillDoneSections';
 
 type RunAiAutofillArgs = {
   sectionKey: string;
@@ -72,6 +85,62 @@ export async function runAiSectionAutofill({
   aiRouting,
 }: RunAiAutofillArgs) {
   try {
+    // Overview already filled + saved this section — never hit the temp document API again.
+    if (isAiAutofillDoneForSection(sectionId)) {
+      markAiSectionFilled(sectionId);
+      return {
+        result: peekDashboardAiPatch(sectionId)?.result || { patch: {} },
+        document_summary: 'Auto fill already completed for this section.',
+        additional_sections: undefined,
+        section_previews: undefined,
+        document_deleted: true,
+        already_filled: true,
+      };
+    }
+
+    const peeked = peekDashboardAiPatch(sectionId);
+    // Prefer temp-stored extraction for this exact section (overview upload path).
+    if (
+      peeked?.result &&
+      (!file_id || !peeked.file_id || peeked.file_id === file_id)
+    ) {
+      const stashedPatch = unwrapAiAutofillPatch(peeked.result);
+      if (aiPatchHasValues(stashedPatch)) {
+        const stashed = takeDashboardAiPatch(sectionId);
+        if (stashed) {
+          const json = {
+            result: stashed.result as any,
+            document_summary: stashed.document_summary,
+            additional_sections: undefined,
+            section_previews: undefined,
+            document_deleted: false,
+          };
+
+          markAiSectionFilled(sectionId);
+          markAiAutofillDoneForSection({
+            sectionId,
+            fileId: stashed.file_id || file_id,
+            fileName: stashed.file_name,
+          });
+          aiRouting?.handleAutofillSuccess({
+            file_id: stashed.file_id || file_id,
+            mime_type: mime_type || 'application/pdf',
+            currentSectionId: sectionId,
+            uploadScope,
+            additional_sections: undefined,
+            section_previews: undefined,
+            document_summary: stashed.document_summary,
+            document_deleted: false,
+            deferAdditionalDialog: true,
+          });
+
+          return json;
+        }
+      }
+      // Empty stash — drop it and try a live extraction.
+      takeDashboardAiPatch(sectionId);
+    }
+
     const json = await autofillSectionFromDocument({
       section: sectionKey,
       file_id,
@@ -86,6 +155,11 @@ export async function runAiSectionAutofill({
       field_catalog: fields ? buildFieldCatalogForAi(fields) : undefined,
     });
 
+    markAiSectionFilled(sectionId);
+    markAiAutofillDoneForSection({
+      sectionId,
+      fileId: file_id,
+    });
     aiRouting?.handleAutofillSuccess({
       file_id,
       mime_type: mime_type || 'application/pdf',

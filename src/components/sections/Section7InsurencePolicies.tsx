@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -25,7 +25,9 @@ import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services
 import {
   createEmptyItemFromFields,
   mergeAiPatchWithDefaults,
+  unwrapAiAutofillPatch,
 } from '@/utils/aiPatchNormalizer';
+import { normalizeUploadField } from '@/utils/sectionUploadFields';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
   resolveAiUploadedFileForScope,
@@ -34,6 +36,7 @@ import {
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
+  buildUploadedAiFile,
   type UploadedAIFile,
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
@@ -102,6 +105,13 @@ const SECTION_7A = {
         'Enter the policy number or upload a photo of the policy showing the number',
     },
     {
+      key: 'policy_expiry',
+      label: 'Policy Expiry Date',
+      type: 'TextInput',
+      helperText:
+        'Policy end date, valid through, or the last date of the policy period',
+    },
+    {
       key: 'coverage_amount',
       label: 'Coverage Amount',
       type: 'TextInput',
@@ -150,7 +160,20 @@ interface Props {
   onChange?: (data: any) => void;
   activeSubsection?: string | null;
   activeTopicId?: string | null;
+  ownerEmail?: string;
+  ownerName?: string;
+  accessPeople?: Array<{
+    email?: string;
+    full_name?: string;
+    immediate_access?: boolean;
+  }>;
 }
+
+type ReminderRecipientOption = {
+  email: string;
+  label: string;
+  role: 'owner' | 'access';
+};
 
 type UploadScope = 'full' | `policy:${number}`;
 
@@ -165,6 +188,9 @@ export default function Section7InsurancePolicies({
   onChange = () => {},
   activeSubsection,
   activeTopicId,
+  ownerEmail = '',
+  ownerName = 'Owner',
+  accessPeople = [],
 }: Props) {
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
@@ -195,6 +221,33 @@ export default function Section7InsurancePolicies({
   const policies: any[] = Array.isArray(data['7A']) ? data['7A'] : [];
   const show7A = !activeSubsection || activeSubsection === '7A';
 
+  const reminderRecipientOptions = useMemo(() => {
+    const options: ReminderRecipientOption[] = [];
+    const owner = (ownerEmail || '').trim().toLowerCase();
+    if (owner) {
+      options.push({
+        email: owner,
+        label: ownerName?.trim()
+          ? `${ownerName.trim()} (Owner)`
+          : 'Owner (you)',
+        role: 'owner',
+      });
+    }
+
+    (accessPeople || []).forEach(person => {
+      const email = (person.email || '').trim().toLowerCase();
+      if (!email || email === owner) return;
+      const name = (person.full_name || '').trim() || email;
+      options.push({
+        email,
+        label: name,
+        role: 'access',
+      });
+    });
+
+    return options;
+  }, [ownerEmail, ownerName, accessPeople]);
+
   useScrollToVaultTopic(activeTopicId, policies.length);
 
   const isAnyAIActionRunning = uploadingScope !== null || aiLoadingScope !== null;
@@ -223,6 +276,43 @@ export default function Section7InsurancePolicies({
     updatePolicies(next);
   };
 
+  const getSelectedReminderEmails = (policy: any): string[] => {
+    const raw = policy?.reminder_recipients;
+    if (raw === undefined || raw === null) {
+      return reminderRecipientOptions.map(option => option.email);
+    }
+    if (!Array.isArray(raw)) {
+      return reminderRecipientOptions.map(option => option.email);
+    }
+    return raw
+      .map((email: unknown) =>
+        typeof email === 'string' ? email.trim().toLowerCase() : '',
+      )
+      .filter(Boolean);
+  };
+
+  const toggleReminderRecipient = (
+    policyIndex: number,
+    email: string,
+    checked: boolean,
+  ) => {
+    const policy = policies[policyIndex] || {};
+    const allEmails = reminderRecipientOptions.map(option => option.email);
+    const current = new Set(getSelectedReminderEmails(policy));
+
+    if (checked) current.add(email);
+    else current.delete(email);
+
+    // Persist explicit list so deselect-all is respected (empty array).
+    // When everything is selected, store null (= default all).
+    const nextSelected = allEmails.filter(item => current.has(item));
+    updatePolicy(
+      policyIndex,
+      'reminder_recipients',
+      nextSelected.length === allEmails.length ? null : nextSelected,
+    );
+  };
+
   const removePolicy = (index: number) => {
     updatePolicies(policies.filter((_, itemIndex) => itemIndex !== index));
   };
@@ -233,7 +323,13 @@ export default function Section7InsurancePolicies({
     getCurrentItems: () => policies,
     setItems: updatePolicies,
     setAiNotice,
-    describeFields: ['policy_type', 'insurance_company', 'provider'],
+    describeFields: [
+      'policy_type',
+      'policy_company',
+      'insurance_company',
+      'policy_number',
+      'provider',
+    ],
     isDuplicate: insurancePoliciesAreDuplicates,
     onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
@@ -245,38 +341,90 @@ export default function Section7InsurancePolicies({
     return resolveAiUploadedFileForScope(scope, uploadedFiles, latestUploadRef, pendingFile);
   };
 
+  const UPLOAD_POLICY_KEYS = new Set(
+    SECTION_7A.fields
+      .filter(field => field.type === 'TextInputWithUpload')
+      .map(field => field.key),
+  );
+
   const cleanPatchObject = (patch: any) => {
     if (!patch || typeof patch !== 'object') return {};
 
-    return Object.fromEntries(
-      Object.entries(patch).filter(([, value]) => {
-        if (value === null || value === undefined || value === '') return false;
-        if (Array.isArray(value) && value.length === 0) return false;
-        return true;
-      }),
-    );
+    const asFieldValue = (key: string, value: unknown): unknown => {
+      if (value === null || value === undefined) return value;
+      if (UPLOAD_POLICY_KEYS.has(key)) {
+        return normalizeUploadField(value);
+      }
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        return value;
+      }
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        if ('files' in record || 'text' in record) return normalizeUploadField(value);
+        for (const nestedKey of ['label', 'name', 'value', 'text', 'title', 'type']) {
+          if (typeof record[nestedKey] === 'string') return record[nestedKey];
+        }
+        return '';
+      }
+      return value;
+    };
+
+    const companyAliases = ['insurance_company', 'provider', 'carrier', 'company'];
+    const normalized: Record<string, unknown> = {};
+
+    Object.entries(patch).forEach(([key, value]) => {
+      const mappedKey =
+        companyAliases.includes(key) && !patch.policy_company
+          ? 'policy_company'
+          : key;
+      const nextValue = asFieldValue(mappedKey, value);
+      if (nextValue === null || nextValue === undefined || nextValue === '') return;
+      if (Array.isArray(nextValue) && nextValue.length === 0) return;
+      normalized[mappedKey] = nextValue;
+    });
+
+    return normalized;
   };
 
   const normalizePolicyPatch = (patch: any) =>
-    mergeAiPatchWithDefaults(patch, SECTION_7A.fields, createEmptyPolicy);
+    mergeAiPatchWithDefaults(
+      cleanPatchObject(patch),
+      SECTION_7A.fields,
+      createEmptyPolicy,
+    );
 
   const extractPolicyArrayFromPatch = (patch: any) => {
+    const policyHasData = (policy: Record<string, unknown>) =>
+      Object.entries(policy).some(([key, value]) => {
+        if (key === '__rowId' || key === 'reminder_recipients') return false;
+        if (value === null || value === undefined || value === '') return false;
+        if (Array.isArray(value) && value.length === 0) return false;
+        if (
+          value &&
+          typeof value === 'object' &&
+          ('text' in value || 'files' in value)
+        ) {
+          const upload = value as { text?: string; files?: unknown[] };
+          return Boolean(
+            (typeof upload.text === 'string' && upload.text.trim()) ||
+              (Array.isArray(upload.files) && upload.files.length > 0),
+          );
+        }
+        return true;
+      });
+
     const rawPolicies = patch?.['7A'];
 
     if (Array.isArray(rawPolicies)) {
       return rawPolicies
         .map(policy => normalizePolicyPatch(policy))
-        .filter(policy => {
-          return Object.values(policy).some(value => value !== '');
-        });
+        .filter(policy => policyHasData(policy));
     }
 
     if (rawPolicies && typeof rawPolicies === 'object') {
       const policy = normalizePolicyPatch(rawPolicies);
-
-      return Object.values(policy).some(value => value !== '')
-        ? [policy]
-        : [];
+      return policyHasData(policy) ? [policy] : [];
     }
 
     return [];
@@ -300,11 +448,7 @@ export default function Section7InsurancePolicies({
 
       const uploaded = await uploadAIDocument(file);
 
-      const uploadedRecord: UploadedAIFile = {
-        file_id: uploaded.file_id,
-        mime_type: uploaded.mime_type,
-        expires_at: uploaded.expires_at,
-      };
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -354,7 +498,7 @@ export default function Section7InsurancePolicies({
 
       if (!json) return;
 
-      const patch = json?.result?.patch ?? {};
+      const patch = unwrapAiAutofillPatch(json) ?? json?.result?.patch ?? {};
       const extractedPolicies = extractPolicyArrayFromPatch(patch);
 
       const disposition = multiItemAutofill.processExtraction(
@@ -406,7 +550,7 @@ export default function Section7InsurancePolicies({
       disabled={isAnyAIActionRunning}
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}
-      uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      uploadedFile={getUploadedFileForScope(scope)}
       highlightUpload={aiRouting?.shouldHighlightUpload('7', String(scope)) ?? false}
       onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
       onAutofill={onAutofill}
@@ -521,6 +665,64 @@ export default function Section7InsurancePolicies({
                 </div>
 
                 <CardContent className="space-y-6 p-5">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-[#10213f]">
+                          Expiry reminder emails
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Sent 10 days, 5 days, 1 day before, and on the policy
+                          expiry date. Default: everyone below.
+                        </p>
+                      </div>
+                    </div>
+
+                    {reminderRecipientOptions.length === 0 ? (
+                      <p className="mt-3 text-xs text-slate-500">
+                        Add your account email and immediate-access people to
+                        choose reminder recipients.
+                      </p>
+                    ) : (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {reminderRecipientOptions.map(option => {
+                          const selected = getSelectedReminderEmails(
+                            policy,
+                          ).includes(option.email);
+                          return (
+                            <label
+                              key={option.email}
+                              className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+                                selected
+                                  ? 'border-[#10213f]/20 bg-white text-[#10213f]'
+                                  : 'border-slate-200 bg-white/60 text-slate-500'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-slate-300 text-[#10213f] focus:ring-[#10213f]"
+                                checked={selected}
+                                onChange={event =>
+                                  toggleReminderRecipient(
+                                    index,
+                                    option.email,
+                                    event.target.checked,
+                                  )
+                                }
+                              />
+                              <span className="font-medium">{option.label}</span>
+                              {option.role === 'access' ? (
+                                <span className="text-[10px] uppercase tracking-wide text-slate-400">
+                                  Access
+                                </span>
+                              ) : null}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
                   {renderUploader({
                     scope: itemScope,
                     title: `Upload document for ${itemLabel}`,

@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { Badge } from '@common/ui/badge';
 import { Button } from '@common/ui/button';
@@ -55,21 +57,18 @@ function getTypeConfig(type: MessageData['messageType']) {
       return {
         icon: <Video className="h-5 w-5" />,
         label: 'Video',
-        accent: 'bg-rose-50 text-rose-600 ring-rose-100',
         badge: 'border-rose-200 bg-rose-50 text-rose-700',
       };
     case 'audio':
       return {
         icon: <Mic className="h-5 w-5" />,
         label: 'Audio',
-        accent: 'bg-blue-50 text-blue-600 ring-blue-100',
-        badge: 'border-blue-200 bg-blue-50 text-blue-700',
+        badge: 'border-sky-200 bg-sky-50 text-sky-700',
       };
     default:
       return {
         icon: <FileText className="h-5 w-5" />,
         label: 'Letter',
-        accent: 'bg-emerald-50 text-emerald-600 ring-emerald-100',
         badge: 'border-emerald-200 bg-emerald-50 text-emerald-700',
       };
   }
@@ -77,10 +76,8 @@ function getTypeConfig(type: MessageData['messageType']) {
 
 function formatDate(dateString?: string) {
   if (!dateString) return '';
-
   const date = new Date(dateString);
   if (Number.isNaN(date.valueOf())) return dateString;
-
   return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -90,10 +87,8 @@ function formatDate(dateString?: string) {
 
 function formatDateTime(dateString?: string) {
   if (!dateString) return 'Not saved yet';
-
   const date = new Date(dateString);
   if (Number.isNaN(date.valueOf())) return dateString;
-
   return date.toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -108,11 +103,11 @@ function stripHtml(value?: string) {
   return value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function truncateContent(text?: string, maxLength = 150) {
+function truncateContent(text?: string, maxLength = 140) {
   const clean = stripHtml(text);
   if (!clean) return 'No content preview added.';
   if (clean.length <= maxLength) return clean;
-  return `${clean.substring(0, maxLength)}...`;
+  return `${clean.substring(0, maxLength)}…`;
 }
 
 export function MessageCard({
@@ -126,29 +121,26 @@ export function MessageCard({
   const deliveryLabel =
     item.deliveryTrigger === 'date'
       ? formatDate(item.deliveryDate) || 'Scheduled date'
-      : 'Upon Death';
+      : 'Upon death';
   const actionLabel = item.messageType === 'letter' ? 'View' : 'Play';
 
   return (
-    <article className="group overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <div className="p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-3">
-            <div
-              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ring-1 ${typeConfig.accent}`}
-            >
-              {typeConfig.icon}
-            </div>
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md sm:p-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#10213f] text-white">
+          {typeConfig.icon}
+        </div>
 
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <div className="mb-2 flex flex-wrap gap-2">
+              <div className="mb-2 flex flex-wrap gap-1.5">
                 <Badge
                   variant="outline"
                   className={`rounded-full ${typeConfig.badge}`}
                 >
                   {typeConfig.label}
                 </Badge>
-
                 <Badge
                   variant="outline"
                   className={
@@ -166,174 +158,136 @@ export function MessageCard({
                 </Badge>
               </div>
 
-              <h3 className="line-clamp-2 text-base font-semibold text-slate-950 sm:text-lg">
+              <h3 className="line-clamp-2 text-base font-semibold text-slate-900">
                 {item.title || 'Untitled Message'}
               </h3>
-
               {item.subject && (
-                <p className="mt-1 line-clamp-1 text-xs font-medium text-slate-500">
+                <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">
                   {item.subject}
                 </p>
               )}
             </div>
-          </div>
 
-          <div className="flex shrink-0 gap-2">
-            {(onView || onPlay) && (
-              <Button
-                type="button"
-                size="icon"
-                onClick={onPlay || onView}
-                className="h-10 w-10 rounded-2xl bg-slate-950 text-white hover:bg-slate-800"
-                aria-label={`${actionLabel} message`}
-              >
-                {item.messageType === 'letter' ? (
-                  <Eye className="h-4 w-4" />
-                ) : (
-                  <Play className="h-4 w-4" />
-                )}
-              </Button>
-            )}
-
-            {onEdit && (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={onEdit}
-                className="h-10 w-10 rounded-2xl border-slate-200"
-                aria-label="Edit message"
-              >
-                <Edit2 className="h-4 w-4" />
-              </Button>
-            )}
-
-            {onDelete && (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={onDelete}
-                className="h-10 w-10 rounded-2xl border-rose-100 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                aria-label="Delete message"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
+            <div className="flex shrink-0 gap-1.5">
+              {(onView || onPlay) && (
+                <Button
+                  type="button"
+                  size="icon"
+                  onClick={onPlay || onView}
+                  className="h-9 w-9 rounded-lg bg-[#10213f] text-white hover:bg-[#0c1a33]"
+                  aria-label={`${actionLabel} message`}
+                >
+                  {item.messageType === 'letter' ? (
+                    <Eye className="h-4 w-4" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
+              {onEdit && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={onEdit}
+                  className="h-9 w-9 rounded-lg border-slate-200"
+                  aria-label="Edit message"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </Button>
+              )}
+              {onDelete && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={onDelete}
+                  className="h-9 w-9 rounded-lg border-rose-100 text-rose-600 hover:bg-rose-50"
+                  aria-label="Delete message"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
         </div>
+      </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <InfoTile
-            icon={<UserRound className="h-4 w-4" />}
-            label="Recipient"
-            value={item.recipient || 'No recipient'}
-          />
-          <InfoTile
-            icon={<Mail className="h-4 w-4" />}
-            label="Email"
-            value={item.recipientEmail || 'No email'}
-          />
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+          <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
+          <span className="truncate">{item.recipient || 'No recipient'}</span>
         </div>
+        <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+          <Mail className="h-4 w-4 shrink-0 text-slate-400" />
+          <span className="truncate">{item.recipientEmail || 'No email'}</span>
+        </div>
+      </div>
 
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-          <div className="mb-2 flex items-center gap-2 text-slate-500">
-            <CalendarClock className="h-4 w-4" />
-            <p className="text-xs font-semibold uppercase tracking-wide">
-              Delivery
-            </p>
-          </div>
-
-          <p className="text-sm font-semibold text-slate-900">
-            {deliveryLabel}
-          </p>
-
+      <div className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
+        <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-slate-800">{deliveryLabel}</p>
           {item.deliveryOccasion && (
-            <p className="mt-1 text-xs font-medium text-slate-500">
+            <p className="mt-0.5 text-xs text-slate-500">
               {item.deliveryOccasion}
             </p>
           )}
         </div>
+      </div>
 
-        {item.media?.url ? (
-          <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
-            {item.messageType === 'video' ? (
-              <video
-                controls
-                src={item.media.url}
-                className="h-44 w-full rounded-xl bg-black object-cover"
-              />
-            ) : (
-              <audio controls src={item.media.url} className="w-full" />
-            )}
-          </div>
-        ) : item.audioFile || item.videoFile ? (
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Attached Media
-            </p>
-            <p className="mt-1 text-sm font-medium text-slate-800">
-              {item.audioFile?.name || item.videoFile?.name}
-            </p>
-          </div>
-        ) : (
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Preview
-            </p>
-            <p className="mt-2 line-clamp-3 text-sm font-medium leading-6 text-slate-700">
-              {truncateContent(item.content)}
-            </p>
-          </div>
-        )}
-
-        <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
-          <p className="min-w-0 truncate text-xs font-medium text-slate-400">
-            Updated {formatDateTime(item.lastModified)}
-          </p>
-
-          {(onView || onPlay) && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onPlay || onView}
-              className="h-10 shrink-0 rounded-2xl border-slate-200"
-            >
-              {item.messageType === 'letter' ? (
-                <Eye className="mr-2 h-4 w-4" />
-              ) : (
-                <Play className="mr-2 h-4 w-4" />
-              )}
-              {actionLabel}
-            </Button>
+      {item.media?.url ? (
+        <div className="mt-4 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+          {item.messageType === 'video' ? (
+            <video
+              controls
+              src={item.media.url}
+              className="h-40 w-full rounded-lg bg-black object-cover"
+            />
+          ) : (
+            <audio controls src={item.media.url} className="w-full" />
           )}
         </div>
+      ) : item.audioFile || item.videoFile ? (
+        <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Attached media
+          </p>
+          <p className="mt-1 text-sm text-slate-800">
+            {item.audioFile?.name || item.videoFile?.name}
+          </p>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Preview
+          </p>
+          <p className="mt-1 line-clamp-3 text-sm italic leading-6 text-slate-600">
+            {truncateContent(item.content)}
+          </p>
+        </div>
+      )}
+
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+        <p className="min-w-0 truncate text-xs text-slate-400">
+          Updated {formatDateTime(item.lastModified)}
+        </p>
+        {(onView || onPlay) && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onPlay || onView}
+            className="h-9 shrink-0 rounded-lg border-slate-200"
+          >
+            {item.messageType === 'letter' ? (
+              <Eye className="mr-1.5 h-4 w-4" />
+            ) : (
+              <Play className="mr-1.5 h-4 w-4" />
+            )}
+            {actionLabel}
+          </Button>
+        )}
       </div>
     </article>
-  );
-}
-
-function InfoTile({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
-        {icon}
-      </div>
-
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-          {label}
-        </p>
-        <p className="truncate text-sm font-medium text-slate-800">{value}</p>
-      </div>
-    </div>
   );
 }

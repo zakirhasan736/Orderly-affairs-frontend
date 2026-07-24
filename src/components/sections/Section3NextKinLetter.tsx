@@ -49,7 +49,7 @@ const SECTION_3A = {
 const GUIDE_STEPS = [
   {
     title: 'Mark in Access Management',
-    text: 'For upon-death trusted people, check Next-of-Kin Letter Received in Section 2. They appear here when ready.',
+    text: 'For Upon Death access trusted people, check Will Receive Next of Kin Letter in Section 2. They appear here when ready.',
     icon: Users,
   },
   {
@@ -70,7 +70,7 @@ const GUIDE_STEPS = [
 ];
 
 const HELPFUL_NOTES = [
-  'Only upon-death trusted people with NOK letter marked appear here.',
+  'Only Upon Death access trusted people with Will Receive Next of Kin Letter checked appear here.',
   'Each person gets a separate letter with their own password card location.',
   'Complete Section 2 Access Management before starting this letter.',
 ];

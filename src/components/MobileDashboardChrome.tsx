@@ -222,6 +222,7 @@ export default function MobileDashboardChrome({
     <>
       {/* ================= MOBILE TOP HEADER ================= */}
       <motion.header
+        data-mobile-dashboard-chrome
         initial={false}
         animate={chromeVisible ? 'show' : 'hide'}
         variants={topHeaderVariants}
@@ -275,6 +276,7 @@ export default function MobileDashboardChrome({
 
       {/* ================= MOBILE BOTTOM NAV ================= */}
       <motion.nav
+        data-mobile-dashboard-chrome
         initial={false}
         animate={chromeVisible ? 'show' : 'hide'}
         variants={bottomNavVariants}

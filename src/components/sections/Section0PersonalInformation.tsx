@@ -1,13 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { Card, CardContent } from '@common/ui/card';
 import { DynamicFormField } from '@/components/DynamicFormField';
 import {
-  BadgeCheck,
   BookOpenText,
-  CheckCircle2,
   ChevronDown,
   ClipboardList,
   FileText,
@@ -15,13 +13,13 @@ import {
   Info,
   Layers3,
   LockKeyhole,
-  PackageCheck,
   ScrollText,
   ShieldCheck,
 } from 'lucide-react';
 
 interface Props {
   onFullyRead?: () => void;
+  onContinue?: () => void;
 }
 
 type InstructionBlock = {
@@ -37,27 +35,25 @@ type InstructionBlock = {
 const INSTRUCTION_BLOCKS: InstructionBlock[] = [
   {
     id: 'honored_youre_here',
-    title: 'We’re honored you’re here',
+    title: 'Welcome',
     shortTitle: 'Welcome',
     eyebrow: 'Start here',
     icon: HeartHandshake,
     colorClass: 'from-rose-500/15 to-orange-500/10 text-rose-600',
-    content: `Thank you for your support of our small business. Whether you're planning ahead or navigating life after a loss, this kit offers you clarity, and support during overwhelming times. It provides an easy framework to gather, organize, and communicate important details to you and your loved ones.
+    content: `Thank you for your support of our small business. This kit is built for two moments in life: gathering and organizing your family's important day to day information, and preparing something clear and thoughtful for your next of kin in case of an emergency. Whether you're a family getting your household in order or an older adult putting together a plan for loved ones to lean on later, this kit gives you an easy framework to gather, organize, and communicate what matters.
 
-This isn't just about paperwork; it's about peace of mind and making things easier for those who may open this kit with a heavy heart. Each section guides you through life areas—financial, legal, personal, or practical—with simple instructions. Some parts are straightforward, such as listing vehicles, while others, like estate plans, require more careful consideration. The kit uses color-coded tabs: green for manageable sections, yellow for those needing more time, and red for sections with documents that may take longer to gather.`,
+This isn't just about paperwork. It's about peace of mind now, and about making things easier for whoever needs this information, especially if they're navigating a hard moment. Each section walks you through a different area of life (financial, legal, personal, or practical) with simple instructions. Some parts are quick, like listing your vehicles. Others, like estate plans, take more careful thought.`,
   },
   {
     id: 'go_at_your_pace',
-    title: 'Go at your own pace',
+    title: 'Pace',
     shortTitle: 'Pace',
     eyebrow: 'No pressure',
     icon: BookOpenText,
     colorClass: 'from-blue-500/15 to-cyan-500/10 text-blue-600',
-    content: `You can write neatly or scribble notes. Add sticky tabs, folders, or printouts, including extra letters or passwords. Make this kit reflect your life, story, and preferences.
+    content: `As you fill it out, think about who will use this: a spouse organizing shared finances, a parent handing this to an adult child, or a next of kin who may not know where everything is or what you'd want. Your care and clarity here will guide them, whoever they are.
 
-As you fill it out, consider those who might hold it—spouse, daughter, son-in-law, or friend. They may not know where everything is or your wishes, but your care and clarity will guide them.
-
-This kit is a gift—not just for the future but for now—offering control, comfort, and preparedness.`,
+This kit is a gift, not just for the future but for right now: it offers control, comfort, and peace of mind today, for your family and for whoever comes after.`,
   },
   {
     id: 'subsection-1C',
@@ -73,19 +69,6 @@ This kit is a gift—not just for the future but for now—offering control, com
 • Keep it in one place. Let someone you trust know where to find it.
 
 • And most importantly, remember this is not a legal document. Please consult with an attorney when drafting your will, designating beneficiaries, or making binding decisions.`,
-  },
-  {
-    id: 'subsection-1D',
-    title: 'What’s included in your Orderly Affairs Kit',
-    shortTitle: 'Included',
-    eyebrow: 'Kit contents',
-    icon: PackageCheck,
-    colorClass: 'from-emerald-500/15 to-green-500/10 text-emerald-600',
-    content: `1 Fireproof Document Protector Bag:
-Use this for passports, birth certificates, or anything you keep in a safe. Your next of kin can also use it to safely store critical documents during estate handling.
-
-1 Fireproof Key Bag + 10 Key Tags:
-We guide you through labeling and storing your home and personal keys. For your next of kin, we provide instructions to keep everything secure and accounted for.`,
   },
   {
     id: 'copyright_legal_notice',
@@ -176,7 +159,10 @@ function InstructionCard({
   );
 }
 
-export default function Section0PersonalInformation({ onFullyRead }: Props) {
+export default function Section0PersonalInformation({
+  onFullyRead,
+  onContinue,
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [openMap, setOpenMap] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
@@ -185,22 +171,6 @@ export default function Section0PersonalInformation({ onFullyRead }: Props) {
   );
   const [activeId, setActiveId] = useState(INSTRUCTION_BLOCKS[0].id);
   const [readTriggered, setReadTriggered] = useState(false);
-
-  const completedCount = useMemo(() => {
-    return Object.values(openMap).filter(Boolean).length;
-  }, [openMap]);
-
-  const progressPercent = Math.round(
-    (completedCount / INSTRUCTION_BLOCKS.length) * 100,
-  );
-
-  const markFullyRead = () => {
-    setReadTriggered(true);
-    setOpenMap(
-      Object.fromEntries(INSTRUCTION_BLOCKS.map(block => [block.id, true])),
-    );
-    onFullyRead?.();
-  };
 
   const scrollToBlock = (id: string) => {
     setActiveId(id);
@@ -244,69 +214,34 @@ export default function Section0PersonalInformation({ onFullyRead }: Props) {
   return (
     <section ref={containerRef} className="w-full scroll-smooth">
       <div className="space-y-5 sm:space-y-6">
-        {/* Hero */}
         <Card className="overflow-hidden rounded-3xl border bg-gradient-to-br from-primary/10 via-background to-background shadow-sm">
           <CardContent className="p-4 sm:p-6 lg:p-7">
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
-              <div className="min-w-0">
-                <div className="mb-4 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    Orderly Affairs Kit
-                  </span>
+            <div className="min-w-0">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Orderly Affairs Kit
+                </span>
 
-                  <span className="inline-flex items-center gap-1.5 rounded-full border bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
-                    <FileText className="h-3.5 w-3.5" />
-                    Introduction
-                  </span>
-                </div>
-
-                <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl lg:text-4xl">
-                  Welcome to your planning guide
-                </h2>
-
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">
-                  Read this short introduction before completing the kit. It
-                  explains how to use the sections, what to keep in mind, and
-                  how to protect the people who may rely on this information.
-                </p>
+                <span className="inline-flex items-center gap-1.5 rounded-full border bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
+                  <FileText className="h-3.5 w-3.5" />
+                  Introduction
+                </span>
               </div>
 
-              <div className="rounded-3xl border bg-background/80 p-4 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600">
-                    <BadgeCheck className="h-6 w-6" />
-                  </div>
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl lg:text-4xl">
+                Welcome to your planning guide
+              </h2>
 
-                  <div>
-                    <p className="text-sm font-semibold">Reading Progress</p>
-                    <p className="text-xs text-muted-foreground">
-                      {progressPercent}% opened
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all duration-300"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={markFullyRead}
-                  className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Mark as Read
-                </button>
-              </div>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">
+                Read this short introduction before completing the kit. It
+                explains how to use the sections, what to keep in mind, and how
+                to protect the people who may rely on this information.
+              </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Mobile quick navigation */}
         <div className="lg:hidden">
           <div className="flex gap-2 overflow-x-auto pb-1">
             {INSTRUCTION_BLOCKS.map(block => (
@@ -327,7 +262,6 @@ export default function Section0PersonalInformation({ onFullyRead }: Props) {
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
-          {/* Desktop side navigation */}
           <aside className="hidden lg:block">
             <div className="sticky top-6 rounded-3xl border bg-background p-4 shadow-sm">
               <div className="mb-4 flex items-center gap-3">
@@ -392,7 +326,6 @@ export default function Section0PersonalInformation({ onFullyRead }: Props) {
             </div>
           </aside>
 
-          {/* Content */}
           <div className="min-w-0 space-y-4">
             {INSTRUCTION_BLOCKS.map((block, index) => (
               <InstructionCard
@@ -416,21 +349,23 @@ export default function Section0PersonalInformation({ onFullyRead }: Props) {
                   <LockKeyhole className="h-5 w-5" />
                 </div>
 
-                <div>
+                <div className="min-w-0 flex-1">
                   <h3 className="font-semibold">You’re ready to continue</h3>
                   <p className="mt-1 text-sm leading-6">
                     Once you understand the purpose of this kit, continue
                     section by section. You can come back and update details
                     anytime life changes.
                   </p>
-
                   <button
                     type="button"
-                    onClick={markFullyRead}
-                    className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-medium text-white transition hover:bg-emerald-700"
+                    onClick={() => {
+                      setReadTriggered(true);
+                      onFullyRead?.();
+                      onContinue?.();
+                    }}
+                    className="mt-4 inline-flex items-center justify-center rounded-2xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800"
                   >
-                    <CheckCircle2 className="h-4 w-4" />
-                    I’ve Read This Section
+                    Continue to Vital Information
                   </button>
                 </div>
               </div>

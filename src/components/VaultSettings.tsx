@@ -599,7 +599,7 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
 
   if (active) {
     return (
-      <div className="space-y-5">
+      <div className="space-y-4">
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
           <p className="text-sm font-semibold text-emerald-950">
             {option.title} is linked
@@ -609,18 +609,20 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
           </p>
         </div>
 
-        <button
-          type="button"
-          disabled={busy || activeMfaCount <= 1}
-          onClick={() => disableMethod(optionId)}
-          className="w-full rounded-2xl border border-slate-200 px-4 py-3.5 text-sm font-semibold text-slate-700 transition hover:bg-white disabled:opacity-60"
-        >
-          {busy
-            ? 'Updating...'
-            : activeMfaCount <= 1
-              ? 'Keep One Linked'
-              : 'Disable Method'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy || activeMfaCount <= 1}
+            onClick={() => disableMethod(optionId)}
+            className="inline-flex h-11 w-auto items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+          >
+            {busy
+              ? 'Updating...'
+              : activeMfaCount <= 1
+                ? 'Keep One Linked'
+                : 'Disable Method'}
+          </button>
+        </div>
       </div>
     );
   }
@@ -646,34 +648,36 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
             </div>
           </div>
 
-          <button
-            type="button"
-            disabled={
-              busy ||
-              emailCode.length !== 6 ||
-              emailAttempts >= MAX_EMAIL_ATTEMPTS
-            }
-            onClick={verifyEmailMfa}
-            className="w-full rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            Verify Email
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={
+                busy ||
+                emailCode.length !== 6 ||
+                emailAttempts >= MAX_EMAIL_ATTEMPTS
+              }
+              onClick={verifyEmailMfa}
+              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#10213f] px-5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Verify Email
+            </button>
 
-          <button
-            type="button"
-            disabled={busy || emailCooldown > 0 || !emailCaptchaToken}
-            onClick={resendEmailMfa}
-            className="w-full rounded-2xl border border-slate-200 px-4 py-3.5 text-sm font-semibold text-slate-700 disabled:opacity-60"
-          >
-            {emailCooldown > 0
-              ? `Resend in ${emailCooldown}s`
-              : 'Resend Code'}
-          </button>
+            <button
+              type="button"
+              disabled={busy || emailCooldown > 0 || !emailCaptchaToken}
+              onClick={resendEmailMfa}
+              className="inline-flex h-11 w-auto items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 disabled:opacity-60"
+            >
+              {emailCooldown > 0
+                ? `Resend in ${emailCooldown}s`
+                : 'Resend Code'}
+            </button>
+          </div>
 
           <TurnstileCaptcha onTokenChange={setEmailCaptchaToken} />
 
           {emailAttempts > 0 && emailAttempts < MAX_EMAIL_ATTEMPTS && (
-            <p className="text-center text-xs text-slate-500">
+            <p className="text-xs text-slate-500">
               Failed attempts: {emailAttempts} / {MAX_EMAIL_ATTEMPTS}
             </p>
           )}
@@ -702,14 +706,16 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
               disabled={busy}
             />
           </div>
-          <button
-            type="button"
-            disabled={busy || authCode.length !== 6}
-            onClick={verifyAuthenticatorMfa}
-            className="w-full rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            Verify Authenticator
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy || authCode.length !== 6}
+              onClick={verifyAuthenticatorMfa}
+              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#10213f] px-5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Verify Authenticator
+            </button>
+          </div>
         </div>
       )}
 
@@ -725,14 +731,16 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
                 showValidation={showSmsPhoneValidation}
               />
               <TurnstileCaptcha onTokenChange={setSmsCaptchaToken} />
-              <button
-                type="button"
-                disabled={busy}
-                onClick={beginSmsMfa}
-                className="w-full rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {busy ? 'Sending...' : 'Send SMS Code'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={beginSmsMfa}
+                  className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#10213f] px-5 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {busy ? 'Sending...' : 'Send SMS Code'}
+                </button>
+              </div>
             </>
           ) : (
             <>
@@ -752,14 +760,16 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
                   />
                 </div>
               </div>
-              <button
-                type="button"
-                disabled={busy || smsCode.length !== 6}
-                onClick={verifySmsMfa}
-                className="w-full rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                Verify SMS
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy || smsCode.length !== 6}
+                  onClick={verifySmsMfa}
+                  className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#10213f] px-5 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  Verify SMS
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -768,26 +778,30 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
       {optionId === 'email' && setupMethod !== 'email' && (
         <div className="space-y-4">
           <TurnstileCaptcha onTokenChange={setEmailCaptchaToken} />
-          <button
-            type="button"
-            disabled={busy || !emailCaptchaToken}
-            onClick={beginEmailMfa}
-            className="w-full rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {busy ? 'Sending...' : 'Send Email Code'}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy || !emailCaptchaToken}
+              onClick={beginEmailMfa}
+              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#10213f] px-5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {busy ? 'Sending...' : 'Send Email Code'}
+            </button>
+          </div>
         </div>
       )}
 
       {optionId === 'authenticator' && setupMethod !== 'authenticator' && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={beginAuthenticatorMfa}
-          className="w-full rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
-        >
-          {busy ? 'Starting...' : 'Set Up QR Code'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={beginAuthenticatorMfa}
+            className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#10213f] px-5 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {busy ? 'Starting...' : 'Set Up QR Code'}
+          </button>
+        </div>
       )}
     </div>
   );
@@ -797,314 +811,424 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
 
   /* ---------------- UI ---------------- */
   return (
-    <div className="space-y-6 pb-24 vault-settings-section sm:space-y-10 sm:pb-32">
+    <div className="vault-settings-section w-full space-y-4 pb-24 sm:space-y-5 sm:pb-28">
       {/* OWNER MFA SETTINGS */}
-      <div className="space-y-4 rounded-3xl border bg-white p-4 shadow-sm sm:space-y-6 sm:p-8 md:p-10">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-lg font-black uppercase text-slate-900 sm:text-xl">
-              Owner MFA Methods
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Enable multiple verification methods. During login, you can use
-              any linked method.
-            </p>
-          </div>
-          <div className="inline-flex w-fit items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-xs font-black uppercase text-slate-600">
-            <ShieldCheck className="h-4 w-4" />
-            {activeMfaCount} Linked
+      <section className="w-full overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[28px]">
+        <div className="relative overflow-hidden bg-[linear-gradient(135deg,#10213f_0%,#1a3a6b_55%,#2563eb_100%)] px-4 py-5 text-white sm:px-6 sm:py-6 md:px-8">
+          <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-sky-300/20 blur-2xl" />
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
+                Security
+              </p>
+              <h2 className="mt-1 text-[20px] font-bold tracking-tight sm:text-[22px]">
+                Owner MFA
+              </h2>
+              <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-white/75 sm:text-sm">
+                Link authenticator, email, or SMS. Use any method at login.
+              </p>
+            </div>
+            <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ring-1 ring-white/20 backdrop-blur-sm">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              {activeMfaCount} linked
+            </div>
           </div>
         </div>
 
-        {isMobile ? (
-          <div className="space-y-3">
-            {mfaOptions.map(option => {
-              const active = mfaMethods[option.id];
+        <div className="space-y-3 p-3 sm:space-y-4 sm:p-5 md:p-6">
+          {isMobile ? (
+            <div className="space-y-2.5">
+              {mfaOptions.map(option => {
+                const active = mfaMethods[option.id];
 
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => openMfaSheet(option.id)}
-                  className={cn(
-                    'flex w-full items-center gap-3 rounded-2xl border p-3 text-left shadow-sm transition active:scale-[0.99]',
-                    active
-                      ? 'border-emerald-200 bg-emerald-50/60'
-                      : 'border-slate-200 bg-white',
-                  )}
-                >
-                  <div
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => openMfaSheet(option.id)}
                     className={cn(
-                      'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl',
+                      'flex w-full min-h-[76px] items-center gap-3 rounded-[22px] border px-3.5 py-3.5 text-left transition active:scale-[0.99]',
                       active
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-slate-100 text-slate-600',
+                        ? 'border-emerald-200/90 bg-[linear-gradient(90deg,#ffffff_0%,#ecfdf5_100%)] shadow-sm'
+                        : 'border-slate-200 bg-[#f8fafc] shadow-sm',
                     )}
                   >
-                    {option.icon}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate font-semibold text-slate-900">
-                        {option.title}
-                      </span>
+                    <div
+                      className={cn(
+                        'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl',
+                        active
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'bg-white text-[#10213f] ring-1 ring-slate-200',
+                      )}
+                    >
+                      {option.icon}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-[15px] font-semibold text-[#10213f]">
+                          {option.title}
+                        </span>
+                        <span
+                          className={cn(
+                            'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                            active
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-slate-200/80 text-slate-600',
+                          )}
+                        >
+                          {active ? 'On' : 'Off'}
+                        </span>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-slate-500">
+                        {option.desc}
+                      </p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-slate-300" />
+                  </button>
+                );
+              })}
+              <p className="px-1 pt-1 text-center text-[11px] font-medium text-slate-400">
+                Tap a method to set up or manage it
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-3">
+              {mfaOptions.map(option => {
+                const active = mfaMethods[option.id];
+                const busy = securityLoading === option.id;
+
+                return (
+                  <div
+                    key={option.id}
+                    className={cn(
+                      'rounded-[24px] border p-5 transition',
+                      active
+                        ? 'border-emerald-200 bg-emerald-50/50'
+                        : 'border-slate-200 bg-slate-50/40',
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={cn(
+                            'flex h-11 w-11 items-center justify-center rounded-2xl',
+                            active
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-white text-[#10213f] ring-1 ring-slate-200',
+                          )}
+                        >
+                          {option.icon}
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-[#10213f]">
+                            {option.title}
+                          </h3>
+                          <p className="mt-1 text-xs leading-5 text-slate-500">
+                            {option.desc}
+                          </p>
+                        </div>
+                      </div>
                       <span
                         className={cn(
-                          'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase',
+                          'rounded-full px-2.5 py-1 text-[10px] font-bold uppercase',
                           active
                             ? 'bg-emerald-100 text-emerald-700'
                             : 'bg-slate-100 text-slate-500',
                         )}
                       >
-                        {active ? 'Linked' : 'Off'}
+                        {active ? 'On' : 'Off'}
                       </span>
                     </div>
-                    <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-slate-500">
-                      {option.desc}
-                    </p>
-                  </div>
-                  <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-3">
-            {mfaOptions.map(option => {
-              const active = mfaMethods[option.id];
-              const busy = securityLoading === option.id;
 
-              return (
-                <div
-                  key={option.id}
-                  className={cn(
-                    'rounded-2xl border p-5 transition',
-                    active
-                      ? 'border-emerald-200 bg-emerald-50/60'
-                      : 'border-slate-200 bg-white',
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={cn(
-                          'flex h-11 w-11 items-center justify-center rounded-xl',
-                          active
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-slate-100 text-slate-600',
-                        )}
-                      >
-                        {option.icon}
-                      </div>
-                      <div>
-                        <h3 className="font-black text-slate-900">
-                          {option.title}
-                        </h3>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                          {option.desc}
+                    <div className="mt-5">
+                      {renderMfaSetupContent(option.id)}
+                      {busy && (
+                        <p className="mt-3 text-xs text-slate-500">
+                          Working...
                         </p>
-                      </div>
-                    </div>
-                    <span
-                      className={cn(
-                        'rounded-full px-2.5 py-1 text-[10px] font-black uppercase',
-                        active
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-slate-100 text-slate-500',
                       )}
-                    >
-                      {active ? 'Linked' : 'Off'}
-                    </span>
+                    </div>
                   </div>
-
-                  <div className="mt-5">
-                    {renderMfaSetupContent(option.id)}
-                    {busy && (
-                      <p className="mt-3 text-center text-xs text-slate-500">
-                        Working...
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* PLAN CARD */}
-      <div className="rounded-3xl border bg-white p-4 shadow-sm sm:p-8 md:p-10">
-        <h2 className="text-xl font-black uppercase">
-          {isTrial ? 'Free Trial Phase' : 'Subscription Active'}
-        </h2>
-
-        <p className="mt-2 text-xs uppercase text-slate-500">
-          {isTrial
-            ? `${trialDaysLeft} days remaining`
-            : `Plan: ${billing.plan?.toUpperCase()}`}
-        </p>
-        {isTrial && trialDaysLeft <= 3 && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-700 px-6 py-4 rounded-xl text-sm font-bold">
-            ⏰ Your free trial ends in {trialDaysLeft} days. Add a payment
-            method to avoid interruption.
+      <section className="w-full overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px]">
+        <div className="flex flex-col gap-4 border-b border-slate-100 bg-[linear-gradient(180deg,#fbfdff_0%,#ffffff_100%)] px-4 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-6 sm:py-6 md:px-8">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+              Billing
+            </p>
+            <h2 className="mt-1 text-[18px] font-bold tracking-tight text-[#10213f] sm:text-xl">
+              {isTrial ? 'Free Trial Phase' : 'Subscription Active'}
+            </h2>
+            <p className="mt-1.5 text-[12px] font-medium text-slate-500">
+              {isTrial
+                ? `${trialDaysLeft} days remaining on your trial`
+                : `Plan: ${billing.plan?.toUpperCase() || '—'}`}
+            </p>
           </div>
-        )}
+          <span
+            className={cn(
+              'inline-flex w-auto items-center rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide',
+              isTrial
+                ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+                : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+            )}
+          >
+            {isTrial ? 'Trial' : billing.status || 'Active'}
+          </span>
+        </div>
 
-        {(billing.status === 'trialing' || billing.status === 'active') && (
-          <div className="mt-5 flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-left">
-              <p className="text-sm font-semibold text-slate-900">Auto-renew</p>
-              <p className="text-xs text-slate-600">
-                {billing.auto_renew !== false
-                  ? 'On — your card will be charged when the current period ends (or when the trial ends if a card is on file).'
-                  : 'Off — you will not be charged automatically. Access may pause when the period ends until you pay.'}
-              </p>
+        <div className="space-y-4 p-4 sm:space-y-5 sm:p-6 md:px-8 md:pb-8">
+          {isTrial && trialDaysLeft <= 3 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+              Your free trial ends in {trialDaysLeft} days. Add a payment
+              method to avoid interruption.
             </div>
+          )}
+
+          {(billing.status === 'trialing' || billing.status === 'active') && (
+            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 text-left">
+                <p className="text-sm font-semibold text-slate-900">Auto-renew</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
+                  {billing.auto_renew !== false
+                    ? 'On — your card will be charged when the current period ends (or when the trial ends if a card is on file).'
+                    : 'Off — you will not be charged automatically. Access may pause when the period ends until you pay.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={autoRenewLoading || disableActions}
+                onClick={async () => {
+                  const next = !(billing.auto_renew !== false);
+                  try {
+                    const res = await setAutoRenew({ enabled: next }).unwrap();
+                    toast.success(
+                      res?.message || (next ? 'Auto-renew on' : 'Auto-renew off'),
+                    );
+                    await refetchStatus();
+                  } catch (err: unknown) {
+                    toast.error(
+                      getErrorMessage(err, 'Could not update auto-renew'),
+                    );
+                  }
+                }}
+                className={cn(
+                  'inline-flex h-10 w-auto shrink-0 items-center justify-center rounded-xl px-5 text-xs font-bold uppercase',
+                  billing.auto_renew !== false
+                    ? 'bg-emerald-700 text-white'
+                    : 'bg-slate-300 text-slate-800',
+                )}
+              >
+                {billing.auto_renew !== false ? 'On' : 'Off'}
+              </button>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
-              disabled={autoRenewLoading || disableActions}
-              onClick={async () => {
-                const next = !(billing.auto_renew !== false);
-                try {
-                  const res = await setAutoRenew({ enabled: next }).unwrap();
-                  toast.success(res?.message || (next ? 'Auto-renew on' : 'Auto-renew off'));
-                  await refetchStatus();
-                } catch (err: unknown) {
-                  toast.error(getErrorMessage(err, 'Could not update auto-renew'));
-                }
-              }}
+              disabled={!canChangePlan || disableActions}
+              onClick={() => setShowUpgradeModal(true)}
               className={cn(
-                'rounded-xl px-5 py-2.5 text-xs font-black uppercase',
-                billing.auto_renew !== false
-                  ? 'bg-emerald-700 text-white'
-                  : 'bg-slate-300 text-slate-800',
+                'inline-flex h-11 w-auto items-center justify-center whitespace-nowrap rounded-xl px-5 text-xs font-bold uppercase',
+                disableActions
+                  ? 'cursor-not-allowed bg-slate-300 text-slate-600'
+                  : 'bg-[#10213f] text-white hover:bg-[#0c1a33]',
               )}
             >
-              {billing.auto_renew !== false ? 'On' : 'Off'}
+              {!billing.has_payment_method
+                ? 'Add Payment Method'
+                : isTrial
+                  ? 'Upgrade Now'
+                  : 'Change Plan'}
+            </button>
+            {billing.status === 'active' && (
+              <button
+                type="button"
+                onClick={pauseSubscription}
+                className="inline-flex h-11 w-auto items-center justify-center whitespace-nowrap rounded-xl bg-amber-600 px-5 text-xs font-bold text-white hover:bg-amber-700"
+              >
+                Pause Subscription
+              </button>
+            )}
+
+            {billing.status === 'paused' && (
+              <button
+                type="button"
+                onClick={resumeSubscription}
+                className="inline-flex h-11 w-auto items-center justify-center whitespace-nowrap rounded-xl bg-amber-600 px-5 text-xs font-bold text-white hover:bg-amber-700"
+              >
+                Resume Subscription
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={openBillingPortal}
+              className="inline-flex h-11 w-auto items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-5 text-xs font-bold uppercase text-[#10213f] hover:bg-slate-50"
+            >
+              Manage Billing
             </button>
           </div>
-        )}
-
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row  sm:items-center">
-          <button
-            disabled={!canChangePlan || disableActions}
-            onClick={() => setShowUpgradeModal(true)}
-            className={cn(
-              'w-auto whitespace-nowrap cursor-pointer rounded-xl px-6 py-3.5 text-xs font-black uppercase sm:w-auto sm:px-10 sm:py-4',
-              disableActions
-                ? 'cursor-not-allowed bg-slate-300'
-                : 'bg-[#1e293b] text-white',
-            )}
-          >
-            {!billing.has_payment_method
-              ? 'Add Payment Method'
-              : isTrial
-                ? 'Upgrade Now'
-                : 'Change Plan'}
-          </button>
-          {billing.status === 'active' && (
-            <button
-              onClick={pauseSubscription}
-              className="w-auto whitespace-nowrap cursor-pointer rounded-xl bg-amber-600 px-6 py-3 text-xs font-black text-white sm:w-auto"
-            >
-              Pause Subscription
-            </button>
-          )}
-
-          {billing.status === 'paused' && (
-            <button
-              onClick={resumeSubscription}
-              className="w-auto whitespace-nowrap cursor-pointer rounded-xl bg-amber-600 px-6 py-3 text-xs font-black text-white sm:w-auto"
-            >
-              Resume Subscription
-            </button>
-          )}
-          <button
-            onClick={openBillingPortal}
-            className="w-auto whitespace-nowrap cursor-pointer rounded-xl bg-slate-800 px-6 py-3 text-xs uppercase font-black text-white sm:w-auto"
-          >
-            Manage Billing
-          </button>
         </div>
-      </div>
+      </section>
 
       {/* INVOICES */}
-      <div className="overflow-hidden rounded-3xl border bg-white">
-        <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="p-4 text-left">Invoice</th>
-              <th className="p-4">Date</th>
-              <th className="p-4">Amount</th>
-              <th className="p-4">Status</th>
-            </tr>
-          </thead>
+      <section className="w-full overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px]">
+        <div className="border-b border-slate-100 px-4 py-4 sm:px-6 md:px-8">
+          <h2 className="text-[17px] font-bold tracking-tight text-[#10213f]">
+            Invoices
+          </h2>
+          <p className="mt-1 text-[12px] text-slate-500">
+            Recent billing history for this vault.
+          </p>
+        </div>
 
-          <tbody>
-            {invoicesLoading && (
+        {/* Mobile invoice cards */}
+        <div className="space-y-2.5 p-3 sm:hidden">
+          {invoicesLoading && <Skeleton className="h-20 w-full rounded-2xl" />}
+          {!invoicesLoading &&
+            invoices?.map((inv: Invoice) => (
+              <div
+                key={inv.id}
+                className="rounded-2xl border border-slate-200 bg-[#f8fafc] p-3.5"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="truncate font-mono text-[11px] text-slate-500">
+                    {inv.id}
+                  </p>
+                  <span
+                    className={cn(
+                      'rounded-full px-2 py-0.5 text-[10px] font-bold capitalize',
+                      inv.status === 'paid'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-amber-100 text-amber-700',
+                    )}
+                  >
+                    {inv.status}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-end justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-[#10213f]">
+                      ${inv.amount_due.toFixed(2)}
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      {formatDate(inv.created)}
+                    </p>
+                  </div>
+                  {inv.pdf ? (
+                    <a
+                      href={inv.pdf}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-9 w-auto items-center rounded-lg bg-[#10213f] px-3 text-[11px] font-bold text-white"
+                    >
+                      PDF
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          {!invoicesLoading && invoices?.length === 0 && (
+            <p className="py-8 text-center text-sm text-slate-400">
+              No invoices yet
+            </p>
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto sm:block">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead className="bg-slate-50">
               <tr>
-                <td colSpan={4} className="p-8">
-                  <Skeleton className="h-6 w-full" />
-                </td>
+                <th className="p-4 text-left font-semibold text-slate-600">
+                  Invoice
+                </th>
+                <th className="p-4 text-left font-semibold text-slate-600">
+                  Date
+                </th>
+                <th className="p-4 text-left font-semibold text-slate-600">
+                  Amount
+                </th>
+                <th className="p-4 text-left font-semibold text-slate-600">
+                  Status
+                </th>
+                <th className="p-4 text-right font-semibold text-slate-600">
+                  File
+                </th>
               </tr>
-            )}
+            </thead>
 
-            {!invoicesLoading &&
-              invoices?.map((inv: Invoice) => (
-                <>
-                  <tr key={inv.id} className="border-t">
-                    <td className="p-4 font-mono">{inv.id}</td>
-                    <td className="p-4">{formatDate(inv.created)}</td>
-                    <td className="p-4">${inv.amount_due.toFixed(2)}</td>
+            <tbody>
+              {invoicesLoading && (
+                <tr>
+                  <td colSpan={5} className="p-8">
+                    <Skeleton className="h-6 w-full" />
+                  </td>
+                </tr>
+              )}
+
+              {!invoicesLoading &&
+                invoices?.map((inv: Invoice) => (
+                  <tr key={inv.id} className="border-t border-slate-100">
+                    <td className="p-4 font-mono text-xs text-slate-600">
+                      {inv.id}
+                    </td>
+                    <td className="p-4 text-slate-700">
+                      {formatDate(inv.created)}
+                    </td>
+                    <td className="p-4 font-semibold text-[#10213f]">
+                      ${inv.amount_due.toFixed(2)}
+                    </td>
                     <td className="p-4 capitalize">
                       <span
-                        className={`px-2 py-1 rounded text-xs font-bold ${
+                        className={cn(
+                          'rounded-full px-2.5 py-1 text-xs font-bold',
                           inv.status === 'paid'
                             ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-amber-100 text-amber-700'
-                        }`}
+                            : 'bg-amber-100 text-amber-700',
+                        )}
                       >
                         {inv.status}
                       </span>
                     </td>
                     <td className="p-4 text-right">
-                      {inv.pdf && (
+                      {inv.pdf ? (
                         <a
                           href={inv.pdf}
                           target="_blank"
-                          className="text-indigo-600 font-bold text-xs"
+                          rel="noreferrer"
+                          className="inline-flex h-9 w-auto items-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-[#10213f] hover:bg-slate-50"
                         >
                           PDF
                         </a>
+                      ) : (
+                        <span className="text-xs text-slate-300">—</span>
                       )}
                     </td>
                   </tr>
-                  <tr>
-                    {inv.lines?.map((line: InvoiceLine) => (
-                      <div
-                        key={line.description}
-                        className="text-xs text-slate-500 pl-6"
-                      >
-                        {line.proration && '🔁 '}
-                        {line.description}: ${line.amount.toFixed(2)}
-                      </div>
-                    ))}
-                  </tr>
-                </>
-              ))}
+                ))}
 
-            {!invoicesLoading && invoices?.length === 0 && (
-              <tr>
-                <td colSpan={4} className="p-8 text-center text-slate-400">
-                  No invoices yet
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              {!invoicesLoading && invoices?.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="p-8 text-center text-slate-400"
+                  >
+                    No invoices yet
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </section>
 
       {/* MFA SETUP — mobile bottom sheet */}
       {isMobile && (
@@ -1114,26 +1238,38 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
           className="max-h-[92dvh]"
           labelledBy="vault-mfa-sheet-title"
         >
-          <div className="flex h-full min-h-0 flex-col">
+          <div className="flex h-full min-h-0 flex-col bg-[#f8fafc]">
             <MobileSheetHandle />
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-4 pt-1">
-              <div className="min-w-0 flex-1">
-                <h3
-                  id="vault-mfa-sheet-title"
-                  className="text-lg font-semibold text-slate-950"
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200/80 bg-white px-4 pb-4 pt-1">
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <span
+                  className={cn(
+                    'mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl',
+                    mfaSheetMethod && mfaMethods[mfaSheetMethod]
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-[#10213f] text-white',
+                  )}
                 >
-                  {mfaSheetOption?.title || 'MFA Method'}
-                </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  {mfaSheetOption?.desc}
-                </p>
+                  {mfaSheetOption?.icon}
+                </span>
+                <div className="min-w-0">
+                  <h3
+                    id="vault-mfa-sheet-title"
+                    className="text-[17px] font-bold tracking-tight text-[#10213f]"
+                  >
+                    {mfaSheetOption?.title || 'MFA Method'}
+                  </h3>
+                  <p className="mt-1 text-[12px] leading-snug text-slate-500">
+                    {mfaSheetOption?.desc}
+                  </p>
+                </div>
               </div>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 onClick={closeMfaSheet}
-                className="h-10 w-10 shrink-0 rounded-full"
+                className="h-10 w-10 shrink-0 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -1146,7 +1282,9 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                 MOBILE_SHEET_SCROLL_PADDING,
               )}
             >
-              {mfaSheetMethod && renderMfaSetupContent(mfaSheetMethod)}
+              <div className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm">
+                {mfaSheetMethod && renderMfaSetupContent(mfaSheetMethod)}
+              </div>
             </div>
           </div>
         </MobileBottomSheet>

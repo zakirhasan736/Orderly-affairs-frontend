@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import {
   CAPTCHA_DISABLED_TOKEN,
-  isCaptchaEnabled,
+  isCaptchaEnabledNow,
 } from '@/utils/captchaConfig';
 
 interface TurnstileCaptchaProps {
@@ -31,9 +31,10 @@ export function TurnstileCaptcha({
 }: TurnstileCaptchaProps) {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const turnstileRef = useRef<TurnstileInstance | null>(null);
+  const captchaOn = isCaptchaEnabledNow();
   const [widgetKey, setWidgetKey] = useState(0);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
-    isCaptchaEnabled ? 'loading' : 'ready',
+    captchaOn ? 'loading' : 'ready',
   );
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevResetKey = useRef(resetKey);
@@ -55,7 +56,7 @@ export function TurnstileCaptcha({
   }, [onTokenChange, setReady]);
 
   useEffect(() => {
-    if (!isCaptchaEnabled) {
+    if (!captchaOn) {
       onTokenChange(CAPTCHA_DISABLED_TOKEN);
       setReady(true, 'ready');
       return;
@@ -64,7 +65,7 @@ export function TurnstileCaptcha({
       onTokenChange('dev-bypass');
       setReady(true, 'ready');
     }
-  }, [onTokenChange, siteKey, setReady]);
+  }, [onTokenChange, siteKey, setReady, captchaOn]);
 
   useEffect(() => {
     if (prevResetKey.current === resetKey) return;
@@ -78,7 +79,7 @@ export function TurnstileCaptcha({
     };
   }, []);
 
-  if (!isCaptchaEnabled) {
+  if (!captchaOn) {
     return null;
   }
 

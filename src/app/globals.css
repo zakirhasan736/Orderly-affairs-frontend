@@ -214,6 +214,14 @@
     transform: translateZ(0);
   }
 
+  /* Hide fixed dashboard chrome while a mobile sheet is open (avoids nav covering form fields) */
+  @media (max-width: 767px) {
+    body.mobile-sheet-open [data-mobile-dashboard-chrome] {
+      visibility: hidden;
+      pointer-events: none;
+    }
+  }
+
   /* Glass Morphism Base Styles */
   .glass-card {
     background: var(--glass-light-fill);
@@ -1752,5 +1760,94 @@ html {
 
   50% {
     box-shadow: 0 0 0 10px rgba(99, 102, 241, 0.4);
+  }
+}
+
+/* Overview AI document reading progress circle */
+@keyframes ai-doc-progress-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ai-doc-progress-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+@keyframes ai-doc-progress-halo {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.18);
+  }
+}
+
+@keyframes ai-doc-progress-stroke {
+  0%,
+  100% {
+    stroke: #10213f;
+    filter: drop-shadow(0 0 2px rgba(16, 33, 63, 0.35));
+  }
+  50% {
+    stroke: #3b82f6;
+    filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.65));
+  }
+}
+
+@keyframes ai-doc-progress-tip {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+
+.ai-doc-progress-spin {
+  animation: ai-doc-progress-spin 1.8s linear infinite;
+}
+
+.ai-doc-progress-pulse {
+  animation: ai-doc-progress-pulse 1.6s ease-in-out infinite;
+}
+
+.ai-doc-progress-halo {
+  animation: ai-doc-progress-halo 1.6s ease-in-out infinite;
+}
+
+.ai-doc-progress-stroke {
+  animation: ai-doc-progress-stroke 1.4s ease-in-out infinite;
+}
+
+.ai-doc-progress-tip {
+  /* rotate is set inline; pulse uses opacity only so it doesn't fight transform */
+  animation: ai-doc-progress-tip-glow 1s ease-in-out infinite;
+}
+
+@keyframes ai-doc-progress-tip-glow {
+  0%,
+  100% {
+    opacity: 0.75;
+    filter: drop-shadow(0 0 2px rgba(96, 165, 250, 0.5));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(96, 165, 250, 0.95));
   }
 }

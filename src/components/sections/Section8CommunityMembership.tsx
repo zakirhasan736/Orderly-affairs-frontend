@@ -34,6 +34,7 @@ import {
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
+  buildUploadedAiFile,
   type UploadedAIFile,
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
@@ -87,6 +88,13 @@ const SECTION_8A = {
       label: 'Membership Details',
       type: 'TextArea',
       helperText: 'Your role, membership number, or special responsibilities',
+    },
+    {
+      key: 'renewal_date',
+      label: 'Membership Renewal Date',
+      type: 'DatePicker',
+      helperText:
+        'When dues or membership renew — reminder emails at 10, 5, 1 days and on the day',
     },
     {
       key: 'contact_info',
@@ -280,11 +288,7 @@ export default function Section8CommunityMembership({
 
       const uploaded = await uploadAIDocument(file);
 
-      const uploadedRecord: UploadedAIFile = {
-        file_id: uploaded.file_id,
-        mime_type: uploaded.mime_type,
-        expires_at: uploaded.expires_at,
-      };
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -386,7 +390,7 @@ export default function Section8CommunityMembership({
       disabled={isAnyAIActionRunning}
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}
-      uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+      uploadedFile={getUploadedFileForScope(scope)}
       highlightUpload={aiRouting?.shouldHighlightUpload('8', String(scope)) ?? false}
       onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
       onAutofill={onAutofill}

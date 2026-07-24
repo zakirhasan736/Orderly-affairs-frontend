@@ -1,6 +1,10 @@
 import { useEffect } from 'react';
-import type { UploadedAIFile } from '@/utils/aiDocumentUploadUi';
+import {
+  mergeAiUploadMeta,
+  type UploadedAIFile,
+} from '@/utils/aiDocumentUploadUi';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import { isAiAutofillDoneForSection } from '@/utils/aiAutofillDoneSections';
 
 type RestoreArgs = {
   sectionId: string;
@@ -17,10 +21,12 @@ export function resolveAiUploadedFileForScope(
   pendingFile?: UploadedAIFile | null,
 ) {
   if (pendingFile) {
-    return pendingFile;
+    return mergeAiUploadMeta(pendingFile);
   }
 
-  return latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+  const local =
+    latestUploadRef.current[String(scope)] ?? uploadedFiles[scope] ?? null;
+  return local ? mergeAiUploadMeta(local) : null;
 }
 
 export function useAiUploadedFileResolver(sectionId: string, scope: string) {
@@ -48,21 +54,48 @@ export function useRestoreAiPendingUploadForSection({
   const pendingUploads = routing?.getPendingUploadsForSection(sectionId) ?? [];
 
   useEffect(() => {
-    const activeUploads = pendingUploads.filter(upload => upload.highlightUpload);
+    // Do not restore a consumed document that already filled this section —
+    // that causes "document not found" when Auto-fill is clicked again.
+    if (isAiAutofillDoneForSection(sectionId)) {
+      return;
+    }
+
+    const activeUploads = pendingUploads.filter(upload => {
+      if (!upload.highlightUpload) return false;
+      if (isAiAutofillDoneForSection(sectionId)) return false;
+      return true;
+    });
 
     activeUploads.forEach(pendingUpload => {
       const scope = pendingUpload.uploadScope || 'full';
-      const pendingFile = {
+      const pendingFile = mergeAiUploadMeta({
         file_id: pendingUpload.file_id,
         mime_type: pendingUpload.mime_type,
         expires_at: pendingUpload.expires_at,
-      };
+        file_name: pendingUpload.file_name,
+        uploaded_at: pendingUpload.uploaded_at || pendingUpload.createdAt,
+      });
 
       latestUploadRef.current[String(scope)] = pendingFile;
-      setUploadedFiles(prev => ({
-        ...prev,
-        [scope]: pendingFile,
-      }));
+
+      // Pattern-B sections use scopes like "21A-full". Mirror the dashboard
+      // "full" pending file so Auto-fill can find it immediately.
+      const mirroredScopes = new Set<string>([String(scope)]);
+      if (scope === 'full' && pendingUpload.targetSubsection) {
+        mirroredScopes.add(`${pendingUpload.targetSubsection}-full`);
+      }
+
+      mirroredScopes.forEach(key => {
+        latestUploadRef.current[key] = pendingFile;
+      });
+
+      setUploadedFiles(prev => {
+        const next = { ...prev, [scope]: pendingFile };
+        mirroredScopes.forEach(key => {
+          next[key] = pendingFile;
+        });
+        return next;
+      });
     });
 
     if (activeUploads.length) {

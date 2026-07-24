@@ -10,7 +10,6 @@ import React, {
   useState,
 } from 'react';
 import { toast } from 'sonner';
-import { AiAdditionalSectionsDialog } from '@/components/ai/AiAdditionalSectionsDialog';
 import { AiGuidedNavigationCallout } from '@/components/ai/AiGuidedNavigationCallout';
 import { AiRoutingFloatingNotifications } from '@/components/ai/AiRoutingFloatingNotifications';
 import { AiSectionMismatchDialog } from '@/components/ai/AiSectionMismatchDialog';
@@ -38,7 +37,10 @@ import {
   AI_SECTION_BY_KEY,
   getAiSectionLabel,
 } from '@/utils/aiSectionRegistry';
-import type { UploadedAIFile } from '@/utils/aiDocumentUploadUi';
+import {
+  getAiUploadMeta,
+  type UploadedAIFile,
+} from '@/utils/aiDocumentUploadUi';
 
 type NavigateToSection = (
   sectionId: string,
@@ -48,6 +50,16 @@ type NavigateToSection = (
 type AiDocumentRoutingContextValue = {
   currentSectionId: string;
   pendingUploads: AiPendingUpload[];
+  batchSilentMode: boolean;
+  setBatchSilentMode: (enabled: boolean) => void;
+  queueRoutedSectionsSilently: (
+    detail: AiDocumentMismatchDetail,
+    context?: {
+      currentSectionId?: string;
+      uploadScope?: string;
+      navigateIntent?: AiNavigateIntent;
+    },
+  ) => void;
   navigateToPendingSection: (
     pending: AiPendingUpload,
     intent?: AiNavigateIntent,
@@ -67,6 +79,7 @@ type AiDocumentRoutingContextValue = {
     context?: {
       currentSectionId?: string;
       uploadScope?: string;
+      silent?: boolean;
     },
   ) => void;
   handleAutofillSuccess: (meta: AiAutofillSuccessMeta) => void;
@@ -117,6 +130,7 @@ export function AiDocumentRoutingProvider({
   const [pendingUploads, setPendingUploads] = useState<AiPendingUpload[]>([]);
   const [filledSectionsByFile, setFilledSectionsByFile] =
     useState<FilledSectionsByFile>({});
+  const [batchSilentMode, setBatchSilentMode] = useState(false);
 
   const [mismatchDetail, setMismatchDetail] =
     useState<AiDocumentMismatchDetail | null>(null);
@@ -256,9 +270,13 @@ export function AiDocumentRoutingProvider({
       const targetSectionId = detail.section_id;
       if (!targetSectionId) return;
 
+      const uploadMeta = getAiUploadMeta(detail.file_id);
+
       addPendingUpload({
         file_id: detail.file_id,
         mime_type: detail.mime_type || 'application/pdf',
+        file_name: uploadMeta?.file_name,
+        uploaded_at: uploadMeta?.uploaded_at,
         targetSectionId,
         targetSectionKey: detail.section_key,
         targetSubsection: detail.subsection,
@@ -294,12 +312,13 @@ export function AiDocumentRoutingProvider({
     [onNavigateToSection, patchPendingUpload],
   );
 
-  const handleMismatch = useCallback(
+  const queueRoutedSectionsSilently = useCallback(
     (
       detail: AiDocumentMismatchDetail,
       context?: {
         currentSectionId?: string;
         uploadScope?: string;
+        navigateIntent?: AiNavigateIntent;
       },
     ) => {
       const suggestedMeta =
@@ -310,6 +329,7 @@ export function AiDocumentRoutingProvider({
 
       const suggestedId =
         suggestedMeta?.id || detail.suggested_section_id || '';
+      const navigateIntent = context?.navigateIntent ?? 'review';
 
       if (
         suggestedId &&
@@ -327,7 +347,12 @@ export function AiDocumentRoutingProvider({
             data_summary: detail.document_summary,
             extracted_fields: detail.extracted_fields,
           },
-          context,
+          {
+            currentSectionId: context?.currentSectionId,
+            uploadScope: context?.uploadScope || 'full',
+            highlight: true,
+            navigateIntent,
+          },
         );
       }
 
@@ -337,7 +362,7 @@ export function AiDocumentRoutingProvider({
           AI_SECTION_BY_KEY[section.section_key]?.id ||
           '';
         if (
-          sectionId &&
+          !sectionId ||
           isSectionFilledForFile(filledSectionsByFile, detail.file_id, sectionId)
         ) {
           return;
@@ -352,14 +377,46 @@ export function AiDocumentRoutingProvider({
             section_label: section.section_label,
             subsection: section.subsection,
             data_summary: section.data_summary,
+            extracted_fields: section.extracted_fields,
           },
           {
             currentSectionId: context?.currentSectionId,
             uploadScope: 'full',
             highlight: true,
+            navigateIntent,
           },
         );
       });
+    },
+    [filledSectionsByFile, queuePendingForSection],
+  );
+
+  const handleMismatch = useCallback(
+    (
+      detail: AiDocumentMismatchDetail,
+      context?: {
+        currentSectionId?: string;
+        uploadScope?: string;
+        silent?: boolean;
+      },
+    ) => {
+      const silent = Boolean(context?.silent || batchSilentMode);
+
+      queueRoutedSectionsSilently(detail, {
+        currentSectionId: context?.currentSectionId,
+        uploadScope: context?.uploadScope,
+        navigateIntent: silent ? 'review' : null,
+      });
+
+      if (silent) {
+        return;
+      }
+
+      const suggestedMeta =
+        (detail.suggested_section_id &&
+          AI_SECTION_BY_ID[detail.suggested_section_id]) ||
+        AI_SECTION_BY_KEY[detail.suggested_section] ||
+        null;
 
       const suggestedLabel =
         detail.suggested_section_label ||
@@ -379,7 +436,7 @@ export function AiDocumentRoutingProvider({
       setMismatchDetail(detail);
       setMismatchContext(context || null);
     },
-    [filledSectionsByFile, queuePendingForSection],
+    [batchSilentMode, queueRoutedSectionsSilently],
   );
 
   const handleAutofillSuccess = useCallback(
@@ -451,6 +508,7 @@ export function AiDocumentRoutingProvider({
             currentSectionId: meta.currentSectionId,
             uploadScope: 'full',
             highlight: true,
+            navigateIntent: batchSilentMode ? 'review' : null,
           },
         );
       });
@@ -465,15 +523,13 @@ export function AiDocumentRoutingProvider({
         },
       };
 
-      if (meta.deferAdditionalDialog) {
-        deferredAdditionalRef.current = dialogPayload;
-        return;
-      }
-
-      setAdditionalSections(extras);
-      setAdditionalContext(dialogPayload.context);
+      // Keep pending section routing in memory only — do not show the
+      // "other sections have data" popup anymore.
+      void dialogPayload;
+      return;
     },
     [
+      batchSilentMode,
       clearAllPendingForFile,
       clearPendingForSection,
       filledSectionsByFile,
@@ -539,12 +595,10 @@ export function AiDocumentRoutingProvider({
   }, []);
 
   const releaseAdditionalSectionsDialog = useCallback(() => {
-    const deferred = deferredAdditionalRef.current;
-    if (!deferred) return;
-
+    // Popup disabled — discard any deferred additional-section prompt.
     deferredAdditionalRef.current = null;
-    setAdditionalSections(deferred.sections);
-    setAdditionalContext(deferred.context);
+    setAdditionalSections([]);
+    setAdditionalContext(null);
   }, []);
 
   const latestMismatchPending = useMemo(() => {
@@ -568,24 +622,6 @@ export function AiDocumentRoutingProvider({
     navigateToPending(latestMismatchPending, 'autofill');
   }, [closeMismatchDialog, latestMismatchPending, navigateToPending]);
 
-  const goToAdditionalSection = useCallback(
-    (section: AiAdditionalSection) => {
-      const pending = pendingUploads.find(
-        item => item.targetSectionId === section.section_id,
-      );
-
-      closeAdditionalDialog();
-
-      if (pending) {
-        navigateToPending(pending, 'autofill');
-        return;
-      }
-
-      onNavigateToSection(section.section_id, section.subsection || null);
-    },
-    [closeAdditionalDialog, navigateToPending, onNavigateToSection, pendingUploads],
-  );
-
   const navigateToPendingSection = useCallback(
     (pending: AiPendingUpload, intent: AiNavigateIntent = 'autofill') => {
       navigateToPending(pending, intent);
@@ -597,6 +633,9 @@ export function AiDocumentRoutingProvider({
     () => ({
       currentSectionId,
       pendingUploads,
+      batchSilentMode,
+      setBatchSilentMode,
+      queueRoutedSectionsSilently,
       navigateToPendingSection,
       getPendingUploadsForSection,
       getPendingFileForSection,
@@ -612,6 +651,8 @@ export function AiDocumentRoutingProvider({
     [
       currentSectionId,
       pendingUploads,
+      batchSilentMode,
+      queueRoutedSectionsSilently,
       navigateToPendingSection,
       getPendingUploadsForSection,
       getPendingFileForSection,
@@ -628,9 +669,7 @@ export function AiDocumentRoutingProvider({
 
   const currentSectionLabel = mismatchContext?.currentSectionId
     ? getAiSectionLabel(mismatchContext.currentSectionId)
-    : additionalContext?.currentSectionId
-      ? getAiSectionLabel(additionalContext.currentSectionId)
-      : 'this section';
+    : 'this section';
 
   const suggestedSectionLabel =
     mismatchDetail?.suggested_section_label ||
@@ -643,7 +682,7 @@ export function AiDocumentRoutingProvider({
       {children}
 
       <AiSectionMismatchDialog
-        open={Boolean(mismatchDetail)}
+        open={Boolean(mismatchDetail) && !batchSilentMode}
         onOpenChange={open => {
           if (!open) closeMismatchDialog();
         }}
@@ -656,19 +695,6 @@ export function AiDocumentRoutingProvider({
         mismatchType={mismatchDetail?.mismatch_type}
         onStayHere={closeMismatchDialog}
         onGoToSection={goToSuggestedSection}
-      />
-
-      <AiAdditionalSectionsDialog
-        open={additionalSections.length > 0 || Boolean(additionalContext?.sectionPreviews?.length)}
-        onOpenChange={open => {
-          if (!open) closeAdditionalDialog();
-        }}
-        currentSectionLabel={currentSectionLabel}
-        documentSummary={additionalContext?.documentSummary}
-        additionalSections={additionalSections}
-        sectionPreviews={additionalContext?.sectionPreviews}
-        onLater={closeAdditionalDialog}
-        onGoToSection={goToAdditionalSection}
       />
 
       <AiRoutingFloatingNotifications />

@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -20,18 +24,42 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@styles": ["./src/styles/*"],
-      "@elements/*": ["./src/components/elements/*"],
-      "@common/*": ["./src/components/common/*"],
-      "@ui/*": ["./src/components/common/ui/*"],
-      "@data/*": ["./src/data/*"],
-      "@images/*": ["./public/images/*"],
-      "@packages/*": ["./src/libs/*"],
-      "@services/*": ["./src/services/*"],
-      "@types/*": ["./src/types/*"],
-      "@icons/*": ["./src/icons/*"],
-      "@utils/*": ["./src/utils/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@styles": [
+        "./src/styles/*"
+      ],
+      "@elements/*": [
+        "./src/components/elements/*"
+      ],
+      "@common/*": [
+        "./src/components/common/*"
+      ],
+      "@ui/*": [
+        "./src/components/common/ui/*"
+      ],
+      "@data/*": [
+        "./src/data/*"
+      ],
+      "@images/*": [
+        "./public/images/*"
+      ],
+      "@packages/*": [
+        "./src/libs/*"
+      ],
+      "@services/*": [
+        "./src/services/*"
+      ],
+      "@types/*": [
+        "./src/types/*"
+      ],
+      "@icons/*": [
+        "./src/icons/*"
+      ],
+      "@utils/*": [
+        "./src/utils/*"
+      ]
     }
   },
   "include": [
@@ -40,7 +68,13 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    ".next-cypress/types/**/*.ts",
+    ".next-cypress/dev/types/**/*.ts",
+    ".next-playwright/types/**/*.ts",
+    ".next-playwright/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }

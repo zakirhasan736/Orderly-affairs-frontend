@@ -118,12 +118,15 @@ export async function deleteMessageMedia(id: string) {
 export async function uploadMessageMedia(file: File | Blob) {
   validateMessageMediaSize(file.size);
 
+  const mime = file.type || '';
+  const name = file instanceof File ? file.name : '';
   const resourceType =
-    file.type?.startsWith('image/') ||
-    (file instanceof File &&
-      /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name))
+    mime.startsWith('image/') ||
+    /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(name)
       ? 'image'
-      : 'video';
+      : mime.startsWith('audio/') || /\.(mp3|m4a|wav|aac|ogg)$/i.test(name)
+        ? 'video' // Cloudinary stores audio under the video resource type
+        : 'video';
 
   const signature = await getMessageMediaUploadSignature(file.size, resourceType);
   return uploadMessageMediaToCloudinary(file, signature);

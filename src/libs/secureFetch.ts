@@ -63,9 +63,13 @@ export async function fetchSession(): Promise<{
 }> {
   if (!API_BASE) return { authenticated: false };
 
-  const res = await secureFetch('/auth/session', { method: 'GET' });
-  if (!res.ok) return { authenticated: false };
-  return res.json();
+  try {
+    const res = await secureFetch('/auth/session', { method: 'GET' });
+    if (!res.ok) return { authenticated: false };
+    return res.json();
+  } catch {
+    return { authenticated: false };
+  }
 }
 
 /** First-party cookie so Next middleware allows /dashboard after API login. */

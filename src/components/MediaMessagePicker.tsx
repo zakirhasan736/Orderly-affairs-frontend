@@ -9,7 +9,6 @@ import {
   FolderOpen,
   Images,
   Mic,
-  Upload,
   Video,
   X,
 } from 'lucide-react';
@@ -181,16 +180,20 @@ export function MediaMessagePicker({
                   isVideo ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'
                 }`}
               >
-                <Upload className="h-6 w-6" />
+                {isVideo ? (
+                  <Video className="h-6 w-6" />
+                ) : (
+                  <Mic className="h-6 w-6" />
+                )}
               </div>
 
               <p className="font-semibold">
-                {isVideo ? 'Upload Video' : 'Upload Audio'}
+                {isVideo ? 'Record or upload video' : 'Record or upload audio'}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {isVideo
-                  ? 'Record video, take a photo, pick from your gallery, or choose a file.'
-                  : 'Record audio, pick from your gallery, or choose a file.'}
+                  ? 'Record a new video, take a photo, pick from your gallery, or choose a file.'
+                  : 'Record a new audio message, pick from your gallery, or choose a file.'}
               </p>
             </button>
           ) : (

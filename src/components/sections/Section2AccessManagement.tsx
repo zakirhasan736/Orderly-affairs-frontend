@@ -52,7 +52,7 @@ const GUIDE_STEPS = [
 const SECURITY_RULES = [
   'Do not give anyone their Master Access Password directly.',
   'Only tell them where their printed Password Card is stored.',
-  'Assign at least one trusted person before finishing this section.',
+  'Add at least 1 trusted person to enable emergency access.',
   'Use Revoke All if you need to immediately lock everyone out.',
 ];
 
@@ -177,7 +177,7 @@ export default function Section2AccessManagement({ isActive = false }: Props) {
           </CardTitle>
           <span className="inline-flex w-fit items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-primary" />
-            Required before emergency access
+            Add at least 1 trusted person to enable emergency access
           </span>
         </div>
       </CardHeader>

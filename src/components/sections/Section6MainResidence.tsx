@@ -49,6 +49,7 @@ import {
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { SectionAiDocumentUploader } from '@/components/ai/SectionAiDocumentUploader';
 import {
+  buildUploadedAiFile,
   type UploadedAIFile,
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
@@ -169,6 +170,27 @@ const SECTION_6A = {
       type: 'TextArea',
       helperText:
         'How payments are made (check, online, autopay, etc.) and include online access details if available',
+    },
+    {
+      key: 'mortgage_maturity_date',
+      label: 'Mortgage / Loan Maturity Date',
+      type: 'DatePicker',
+      helperText:
+        'When the home loan or mortgage is paid off / matures — used for renewal deadline reminder emails',
+    },
+    {
+      key: 'lease_end_date',
+      label: 'Lease End Date',
+      type: 'DatePicker',
+      helperText:
+        'If renting, when the current lease ends — reminder emails at 10, 5, 1 days and on the day',
+    },
+    {
+      key: 'property_tax_due_date',
+      label: 'Next Property Tax Due Date',
+      type: 'DatePicker',
+      helperText:
+        'Next property tax payment or filing deadline — reminder emails follow the same schedule as insurance',
     },
     {
       key: 'property_ownership_docs_label',
@@ -457,7 +479,13 @@ const SECTION_6A_GROUPS: FieldGroup[] = [
     accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
     iconWrap: 'bg-amber-500/10 text-amber-700',
     layout: 'grid',
-    fieldKeys: ['mortgage_lienholder_landlord', 'payment_methods'],
+    fieldKeys: [
+      'mortgage_lienholder_landlord',
+      'payment_methods',
+      'mortgage_maturity_date',
+      'lease_end_date',
+      'property_tax_due_date',
+    ],
   },
   {
     key: 'ownership_documents',
@@ -641,12 +669,25 @@ export default function Section6MainResidence({
   const cleanPatchObject = (patch: any) => {
     if (!patch || typeof patch !== 'object') return {};
 
+    const uploadKeys = new Set(
+      SECTION_6A.fields
+        .filter(field => String(field.type || '').includes('Upload'))
+        .map(field => field.key),
+    );
+
     return Object.fromEntries(
-      Object.entries(patch).filter(([, value]) => {
-        if (value === null || value === undefined || value === '') return false;
-        if (Array.isArray(value) && value.length === 0) return false;
-        return true;
-      }),
+      Object.entries(patch)
+        .map(([key, value]) => {
+          if (uploadKeys.has(key) && typeof value === 'string') {
+            return [key, { text: value, files: [] }];
+          }
+          return [key, value];
+        })
+        .filter(([, value]) => {
+          if (value === null || value === undefined || value === '') return false;
+          if (Array.isArray(value) && value.length === 0) return false;
+          return true;
+        }),
     );
   };
 
@@ -668,11 +709,7 @@ export default function Section6MainResidence({
 
       const uploaded = await uploadAIDocument(file);
 
-      const uploadedRecord: UploadedAIFile = {
-        file_id: uploaded.file_id,
-        mime_type: uploaded.mime_type,
-        expires_at: uploaded.expires_at,
-      };
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -758,7 +795,7 @@ export default function Section6MainResidence({
         disabled={isAnyAIActionRunning}
         isUploading={uploadingScope === scope}
         isReading={aiLoadingScope === scope}
-        uploadedMimeType={getUploadedFileForScope(scope)?.mime_type}
+        uploadedFile={getUploadedFileForScope(scope)}
       highlightUpload={aiRouting?.shouldHighlightUpload('6', String(scope)) ?? false}
         onUpload={file =>
           handleDocumentUpload(file, scope, () => handleAutofill(scope))

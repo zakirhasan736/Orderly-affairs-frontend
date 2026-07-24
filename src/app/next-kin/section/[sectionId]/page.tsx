@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 import { useGetKitForNokQuery } from '@/services/kitApi';
 import { useGetMyNextKinAccessQuery } from '@/services/authApi';
@@ -9,22 +9,45 @@ import { EnhancedSectionView } from '@/components/EnhancedSectionView';
 import { isHiddenFromNokDashboard } from '@/config/nokConfig';
 import { nokLogout, fetchSession } from '@/libs/secureFetch';
 
+function SectionSkeleton() {
+  return (
+    <div className="min-h-[100dvh] bg-[#f6f8fb]">
+      <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white px-4 py-3">
+        <div className="mx-auto flex max-w-[1480px] items-center gap-3">
+          <div className="h-10 w-10 animate-pulse rounded-xl bg-slate-200" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 w-48 animate-pulse rounded bg-slate-200" />
+            <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
+          </div>
+          <div className="h-9 w-16 animate-pulse rounded-xl bg-slate-200" />
+        </div>
+      </div>
+      <div className="mx-auto max-w-[1480px] space-y-3 px-4 py-5">
+        <div className="h-24 animate-pulse rounded-2xl bg-white" />
+        <div className="h-40 animate-pulse rounded-2xl bg-white" />
+      </div>
+    </div>
+  );
+}
+
 export default function NextKinSectionPage() {
   const router = useRouter();
   const { sectionId } = useParams<{ sectionId: string }>();
-  const [sessionReady, setSessionReady] = useState(false);
 
   const { data: access } = useGetMyNextKinAccessQuery();
-  const { data: kit, isLoading } = useGetKitForNokQuery();
+  const { data: kit, isLoading: kitLoading } = useGetKitForNokQuery();
 
   useEffect(() => {
-    fetchSession().then(session => {
+    let cancelled = false;
+    void fetchSession().then(session => {
+      if (cancelled) return;
       if (!session.authenticated || session.role !== 'nextkin') {
         router.replace('/next-kin');
-        return;
       }
-      setSessionReady(true);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   useEffect(() => {
@@ -33,15 +56,15 @@ export default function NextKinSectionPage() {
     }
   }, [sectionId, router]);
 
-  if (!sessionReady || isLoading || !kit) {
-    return <div className="p-8 text-muted-foreground">Loading section…</div>;
+  if ((kitLoading && !kit) || !kit) {
+    return <SectionSkeleton />;
   }
 
   return (
     <EnhancedSectionView
       formData={{}}
       sectionId={sectionId}
-      nokData={access?.nextkin}
+      nokData={access?.nextkin ?? {}}
       kit={kit}
       onBack={() => router.push('/next-kin/dashboard')}
       onLogout={async () => {

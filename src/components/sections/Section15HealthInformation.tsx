@@ -1,5 +1,6 @@
 'use client';
 
+import { AiUploadedAttachmentList } from '@/components/ai/AiUploadedAttachmentList';
 import React, { useRef, useState } from 'react';
 import {
   Card,
@@ -32,6 +33,10 @@ import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services
 import {
   createEmptyItemFromFields,
   mergeAiPatchWithDefaults,
+  buildAiFieldPatch,
+  unwrapAiAutofillPatch,
+  extractSubsectionPatch,
+  aiPatchHasValues,
 } from '@/utils/aiPatchNormalizer';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
@@ -40,6 +45,7 @@ import {
 } from '@/hooks/useAiUploadedFileResolver';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import {
+  buildUploadedAiFile,
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
 import { AiDocumentDropZoneInput } from '@/components/ai/AiDocumentDropZoneInput';
@@ -349,6 +355,8 @@ type UploadedAIFile = {
   file_id: string;
   mime_type: string;
   expires_at?: string;
+  file_name?: string;
+  uploaded_at?: number;
 };
 
 const ALLOWED_UPLOAD_TYPES = [
@@ -512,8 +520,12 @@ export default function Section15HealthInformation({
 
   const normalizeProviderPatch = (patch: any) => {
     return {
-      ...createEmptyProvider(),
-      ...cleanPatchObject(patch),
+      ...mergeAiPatchWithDefaults(
+        patch,
+        SECTION_15B.fields as any,
+        () => createEmptyItemFromFields(SECTION_15B.fields as any),
+      ),
+      __rowId: createRowId(),
     };
   };
 
@@ -563,11 +575,7 @@ export default function Section15HealthInformation({
 
       const uploaded = await uploadAIDocument(file);
 
-      const uploadedRecord: UploadedAIFile = {
-        file_id: uploaded.file_id,
-        mime_type: uploaded.mime_type,
-        expires_at: uploaded.expires_at,
-      };
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -614,17 +622,21 @@ export default function Section15HealthInformation({
 
       if (!json) return;
 
-      const patch = json?.result?.patch ?? {};
-      const extracted15A = extract15AObjectFromPatch(patch);
+      const patch = unwrapAiAutofillPatch(json?.result);
+      const extracted15A = extractSubsectionPatch(patch, '15A');
+      const normalized15A = buildAiFieldPatch(
+        extracted15A,
+        SECTION_15A.fields as any,
+      );
 
-      if (Object.keys(extracted15A).length === 0) {
+      if (!aiPatchHasValues(normalized15A)) {
         setAiError(
           'AI could not find health insurance or medical information in this document.',
         );
         return;
       }
 
-      update15AWithPatch(extracted15A);
+      update15AWithPatch(normalized15A);
       setAiNotice(
         'AI filled health insurance and medical information. Please review the fields.',
       );
@@ -664,7 +676,7 @@ export default function Section15HealthInformation({
 
       if (!json) return;
 
-      const patch = json?.result?.patch ?? {};
+      const patch = unwrapAiAutofillPatch(json?.result);
       const extractedProviders = extractProviderArrayFromPatch(patch);
 
       if (extractedProviders.length === 0) {
@@ -828,14 +840,9 @@ export default function Section15HealthInformation({
             ].join(' ')}
             iconClassName={iconClass}
           />
-
-          {uploadedFile && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              <FileText className="h-4 w-4" />
-              <span>{getReadableFileType(uploadedFile.mime_type)} ready</span>
-            </div>
-          )}
         </div>
+
+        <AiUploadedAttachmentList file={uploadedFile} />
 
         {isUploading && (
           <div className="relative flex items-center gap-2 text-xs text-slate-500">

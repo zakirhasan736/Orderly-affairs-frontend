@@ -343,8 +343,6 @@ export function Letters({
   }, [letters]);
 
   useEffect(() => {
-    if (!isNextOfKin) return;
-
     setIsLoading(true);
 
     getMessages()
@@ -376,8 +374,6 @@ export function Letters({
   }, [clearNonce]);
 
   const refreshMessages = async () => {
-    if (!isNextOfKin) return;
-
     const data = await getMessages();
     setLetters(data.map(normalizeLetter));
   };
@@ -650,12 +646,25 @@ export function Letters({
         await updateMessage(currentLetter.id, payload);
         toast.success('Message updated');
       } else {
-        await createMessage(payload);
+        const created = await createMessage(payload);
+        const normalized = normalizeLetter({
+          ...currentLetter,
+          ...created,
+          id: created?._id || created?.id || currentLetter.id,
+        });
+        setLetters(prev => {
+          if (prev.some(item => item.id === normalized.id)) return prev;
+          return [normalized, ...prev];
+        });
         toast.success('Message saved');
       }
 
       closeEditor({ cleanupMedia: false });
-      await refreshMessages();
+      try {
+        await refreshMessages();
+      } catch {
+        // Local list already updated from create response when possible.
+      }
     } catch {
       toast.error('Save failed');
     } finally {
