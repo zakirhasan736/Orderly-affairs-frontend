@@ -258,11 +258,17 @@ function normalizeAccessLevel(
     : 'Full Kit Access';
 }
 
-type CreateNextKinResponseWithId = { id?: string; _id?: string };
+type CreateNextKinResponseWithId = {
+  id?: string;
+  _id?: string;
+  master_password?: string | null;
+};
 
 type NextKinApiPersonExtras = {
   _id?: string;
+  id?: string;
   master_password?: string | null;
+  has_master_password?: boolean;
 };
 
 function toNextKinApiBody(
@@ -1262,10 +1268,15 @@ export const AccessManagement = forwardRef<
     if (!data) return;
 
     setAuthorizedPeople(prev => {
+      const prevById = new Map(
+        prev.filter(p => p._id).map(p => [p._id as string, p]),
+      );
       const unsaved = prev.filter(p => !p._id);
       const fromApi: AuthorizedPerson[] = data.map(rawNextKin => {
         const nk = rawNextKin as typeof rawNextKin & NextKinApiPersonExtras;
         const personId = nk.id || nk._id;
+        const previous = personId ? prevById.get(personId) : undefined;
+        const apiPassword = (nk.master_password || '').trim();
         return {
           _id: personId,
           __clientId: personId || makeClientId(),
@@ -1279,8 +1290,13 @@ export const AccessManagement = forwardRef<
             : [],
           immediate_access: !!nk.immediate_access,
           nok_letter_received: !!nk.nok_letter_received,
-          master_password: '',
-          has_master_password: !!(nk as { has_master_password?: boolean }).has_master_password,
+          master_password:
+            apiPassword || previous?.master_password?.trim() || '',
+          has_master_password: !!(
+            (nk as { has_master_password?: boolean }).has_master_password ||
+            apiPassword ||
+            previous?.master_password?.trim()
+          ),
           password_card_generated: !!nk.password_card_generated,
           card_storage_location: nk.card_storage_location || '',
           key_bag_location: nk.key_bag_location || '',
@@ -1556,6 +1572,9 @@ export const AccessManagement = forwardRef<
           ...draft,
           _id: res.id || res._id,
           __clientId: res.id || res._id || draft.__clientId,
+          master_password:
+            (res.master_password || '').trim() || draft.master_password || '',
+          has_master_password: true,
         };
         setAuthorizedPeople(prev => [...prev, saved]);
         toast.success(`Added ${draft.full_name}`);

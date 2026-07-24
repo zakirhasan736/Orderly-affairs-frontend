@@ -25,6 +25,7 @@ export interface CreateNextKinSingleResponse {
   owner: string;
   id: string;
   temp_password_sent: boolean;
+  master_password?: string | null;
 }
 export interface CreateNextKinBulkItem {
   index: number;
@@ -67,6 +68,8 @@ export interface NextKinAccessResponse {
   };
   password_card_generated?: boolean;
   has_master_password?: boolean;
+  /** Owner-only: returned by GET /my-nextkin for access cards / print. */
+  master_password?: string | null;
   card_storage_location?: string | null;
   key_bag_location?: string | null;
   documents_bag_location?: string | null;

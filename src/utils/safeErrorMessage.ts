@@ -9,24 +9,29 @@ export function getSafeErrorMessage(err: unknown, fallback: string): string {
   if (parsed.status === 429) {
     return parsed.message;
   }
+
+  const detail = (parsed.message || '').trim();
+  if (/captcha|security check|turnstile/i.test(detail)) {
+    return 'Security check expired or already used. Complete the Cloudflare check again, then retry.';
+  }
+
   if (
     parsed.status === 400 ||
     parsed.status === 409 ||
     parsed.status === 422
   ) {
     if (
-      parsed.message &&
-      parsed.message !== fallback &&
-      !/internal|stack|traceback|exception/i.test(parsed.message)
+      detail &&
+      detail !== fallback &&
+      !/internal|stack|traceback|exception/i.test(detail)
     ) {
-      return parsed.message;
+      return detail;
     }
   }
-  if (
-    parsed.status === 400 &&
-    /captcha|security check|otp|code|password/i.test(parsed.message)
-  ) {
-    return parsed.message;
+  if (parsed.status === 401) {
+    return detail && detail !== fallback
+      ? detail
+      : 'Invalid email or password';
   }
   return fallback;
 }

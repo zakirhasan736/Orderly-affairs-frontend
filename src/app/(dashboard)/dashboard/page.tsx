@@ -64,6 +64,7 @@ import { fetchMySupportThread } from '@/libs/api/supportChat';
 
 import { fetchSession, nokLogout as apiNokLogout, ownerLogout as apiOwnerLogout, secureFetch } from '@/libs/secureFetch';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
+import { parseAuthApiError } from '@/utils/authRateLimit';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/common/ui/button';
 import { Card, CardContent } from '@/components/common/ui/card';
@@ -181,6 +182,8 @@ export default function DashboardPage() {
   const [showOwnerLetter, setShowOwnerLetter] = useState(false);
   const [showMessagesDelivery, setShowMessagesDelivery] = useState(false);
   const [nokCaptchaToken, setNokCaptchaToken] = useState('');
+  const [nokCaptchaReady, setNokCaptchaReady] = useState(false);
+  const [nokCaptchaResetKey, setNokCaptchaResetKey] = useState(0);
   const [showWelcome, setShowWelcome] = useState(false);
   const [tourStarted, setTourStarted] = useState(false);
   const derivedRole = useMemo(() => {
@@ -844,9 +847,15 @@ export default function DashboardPage() {
   );
 
   // NOK LOGIN — store in nok_auth_token (do NOT touch auth_token)
+  const refreshNokCaptcha = useCallback(() => {
+    setNokCaptchaToken('');
+    setNokCaptchaReady(false);
+    setNokCaptchaResetKey(k => k + 1);
+  }, []);
+
   const handleNokLogin = useCallback(
     async (loginData: { email: string; password: string }) => {
-      if (!nokCaptchaToken) {
+      if (!nokCaptchaReady || !nokCaptchaToken) {
         toast.error('Complete the security check before signing in');
         return;
       }
@@ -873,17 +882,33 @@ export default function DashboardPage() {
           } else {
             toast.error('Invalid role in session.');
             setAppMode('nok_login');
+            refreshNokCaptcha();
           }
         } else {
           toast.error('Session was not established.');
+          refreshNokCaptcha();
         }
       } catch (error: unknown) {
-        toast.error(
-          getSafeErrorMessage(error, 'Login failed. Please check your credentials.'),
-        );
+        const parsed = parseAuthApiError(error, '');
+        refreshNokCaptcha();
+        if (
+          parsed.status === 400 &&
+          /captcha|security check/i.test(parsed.message)
+        ) {
+          toast.error(
+            'Security check expired. Complete the Cloudflare check again, then sign in.',
+          );
+        } else {
+          toast.error(
+            getSafeErrorMessage(
+              error,
+              'Login failed. Please check your email and password.',
+            ),
+          );
+        }
       }
     },
-    [nextkinLogin, router, nokCaptchaToken],
+    [nextkinLogin, router, nokCaptchaToken, nokCaptchaReady, refreshNokCaptcha],
   );
   const handleOwnerApproval = useCallback(async () => {
     try {

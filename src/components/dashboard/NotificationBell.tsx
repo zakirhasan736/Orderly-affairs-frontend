@@ -83,6 +83,10 @@ export function NotificationBell({
   const [storageTick, setStorageTick] = useState(0);
   const [toastReady, setToastReady] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [desktopPos, setDesktopPos] = useState<{ top: number; left?: number; right?: number }>({
+    top: 72,
+    right: 16,
+  });
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
@@ -90,6 +94,32 @@ export function NotificationBell({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!open || isMobile) return;
+    const updatePos = () => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      if (align === 'right') {
+        setDesktopPos({
+          top: rect.bottom + 8,
+          right: Math.max(8, window.innerWidth - rect.right),
+        });
+      } else {
+        setDesktopPos({
+          top: rect.bottom + 8,
+          left: Math.max(8, rect.left),
+        });
+      }
+    };
+    updatePos();
+    window.addEventListener('resize', updatePos);
+    window.addEventListener('scroll', updatePos, true);
+    return () => {
+      window.removeEventListener('resize', updatePos);
+      window.removeEventListener('scroll', updatePos, true);
+    };
+  }, [open, isMobile, align]);
 
   useEffect(() => {
     const refresh = () => setStorageTick(n => n + 1);
@@ -187,8 +217,18 @@ export function NotificationBell({
   const close = () => setOpen(false);
 
   const stopAction = (event: React.SyntheticEvent) => {
+    // Do NOT preventDefault on mousedown — that cancels the following click
+    // in many browsers and makes Mark as read / Delete appear dead.
+    event.stopPropagation();
+  };
+
+  const runNoticeAction = (
+    event: React.SyntheticEvent,
+    action: () => void,
+  ) => {
     event.preventDefault();
     event.stopPropagation();
+    action();
   };
 
   const header = (
@@ -212,8 +252,9 @@ export function NotificationBell({
             type="button"
             onMouseDown={stopAction}
             onClick={event => {
-              stopAction(event);
-              markAllNoticesRead(visibleNotices.map(n => n.id));
+              runNoticeAction(event, () =>
+                markAllNoticesRead(visibleNotices.map(n => n.id)),
+              );
             }}
             className="rounded-full px-2 py-1 text-[10px] font-semibold text-sky-700 hover:bg-sky-50"
           >
@@ -225,8 +266,7 @@ export function NotificationBell({
             type="button"
             onMouseDown={stopAction}
             onClick={event => {
-              stopAction(event);
-              close();
+              runNoticeAction(event, close);
             }}
             className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600"
             aria-label="Close notifications"
@@ -269,10 +309,11 @@ export function NotificationBell({
                   type="button"
                   onMouseDown={stopAction}
                   onClick={event => {
-                    stopAction(event);
-                    markNoticeRead(notice.id);
-                    close();
-                    onSelect(notice);
+                    runNoticeAction(event, () => {
+                      markNoticeRead(notice.id);
+                      close();
+                      onSelect(notice);
+                    });
                   }}
                   className="flex w-full items-start gap-3 rounded-xl px-1 py-1 text-left transition active:bg-slate-50 hover:bg-slate-50"
                 >
@@ -318,8 +359,7 @@ export function NotificationBell({
                       type="button"
                       onMouseDown={stopAction}
                       onClick={event => {
-                        stopAction(event);
-                        markNoticeRead(notice.id);
+                        runNoticeAction(event, () => markNoticeRead(notice.id));
                       }}
                       className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-[#10213f]"
                     >
@@ -331,8 +371,9 @@ export function NotificationBell({
                       type="button"
                       onMouseDown={stopAction}
                       onClick={event => {
-                        stopAction(event);
-                        markNoticeUnread(notice.id);
+                        runNoticeAction(event, () =>
+                          markNoticeUnread(notice.id),
+                        );
                       }}
                       className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-[#10213f]"
                     >
@@ -344,8 +385,7 @@ export function NotificationBell({
                     type="button"
                     onMouseDown={stopAction}
                     onClick={event => {
-                      stopAction(event);
-                      dismissNotice(notice.id);
+                      runNoticeAction(event, () => dismissNotice(notice.id));
                     }}
                     className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold text-rose-500 hover:bg-rose-50"
                   >
@@ -368,8 +408,7 @@ export function NotificationBell({
           type="button"
           onMouseDown={stopAction}
           onClick={event => {
-            stopAction(event);
-            setSeeAll(prev => !prev);
+            runNoticeAction(event, () => setSeeAll(prev => !prev));
           }}
           className="w-full rounded-xl bg-slate-50 px-3 py-2 text-center text-[12px] font-semibold text-[#10213f] transition hover:bg-slate-100"
         >
@@ -420,6 +459,40 @@ export function NotificationBell({
         )
       : null;
 
+  const desktopPanel =
+    open && !isMobile && mounted
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[120]"
+            role="presentation"
+          >
+            <button
+              type="button"
+              className="absolute inset-0 cursor-default bg-transparent"
+              aria-label="Dismiss notifications"
+              onClick={close}
+            />
+            <div
+              ref={panelRef}
+              role="dialog"
+              aria-label="Notifications"
+              className="absolute z-[1] flex w-[min(92vw,360px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+              style={{
+                top: desktopPos.top,
+                ...(desktopPos.right != null
+                  ? { right: desktopPos.right }
+                  : { left: desktopPos.left }),
+              }}
+              onClick={stopAction}
+              onMouseDown={stopAction}
+            >
+              {panelBody}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <div ref={rootRef} className={cn('relative', className)}>
       <button
@@ -448,21 +521,7 @@ export function NotificationBell({
         ) : null}
       </button>
 
-      {open && !isMobile ? (
-        <div
-          ref={panelRef}
-          className={cn(
-            'absolute top-full z-[70] mt-2 flex w-[min(92vw,360px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl',
-            align === 'right' ? 'right-0' : 'left-0',
-          )}
-          role="dialog"
-          aria-label="Notifications"
-          onClick={stopAction}
-        >
-          {panelBody}
-        </div>
-      ) : null}
-
+      {desktopPanel}
       {mobilePanel}
     </div>
   );

@@ -9,6 +9,8 @@ import { useGetKitForNokQuery } from '@/services/kitApi';
 import { OwnerLetterModal } from '@/components/OwnerLetterModal';
 import { MessagesDeliveryModal } from '@/components/MessagesDeliveryModal';
 import { nokLogout, fetchSession } from '@/libs/secureFetch';
+import { HelpAssistantProvider } from '@/components/help/HelpAssistantContext';
+import { HelpAssistantHost } from '@/components/help/HelpAssistantHost';
 
 export default function NextKinDashboardPage() {
   const router = useRouter();
@@ -59,7 +61,7 @@ export default function NextKinDashboardPage() {
     }
   };
 
-  if ((error as any)?.status === 403) {
+  if ((error as { status?: number })?.status === 403) {
     return (
       <div className="min-h-screen grid place-items-center">
         <div className="text-muted-foreground">Awaiting owner approval</div>
@@ -80,7 +82,7 @@ export default function NextKinDashboardPage() {
   }
 
   return (
-    <>
+    <HelpAssistantProvider>
       <EnhancedNOKDashboard
         nokData={access.nextkin}
         kit={kit}
@@ -108,6 +110,15 @@ export default function NextKinDashboardPage() {
           onClose={() => setShowMessagesModal(false)}
         />
       )}
-    </>
+
+      <HelpAssistantHost
+        currentSectionId={null}
+        onStartTour={() => undefined}
+        onNavigateToSection={sectionId =>
+          router.push(`/next-kin/section/${sectionId}`)
+        }
+        onFocusUpload={() => undefined}
+      />
+    </HelpAssistantProvider>
   );
 }

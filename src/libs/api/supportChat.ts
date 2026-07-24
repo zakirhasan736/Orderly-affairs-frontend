@@ -24,8 +24,22 @@ export type SupportThread = {
 
 async function readJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(detail || `Support request failed (${res.status})`);
+    const raw = await res.text().catch(() => '');
+    let detail = raw || `Support request failed (${res.status})`;
+    try {
+      const parsed = JSON.parse(raw) as { detail?: unknown };
+      if (typeof parsed.detail === 'string' && parsed.detail.trim()) {
+        detail = parsed.detail;
+      }
+    } catch {
+      /* keep raw */
+    }
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        'Live agent chat requires an active owner login. Sign in as the kit owner, then try Live again.',
+      );
+    }
+    throw new Error(detail);
   }
   return res.json() as Promise<T>;
 }

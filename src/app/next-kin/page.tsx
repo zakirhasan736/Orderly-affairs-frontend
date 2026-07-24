@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { NextOfKinLoginPage } from '@/components/NextOfKinLoginPage';
@@ -8,11 +8,20 @@ import { TurnstileCaptcha } from '@/components/TurnstileCaptcha';
 import { useNextkinLoginMutation } from '@/services/authApi';
 import { getOtpSessionId } from '@/utils/otpSession';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
+import { parseAuthApiError } from '@/utils/authRateLimit';
 
 export default function NextKinLoginPageWrapper() {
   const router = useRouter();
   const [nextkinLogin] = useNextkinLoginMutation();
   const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaReady, setCaptchaReady] = useState(false);
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
+
+  const refreshCaptcha = useCallback(() => {
+    setCaptchaToken('');
+    setCaptchaReady(false);
+    setCaptchaResetKey(k => k + 1);
+  }, []);
 
   const handleLoginSuccess = async ({
     email,
@@ -21,9 +30,9 @@ export default function NextKinLoginPageWrapper() {
     email: string;
     password: string;
   }) => {
-    if (!captchaToken) {
+    if (!captchaReady || !captchaToken) {
       toast.error('Complete the security check before signing in');
-      return;
+      throw new Error('Complete the security check before signing in');
     }
 
     try {
@@ -41,9 +50,26 @@ export default function NextKinLoginPageWrapper() {
       toast.success('Login successful');
       router.push('/next-kin/dashboard');
     } catch (err: unknown) {
-      toast.error(
-        getSafeErrorMessage(err, 'Login failed. Check your credentials.'),
+      const parsed = parseAuthApiError(err, '');
+      const message = getSafeErrorMessage(
+        err,
+        'Login failed. Check your email and password.',
       );
+
+      // Always mint a fresh Turnstile token after an attempt (tokens are single-use).
+      refreshCaptcha();
+
+      if (
+        parsed.status === 400 &&
+        /captcha|security check/i.test(parsed.message || message)
+      ) {
+        toast.error(
+          'Security check expired. Complete the Cloudflare check again, then sign in.',
+        );
+      } else {
+        toast.error(message);
+      }
+      throw new Error(message);
     }
   };
 
@@ -52,8 +78,14 @@ export default function NextKinLoginPageWrapper() {
       onLoginSuccess={handleLoginSuccess}
       onBackToOwner={() => router.push('/dashboard')}
       formData={{}}
+      captchaReady={captchaReady}
       captchaSlot={
-        <TurnstileCaptcha onTokenChange={setCaptchaToken} />
+        <TurnstileCaptcha
+          gateMode
+          onTokenChange={setCaptchaToken}
+          onReadyChange={setCaptchaReady}
+          resetKey={captchaResetKey}
+        />
       }
     />
   );

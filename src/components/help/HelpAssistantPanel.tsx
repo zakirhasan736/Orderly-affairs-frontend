@@ -373,18 +373,20 @@ export function HelpAssistantPanel({
     <div className="fixed inset-0 z-[99999] flex items-stretch justify-center sm:items-center sm:p-4 md:p-6">
       <button
         type="button"
-        className="absolute inset-0 bg-[#1a1030]/45 backdrop-blur-[6px]"
+        className="absolute inset-0 z-0 bg-[#1a1030]/45 backdrop-blur-[6px]"
         aria-label="Close help"
         onClick={closeHelp}
       />
 
       <div
         className={cn(
-          'relative flex h-[100dvh] w-full max-w-[560px] flex-col overflow-hidden sm:h-[min(92dvh,820px)] sm:rounded-[32px] sm:border sm:border-white/50 sm:shadow-[0_30px_80px_rgba(40,20,80,0.28)]',
+          'relative z-10 flex h-[100dvh] w-full max-w-[560px] flex-col overflow-hidden bg-white pointer-events-auto sm:h-[min(92dvh,820px)] sm:rounded-[32px] sm:border sm:border-white/50 sm:shadow-[0_30px_80px_rgba(40,20,80,0.28)]',
         )}
         role="dialog"
         aria-modal="true"
         aria-label="Orderly Affairs assistant"
+        onClick={event => event.stopPropagation()}
+        onMouseDown={event => event.stopPropagation()}
       >
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(165deg,#efe8ff_0%,#f7e9f4_28%,#eaf4ff_58%,#eef8f3_100%)]" />
         <div className="pointer-events-none absolute -left-16 top-10 h-56 w-56 rounded-full bg-[#c4b5fd]/35 blur-3xl" />

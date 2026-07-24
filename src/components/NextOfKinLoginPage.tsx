@@ -21,12 +21,15 @@ interface NextOfKinLoginPageProps {
   onBackToOwner: () => void;
   formData: any;
   captchaSlot?: React.ReactNode;
+  /** When captcha is shown, block submit until Cloudflare finishes. */
+  captchaReady?: boolean;
 }
 
 export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
   onLoginSuccess,
   onBackToOwner,
   captchaSlot,
+  captchaReady = true,
 }) => {
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -39,6 +42,10 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
   const handleLogin = async () => {
     if (!emailOrPhone || !password) {
       setError('Please fill in both fields.');
+      return;
+    }
+    if (captchaSlot && !captchaReady) {
+      setError('Complete the security check before signing in.');
       return;
     }
     setIsLoading(true);
@@ -60,7 +67,9 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
   };
 
   const isFormValid =
-    emailOrPhone.trim().length > 0 && password.trim().length > 0;
+    emailOrPhone.trim().length > 0 &&
+    password.trim().length > 0 &&
+    (!captchaSlot || captchaReady);
 
   return (
     <div
@@ -205,7 +214,7 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
 
             <Button
               onClick={() => void handleLogin()}
-              disabled={!isFormValid || isLocked || isLoading}
+              disabled={!isFormValid || isLocked || isLoading || (Boolean(captchaSlot) && !captchaReady)}
               className="h-12 w-full rounded-2xl bg-[#10213f] text-[15px] font-semibold text-white hover:bg-[#1a335f] sm:w-auto sm:min-w-[200px] sm:px-8"
               size="lg"
             >
@@ -214,6 +223,8 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                   Authenticating…
                 </span>
+              ) : captchaSlot && !captchaReady ? (
+                'Waiting for security check…'
               ) : (
                 'Continue securely'
               )}

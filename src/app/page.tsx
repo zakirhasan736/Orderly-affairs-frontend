@@ -883,7 +883,7 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
         return;
       }
 
-      refreshCaptcha();
+      // Keep the Turnstile token for /signup (tokens are single-use — do not remount yet).
       setStep('mfa_method_selection');
       return;
     }
@@ -999,22 +999,17 @@ const handleMFAMethodSelection = async () => {
         otp_session_id: getOtpSessionId(),
       };
 
-      if (selectedMFAMethod === 'sms') {
-        if (!captchaToken) {
-          throw new Error('Complete the CAPTCHA before requesting an OTP');
-        }
-        signupPayload.phone_number = phoneNumber.trim();
-        signupPayload.captcha_token = captchaToken;
+      if (!captchaToken) {
+        throw new Error('Complete the CAPTCHA before continuing');
       }
+      signupPayload.captcha_token = captchaToken;
 
-      if (selectedMFAMethod === 'email') {
-        if (!captchaToken) {
-          throw new Error('Complete the CAPTCHA before requesting an OTP');
-        }
-        signupPayload.captcha_token = captchaToken;
+      if (selectedMFAMethod === 'sms') {
+        signupPayload.phone_number = phoneNumber.trim();
       }
 
       const signupRes = await signup(signupPayload).unwrap();
+      refreshCaptcha();
 
       // ✅ NEW USER → AUTHENTICATOR
       if (selectedMFAMethod === 'authenticator') {

@@ -105,6 +105,15 @@ describe('safeErrorMessage', () => {
       ),
     ).toBe('Something went wrong');
   });
+
+  it('rewrites CAPTCHA failures into a clear retry message', () => {
+    expect(
+      getSafeErrorMessage(
+        { status: 400, data: { detail: 'CAPTCHA verification failed' } },
+        'Login failed',
+      ),
+    ).toMatch(/Cloudflare check again/i);
+  });
 });
 
 describe('otpSession', () => {

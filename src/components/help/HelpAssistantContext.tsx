@@ -9,6 +9,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { toast } from 'sonner';
 import {
   buildWelcomeMessage,
   createAssistantId,
@@ -173,11 +174,12 @@ export function HelpAssistantProvider({
       }, 3000);
     } catch (err) {
       setLiveConnected(false);
-      setLiveError(
+      const message =
         err instanceof Error
           ? err.message
-          : 'Could not connect to a live agent',
-      );
+          : 'Could not connect to a live agent';
+      setLiveError(message);
+      toast.error(message);
     } finally {
       setLiveConnecting(false);
     }
