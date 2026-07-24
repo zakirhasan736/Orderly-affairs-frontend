@@ -12,7 +12,7 @@ export type VaultSectionSpec = {
   hasTextFields: boolean;
   /** May need an "Add …" card before inputs appear */
   needsAddCard?: boolean;
-  /** POST/PUT **/sections/** expected on Save */
+  /** POST/PUT kit sections expected on Save */
   expectsSectionSave?: boolean;
   /** Special flow notes */
   kind?: 'instructions' | 'access' | 'letter' | 'messages' | 'form';

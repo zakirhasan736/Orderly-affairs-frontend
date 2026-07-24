@@ -27,6 +27,7 @@ if (typeof window !== 'undefined') {
     disconnect() {}
   }
 
-  // @ts-expect-error jsdom stub
-  window.ResizeObserver = window.ResizeObserver || ResizeObserverMock;
+  window.ResizeObserver =
+    window.ResizeObserver ||
+    (ResizeObserverMock as unknown as typeof ResizeObserver);
 }

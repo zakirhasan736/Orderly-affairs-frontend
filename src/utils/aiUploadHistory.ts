@@ -47,12 +47,12 @@ function normalizeItem(raw: any): AiUploadHistoryItem | null {
     raw.sectionId != null && String(raw.sectionId).trim()
       ? String(raw.sectionId)
       : undefined;
-  const sectionIds = Array.isArray(raw.sectionIds)
+  const sectionIds: string[] = Array.isArray(raw.sectionIds)
     ? Array.from(
         new Set(
-          raw.sectionIds
-            .map((id: unknown) => String(id || '').trim())
-            .filter(Boolean),
+          (raw.sectionIds as unknown[])
+            .map(id => String(id || '').trim())
+            .filter((id): id is string => Boolean(id)),
         ),
       )
     : sectionId
