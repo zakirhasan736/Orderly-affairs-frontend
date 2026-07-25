@@ -57,7 +57,20 @@ async function uploadMessageMediaToCloudinary(
   });
 
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res, 'Cloudinary upload failed'));
+    let detail = 'Could not save media. Please try again.';
+    try {
+      const payload = (await res.json()) as {
+        error?: { message?: string };
+        message?: string;
+      };
+      detail =
+        payload?.error?.message ||
+        payload?.message ||
+        detail;
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(detail);
   }
 
   const result = (await res.json()) as CloudinaryUploadResult;
@@ -118,6 +131,10 @@ export async function deleteMessageMedia(id: string) {
 export async function uploadMessageMedia(file: File | Blob) {
   validateMessageMediaSize(file.size);
 
+  if (!file.size) {
+    throw new Error('That file is empty. Please pick another video, audio, or photo.');
+  }
+
   const mime = file.type || '';
   const name = file instanceof File ? file.name : '';
   const resourceType =
@@ -144,6 +161,10 @@ export async function deleteUploadedMessageMedia(
     }),
   });
 
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    throw new Error(
+      await readSafeErrorMessage(res, 'Could not delete media. Please try again.'),
+    );
+  }
   return res.json();
 }

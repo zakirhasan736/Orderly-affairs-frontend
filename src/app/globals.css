@@ -2040,12 +2040,44 @@ html {
 }
 
 .auth-portal .auth-serif-title {
-  font-family: var(--font-family);
+  font-family: var(--font-family-serif);
   color: #132b26;
   font-size: 22px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: -0.01em;
   line-height: 1.2;
+}
+
+.auth-portal .btn-secondary,
+.auth-portal button.btn-secondary {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  color: #132b26 !important;
+  border: 1.5px solid #d5d8d3 !important;
+  border-radius: 26px !important;
+  box-shadow: none !important;
+  font-family: var(--font-family);
+  font-size: 14.5px;
+  font-weight: 500;
+  height: 52px;
+  transform: none !important;
+}
+
+@media (min-width: 1024px) {
+  .auth-portal .btn-secondary,
+  .auth-portal button.btn-secondary {
+    height: 50px;
+    border-radius: 25px !important;
+  }
+}
+
+.auth-portal .btn-secondary:hover,
+.auth-portal button.btn-secondary:hover {
+  background: #f7f6f2 !important;
+  background-color: #f7f6f2 !important;
+  border-color: #c5cbc6 !important;
+  box-shadow: none !important;
+  transform: none !important;
 }
 
 .auth-portal [class*='rounded-xl'][class*='border']:focus-within {

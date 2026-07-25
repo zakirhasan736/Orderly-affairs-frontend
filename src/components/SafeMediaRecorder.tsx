@@ -40,6 +40,12 @@ export function SafeMediaRecorder({
     try {
       validateMessageMediaSize(blob.size);
 
+      if (!blob.size) {
+        throw new Error(
+          'Recording is empty. Please record again, then save.',
+        );
+      }
+
       setUploading(true);
 
       const file = blobToMediaFile(blob, type);
@@ -51,9 +57,14 @@ export function SafeMediaRecorder({
       return true;
     } catch (error) {
       console.error(`${mediaLabel} upload failed:`, error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : `Could not save ${mediaLabel.toLowerCase()}. Please try again.`;
+      toast.error(message);
       throw error instanceof Error
         ? error
-        : new Error(`${mediaLabel} upload failed. Please try again.`);
+        : new Error(message);
     } finally {
       setUploading(false);
     }

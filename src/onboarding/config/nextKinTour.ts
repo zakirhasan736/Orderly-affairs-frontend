@@ -3,6 +3,7 @@ export type NextKinTourStep = {
   selector: string;
   title: string;
   description: string;
+  ensureSection?: string;
 };
 
 /**

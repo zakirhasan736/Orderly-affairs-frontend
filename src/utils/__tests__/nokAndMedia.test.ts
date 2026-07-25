@@ -83,6 +83,12 @@ describe('mediaUpload (personal messages)', () => {
         name: 'still.jpg',
       } as File),
     ).toBe(true);
+    expect(
+      isAllowedVideoMessageFile({
+        type: '',
+        name: 'still.heic',
+      } as File),
+    ).toBe(true);
   });
 
   it('detects image media and formats sizes', () => {
@@ -101,6 +107,16 @@ describe('mediaUpload (personal messages)', () => {
     ).toThrow(/150 MB/i);
     expect(inferMediaContentType('clip.mp4')).toBe('video/mp4');
     expect(inferMediaContentType('voice.m4a', 'audio/mp4')).toBe('audio/mp4');
+  });
+});
+
+describe('mediaPlayback (Safari / iOS)', () => {
+  it('rewrites Cloudinary WebM video URLs to MP4 delivery', async () => {
+    const { toPlayableMediaUrl } = await import('@/utils/mediaPlayback');
+    const src =
+      'https://res.cloudinary.com/demo/video/upload/v1/messages/media/clip.webm';
+    expect(toPlayableMediaUrl(src, 'video')).toContain('f_mp4,vc_h264,ac_aac');
+    expect(toPlayableMediaUrl(src, 'audio')).toContain('f_m4a,ac_aac');
   });
 });
 

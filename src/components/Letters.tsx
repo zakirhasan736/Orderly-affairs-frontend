@@ -68,6 +68,7 @@ import {
   isImageMedia,
   prepareMessageMediaFile,
 } from '@/utils/mediaUpload';
+import { toPlayableMediaUrl } from '@/utils/mediaPlayback';
 
 /* ============================================================
    TYPES
@@ -213,7 +214,15 @@ function MessageMediaPreview({
   className?: string;
 }) {
   if (messageType === 'audio') {
-    return <audio controls src={media.url} className={className ?? 'w-full'} />;
+    return (
+      <audio
+        controls
+        playsInline
+        preload="metadata"
+        src={toPlayableMediaUrl(media.url, 'audio')}
+        className={className ?? 'w-full'}
+      />
+    );
   }
 
   if (isImageMedia(media)) {
@@ -229,7 +238,9 @@ function MessageMediaPreview({
   return (
     <video
       controls
-      src={media.url}
+      playsInline
+      preload="metadata"
+      src={toPlayableMediaUrl(media.url, 'video')}
       className={className ?? 'h-44 w-full rounded-xl bg-black object-cover'}
     />
   );
@@ -574,8 +585,11 @@ export function Letters({
       }
 
       toast.success('Media deleted');
-    } catch {
-      toast.error('Media delete failed');
+    } catch (error) {
+      console.error('Media delete failed:', error);
+      toast.error(
+        error instanceof Error ? error.message : 'Media delete failed',
+      );
     } finally {
       setDeletingMedia(false);
     }
@@ -2601,7 +2615,11 @@ function MediaUploadPanel({
               className="h-56 w-full rounded-xl bg-black object-cover sm:h-72"
             />
           ) : (
-            <audio controls src={media.url} className="w-full" />
+            <MessageMediaPreview
+              messageType="audio"
+              media={media}
+              className="w-full"
+            />
           )}
         </div>
       )}

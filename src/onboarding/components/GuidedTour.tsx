@@ -4,18 +4,33 @@ import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 
-import { ownerTour } from '@/onboarding/config/ownerTour';
-import { nextKinTour } from '@/onboarding/config/nextKinTour';
+import { ownerTour, type OwnerTourStep } from '@/onboarding/config/ownerTour';
+import {
+  nextKinTour,
+  type NextKinTourStep,
+} from '@/onboarding/config/nextKinTour';
 import { SpotlightOverlay } from './SpotlightOverlay';
 import { useOnboarding } from './OnboardingProvider';
 import { useUpdateTourStatusMutation } from '@/services/onboardingApi';
 import { cn } from '@common/ui/utils';
+
+type TourStep = OwnerTourStep | NextKinTourStep;
 
 type Props = {
   role: 'owner' | 'nextkin';
   activeSection: string;
   setActiveSection: (section: string) => void;
 };
+
+function getEnsureSection(step: TourStep): string | undefined {
+  if (
+    'ensureSection' in step &&
+    typeof (step as OwnerTourStep).ensureSection === 'string'
+  ) {
+    return (step as OwnerTourStep).ensureSection;
+  }
+  return undefined;
+}
 
 export const GuidedTour = ({
   role,
@@ -27,7 +42,7 @@ export const GuidedTour = ({
   const [index, setIndex] = useState(0);
   const [ready, setReady] = useState(false);
 
-  const steps = role === 'owner' ? ownerTour : nextKinTour;
+  const steps: TourStep[] = role === 'owner' ? ownerTour : nextKinTour;
   const step = steps[index];
   const total = steps.length;
 
@@ -35,10 +50,7 @@ export const GuidedTour = ({
   useEffect(() => {
     if (!step) return;
 
-    const ensureSection: string | undefined =
-      'ensureSection' in step && typeof step.ensureSection === 'string'
-        ? step.ensureSection
-        : undefined;
+    const ensureSection = getEnsureSection(step);
 
     if (ensureSection && activeSection !== ensureSection) {
       setReady(false);

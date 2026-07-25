@@ -17,6 +17,8 @@ import {
   UserRound,
   Video,
 } from 'lucide-react';
+import { toPlayableMediaUrl } from '@/utils/mediaPlayback';
+import { isImageMedia } from '@/utils/mediaUpload';
 
 interface MessageMedia {
   url?: string;
@@ -239,13 +241,30 @@ export function MessageCard({
       {item.media?.url ? (
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 p-2.5">
           {item.messageType === 'video' ? (
-            <video
-              controls
-              src={item.media.url}
-              className="h-40 w-full rounded-lg bg-black object-cover"
-            />
+            isImageMedia(item.media) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={item.media.url}
+                alt=""
+                className="h-40 w-full rounded-lg object-cover"
+              />
+            ) : (
+              <video
+                controls
+                playsInline
+                preload="metadata"
+                src={toPlayableMediaUrl(item.media.url, 'video')}
+                className="h-40 w-full rounded-lg bg-black object-cover"
+              />
+            )
           ) : (
-            <audio controls src={item.media.url} className="w-full" />
+            <audio
+              controls
+              playsInline
+              preload="metadata"
+              src={toPlayableMediaUrl(item.media.url, 'audio')}
+              className="w-full"
+            />
           )}
         </div>
       ) : item.audioFile || item.videoFile ? (

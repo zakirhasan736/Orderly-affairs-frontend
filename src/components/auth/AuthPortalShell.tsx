@@ -5,26 +5,34 @@ import { BRAND_LOGO } from '@/constants/brand';
 
 export type AuthPortalMode = 'login' | 'signup';
 
-const SIGNUP_STEPS = [
+type SignupStepMeta = {
+  title: string;
+  description: string;
+};
+
+const DEFAULT_SIGNUP_STEPS: SignupStepMeta[] = [
   {
-    title: 'Your account',
+    title: 'Create your account',
     description: 'Email and a password',
   },
   {
-    title: 'How we verify it’s you',
+    title: 'Secure it',
     description: 'Authenticator app, email, or SMS',
   },
   {
     title: 'Choose your plan',
-    description: '14-day trial, no card needed',
+    description: 'Then payment, or start the trial',
   },
-] as const;
+];
 
 type AuthPortalShellProps = {
   mode: AuthPortalMode;
   signupStep?: 1 | 2 | 3;
+  /** Override sidebar step descriptions (e.g. email + MFA method on step 3). */
+  signupSteps?: SignupStepMeta[];
   mobileTitle: string;
   mobileStepLabel?: string;
+  mobileSubtitle?: string;
   mobileShowTagline?: boolean;
   /** Mobile top chrome: brand ink banner vs reset white bar */
   mobileChrome?: 'brand' | 'reset';
@@ -123,27 +131,50 @@ function LoginBrandPanel() {
   );
 }
 
-function SignupBrandPanel({ activeStep }: { activeStep: 1 | 2 | 3 }) {
+function SignupBrandPanel({
+  activeStep,
+  steps,
+}: {
+  activeStep: 1 | 2 | 3;
+  steps: SignupStepMeta[];
+}) {
   return (
     <BrandAside contentMaxWidth="520px">
       <BrandMark />
 
       <ol className="mt-10 flex flex-col gap-5">
-        {SIGNUP_STEPS.map((item, index) => {
+        {steps.map((item, index) => {
           const stepNum = (index + 1) as 1 | 2 | 3;
           const isFuture = stepNum > activeStep;
+          const isComplete = stepNum < activeStep;
+          const isActive = stepNum === activeStep;
 
           return (
             <li key={item.title} className="flex gap-3.5">
               <span
                 className={cn(
                   'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[12px] font-semibold',
-                  isFuture
-                    ? 'bg-[rgba(255,255,255,.16)] text-white/60'
-                    : 'bg-white text-[#132b26]',
+                  isActive
+                    ? 'bg-white text-[#132b26]'
+                    : isComplete
+                      ? 'bg-[rgba(255,255,255,.22)] text-white'
+                      : 'bg-[rgba(255,255,255,.16)] text-white/60',
                 )}
+                aria-hidden
               >
-                {stepNum}
+                {isComplete ? (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path
+                      d="M2.5 6.2 4.8 8.5 9.5 3.5"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                ) : (
+                  stepNum
+                )}
               </span>
               <div className="min-w-0">
                 <p
@@ -169,8 +200,9 @@ function SignupBrandPanel({ activeStep }: { activeStep: 1 | 2 | 3 }) {
       </ol>
 
       <p className="mt-auto mb-0 max-w-[22rem] text-[13px] leading-[1.7] text-white/55">
-        Your vault is encrypted at rest. Only you and the people you name can
-        ever open it.
+        {activeStep === 3
+          ? 'Your vault is already saving. Choosing a plan only decides how long you keep access after the trial.'
+          : 'Your vault is encrypted at rest. Only you and the people you name can ever open it.'}
       </p>
     </BrandAside>
   );
@@ -179,8 +211,10 @@ function SignupBrandPanel({ activeStep }: { activeStep: 1 | 2 | 3 }) {
 export function AuthPortalShell({
   mode,
   signupStep = 1,
+  signupSteps = DEFAULT_SIGNUP_STEPS,
   mobileTitle,
   mobileStepLabel,
+  mobileSubtitle,
   mobileShowTagline = false,
   mobileChrome = 'brand',
   onMobileBack,
@@ -197,7 +231,7 @@ export function AuthPortalShell({
       )}
     >
       {mode === 'signup' && !isResetChrome ? (
-        <SignupBrandPanel activeStep={signupStep} />
+        <SignupBrandPanel activeStep={signupStep} steps={signupSteps} />
       ) : (
         <LoginBrandPanel />
       )}
@@ -233,12 +267,14 @@ export function AuthPortalShell({
               'h-auto bg-[#132b26] text-white lg:hidden',
               mobileShowTagline
                 ? 'px-6 pb-[30px] pt-[max(20px,env(safe-area-inset-top))]'
-                : 'px-5 pb-6 pt-[max(0.875rem,env(safe-area-inset-top))]',
+                : mobileSubtitle
+                  ? 'px-5 pb-7 pt-[max(0.875rem,env(safe-area-inset-top))]'
+                  : 'px-5 pb-6 pt-[max(0.875rem,env(safe-area-inset-top))]',
             )}
           >
             <BrandMark compact />
             {mobileStepLabel && !mobileShowTagline ? (
-              <p className="mb-0 mt-[18px] text-[12px] font-medium text-white/60">
+              <p className="mb-0 mt-[18px] text-[11px] font-medium tracking-[0.14em] text-white/60">
                 {mobileStepLabel}
               </p>
             ) : null}
@@ -254,6 +290,11 @@ export function AuthPortalShell({
                 ? 'One place, so nobody has to guess.'
                 : mobileTitle}
             </h1>
+            {mobileSubtitle && !mobileShowTagline ? (
+              <p className="mb-0 mt-2 max-w-[34ch] text-[13.5px] leading-snug text-white/70">
+                {mobileSubtitle}
+              </p>
+            ) : null}
           </header>
         )}
 

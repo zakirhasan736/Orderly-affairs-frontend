@@ -28,12 +28,19 @@ type RecorderStatus = 'idle' | 'recording' | 'paused' | 'stopped' | 'error';
 function getSupportedAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return '';
 
-  const types = [
-    'audio/webm;codecs=opus',
-    'audio/webm',
-    'audio/mp4',
-    'audio/mpeg',
-  ];
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const isIOS =
+    /iPad|iPhone|iPod/.test(ua) ||
+    (typeof navigator !== 'undefined' &&
+      navigator.platform === 'MacIntel' &&
+      navigator.maxTouchPoints > 1);
+  const isSafari =
+    /Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS|OPiOS|Android/i.test(ua);
+
+  const types =
+    isIOS || isSafari
+      ? ['audio/mp4', 'audio/mpeg', 'audio/aac', 'audio/webm;codecs=opus', 'audio/webm']
+      : ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/mpeg'];
 
   return types.find(type => MediaRecorder.isTypeSupported(type)) || '';
 }

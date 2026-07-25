@@ -1732,6 +1732,37 @@ const mobileStepLabel = (() => {
   return undefined;
 })();
 
+const mobileSubtitle =
+  step === 'plan_selection'
+    ? 'Start paid now, or begin a 14-day trial with no charge.'
+    : undefined;
+
+const signupAsideSteps = (() => {
+  const mfaLabel =
+    selectedMFAMethod === 'authenticator'
+      ? 'Authenticator app · Most Secure'
+      : selectedMFAMethod === 'sms'
+        ? 'Text message'
+        : selectedMFAMethod === 'email'
+          ? 'Email code'
+          : 'Authenticator app, email, or SMS';
+
+  return [
+    {
+      title: 'Create your account',
+      description: email.trim() || 'Email and a password',
+    },
+    {
+      title: 'Secure it',
+      description: mfaLabel,
+    },
+    {
+      title: 'Choose your plan',
+      description: 'Then payment, or start the trial',
+    },
+  ];
+})();
+
 const mobileTitle = (() => {
   if (step === 'plan_selection') return 'Choose your plan';
   if (step === 'payment') return 'Secure checkout';
@@ -1784,15 +1815,19 @@ const backButtonLabel =
     <AuthPortalShell
       mode={authMode}
       signupStep={signupStepIndex}
+      signupSteps={signupAsideSteps}
       mobileTitle={mobileTitle}
       mobileStepLabel={mobileStepLabel}
+      mobileSubtitle={mobileSubtitle}
       mobileShowTagline={!isNewUser && step === 'credentials'}
       mobileChrome={isPasswordResetFlow ? 'reset' : 'brand'}
       onMobileBack={handleBack}
     >
       <AuthCard
         flushOnMobile={
-          step === 'credentials' || step === 'reset_password'
+          step === 'credentials' ||
+          step === 'reset_password' ||
+          step === 'plan_selection'
         }
       >
             {error &&
@@ -1814,7 +1849,10 @@ const backButtonLabel =
                 variant="ghost"
                 size="sm"
                 onClick={handleBack}
-                className="mb-4 flex items-center gap-2 text-[var(--ink-muted)]"
+                className={cn(
+                  'mb-4 items-center gap-2 text-[var(--ink-muted)]',
+                  step === 'plan_selection' ? 'hidden lg:flex' : 'flex',
+                )}
               >
                 <ArrowLeft className="h-4 w-4" />
                 {backButtonLabel}
@@ -2910,19 +2948,17 @@ const backButtonLabel =
                     data-cy="checkout-plan-selection"
                     className="space-y-5 text-left"
                   >
-                    <div className="space-y-0">
+                    <div className="hidden space-y-0 lg:block">
                       <p className="auth-step-kicker">Step 3 of 3</p>
-                      <h2 className="auth-serif-title mt-3 mb-1 text-[19px] font-semibold lg:text-[21px]">
+                      <h2 className="auth-serif-title mt-3 mb-1 text-[28px]">
                         Choose your plan
                       </h2>
                       <p className="mb-0 text-[13.5px] leading-snug text-[#6e7c77]">
-                        Start paid now, or begin a 14-day trial with no charge
-                        today.
+                        Start paid now, or begin a 14-day trial with no charge.
                       </p>
                     </div>
 
-                    <div className="space-y-2.5">
-                      <AuthFieldLabel>Billing cycle</AuthFieldLabel>
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                       {(
                         [
                           {
@@ -2947,10 +2983,10 @@ const backButtonLabel =
                             key={plan.id}
                             data-cy={`checkout-plan-${plan.id}`}
                             className={cn(
-                              'flex cursor-pointer items-center gap-3.5 rounded-[13px] p-4 transition',
+                              'flex cursor-pointer flex-col gap-2 rounded-[14px] bg-white p-4 transition',
                               selected
-                                ? 'border-[1.5px] border-[#2e7d6e] bg-[#f4f8f7]'
-                                : 'border border-[#e4e6e1] bg-white',
+                                ? 'border-[1.5px] border-[#2e7d6e]'
+                                : 'border border-[#e4e6e1]',
                             )}
                           >
                             <input
@@ -2961,33 +2997,36 @@ const backButtonLabel =
                               onChange={() => setSelectedPlan(plan.id)}
                               className="sr-only"
                             />
-                            <span
-                              className={cn(
-                                'h-[18px] w-[18px] shrink-0 rounded-full',
-                                selected
-                                  ? 'bg-[#2e7d6e] shadow-[inset_0_0_0_3px_#fff]'
-                                  : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
-                              )}
-                              aria-hidden
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
+                            <div className="flex items-center gap-2.5">
+                              <span
+                                className={cn(
+                                  'h-[18px] w-[18px] shrink-0 rounded-full',
+                                  selected
+                                    ? 'bg-[#2e7d6e] shadow-[inset_0_0_0_3px_#fff]'
+                                    : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
+                                )}
+                                aria-hidden
+                              />
+                              <p className="m-0 flex-1 text-[14.5px] font-semibold text-[#132b26]">
                                 {plan.title}
                               </p>
-                              <p className="mt-[3px] mb-0 text-[12.5px] text-[#5c6b66]">
-                                {plan.price} · {plan.description}
-                              </p>
+                              <span
+                                className={cn(
+                                  'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                                  selected
+                                    ? 'bg-[#e8f1ee] text-[#1f5c52]'
+                                    : 'bg-[#f2f1ec] text-[#5c6b66]',
+                                )}
+                              >
+                                {plan.badge}
+                              </span>
                             </div>
-                            <span
-                              className={cn(
-                                'shrink-0 rounded-[5px] px-2 py-1 text-[11px] font-medium',
-                                selected
-                                  ? 'bg-[#e8f1ee] text-[#1f5c52]'
-                                  : 'bg-[#f2f1ec] text-[#5c6b66]',
-                              )}
-                            >
-                              {plan.badge}
-                            </span>
+                            <p className="m-0 font-[family-name:var(--font-family-serif)] text-[22px] leading-none text-[#132b26]">
+                              {plan.price}
+                            </p>
+                            <p className="m-0 text-[12.5px] leading-snug text-[#5c6b66]">
+                              {plan.description}
+                            </p>
                           </label>
                         );
                       })}
@@ -3005,92 +3044,120 @@ const backButtonLabel =
                       Continue to payment
                     </Button>
 
-                    <div className="space-y-2.5 border-t border-[#e4e6e1] pt-5">
-                      <AuthFieldLabel>Or start a free trial</AuthFieldLabel>
-                      <p className="m-0 text-[12.5px] leading-snug text-[#6e7c77]">
-                        14 days free. Pick how you want to handle the card.
-                      </p>
+                    <div className="space-y-3 border-t border-[#e4e6e1] pt-5">
+                      <div>
+                        <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
+                          Or start the trial{' '}
+                          <span className="font-normal text-[#6e7c77]">
+                            14 days free. Pick how you want to handle the card.
+                          </span>
+                        </p>
+                      </div>
 
-                      <button
-                        type="button"
-                        data-cy="checkout-trial-cardless"
-                        className={cn(
-                          'flex w-full cursor-pointer items-start gap-3.5 rounded-[13px] p-4 text-left transition',
-                          trialMode === 'cardless'
-                            ? 'border-[1.5px] border-[#2e7d6e] bg-[#f4f8f7]'
-                            : 'border border-[#e4e6e1] bg-white',
-                        )}
-                        onClick={() => setTrialMode('cardless')}
-                      >
-                        <span
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <button
+                          type="button"
+                          data-cy="checkout-trial-cardless"
                           className={cn(
-                            'mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full',
+                            'flex min-h-[108px] cursor-pointer flex-col gap-2 rounded-[14px] bg-white p-3.5 text-left transition sm:min-h-0 sm:p-4',
                             trialMode === 'cardless'
-                              ? 'bg-[#2e7d6e] shadow-[inset_0_0_0_3px_#fff]'
-                              : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
+                              ? 'border-[1.5px] border-[#132b26]'
+                              : 'border border-[#e4e6e1]',
                           )}
-                          aria-hidden
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
-                            Cardless trial
-                          </p>
-                          <p className="mt-[3px] mb-0 text-[12.5px] text-[#5c6b66]">
-                            No card now. Access pauses after trial until you
-                            pay.
-                          </p>
-                        </div>
-                      </button>
+                          onClick={() => setTrialMode('cardless')}
+                        >
+                          <span
+                            className={cn(
+                              'h-[18px] w-[18px] shrink-0 rounded-full',
+                              trialMode === 'cardless'
+                                ? 'bg-[#132b26] shadow-[inset_0_0_0_3px_#fff]'
+                                : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
+                            )}
+                            aria-hidden
+                          />
+                          <div className="min-w-0">
+                            <p className="m-0 text-[13.5px] font-semibold text-[#132b26] sm:text-[14.5px]">
+                              <span className="sm:hidden">Cardless</span>
+                              <span className="hidden sm:inline">
+                                Cardless trial
+                              </span>
+                            </p>
+                            <p className="mt-1 mb-0 text-[12px] leading-snug text-[#5c6b66] sm:text-[12.5px]">
+                              <span className="sm:hidden">
+                                Access pauses after the trial.
+                              </span>
+                              <span className="hidden sm:inline">
+                                No card now. Access pauses after the trial until
+                                you add payment.
+                              </span>
+                            </p>
+                          </div>
+                        </button>
 
-                      <button
-                        type="button"
-                        className={cn(
-                          'flex w-full cursor-pointer items-start gap-3.5 rounded-[13px] p-4 text-left transition',
-                          trialMode === 'card_on_file'
-                            ? 'border-[1.5px] border-[#2e7d6e] bg-[#f4f8f7]'
-                            : 'border border-[#e4e6e1] bg-white',
-                        )}
-                        onClick={() => setTrialMode('card_on_file')}
-                      >
-                        <span
+                        <button
+                          type="button"
                           className={cn(
-                            'mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full',
+                            'flex min-h-[108px] cursor-pointer flex-col gap-2 rounded-[14px] bg-white p-3.5 text-left transition sm:min-h-0 sm:p-4',
                             trialMode === 'card_on_file'
-                              ? 'bg-[#2e7d6e] shadow-[inset_0_0_0_3px_#fff]'
-                              : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
+                              ? 'border-[1.5px] border-[#132b26]'
+                              : 'border border-[#e4e6e1]',
                           )}
-                          aria-hidden
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
+                          onClick={() => setTrialMode('card_on_file')}
+                        >
+                          <span
+                            className={cn(
+                              'h-[18px] w-[18px] shrink-0 rounded-full',
+                              trialMode === 'card_on_file'
+                                ? 'bg-[#132b26] shadow-[inset_0_0_0_3px_#fff]'
+                                : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
+                            )}
+                            aria-hidden
+                          />
+                          <div className="min-w-0">
+                            <p className="m-0 text-[13.5px] font-semibold text-[#132b26] sm:text-[14.5px]">
                               Card on file
                             </p>
-                            <span className="rounded-[5px] bg-[#e8f1ee] px-2 py-1 text-[11px] font-medium text-[#1f5c52]">
-                              Recommended
-                            </span>
+                            <p className="mt-1 mb-0 text-[12px] leading-snug text-[#5c6b66] sm:text-[12.5px]">
+                              <span className="sm:hidden">
+                                Charged on day 15.
+                              </span>
+                              <span className="hidden sm:inline">
+                                Add a card today; nothing is charged until day
+                                15, and it continues without a gap.
+                              </span>
+                            </p>
                           </div>
-                          <p className="mt-[3px] mb-0 text-[12.5px] text-[#5c6b66]">
-                            Verify card now — no charge today. After trial,
-                            auto-charge if auto-renew is on.
-                          </p>
-                        </div>
-                      </button>
+                        </button>
+                      </div>
 
                       <Button
                         data-cy="checkout-continue-trial"
-                        className="w-full btn-primary"
+                        className="w-full btn-secondary"
                         onClick={() => {
                           setError('');
                           setIsTrial(true);
                           setStep('payment');
                         }}
                       >
-                        Continue with{' '}
                         {trialMode === 'cardless'
-                          ? 'cardless trial'
-                          : 'card-verified trial'}
+                          ? 'Start cardless trial'
+                          : 'Start trial with card'}
                       </Button>
+
+                      <p className="mb-0 text-center text-[12px] leading-snug text-[#8b9995]">
+                        You picked a{' '}
+                        <span className="font-medium text-[#5c6b66]">
+                          {trialMode === 'cardless'
+                            ? 'cardless trial'
+                            : 'card-on-file trial'}
+                        </span>{' '}
+                        on the{' '}
+                        <span className="font-medium text-[#5c6b66]">
+                          {selectedPlan === 'yearly' ? 'Yearly' : 'Monthly'}
+                        </span>{' '}
+                        plan. You can switch plans or add a card any time in
+                        settings.
+                      </p>
                     </div>
                   </div>
                 )}

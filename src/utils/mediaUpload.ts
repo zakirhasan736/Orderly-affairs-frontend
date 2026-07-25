@@ -2,6 +2,7 @@ export const MESSAGE_MEDIA_MAX_BYTES = 150 * 1024 * 1024; // 150 MB
 
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'm4v'];
 const AUDIO_EXTENSIONS = ['mp3', 'm4a', 'wav', 'webm', 'aac', 'ogg'];
+const IMAGE_FORMATS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif']);
 
 const MIME_BY_EXT: Record<string, string> = {
   mp4: 'video/mp4',
@@ -51,10 +52,13 @@ export function blobToPhotoFile(blob: Blob): File {
 }
 
 export function prepareMessageMediaFile(file: File, kind: 'video' | 'audio') {
-  if (file.type?.startsWith('image/')) {
-    if (file.name) return file;
-    return new File([file], `photo-message-${Date.now()}.jpg`, {
-      type: file.type || 'image/jpeg',
+  const mime = (file.type || '').toLowerCase();
+
+  if (mime.startsWith('image/') || IMAGE_FORMATS.has(file.name.split('.').pop()?.toLowerCase() || '')) {
+    if (file.name && mime.startsWith('image/')) return file;
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    return new File([file], file.name || `photo-message-${Date.now()}.${ext}`, {
+      type: mime.startsWith('image/') ? file.type : `image/${ext === 'jpg' ? 'jpeg' : ext}`,
     });
   }
 
@@ -71,7 +75,16 @@ export function prepareMessageMediaFile(file: File, kind: 'video' | 'audio') {
 }
 
 export function isAllowedMediaFile(file: File, kind: 'video' | 'audio') {
-  if (file.type.startsWith(`${kind}/`)) return true;
+  const mime = (file.type || '').toLowerCase();
+  if (mime.startsWith(`${kind}/`)) return true;
+
+  // iOS / Android sometimes report voice notes as video/mp4 or empty mime.
+  if (kind === 'audio') {
+    if (mime === 'video/mp4' || mime === 'video/quicktime') {
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      if (['m4a', 'mp3', 'aac', 'wav', 'ogg'].includes(ext)) return true;
+    }
+  }
 
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
   const allowedExtensions = kind === 'video' ? VIDEO_EXTENSIONS : AUDIO_EXTENSIONS;
@@ -82,10 +95,12 @@ export function isAllowedMediaFile(file: File, kind: 'video' | 'audio') {
 /** Video messages may attach a still photo via Take Photo. */
 export function isAllowedVideoMessageFile(file: File) {
   if (isAllowedMediaFile(file, 'video')) return true;
-  return file.type.startsWith('image/');
-}
+  const mime = (file.type || '').toLowerCase();
+  if (mime.startsWith('image/')) return true;
 
-const IMAGE_FORMATS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif']);
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  return IMAGE_FORMATS.has(ext);
+}
 
 export function isImageMedia(media?: {
   type?: string;

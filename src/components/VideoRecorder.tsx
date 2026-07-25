@@ -36,15 +36,32 @@ type RecorderStatus =
 function getSupportedVideoMimeType() {
   if (typeof MediaRecorder === 'undefined') return '';
 
-  // Prefer WebM on Chromium — more reliable for MediaRecorder + blob preview.
-  // MP4 first can report "supported" but produce blobs Chrome cannot play back.
-  const types = [
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm',
-    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-    'video/mp4',
-  ];
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const isIOS =
+    /iPad|iPhone|iPod/.test(ua) ||
+    (typeof navigator !== 'undefined' &&
+      navigator.platform === 'MacIntel' &&
+      navigator.maxTouchPoints > 1);
+  const isSafari =
+    /Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS|OPiOS|Android/i.test(ua);
+
+  // Safari / iOS: prefer MP4 (Safari cannot play WebM recordings later).
+  // Chromium: prefer WebM — more reliable for MediaRecorder + blob preview.
+  const types =
+    isIOS || isSafari
+      ? [
+          'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+          'video/mp4',
+          'video/webm;codecs=vp8,opus',
+          'video/webm',
+        ]
+      : [
+          'video/webm;codecs=vp9,opus',
+          'video/webm;codecs=vp8,opus',
+          'video/webm',
+          'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+          'video/mp4',
+        ];
 
   return types.find(type => MediaRecorder.isTypeSupported(type)) || '';
 }
