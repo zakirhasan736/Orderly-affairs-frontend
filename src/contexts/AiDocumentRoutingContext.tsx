@@ -14,6 +14,10 @@ import { AiGuidedNavigationCallout } from '@/components/ai/AiGuidedNavigationCal
 import { AiRoutingFloatingNotifications } from '@/components/ai/AiRoutingFloatingNotifications';
 import { AiSectionMismatchDialog } from '@/components/ai/AiSectionMismatchDialog';
 import {
+  getAiAutofillDoneForSection,
+  isAiAutofillDoneForSection,
+} from '@/utils/aiAutofillDoneSections';
+import {
   type AiAdditionalSection,
   type AiAutofillSuccessMeta,
   type AiDocumentMismatchDetail,
@@ -21,10 +25,12 @@ import {
   type AiPendingUpload,
   type FilledSectionsByFile,
   clearFilledSectionsForFile,
+  isAiPendingUploadConsumed,
   isSectionFilledForFile,
   markSectionFilledForFile,
   pendingUploadKey,
   pendingUploadToAiFile,
+  promoteSingleHighlightPerFile,
   purgePendingUploadsForFile,
   readFilledSectionsFromStorage,
   readPendingUploadsFromStorage,
@@ -122,6 +128,13 @@ function updatePendingUpload(
   });
 }
 
+function isSectionDoneForUpload(sectionId: string, fileId?: string) {
+  const done = getAiAutofillDoneForSection(sectionId);
+  if (!done) return isAiAutofillDoneForSection(sectionId);
+  if (!fileId || !done.fileId) return true;
+  return done.fileId === fileId;
+}
+
 export function AiDocumentRoutingProvider({
   children,
   currentSectionId,
@@ -161,6 +174,29 @@ export function AiDocumentRoutingProvider({
     setFilledSectionsByFile(readFilledSectionsFromStorage());
   }, []);
 
+  /** Drop resolved section cards and keep one highlight per file. */
+  const pruneAndPromotePending = useCallback(
+    (
+      uploads: AiPendingUpload[],
+      filledMap: FilledSectionsByFile = filledSectionsByFile,
+    ) => {
+      const pruned = uploads.filter(
+        upload =>
+          !isAiPendingUploadConsumed(
+            upload,
+            filledMap,
+            isSectionDoneForUpload,
+          ),
+      );
+      return promoteSingleHighlightPerFile(
+        pruned,
+        filledMap,
+        isSectionDoneForUpload,
+      );
+    },
+    [filledSectionsByFile],
+  );
+
   const persistFilledSections = useCallback((next: FilledSectionsByFile) => {
     setFilledSectionsByFile(next);
     writeFilledSectionsToStorage(next);
@@ -174,12 +210,14 @@ export function AiDocumentRoutingProvider({
   const addPendingUpload = useCallback(
     (upload: AiPendingUpload) => {
       setPendingUploads(current => {
-        const next = upsertPendingUpload(current, upload);
+        const next = pruneAndPromotePending(
+          upsertPendingUpload(current, upload),
+        );
         writePendingUploadsToStorage(next);
         return next;
       });
     },
-    [],
+    [pruneAndPromotePending],
   );
 
   const patchPendingUpload = useCallback(
@@ -200,17 +238,21 @@ export function AiDocumentRoutingProvider({
   const clearPendingForSection = useCallback((sectionId: string, scope = 'full') => {
     const key = pendingUploadKey(sectionId, scope);
     setPendingUploads(current => {
-      const next = current.filter(
-        item => pendingUploadKey(item.targetSectionId, item.uploadScope) !== key,
+      const next = pruneAndPromotePending(
+        current.filter(
+          item => pendingUploadKey(item.targetSectionId, item.uploadScope) !== key,
+        ),
       );
       writePendingUploadsToStorage(next);
       return next;
     });
-  }, []);
+  }, [pruneAndPromotePending]);
 
   const clearAllPendingForFile = useCallback((fileId: string) => {
     setPendingUploads(current => {
-      const next = purgePendingUploadsForFile(current, fileId);
+      const next = pruneAndPromotePending(
+        purgePendingUploadsForFile(current, fileId),
+      );
       writePendingUploadsToStorage(next);
       return next;
     });
@@ -228,15 +270,21 @@ export function AiDocumentRoutingProvider({
         }),
       );
     }
-  }, []);
+  }, [pruneAndPromotePending]);
 
   const dismissHighlight = useCallback((sectionId: string, scope = 'full') => {
-    patchPendingUpload(sectionId, scope, upload => ({
-      ...upload,
-      highlightUpload: false,
-      navigateIntent: null,
-    }));
-  }, [patchPendingUpload]);
+    setPendingUploads(current => {
+      // Remove dismissed card entirely, then light the next related section.
+      const key = pendingUploadKey(sectionId, scope);
+      const next = pruneAndPromotePending(
+        current.filter(
+          item => pendingUploadKey(item.targetSectionId, item.uploadScope) !== key,
+        ),
+      );
+      writePendingUploadsToStorage(next);
+      return next;
+    });
+  }, [pruneAndPromotePending]);
 
   const clearNavigateIntent = useCallback(
     (sectionId: string, scope = 'full') => {
@@ -247,6 +295,38 @@ export function AiDocumentRoutingProvider({
     },
     [patchPendingUpload],
   );
+
+  // Visiting a section that is already filled removes its card and reveals the next one.
+  useEffect(() => {
+    if (!currentSectionId || currentSectionId === 'dashboard') return;
+
+    setPendingUploads(current => {
+      const related = current.filter(
+        item => item.targetSectionId === currentSectionId,
+      );
+      if (!related.length) return current;
+
+      const shouldDrop = related.every(
+        item =>
+          isAiPendingUploadConsumed(
+            item,
+            filledSectionsByFile,
+            isSectionDoneForUpload,
+          ) || isSectionDoneForUpload(currentSectionId, item.file_id),
+      );
+
+      if (!shouldDrop && !isAiAutofillDoneForSection(currentSectionId)) {
+        return current;
+      }
+
+      const next = pruneAndPromotePending(
+        current.filter(item => item.targetSectionId !== currentSectionId),
+        filledSectionsByFile,
+      );
+      writePendingUploadsToStorage(next);
+      return next;
+    });
+  }, [currentSectionId, filledSectionsByFile, pruneAndPromotePending]);
 
   const queuePendingForSection = useCallback(
     (
@@ -294,22 +374,32 @@ export function AiDocumentRoutingProvider({
 
   const navigateToPending = useCallback(
     (pending: AiPendingUpload, intent: AiNavigateIntent = 'autofill') => {
-      patchPendingUpload(
-        pending.targetSectionId,
-        pending.uploadScope,
-        upload => ({
-          ...upload,
-          navigateIntent: intent,
-          highlightUpload: true,
-        }),
-      );
+      setPendingUploads(current => {
+        const next = current.map(upload => {
+          if (upload.file_id !== pending.file_id) {
+            return upload;
+          }
+
+          const isTarget =
+            upload.targetSectionId === pending.targetSectionId &&
+            upload.uploadScope === pending.uploadScope;
+
+          return {
+            ...upload,
+            highlightUpload: isTarget,
+            navigateIntent: isTarget ? intent : null,
+          };
+        });
+        writePendingUploadsToStorage(next);
+        return next;
+      });
 
       onNavigateToSection(
         pending.targetSectionId,
         pending.targetSubsection || null,
       );
     },
-    [onNavigateToSection, patchPendingUpload],
+    [onNavigateToSection],
   );
 
   const queueRoutedSectionsSilently = useCallback(
@@ -330,10 +420,12 @@ export function AiDocumentRoutingProvider({
       const suggestedId =
         suggestedMeta?.id || detail.suggested_section_id || '';
       const navigateIntent = context?.navigateIntent ?? 'review';
+      let highlightedOnce = false;
 
       if (
         suggestedId &&
-        !isSectionFilledForFile(filledSectionsByFile, detail.file_id, suggestedId)
+        !isSectionFilledForFile(filledSectionsByFile, detail.file_id, suggestedId) &&
+        !isSectionDoneForUpload(suggestedId, detail.file_id)
       ) {
         queuePendingForSection(
           {
@@ -354,6 +446,7 @@ export function AiDocumentRoutingProvider({
             navigateIntent,
           },
         );
+        highlightedOnce = true;
       }
 
       (detail.additional_sections || []).forEach(section => {
@@ -363,11 +456,13 @@ export function AiDocumentRoutingProvider({
           '';
         if (
           !sectionId ||
-          isSectionFilledForFile(filledSectionsByFile, detail.file_id, sectionId)
+          isSectionFilledForFile(filledSectionsByFile, detail.file_id, sectionId) ||
+          isSectionDoneForUpload(sectionId, detail.file_id)
         ) {
           return;
         }
 
+        const shouldHighlight = !highlightedOnce;
         queuePendingForSection(
           {
             file_id: detail.file_id,
@@ -382,10 +477,12 @@ export function AiDocumentRoutingProvider({
           {
             currentSectionId: context?.currentSectionId,
             uploadScope: 'full',
-            highlight: true,
-            navigateIntent,
+            // Only the next section card lights up — rest stay queued quietly.
+            highlight: shouldHighlight,
+            navigateIntent: shouldHighlight ? navigateIntent : null,
           },
         );
+        if (shouldHighlight) highlightedOnce = true;
       });
     },
     [filledSectionsByFile, queuePendingForSection],
@@ -448,8 +545,6 @@ export function AiDocumentRoutingProvider({
       );
       persistFilledSections(nextFilled);
 
-      clearPendingForSection(meta.currentSectionId, meta.uploadScope);
-
       if (meta.document_deleted) {
         clearAllPendingForFile(meta.file_id);
         return;
@@ -470,71 +565,58 @@ export function AiDocumentRoutingProvider({
       const extras = (meta.additional_sections || []).filter(
         section =>
           section.section_id !== meta.currentSectionId &&
-          !isSectionFilledForFile(nextFilled, meta.file_id, section.section_id),
-      );
-      const previews = (meta.section_previews || []).filter(
-        preview =>
-          preview.status === 'pending' &&
-          preview.section_id !== meta.currentSectionId &&
-          (!preview.section_id ||
-            !isSectionFilledForFile(
-              nextFilled,
-              meta.file_id,
-              preview.section_id,
-            )),
+          !isSectionFilledForFile(nextFilled, meta.file_id, section.section_id) &&
+          !isSectionDoneForUpload(section.section_id, meta.file_id),
       );
 
-      if (!extras.length && !previews.length) return;
-
-      extras.forEach(section => {
-        if (
-          isSectionFilledForFile(nextFilled, meta.file_id, section.section_id)
-        ) {
-          return;
-        }
-
-        queuePendingForSection(
-          {
-            file_id: meta.file_id,
-            mime_type: meta.mime_type,
-            section_key: section.section_key,
-            section_id: section.section_id,
-            section_label: section.section_label,
-            subsection: section.subsection,
-            data_summary: section.data_summary,
-            extracted_fields: section.extracted_fields,
-          },
-          {
-            currentSectionId: meta.currentSectionId,
-            uploadScope: 'full',
-            highlight: true,
-            navigateIntent: batchSilentMode ? 'review' : null,
-          },
+      // Rebuild pending for this file: drop the filled section, keep only
+      // remaining related sections, and light up a single "next" card.
+      setPendingUploads(current => {
+        let next = current.filter(
+          item =>
+            !(
+              item.file_id === meta.file_id &&
+              item.targetSectionId === meta.currentSectionId
+            ),
         );
+
+        extras.forEach(section => {
+          const already = next.some(
+            item =>
+              item.file_id === meta.file_id &&
+              item.targetSectionId === section.section_id,
+          );
+          if (already) return;
+
+          const uploadMeta = getAiUploadMeta(meta.file_id);
+          next = upsertPendingUpload(next, {
+            file_id: meta.file_id,
+            mime_type: meta.mime_type || 'application/pdf',
+            file_name: uploadMeta?.file_name,
+            uploaded_at: uploadMeta?.uploaded_at,
+            targetSectionId: section.section_id,
+            targetSectionKey: section.section_key,
+            targetSubsection: section.subsection,
+            uploadScope: 'full',
+            documentSummary: section.data_summary,
+            extractedFields: section.extracted_fields,
+            navigateIntent: null,
+            uploadedFromSectionId: meta.currentSectionId,
+            highlightUpload: false,
+            createdAt: Date.now(),
+          });
+        });
+
+        next = pruneAndPromotePending(next, nextFilled);
+        writePendingUploadsToStorage(next);
+        return next;
       });
-
-      const dialogPayload = {
-        sections: extras,
-        context: {
-          currentSectionId: meta.currentSectionId,
-          documentSummary:
-            meta.document_summary || extras[0]?.data_summary || undefined,
-          sectionPreviews: previews.length ? previews : undefined,
-        },
-      };
-
-      // Keep pending section routing in memory only — do not show the
-      // "other sections have data" popup anymore.
-      void dialogPayload;
-      return;
     },
     [
-      batchSilentMode,
       clearAllPendingForFile,
-      clearPendingForSection,
       filledSectionsByFile,
       persistFilledSections,
-      queuePendingForSection,
+      pruneAndPromotePending,
     ],
   );
 

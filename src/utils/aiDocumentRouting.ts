@@ -237,3 +237,71 @@ export function pendingUploadKey(sectionId: string, scope = 'full') {
 export function isPendingUploadActive(upload: AiPendingUpload) {
   return upload.highlightUpload;
 }
+
+/**
+ * True when this section was already filled for the same upload
+ * (or marked autofill-done), so routing popups should not keep it.
+ */
+export function isAiPendingUploadConsumed(
+  upload: Pick<AiPendingUpload, 'file_id' | 'targetSectionId'>,
+  filledSectionsByFile: FilledSectionsByFile,
+  isSectionAutofillDone?: (sectionId: string, fileId?: string) => boolean,
+): boolean {
+  if (
+    isSectionFilledForFile(
+      filledSectionsByFile,
+      upload.file_id,
+      upload.targetSectionId,
+    )
+  ) {
+    return true;
+  }
+
+  if (!isSectionAutofillDone) return false;
+  return isSectionAutofillDone(upload.targetSectionId, upload.file_id);
+}
+
+/**
+ * Keep at most one highlighted card per file — the next unfilled section.
+ * Other pending rows stay quiet until that one is cleared.
+ */
+export function promoteSingleHighlightPerFile(
+  uploads: AiPendingUpload[],
+  filledSectionsByFile: FilledSectionsByFile,
+  isSectionAutofillDone?: (sectionId: string, fileId?: string) => boolean,
+): AiPendingUpload[] {
+  const active = uploads.filter(
+    upload =>
+      !isAiPendingUploadConsumed(
+        upload,
+        filledSectionsByFile,
+        isSectionAutofillDone,
+      ),
+  );
+
+  const highlightOwnerByFile = new Map<string, string>();
+  for (const upload of active) {
+    if (highlightOwnerByFile.has(upload.file_id)) continue;
+    highlightOwnerByFile.set(upload.file_id, upload.targetSectionId);
+  }
+
+  return uploads
+    .filter(upload =>
+      active.some(
+        item =>
+          item.file_id === upload.file_id &&
+          item.targetSectionId === upload.targetSectionId &&
+          item.uploadScope === upload.uploadScope,
+      ),
+    )
+    .map(upload => {
+      const owner = highlightOwnerByFile.get(upload.file_id);
+      const shouldHighlight = owner === upload.targetSectionId;
+      if (upload.highlightUpload === shouldHighlight) return upload;
+      return {
+        ...upload,
+        highlightUpload: shouldHighlight,
+        navigateIntent: shouldHighlight ? upload.navigateIntent : null,
+      };
+    });
+}

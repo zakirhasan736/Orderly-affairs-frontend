@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import { isAiAutofillDoneForSection } from '@/utils/aiAutofillDoneSections';
 import { useOptionalHelpAssistant } from '@/components/help/HelpAssistantContext';
 import {
   getDynamicTopicsForSubsection,
@@ -364,7 +365,9 @@ export function VaultSidebarNavigation({
               const pendingAiUploads =
                 aiRouting?.getPendingUploadsForSection(section.id) ?? [];
               const hasAiReady = pendingAiUploads.some(
-                upload => upload.highlightUpload,
+                upload =>
+                  upload.highlightUpload &&
+                  !isAiAutofillDoneForSection(section.id),
               );
 
               return (

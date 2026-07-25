@@ -12,19 +12,26 @@ import {
   listDashboardAiPatches,
   type DetectedAiFact,
 } from '@/utils/aiDashboardPatchCache';
+import { isAiAutofillDoneForSection } from '@/utils/aiAutofillDoneSections';
 
-function dedupeHighlightedUploads(uploads: AiPendingUpload[]) {
+function dedupeOpenUploads(uploads: AiPendingUpload[]) {
   const seen = new Set<string>();
   const result: AiPendingUpload[] = [];
 
   for (const upload of uploads) {
-    if (!upload.highlightUpload) continue;
-    if (seen.has(upload.targetSectionId)) continue;
-    seen.add(upload.targetSectionId);
+    if (isAiAutofillDoneForSection(upload.targetSectionId)) continue;
+    const key = upload.targetSectionId;
+    if (seen.has(key)) continue;
+    seen.add(key);
     result.push(upload);
   }
 
-  return result.sort((a, b) => b.createdAt - a.createdAt);
+  return result.sort((a, b) => {
+    if (a.highlightUpload !== b.highlightUpload) {
+      return a.highlightUpload ? -1 : 1;
+    }
+    return b.createdAt - a.createdAt;
+  });
 }
 
 export function AiDetectedInformationPanel({
@@ -42,13 +49,14 @@ export function AiDetectedInformationPanel({
   }, []);
 
   const detected = useMemo(
-    () => dedupeHighlightedUploads(routing?.pendingUploads || []),
+    () => dedupeOpenUploads(routing?.pendingUploads || []),
     [routing?.pendingUploads, stashTick],
   );
 
   const factsBySection = useMemo(() => {
     const map = new Map<string, DetectedAiFact[]>();
     listDashboardAiPatches().forEach(entry => {
+      if (isAiAutofillDoneForSection(entry.section_id)) return;
       const facts = entry.detectedFields || [];
       if (!facts.length) return;
       map.set(entry.section_id, facts.slice(0, 8));
@@ -63,14 +71,21 @@ export function AiDetectedInformationPanel({
   const cards =
     detected.length > 0
       ? detected
-      : listDashboardAiPatches().map(entry => ({
-          targetSectionId: entry.section_id,
-          file_id: entry.file_id,
-          documentSummary: entry.document_summary,
-          extractedFields: entry.detectedFields,
-          highlightUpload: true,
-          createdAt: entry.createdAt,
-        }));
+      : listDashboardAiPatches()
+          .filter(entry => !isAiAutofillDoneForSection(entry.section_id))
+          .map(entry => ({
+            targetSectionId: entry.section_id,
+            file_id: entry.file_id,
+            documentSummary: entry.document_summary,
+            extractedFields: entry.detectedFields,
+            highlightUpload: true,
+            createdAt: entry.createdAt,
+          }));
+
+  const primary = cards[0];
+  const rest = cards.slice(1);
+
+  if (!primary) return null;
 
   return (
     <section className="overflow-hidden rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/70 via-white to-sky-50/40 p-4 shadow-sm sm:p-5">
@@ -80,80 +95,113 @@ export function AiDetectedInformationPanel({
         </div>
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
-            Detected data (temporary)
+            Detected data
           </p>
           <h3 className="text-lg font-semibold text-[#132b26]">
-            Matched fields ready to place
+            {cards.length === 1
+              ? 'Matched section ready to review'
+              : `${cards.length} matched sections — review one at a time`}
           </h3>
         </div>
       </div>
 
-      <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-3">
-        {cards.map(upload => {
-          const sectionId = upload.targetSectionId;
-          const label = getAiSectionLabel(sectionId);
-          const facts =
-            factsBySection.get(sectionId) ||
-            (upload.extractedFields as DetectedAiFact[] | undefined) ||
-            [];
-          const fieldCount = facts.length;
-
-          return (
-            <div
-              key={`${sectionId}:${upload.file_id}`}
-              className="flex flex-col justify-between rounded-2xl border border-white/80 bg-white/95 p-3.5 shadow-sm sm:p-4"
-            >
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-slate-700">
-                  <FileText className="h-4 w-4 text-emerald-600" />
-                  <span className="font-semibold text-[#132b26]">{label}</span>
-                </div>
-                <p className="text-sm text-slate-600">
-                  {fieldCount > 0
-                    ? `${fieldCount} field${fieldCount === 1 ? '' : 's'} visualized from your upload`
-                    : upload.documentSummary ||
-                      'Document saved for this section'}
-                </p>
-                {facts.length > 0 && (
-                  <ul className="mt-2 space-y-1.5">
-                    {facts.slice(0, 5).map(fact => (
-                      <li
-                        key={`${fact.label}:${fact.value}`}
-                        className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700"
-                      >
-                        <span className="font-semibold text-[#132b26]">
-                          {fact.label}:
-                        </span>{' '}
-                        <span className="break-all">{fact.value}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className={cn(
-                  AI_MOBILE_ACTION_BUTTON,
-                  'mt-3 border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 sm:mt-4',
-                )}
-                onClick={() => {
-                  const pending =
-                    routing?.getPendingUploadsForSection(sectionId)?.[0];
-                  if (pending && routing) {
-                    routing.navigateToPendingSection(pending, 'autofill');
-                    return;
-                  }
-                  onNavigateToSection?.(sectionId);
-                }}
-              >
-                Open {label}
-              </Button>
+      <div className="space-y-3">
+        <div
+          key={`${primary.targetSectionId}:${primary.file_id}`}
+          className="flex flex-col justify-between rounded-2xl border border-white/80 bg-white/95 p-3.5 shadow-sm sm:p-4"
+        >
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-slate-700">
+              <FileText className="h-4 w-4 text-emerald-600" />
+              <span className="font-semibold text-[#132b26]">
+                {getAiSectionLabel(primary.targetSectionId)}
+              </span>
+              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
+                Next
+              </span>
             </div>
-          );
-        })}
+            <p className="text-sm text-slate-600">
+              {(factsBySection.get(primary.targetSectionId) || []).length > 0
+                ? `${(factsBySection.get(primary.targetSectionId) || []).length} fields from your upload`
+                : primary.documentSummary ||
+                  'Document saved for this section'}
+            </p>
+            {(factsBySection.get(primary.targetSectionId) || []).length > 0 && (
+              <ul className="mt-2 space-y-1.5">
+                {(factsBySection.get(primary.targetSectionId) || [])
+                  .slice(0, 5)
+                  .map(fact => (
+                    <li
+                      key={`${fact.label}:${fact.value}`}
+                      className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700"
+                    >
+                      <span className="font-semibold text-[#132b26]">
+                        {fact.label}:
+                      </span>{' '}
+                      <span className="break-all">{fact.value}</span>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </div>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={cn(
+              AI_MOBILE_ACTION_BUTTON,
+              'mt-3 border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 sm:mt-4',
+            )}
+            onClick={() => {
+              const sectionId = primary.targetSectionId;
+              const pending =
+                routing?.getPendingUploadsForSection(sectionId)?.[0];
+              if (pending && routing) {
+                routing.navigateToPendingSection(pending, 'autofill');
+                return;
+              }
+              onNavigateToSection?.(sectionId);
+            }}
+          >
+            Open {getAiSectionLabel(primary.targetSectionId)}
+          </Button>
+        </div>
+
+        {rest.length > 0 ? (
+          <div className="rounded-xl border border-dashed border-emerald-200/80 bg-white/70 px-3 py-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              After that
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {rest.map(upload => {
+                const label = getAiSectionLabel(upload.targetSectionId);
+                return (
+                  <li key={`${upload.targetSectionId}:${upload.file_id}`}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-[#132b26] hover:bg-emerald-50/80"
+                      onClick={() => {
+                        const pending =
+                          routing?.getPendingUploadsForSection(
+                            upload.targetSectionId,
+                          )?.[0];
+                        if (pending && routing) {
+                          routing.navigateToPendingSection(pending, 'autofill');
+                          return;
+                        }
+                        onNavigateToSection?.(upload.targetSectionId);
+                      }}
+                    >
+                      <span className="font-medium">{label}</span>
+                      <span className="text-xs text-slate-400">Open</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
       </div>
     </section>
   );
