@@ -616,7 +616,10 @@ export function useDashboardAiBatchRunner() {
       });
 
       const uploaded = await uploadAIDocument(job.file);
-      buildUploadedAiFile(uploaded, job.file);
+      buildUploadedAiFile(uploaded, job.file, {
+        sectionId: 'overview',
+        source: 'overview',
+      });
 
       patchJob(job.id, {
         status: 'reading',

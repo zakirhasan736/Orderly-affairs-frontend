@@ -3,7 +3,13 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
-import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import {
+  CardNumberElement,
+  CardExpiryElement,
+  CardCvcElement,
+  useStripe,
+  useElements,
+} from '@stripe/react-stripe-js';
 
 import {
   Mail,
@@ -249,16 +255,59 @@ function AuthStatusBanner({
   );
 }
 
+function formatTrialEndDate(days = 14) {
+  const end = new Date();
+  end.setDate(end.getDate() + days);
+  return end.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatTrialEndShort(days = 14) {
+  const end = new Date();
+  end.setDate(end.getDate() + days);
+  return end.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+const PLAN_PRICES = {
+  yearly: { label: 'Yearly plan', price: '$94.95', note: 'Billed once a year · save about 20%' },
+  monthly: { label: 'Monthly plan', price: '$9.95', note: 'Billed month to month · flexible' },
+} as const;
+
+const STRIPE_ELEMENT_STYLE = {
+  base: {
+    fontSize: '15px',
+    lineHeight: '24px',
+    color: '#132b26',
+    fontFamily: "'Instrument Sans', ui-sans-serif, system-ui, sans-serif",
+    '::placeholder': {
+      color: '#a5b1ad',
+    },
+  },
+  invalid: {
+    color: '#b4483f',
+  },
+} as const;
+
 function PaymentForm({
   isTrial,
   trialMode,
   selectedPlan,
   router,
+  onBack,
+  onSwitchToCardless,
 }: {
   isTrial: boolean;
   trialMode: 'cardless' | 'card_on_file';
   selectedPlan: 'monthly' | 'yearly';
   router: ReturnType<typeof useRouter>;
+  onBack: () => void;
+  onSwitchToCardless: () => void;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -269,12 +318,25 @@ function PaymentForm({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cardReady, setCardReady] = useState(false);
-  const [cardFocused, setCardFocused] = useState(false);
+  const [cardReady, setCardReady] = useState({
+    number: false,
+    expiry: false,
+    cvc: false,
+  });
+  const [focusedField, setFocusedField] = useState<
+    'number' | 'expiry' | 'cvc' | null
+  >(null);
 
   const needsCardNow = !isTrial || trialMode === 'card_on_file';
   const stripeReady = Boolean(stripe && elements);
-  const canPay = !needsCardNow || (stripeReady && cardReady);
+  const cardFieldsReady =
+    cardReady.number && cardReady.expiry && cardReady.cvc;
+  const canPay = !needsCardNow || (stripeReady && cardFieldsReady);
+
+  const plan = PLAN_PRICES[selectedPlan];
+  const trialEndShort = formatTrialEndShort();
+  const trialEndFull = formatTrialEndDate();
+  const dueToday = isTrial ? '$0.00' : plan.price;
 
   const handleSubmit = async () => {
     setError(null);
@@ -290,7 +352,7 @@ function PaymentForm({
 
         const { client_secret } = await setupIntent().unwrap();
 
-        const card = elements.getElement(CardElement);
+        const card = elements.getElement(CardNumberElement);
         if (!card) {
           throw new Error('Card element not found');
         }
@@ -326,111 +388,260 @@ function PaymentForm({
     }
   };
 
-  return (
-    <div className="space-y-5 text-left">
-      <div className="space-y-0">
-        <p className="auth-step-kicker">Step 3 of 3</p>
-        <h2 className="auth-serif-title mt-3 mb-1 text-[19px] font-semibold lg:text-[21px]">
-          {isTrial ? 'Start your trial' : 'Secure checkout'}
-        </h2>
-        <p className="mb-0 text-[13.5px] leading-snug text-[#6e7c77]">
-          {isTrial
-            ? trialMode === 'cardless'
-              ? 'No card needed today. You can add payment anytime in settings.'
-              : 'Verify your card now — you won’t be charged until the trial ends.'
-            : `You’re subscribing to the ${selectedPlan} plan.`}
+  const title = isTrial ? 'Start your trial' : 'Secure checkout';
+  const subtitle = isTrial
+    ? trialMode === 'cardless'
+      ? 'No card needed today. You can add payment anytime in settings.'
+      : 'Add a card now and access continues without a gap when the trial ends.'
+    : `You’re subscribing to the ${selectedPlan} plan.`;
+
+  const ctaLabel = loading
+    ? 'Please wait…'
+    : needsCardNow && !canPay
+      ? 'Loading card form…'
+      : isTrial
+        ? trialMode === 'cardless'
+          ? 'Start cardless trial'
+          : 'Start your trial'
+        : 'Subscribe now';
+
+  const mobilePlanCard = (
+    <div className="rounded-[16px] border border-[#e4e6e1] bg-white p-4 lg:hidden">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="m-0 font-[family-name:var(--font-family-serif)] text-[20px] text-[#132b26]">
+          {plan.label}
+        </p>
+        <p className="m-0 font-[family-name:var(--font-family-serif)] text-[20px] text-[#132b26]">
+          {plan.price}
         </p>
       </div>
+      <div className="my-3.5 h-px bg-[#ebece7]" />
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="m-0 text-[13.5px] text-[#6e7c77]">Due today</p>
+        <p className="m-0 text-[14px] font-semibold text-[#132b26]">{dueToday}</p>
+      </div>
+      {isTrial ? (
+        <p className="mt-2 mb-0 text-[12px] leading-snug text-[#8b9995]">
+          Trial runs to {trialEndShort}. First charge {trialEndFull}.
+        </p>
+      ) : (
+        <p className="mt-2 mb-0 text-[12px] leading-snug text-[#8b9995]">
+          {plan.note}
+        </p>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 text-left lg:space-y-5">
+      <div className="hidden space-y-0 lg:block">
+        <button
+          type="button"
+          onClick={onBack}
+          className="mb-4 flex items-center gap-1.5 text-[13px] font-medium text-[#6e7c77] transition hover:text-[#132b26]"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Change plan
+        </button>
+        <p className="auth-step-kicker">Step 3 of 3</p>
+        <h2 className="auth-serif-title mt-3 mb-1 text-[28px]">{title}</h2>
+        <p className="mb-0 text-[13.5px] leading-snug text-[#6e7c77]">
+          {subtitle}
+        </p>
+      </div>
+
+      {mobilePlanCard}
 
       {error ? (
         <p className="text-[13px] text-red-600">{error}</p>
       ) : null}
 
-      {isTrial && trialMode === 'cardless' ? (
-        <div className="rounded-[13px] border border-[#e4e6e1] bg-[#f7f6f2] p-4">
+      {needsCardNow ? (
+        <div className="rounded-[16px] border border-[#e4e6e1] bg-white p-4 sm:p-5">
+          <div className="mb-3.5 flex items-center justify-between gap-3">
+            <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
+              Card details
+            </p>
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#e8f1ee] px-2.5 py-1 text-[11px] font-medium text-[#1f5c52]">
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                aria-hidden
+              >
+                <rect x="3" y="11" width="18" height="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              <span className="lg:hidden">Stripe</span>
+              <span className="hidden lg:inline">Secured by Stripe</span>
+            </span>
+          </div>
+
+          <div className="space-y-2.5">
+            <div
+              className={cn(
+                'auth-stripe-field',
+                focusedField === 'number' && 'auth-stripe-field--focused',
+              )}
+            >
+              {!stripeReady ? (
+                <p className="m-0 text-[13.5px] text-[#8b9995]">
+                  Loading secure card form…
+                </p>
+              ) : (
+                <CardNumberElement
+                  options={{
+                    showIcon: true,
+                    style: STRIPE_ELEMENT_STYLE,
+                  }}
+                  onReady={() =>
+                    setCardReady(prev => ({ ...prev, number: true }))
+                  }
+                  onFocus={() => setFocusedField('number')}
+                  onBlur={() => setFocusedField(null)}
+                />
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <div
+                className={cn(
+                  'auth-stripe-field auth-stripe-field--muted',
+                  focusedField === 'expiry' && 'auth-stripe-field--focused',
+                )}
+              >
+                {stripeReady ? (
+                  <CardExpiryElement
+                    options={{ style: STRIPE_ELEMENT_STYLE }}
+                    onReady={() =>
+                      setCardReady(prev => ({ ...prev, expiry: true }))
+                    }
+                    onFocus={() => setFocusedField('expiry')}
+                    onBlur={() => setFocusedField(null)}
+                  />
+                ) : null}
+              </div>
+              <div
+                className={cn(
+                  'auth-stripe-field auth-stripe-field--muted',
+                  focusedField === 'cvc' && 'auth-stripe-field--focused',
+                )}
+              >
+                {stripeReady ? (
+                  <CardCvcElement
+                    options={{ style: STRIPE_ELEMENT_STYLE }}
+                    onReady={() =>
+                      setCardReady(prev => ({ ...prev, cvc: true }))
+                    }
+                    onFocus={() => setFocusedField('cvc')}
+                    onBlur={() => setFocusedField(null)}
+                  />
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          <p className="mt-2.5 mb-0 text-[12px] text-[#8b9995]">
+            Card fields are provided by Stripe. Do not refresh while they load.
+          </p>
+
+          {isTrial && trialMode === 'card_on_file' ? (
+            <div className="mt-4 flex items-start gap-2.5 rounded-[12px] bg-[#f4f8f7] px-3.5 py-3">
+              <span
+                className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#2e7d6e] text-white"
+                aria-hidden
+              >
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                  <path
+                    d="M2.5 6.2 4.8 8.5 9.5 3.5"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              <p className="m-0 text-[12.5px] leading-snug text-[#3c4a46]">
+                Nothing is charged today. We authorise $0 to check the card is
+                valid, then bill {plan.price} on {trialEndFull}.
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="rounded-[16px] border border-[#e4e6e1] bg-white p-4 sm:p-5">
           <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
             Cardless trial
           </p>
           <p className="mt-1.5 mb-0 text-[12.5px] leading-snug text-[#5c6b66]">
-            When the trial ends without a card on file, vault access pauses
-            until you add payment.
+            No card needed today. When the trial ends without a card on file,
+            vault access pauses until you add payment — nothing is deleted.
           </p>
         </div>
-      ) : null}
+      )}
 
       {isTrial && trialMode === 'card_on_file' ? (
-        <div className="rounded-[13px] border border-[#2e7d6e] bg-[#f4f8f7] p-4">
-          <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
-            Card verified — no charge today
-          </p>
-          <p className="mt-1.5 mb-0 text-[12.5px] leading-snug text-[#5c6b66]">
-            After the trial, your card is charged automatically if auto-renew
-            stays on. You can turn auto-renew off in settings.
+        <div className="rounded-[14px] border border-[#e4d7c8] bg-[#f7f1ea] px-4 py-3.5 lg:hidden">
+          <p className="m-0 text-[13px] leading-snug text-[#7a5a3c]">
+            Cardless instead? Access pauses after the trial until you add
+            payment — nothing is deleted.
           </p>
         </div>
       ) : null}
 
-      {needsCardNow ? (
-        <div>
-          <AuthFieldLabel>Card details</AuthFieldLabel>
-          <div
-            className={cn(
-              'auth-stripe-field',
-              cardFocused && 'auth-stripe-field--focused',
-            )}
-          >
-            {!stripeReady ? (
-              <p className="m-0 text-[13.5px] text-[#8b9995]">
-                Loading secure card form…
-              </p>
-            ) : (
-              <CardElement
-                options={{
-                  hidePostalCode: true,
-                  style: {
-                    base: {
-                      fontSize: '15px',
-                      lineHeight: '24px',
-                      color: '#132b26',
-                      fontFamily:
-                        "'Instrument Sans', ui-sans-serif, system-ui, sans-serif",
-                      '::placeholder': {
-                        color: '#a5b1ad',
-                      },
-                    },
-                    invalid: {
-                      color: '#b4483f',
-                    },
-                  },
-                }}
-                onReady={() => setCardReady(true)}
-                onFocus={() => setCardFocused(true)}
-                onBlur={() => setCardFocused(false)}
-              />
-            )}
-          </div>
-          <p className="mt-2 mb-0 text-[12px] text-[#8b9995]">
-            Card fields are provided by Stripe. Do not refresh while they load.
+      {isTrial && trialMode === 'cardless' ? (
+        <div className="rounded-[14px] border border-[#e4d7c8] bg-[#f7f1ea] px-4 py-3.5 lg:hidden">
+          <p className="m-0 text-[13px] leading-snug text-[#7a5a3c]">
+            Want continuous access? Go back and choose card on file — nothing is
+            charged until {trialEndFull}.
           </p>
         </div>
       ) : null}
 
       <Button
         data-cy="checkout-submit"
-        className="w-full btn-primary"
+        className="btn-primary w-full"
         disabled={loading || !canPay}
         onClick={() => void handleSubmit()}
       >
-        {loading
-          ? 'Please wait…'
-          : needsCardNow && !canPay
-            ? 'Loading card form…'
-            : isTrial
-              ? trialMode === 'cardless'
-                ? 'Start cardless trial'
-                : 'Verify card & start trial'
-              : 'Subscribe now'}
+        {ctaLabel}
       </Button>
+
+      {isTrial && trialMode === 'card_on_file' ? (
+        <button
+          type="button"
+          className="auth-link mx-auto block text-center text-[13px]"
+          onClick={onSwitchToCardless}
+        >
+          Or go back and start without a card
+        </button>
+      ) : null}
+
+      {isTrial && trialMode === 'cardless' ? (
+        <button
+          type="button"
+          className="auth-link mx-auto block text-center text-[13px]"
+          onClick={onBack}
+        >
+          Or go back and add a card
+        </button>
+      ) : null}
+
+      {isTrial && trialMode === 'card_on_file' ? (
+        <div className="hidden rounded-[14px] border border-[#e4d7c8] bg-[#f7f1ea] px-4 py-3.5 lg:block">
+          <p className="m-0 text-[13.5px] font-semibold text-[#7a5a3c]">
+            If you choose the cardless trial instead
+          </p>
+          <p className="mt-1.5 mb-0 text-[12.5px] leading-snug text-[#8a6b4d]">
+            No card needed today. You can add payment anytime in settings. When
+            the trial ends without a card on file, vault access pauses until you
+            add payment — nothing is deleted.
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1737,6 +1948,25 @@ const mobileSubtitle =
     ? 'Start paid now, or begin a 14-day trial with no charge.'
     : undefined;
 
+const checkoutOrderSummary = (() => {
+  if (step !== 'payment') return null;
+  const plan = PLAN_PRICES[selectedPlan];
+  const trialEndFull = formatTrialEndDate();
+  const dueToday = isTrial ? '$0.00' : plan.price;
+  return {
+    planLabel: plan.label,
+    planPrice: plan.price,
+    planNote: plan.note,
+    dueToday,
+    dueNote: isTrial
+      ? `Your 14-day trial runs to ${formatTrialEndShort()}. First charge on ${trialEndFull}.`
+      : 'Charged today. Cancel any time from settings.',
+    footerNote: isTrial
+      ? `Card fields are provided by Stripe — we never see or store your card number. Cancel any time before ${formatTrialEndShort()} and you won't be charged.`
+      : 'Card fields are provided by Stripe — we never see or store your card number.',
+  };
+})();
+
 const signupAsideSteps = (() => {
   const mfaLabel =
     selectedMFAMethod === 'authenticator'
@@ -1765,7 +1995,9 @@ const signupAsideSteps = (() => {
 
 const mobileTitle = (() => {
   if (step === 'plan_selection') return 'Choose your plan';
-  if (step === 'payment') return 'Secure checkout';
+  if (step === 'payment') {
+    return isTrial ? 'Start your trial' : 'Secure checkout';
+  }
   if (step === 'credentials') {
     return isNewUser ? 'Create your account' : 'Welcome back';
   }
@@ -1810,20 +2042,29 @@ const backButtonLabel =
   // -----------------------------------------------------------
   const isPasswordResetFlow =
     step === 'forgot_password' || step === 'reset_password';
+  const isPaymentStep = step === 'payment';
 
   return (
     <AuthPortalShell
       mode={authMode}
       signupStep={signupStepIndex}
       signupSteps={signupAsideSteps}
+      checkoutSummary={checkoutOrderSummary}
       mobileTitle={mobileTitle}
       mobileStepLabel={mobileStepLabel}
       mobileSubtitle={mobileSubtitle}
       mobileShowTagline={!isNewUser && step === 'credentials'}
-      mobileChrome={isPasswordResetFlow ? 'reset' : 'brand'}
+      mobileChrome={
+        isPasswordResetFlow
+          ? 'reset'
+          : isPaymentStep
+            ? 'checkout'
+            : 'brand'
+      }
       onMobileBack={handleBack}
     >
       <AuthCard
+        flush={step === 'payment'}
         flushOnMobile={
           step === 'credentials' ||
           step === 'reset_password' ||
@@ -1844,7 +2085,8 @@ const backButtonLabel =
             <RateLimitBanner seconds={rateLimitSeconds} />
             {step !== 'credentials' &&
               step !== 'forgot_password' &&
-              step !== 'reset_password' && (
+              step !== 'reset_password' &&
+              step !== 'payment' && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -3184,14 +3426,21 @@ const backButtonLabel =
                     trialMode={trialMode}
                     selectedPlan={selectedPlan}
                     router={router}
+                    onBack={handleBack}
+                    onSwitchToCardless={() => {
+                      setTrialMode('cardless');
+                      setIsTrial(true);
+                    }}
                   />
                 </Elements>
               </div>
             ) : null}
       </AuthCard>
-      <p className="mt-6 px-1 text-center text-[11px] leading-relaxed text-[rgba(19,43,38,0.45)] lg:hidden">
-        Encrypted at rest · You choose who opens it
-      </p>
+      {step !== 'payment' ? (
+        <p className="mt-6 px-1 text-center text-[11px] leading-relaxed text-[rgba(19,43,38,0.45)] lg:hidden">
+          Encrypted at rest · You choose who opens it
+        </p>
+      ) : null}
     </AuthPortalShell>
   );
 }

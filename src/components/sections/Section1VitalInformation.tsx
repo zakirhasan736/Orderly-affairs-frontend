@@ -880,9 +880,12 @@ const [uploadedFiles, setUploadedFiles] = useState<
 
       setUploadingScope(scope as UploadScope);
 
-      const uploaded = await uploadAIDocument(file);
+      const uploaded = await uploadAIDocument(file, { section: '1' });
 
-      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file, {
+        sectionId: '1',
+        source: 'section',
+      });
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -896,6 +899,8 @@ const [uploadedFiles, setUploadedFiles] = useState<
       if (runAutofill) {
         await runAutofill();
       }
+    
+      return uploadedRecord;
     } catch (err: any) {
       setAiError(err?.message || 'Document upload failed');
     } finally {

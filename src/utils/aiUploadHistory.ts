@@ -267,14 +267,15 @@ function mergeSectionIds(
  * Upsert one footprint per document+topic.
  * Re-uploading the same file for Vehicles replaces the previous Vehicles card
  * (including failed/filled attempts) instead of stacking duplicates.
+ * Returns previous backend file ids that were replaced (caller/backend deletes them).
  */
 export function upsertAiUploadHistory(
   item: Omit<AiUploadHistoryItem, 'createdAt' | 'updatedAt'> & {
     createdAt?: string;
     updatedAt?: string;
   },
-) {
-  if (!item?.id || !item.fileName) return;
+): { item: AiUploadHistoryItem; replacedFileIds: string[] } | null {
+  if (!item?.id || !item.fileName) return null;
 
   const existing = readHistory();
   const now = new Date().toISOString();
@@ -309,28 +310,50 @@ export function upsertAiUploadHistory(
     item.sectionIds,
   );
 
+  const isFreshUpload =
+    item.status === 'uploading' ||
+    Boolean(item.fileId && prev?.fileId && item.fileId !== prev.fileId) ||
+    Boolean(item.fileId && !prev?.fileId && prev);
+
   const nextItem: AiUploadHistoryItem = {
     // Always track the latest live job id so progress merge keeps working.
     id: String(item.id),
     fileName: item.fileName,
     status: item.status,
     progress: item.progress,
-    fileId: item.fileId || prev?.fileId,
+    // New upload clears old fileId until the new id is known.
+    fileId:
+      item.status === 'uploading'
+        ? item.fileId
+        : item.fileId || prev?.fileId,
     sectionId: preservedSectionId,
     sectionIds,
     targetSectionLabel: item.targetSectionLabel ?? prev?.targetSectionLabel,
     error: item.error,
     source: item.source ?? prev?.source,
-    // New upload of same file = fresh "Uploaded" time; keep only one card.
-    createdAt: item.createdAt || now,
+    // Re-upload of same topic = fresh uploaded/updated timestamps.
+    createdAt: isFreshUpload
+      ? item.createdAt || now
+      : item.createdAt || prev?.createdAt || now,
     updatedAt: item.updatedAt || now,
   };
 
+  const replacedFileIds: string[] = [];
   // Drop this id AND any older same-topic duplicates.
   const next = existing.filter(row => {
     if (row.id === item.id) return false;
-    if (prev && row.id === prev.id) return false;
-    if (sameDocumentTopic(row, nextItem)) return false;
+    if (prev && row.id === prev.id) {
+      if (row.fileId && row.fileId !== nextItem.fileId) {
+        replacedFileIds.push(row.fileId);
+      }
+      return false;
+    }
+    if (sameDocumentTopic(row, nextItem)) {
+      if (row.fileId && row.fileId !== nextItem.fileId) {
+        replacedFileIds.push(row.fileId);
+      }
+      return false;
+    }
     return true;
   });
   next.unshift(nextItem);
@@ -341,6 +364,37 @@ export function upsertAiUploadHistory(
       new CustomEvent('orderly-ai-upload-history', { detail: nextItem }),
     );
   }
+
+  return { item: nextItem, replacedFileIds: Array.from(new Set(replacedFileIds)) };
+}
+
+/**
+ * Attach the new backend file id to the matching history card (same file + section).
+ */
+export function bindAiUploadHistoryFileId(args: {
+  fileName: string;
+  fileId: string;
+  sectionId?: string | null;
+  source?: 'overview' | 'section';
+}) {
+  if (!args.fileName || !args.fileId) return;
+  const existing = readHistory();
+  const now = new Date().toISOString();
+  const match = existing.find(row =>
+    sameDocumentTopic(row, {
+      fileName: args.fileName,
+      sectionId: args.sectionId || undefined,
+      source: args.source,
+    }),
+  );
+  if (!match) return;
+
+  upsertAiUploadHistory({
+    ...match,
+    fileId: args.fileId,
+    updatedAt: now,
+    createdAt: now,
+  });
 }
 
 /** Clear all upload footprints (localStorage + memory). */
@@ -405,6 +459,50 @@ export function formatUploadHistoryWhen(iso: string | null | undefined): string 
     minute: '2-digit',
   });
   return `${day} · ${time}`;
+}
+
+/** Relative age for overview + section history cards (“Updated 3 days ago”). */
+export function formatUploadRelativeDays(
+  iso: string | null | undefined,
+): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 0) return 'Updated just now';
+
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return 'Updated just now';
+  if (minutes < 60) {
+    return minutes === 1
+      ? 'Updated 1 minute ago'
+      : `Updated ${minutes} minutes ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return hours === 1 ? 'Updated 1 hour ago' : `Updated ${hours} hours ago`;
+  }
+
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Updated yesterday';
+  if (days < 7) return `Updated ${days} days ago`;
+
+  const weeks = Math.floor(days / 7);
+  if (days < 30) {
+    return weeks === 1 ? 'Updated 1 week ago' : `Updated ${weeks} weeks ago`;
+  }
+
+  const months = Math.floor(days / 30);
+  if (days < 365) {
+    return months === 1
+      ? 'Updated 1 month ago'
+      : `Updated ${months} months ago`;
+  }
+
+  const years = Math.floor(days / 365);
+  return years === 1 ? 'Updated 1 year ago' : `Updated ${years} years ago`;
 }
 
 export function formatUploadHistoryDay(iso: string | null | undefined): string {

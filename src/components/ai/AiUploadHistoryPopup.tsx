@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, FileStack, FileText, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, FileStack, FileText, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import {
   formatUploadHistoryDay,
   formatUploadHistoryTime,
   formatUploadHistoryWhen,
+  formatUploadRelativeDays,
   listAiUploadHistory,
   removeAiUploadHistoryItem,
   type AiUploadHistoryItem,
@@ -22,6 +23,7 @@ import { clearAiUploadMeta } from '@/utils/aiDocumentUploadUi';
 import { deleteAIDocument } from '@/services/aiDocumentUpload';
 import type { DashboardAiJob } from '@/hooks/useDashboardAiBatchRunner';
 import { toast } from 'sonner';
+import { AiDocumentPreviewDialog } from '@/components/ai/AiDocumentPreviewDialog';
 
 function statusTone(status: string) {
   if (status === 'done') return 'text-emerald-700 bg-emerald-50';
@@ -220,7 +222,7 @@ function ProgressBar({
 /**
  * Overview: FileStack button + dialog list (localStorage footprints).
  * Sections: inline bottom-right panel for that section only.
- * New uploads append — older files are never replaced.
+ * Re-uploading the same topic replaces the previous card and refreshes timestamps.
  */
 export function AiUploadHistoryPopup({
   className,
@@ -239,6 +241,10 @@ export function AiUploadHistoryPopup({
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{
+    fileId: string;
+    fileName: string;
+  } | null>(null);
   const count = items.length;
 
   const handleDelete = useCallback(
@@ -267,10 +273,32 @@ export function AiUploadHistoryPopup({
     [deletingId, jobs, onDismissJob, refreshHistory],
   );
 
+  const openPreview = useCallback((item: AiUploadHistoryItem) => {
+    const live = jobs.find(job => job.id === item.id);
+    const fileId = item.fileId || live?.file_id || '';
+    if (!fileId) {
+      toast.error('Preview is not available for this upload yet.');
+      return;
+    }
+    setPreview({ fileId, fileName: item.fileName });
+  }, [jobs]);
+
+  const previewDialog = (
+    <AiDocumentPreviewDialog
+      open={Boolean(preview)}
+      onOpenChange={open => {
+        if (!open) setPreview(null);
+      }}
+      fileId={preview?.fileId}
+      fileName={preview?.fileName}
+    />
+  );
+
   if (variant === 'inline') {
     if (count === 0) return null;
 
     return (
+      <>
       <div
         className={cn(
           absolute
@@ -292,7 +320,7 @@ export function AiUploadHistoryPopup({
                 Uploaded documents
               </p>
               <p className="text-[10px] text-slate-500">
-                {count} file{count === 1 ? '' : 's'} · same file updates in place
+                {count} file{count === 1 ? '' : 's'} · tap a name to preview
               </p>
             </div>
             {expanded ? (
@@ -320,10 +348,21 @@ export function AiUploadHistoryPopup({
                     className="rounded-xl border border-slate-200 bg-slate-50/80 px-2.5 py-2"
                   >
                     <div className="flex items-start gap-2">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() => openPreview(item)}
+                        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm transition hover:text-[#2e7d6e]"
+                        title="View document"
+                        aria-label={`View ${item.fileName}`}
+                      >
                         <FileText className="h-3.5 w-3.5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openPreview(item)}
+                        className="min-w-0 flex-1 text-left"
+                        title="Click to view document"
+                      >
                         <p
                           className="truncate text-[11px] font-semibold text-slate-900"
                           title={item.fileName}
@@ -342,8 +381,12 @@ export function AiUploadHistoryPopup({
                           <span className="text-[10px] font-semibold text-slate-600">
                             {progress}%
                           </span>
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-[#2e7d6e]">
+                            <Eye className="h-2.5 w-2.5" />
+                            View
+                          </span>
                         </div>
-                      </div>
+                      </button>
                       <button
                         type="button"
                         disabled={deletingId === item.id}
@@ -369,6 +412,9 @@ export function AiUploadHistoryPopup({
                     ) : null}
 
                     <div className="mt-1.5 space-y-0.5 text-[9px] leading-snug text-slate-500">
+                      <p className="font-semibold text-[#2e7d6e]">
+                        {formatUploadRelativeDays(item.updatedAt)}
+                      </p>
                       <p>
                         <span className="font-medium text-slate-600">
                           Uploaded
@@ -399,6 +445,8 @@ export function AiUploadHistoryPopup({
           ) : null}
         </div>
       </div>
+      {previewDialog}
+      </>
     );
   }
 
@@ -436,8 +484,9 @@ export function AiUploadHistoryPopup({
               Uploaded documents
             </DialogTitle>
             <DialogDescription>
-              Latest upload per document and section. Re-uploading the same
-              file updates that card instead of adding duplicates.
+              Tap a document name to preview image, text, or PDF. Re-uploading
+              the same topic replaces the previous file and refreshes the update
+              time.
             </DialogDescription>
           </DialogHeader>
 
@@ -464,10 +513,21 @@ export function AiUploadHistoryPopup({
                       className="flex min-h-[9.5rem] flex-col rounded-xl border border-slate-200 bg-white p-2.5 sm:min-h-[10.5rem] sm:p-3"
                     >
                       <div className="flex items-start gap-2">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-500 sm:h-9 sm:w-9">
+                        <button
+                          type="button"
+                          onClick={() => openPreview(item)}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-500 transition hover:bg-emerald-50 hover:text-[#2e7d6e] sm:h-9 sm:w-9"
+                          title="View document"
+                          aria-label={`View ${item.fileName}`}
+                        >
                           <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openPreview(item)}
+                          className="min-w-0 flex-1 text-left"
+                          title="Click to view document"
+                        >
                           <p
                             className="truncate text-[12px] font-semibold leading-snug text-slate-900 sm:text-sm"
                             title={item.fileName}
@@ -488,8 +548,12 @@ export function AiUploadHistoryPopup({
                                 {progress}%
                               </span>
                             ) : null}
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-[#2e7d6e] sm:text-[10px]">
+                              <Eye className="h-3 w-3" />
+                              View
+                            </span>
                           </div>
-                        </div>
+                        </button>
                         <button
                           type="button"
                           disabled={deletingId === item.id}
@@ -526,6 +590,9 @@ export function AiUploadHistoryPopup({
                       ) : null}
 
                       <div className="mt-auto space-y-0.5 pt-2 text-[9px] leading-snug text-slate-500 sm:text-[11px]">
+                        <p className="font-semibold text-[#2e7d6e]">
+                          {formatUploadRelativeDays(item.updatedAt)}
+                        </p>
                         <p>
                           Uploaded{' '}
                           <span className="font-medium text-slate-700">
@@ -553,6 +620,7 @@ export function AiUploadHistoryPopup({
           </div>
         </DialogContent>
       </Dialog>
+      {previewDialog}
     </>
   );
 }

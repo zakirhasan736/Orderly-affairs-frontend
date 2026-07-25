@@ -573,9 +573,12 @@ export default function Section15HealthInformation({
 
       setUploadingScope(scope as UploadScope);
 
-      const uploaded = await uploadAIDocument(file);
+      const uploaded = await uploadAIDocument(file, { section: '15' });
 
-      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file, {
+        sectionId: '15',
+        source: 'section',
+      });
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -589,6 +592,8 @@ export default function Section15HealthInformation({
       if (runAutofill) {
         await runAutofill();
       }
+    
+      return uploadedRecord;
     } catch (err: any) {
       setAiError(err?.message || 'Document upload failed');
     } finally {

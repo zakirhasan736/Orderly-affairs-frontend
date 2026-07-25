@@ -577,9 +577,12 @@ export default function Section16CreditCardsDebt({
 
       setUploadingScope(scope as UploadScope);
 
-      const uploaded = await uploadAIDocument(file);
+      const uploaded = await uploadAIDocument(file, { section: '16' });
 
-      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file, {
+        sectionId: '16',
+        source: 'section',
+      });
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -593,6 +596,8 @@ export default function Section16CreditCardsDebt({
       if (runAutofill) {
         await runAutofill();
       }
+    
+      return uploadedRecord;
     } catch (err: any) {
       setAiError(err?.message || 'Document upload failed');
     } finally {

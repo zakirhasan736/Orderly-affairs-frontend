@@ -14,6 +14,7 @@ const connectSrc = [
   'https://challenges.cloudflare.com',
   'https://api.stripe.com',
   'https://res.cloudinary.com',
+  'https://api.cloudinary.com',
 ]
   .filter(Boolean)
   .join(' ');

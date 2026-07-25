@@ -28,8 +28,14 @@ export async function secureFetch(
 ): Promise<Response> {
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
   const headers = new Headers(options.headers || undefined);
+  const method = (options.method || 'GET').toUpperCase();
 
-  if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
+  if (
+    method !== 'GET' &&
+    method !== 'HEAD' &&
+    !(options.body instanceof FormData) &&
+    !headers.has('Content-Type')
+  ) {
     headers.set('Content-Type', 'application/json');
   }
 

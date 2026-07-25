@@ -1974,9 +1974,14 @@ html {
   transform: none;
 }
 
+.auth-portal .auth-stripe-field--muted {
+  background: #f7f6f2;
+}
+
 .auth-portal .auth-stripe-field--focused {
   border-color: #2e7d6e;
   box-shadow: 0 0 0 3px #e8f1ee;
+  background: #ffffff;
 }
 
 .auth-portal .auth-stripe-field iframe {
@@ -2187,4 +2192,14 @@ html {
     margin-top: 18px;
     border-radius: 25px;
   }
+}
+
+/*
+ * Ghost / white surface buttons — Owner Portal + Next of Kin Portal
+ * Design: white bg + border + font without color inherited UA black (#000).
+ * Force palette ink for contrast / readability (class-level, not per-sample).
+ */
+[data-slot='button'][data-variant='ghost'],
+[data-slot='button'][data-variant='outline'] {
+  color: #132b26;
 }

@@ -1,3 +1,5 @@
+import { bindAiUploadHistoryFileId } from '@/utils/aiUploadHistory';
+
 export type UploadedAIFile = {
   file_id: string;
   mime_type: string;
@@ -58,19 +60,39 @@ export function buildUploadedAiFile(
     file_id: string;
     mime_type: string;
     expires_at?: string;
+    name?: string;
+    original_filename?: string;
+    updated_at?: string;
   },
   file?: File | null,
-  extras?: AiUploadMeta,
+  extras?: AiUploadMeta & {
+    sectionId?: string | null;
+    source?: 'overview' | 'section';
+  },
 ): UploadedAIFile {
   const record: UploadedAIFile = {
     file_id: uploaded.file_id,
     mime_type: uploaded.mime_type,
     expires_at: uploaded.expires_at,
-    file_name: extras?.file_name ?? file?.name,
+    file_name:
+      extras?.file_name ??
+      uploaded.original_filename ??
+      uploaded.name ??
+      file?.name,
     uploaded_at: extras?.uploaded_at ?? Date.now(),
   };
 
   rememberAiUploadMeta(record);
+
+  if (record.file_name && record.file_id) {
+    bindAiUploadHistoryFileId({
+      fileName: record.file_name,
+      fileId: record.file_id,
+      sectionId: extras?.sectionId,
+      source: extras?.source,
+    });
+  }
+
   return record;
 }
 

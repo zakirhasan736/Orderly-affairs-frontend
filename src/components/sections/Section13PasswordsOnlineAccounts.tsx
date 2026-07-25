@@ -539,9 +539,12 @@ export default function Section13PasswordsOnlineAccounts({
 
       setUploadingScope(scope);
 
-      const uploaded = await uploadAIDocument(file);
+      const uploaded = await uploadAIDocument(file, { section: '13' });
 
-      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file, {
+        sectionId: '13',
+        source: 'section',
+      });
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -555,6 +558,8 @@ export default function Section13PasswordsOnlineAccounts({
       if (runAutofill) {
         await runAutofill();
       }
+    
+      return uploadedRecord;
     } catch (err: any) {
       setAiError(err?.message || 'Document upload failed');
     } finally {

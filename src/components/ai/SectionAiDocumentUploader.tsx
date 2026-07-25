@@ -55,7 +55,9 @@ type SectionAiDocumentUploaderProps = {
   sectionId?: string;
   /** Force "Auto fill done" (overview already filled this section). */
   autofillDone?: boolean;
-  onUpload: (file: File) => void | Promise<void>;
+  onUpload: (
+    file: File,
+  ) => void | Promise<void | UploadedAIFile | { file_id?: string }>;
   onAutofill: () => void | Promise<void>;
 };
 
@@ -128,7 +130,15 @@ export function SectionAiDocumentUploader({
       });
 
       try {
-        await onUpload(file);
+        const result = await onUpload(file);
+        const fileId =
+          result && typeof result === 'object'
+            ? String(
+                ('file_id' in result && result.file_id) ||
+                  ('fileId' in result && (result as { fileId?: string }).fileId) ||
+                  '',
+              ) || undefined
+            : undefined;
         upsertAiUploadHistory({
           id: historyId,
           fileName: file.name,
@@ -136,6 +146,7 @@ export function SectionAiDocumentUploader({
           progress: 100,
           createdAt: now,
           updatedAt: new Date().toISOString(),
+          fileId,
           sectionId: resolvedSectionId,
           sectionIds: resolvedSectionId ? [String(resolvedSectionId)] : undefined,
           source: 'section',

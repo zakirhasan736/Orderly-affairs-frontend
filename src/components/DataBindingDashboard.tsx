@@ -920,7 +920,7 @@ function QuickAction({
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-1 py-3 shadow-sm active:scale-[0.98]"
+      className="flex flex-col items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-1 py-3 text-[#132b26] shadow-sm active:scale-[0.98]"
     >
       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-sky-600">
         {icon}

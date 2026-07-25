@@ -10,6 +10,15 @@ type SignupStepMeta = {
   description: string;
 };
 
+export type CheckoutOrderSummary = {
+  planLabel: string;
+  planPrice: string;
+  planNote: string;
+  dueToday: string;
+  dueNote: string;
+  footerNote: string;
+};
+
 const DEFAULT_SIGNUP_STEPS: SignupStepMeta[] = [
   {
     title: 'Create your account',
@@ -30,12 +39,14 @@ type AuthPortalShellProps = {
   signupStep?: 1 | 2 | 3;
   /** Override sidebar step descriptions (e.g. email + MFA method on step 3). */
   signupSteps?: SignupStepMeta[];
+  /** When set, left panel shows checkout order summary instead of signup steps. */
+  checkoutSummary?: CheckoutOrderSummary | null;
   mobileTitle: string;
   mobileStepLabel?: string;
   mobileSubtitle?: string;
   mobileShowTagline?: boolean;
-  /** Mobile top chrome: brand ink banner vs reset white bar */
-  mobileChrome?: 'brand' | 'reset';
+  /** Mobile top chrome: brand ink banner vs reset white bar vs checkout */
+  mobileChrome?: 'brand' | 'reset' | 'checkout';
   onMobileBack?: () => void;
   children: React.ReactNode;
   className?: string;
@@ -208,10 +219,54 @@ function SignupBrandPanel({
   );
 }
 
+function CheckoutBrandPanel({ summary }: { summary: CheckoutOrderSummary }) {
+  return (
+    <BrandAside contentMaxWidth="520px">
+      <BrandMark />
+
+      <div className="mt-auto max-w-[26rem]">
+        <p className="m-0 text-[11px] font-medium tracking-[0.14em] text-white/50">
+          YOUR ORDER
+        </p>
+        <div className="mt-3 rounded-[14px] border border-white/15 bg-white/[0.06] p-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="m-0 font-[family-name:var(--font-family-serif)] text-[22px] text-white">
+              {summary.planLabel}
+            </p>
+            <p className="m-0 font-[family-name:var(--font-family-serif)] text-[22px] text-white">
+              {summary.planPrice}
+            </p>
+          </div>
+          <p className="mt-1.5 mb-0 text-[12.5px] text-white/55">
+            {summary.planNote}
+          </p>
+
+          <div className="my-4 h-px bg-white/12" />
+
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="m-0 text-[14px] font-semibold text-white">Due today</p>
+            <p className="m-0 text-[14px] font-semibold text-white">
+              {summary.dueToday}
+            </p>
+          </div>
+          <p className="mt-1.5 mb-0 text-[12.5px] leading-snug text-white/55">
+            {summary.dueNote}
+          </p>
+        </div>
+
+        <p className="mt-8 mb-0 text-[12px] leading-[1.65] text-white/45">
+          {summary.footerNote}
+        </p>
+      </div>
+    </BrandAside>
+  );
+}
+
 export function AuthPortalShell({
   mode,
   signupStep = 1,
   signupSteps = DEFAULT_SIGNUP_STEPS,
+  checkoutSummary = null,
   mobileTitle,
   mobileStepLabel,
   mobileSubtitle,
@@ -222,6 +277,16 @@ export function AuthPortalShell({
   className,
 }: AuthPortalShellProps) {
   const isResetChrome = mobileChrome === 'reset';
+  const isCheckoutChrome = mobileChrome === 'checkout';
+
+  const aside =
+    checkoutSummary ? (
+      <CheckoutBrandPanel summary={checkoutSummary} />
+    ) : mode === 'signup' && !isResetChrome ? (
+      <SignupBrandPanel activeStep={signupStep} steps={signupSteps} />
+    ) : (
+      <LoginBrandPanel />
+    );
 
   return (
     <div
@@ -230,11 +295,7 @@ export function AuthPortalShell({
         className,
       )}
     >
-      {mode === 'signup' && !isResetChrome ? (
-        <SignupBrandPanel activeStep={signupStep} steps={signupSteps} />
-      ) : (
-        <LoginBrandPanel />
-      )}
+      {aside}
 
       <div className="flex min-h-[100dvh] flex-1 flex-col">
         {isResetChrome ? (
@@ -242,7 +303,7 @@ export function AuthPortalShell({
             <button
               type="button"
               onClick={onMobileBack}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[#e4e6e1]"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[#e4e6e1] bg-white text-[#132b26]"
               aria-label="Back"
             >
               <svg
@@ -250,7 +311,7 @@ export function AuthPortalShell({
                 height="15"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#3c4a46"
+                stroke="#132b26"
                 strokeWidth="2"
                 aria-hidden
               >
@@ -260,6 +321,45 @@ export function AuthPortalShell({
             <span className="text-[15px] font-semibold text-[#132b26]">
               Reset password
             </span>
+          </header>
+        ) : isCheckoutChrome ? (
+          <header className="h-auto bg-[#132b26] px-5 pb-7 pt-[max(0.875rem,env(safe-area-inset-top))] text-white lg:hidden">
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={onMobileBack}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-white/20 bg-white/5"
+                aria-label="Back"
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2"
+                  aria-hidden
+                >
+                  <path d="m14 6-6 6 6 6" strokeLinecap="round" />
+                </svg>
+              </button>
+              <span className="text-[15px] font-medium text-white">
+                Secure checkout
+              </span>
+            </div>
+            {mobileStepLabel ? (
+              <p className="mb-0 mt-[18px] text-[11px] font-medium tracking-[0.14em] text-white/55">
+                {mobileStepLabel}
+              </p>
+            ) : null}
+            <h1 className="mt-1.5 mb-0 font-[family-name:var(--font-family-serif)] text-[28px] font-normal leading-[1.15] text-white">
+              {mobileTitle}
+            </h1>
+            {mobileSubtitle ? (
+              <p className="mb-0 mt-2 max-w-[34ch] text-[13.5px] leading-snug text-white/65">
+                {mobileSubtitle}
+              </p>
+            ) : null}
           </header>
         ) : (
           <header
@@ -303,7 +403,9 @@ export function AuthPortalShell({
             'flex flex-1 flex-col items-center px-5 sm:px-8 lg:justify-center lg:gap-6 lg:p-14',
             isResetChrome
               ? 'justify-start gap-3.5 py-5'
-              : 'justify-start gap-3 py-[18px]',
+              : isCheckoutChrome
+                ? 'justify-start gap-3 py-4'
+                : 'justify-start gap-3 py-[18px]',
           )}
         >
           <div className="flex w-full max-w-[520px] flex-1 flex-col gap-3.5 lg:flex-none lg:gap-6">
@@ -319,18 +421,23 @@ export function AuthCard({
   children,
   className,
   flushOnMobile = false,
+  flush = false,
 }: {
   children: React.ReactNode;
   className?: string;
   flushOnMobile?: boolean;
+  /** No card chrome on any breakpoint (paper background, nested cards only). */
+  flush?: boolean;
 }) {
   return (
     <div
       className={cn(
         'w-full max-w-[520px]',
-        flushOnMobile
-          ? 'rounded-none border-0 bg-transparent p-0 lg:rounded-[18px] lg:border lg:border-[#e4e6e1] lg:bg-white lg:p-[34px]'
-          : 'rounded-[18px] border border-[#e4e6e1] bg-white p-[18px] sm:p-[26px] lg:p-[34px]',
+        flush
+          ? 'rounded-none border-0 bg-transparent p-0'
+          : flushOnMobile
+            ? 'rounded-none border-0 bg-transparent p-0 lg:rounded-[18px] lg:border lg:border-[#e4e6e1] lg:bg-white lg:p-[34px]'
+            : 'rounded-[18px] border border-[#e4e6e1] bg-white p-[18px] sm:p-[26px] lg:p-[34px]',
         className,
       )}
     >

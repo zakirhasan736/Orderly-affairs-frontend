@@ -321,9 +321,12 @@ const createEmptyCharity = () => createEmptyItemFromFields(SECTION_9A.fields);
 
       setUploadingScope(scope);
 
-      const uploaded = await uploadAIDocument(file);
+      const uploaded = await uploadAIDocument(file, { section: '9' });
 
-      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file);
+      const uploadedRecord: UploadedAIFile = buildUploadedAiFile(uploaded, file, {
+        sectionId: '9',
+        source: 'section',
+      });
 
       latestUploadRef.current[String(scope)] = uploadedRecord;
       setUploadedFiles(prev => ({
@@ -337,6 +340,8 @@ const createEmptyCharity = () => createEmptyItemFromFields(SECTION_9A.fields);
       if (runAutofill) {
         await runAutofill();
       }
+    
+      return uploadedRecord;
     } catch (err: any) {
       setAiError(err?.message || 'Document upload failed');
     } finally {
