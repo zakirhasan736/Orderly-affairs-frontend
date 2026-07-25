@@ -35,20 +35,23 @@ export const GuidedTour = ({
   useEffect(() => {
     if (!step) return;
 
-    const ensure =
-      'ensureSection' in step && step.ensureSection
+    const ensureSection: string | undefined =
+      'ensureSection' in step && typeof step.ensureSection === 'string'
         ? step.ensureSection
-        : null;
+        : undefined;
 
-    if (ensure && activeSection !== ensure) {
+    if (ensureSection && activeSection !== ensureSection) {
       setReady(false);
-      setActiveSection(ensure);
+      setActiveSection(ensureSection);
       return;
     }
 
     // Allow layout to paint after section switch before spotlight measures.
     setReady(false);
-    const timer = window.setTimeout(() => setReady(true), ensure ? 180 : 40);
+    const timer = window.setTimeout(
+      () => setReady(true),
+      ensureSection ? 180 : 40,
+    );
     return () => window.clearTimeout(timer);
   }, [activeSection, setActiveSection, step]);
 
