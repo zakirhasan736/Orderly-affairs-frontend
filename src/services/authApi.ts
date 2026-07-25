@@ -115,12 +115,17 @@ export interface SmsOtpResponse {
 export interface OtpSecurityPayload {
   captcha_token?: string;
   otp_session_id?: string;
+  /** Signup OTP — backend skips Cloudflare Turnstile */
+  flow?: 'signup' | 'login';
 }
 
 export interface SendEmailOtpRequest {
   email: string;
   captcha_token?: string;
   otp_session_id?: string;
+  mfa_challenge_token?: string;
+  /** Signup OTP — backend skips Cloudflare Turnstile */
+  flow?: 'signup' | 'login';
 }
 
 export interface EmailOtpResponse {

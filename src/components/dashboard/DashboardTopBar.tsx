@@ -8,6 +8,7 @@ import type { VaultExportPayload } from '@/utils/vaultExport';
 import { cn } from '@common/ui/utils';
 import { NotificationBell } from '@/components/dashboard/NotificationBell';
 import type { DashboardNotice } from '@/utils/dashboardNotifications';
+import { BRAND_LOGO } from '@/constants/brand';
 
 function HeaderProgressRing({
   completed,
@@ -30,7 +31,7 @@ function HeaderProgressRing({
             cy="22"
             r={radius}
             fill="none"
-            stroke="#e2e8f0"
+            stroke="#e8e6e0"
             strokeWidth="3.5"
           />
           <circle
@@ -38,22 +39,22 @@ function HeaderProgressRing({
             cy="22"
             r={radius}
             fill="none"
-            stroke="#3b82f6"
+            stroke="#2e7d6e"
             strokeWidth="3.5"
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
           />
         </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-[#10213f]">
+        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-[#132b26]">
           {pct}%
         </span>
       </div>
       <div className="pr-1.5 leading-tight">
-        <p className="text-[11px] font-semibold text-[#10213f]">
+        <p className="text-[11px] font-semibold text-[#132b26]">
           {completed} of {total}
         </p>
-        <p className="text-[10px] font-medium text-slate-400">completed</p>
+        <p className="text-[10px] font-medium text-[rgba(19,43,38,0.55)]">completed</p>
       </div>
     </div>
   );
@@ -89,16 +90,16 @@ export function DashboardTopBar({
   return (
     <header
       className={cn(
-        'sticky top-0 z-30 hidden border-b border-slate-200/80 bg-white/95 backdrop-blur-xl md:block',
+        'sticky top-0 z-30 hidden border-b border-[rgba(19,43,38,0.1)] bg-[var(--paper)] md:block',
         className,
       )}
     >
       <div className="flex h-[72px] items-center justify-between gap-4 px-5 xl:px-8">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[rgba(19,43,38,0.45)]">
             Current Area
           </p>
-          <h1 className="mt-0.5 truncate text-[18px] font-semibold tracking-tight text-[#0f172a]">
+          <h1 className="mt-0.5 truncate text-[18px] font-semibold tracking-tight text-[#132b26]">
             {currentSectionLabel}
           </h1>
         </div>
@@ -112,7 +113,7 @@ export function DashboardTopBar({
           <button
             type="button"
             onClick={onRunTour}
-            className="inline-flex h-10 items-center gap-2 rounded-full bg-[#10213f] px-4 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#0c1a33] active:scale-[0.98]"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#132b26] px-4 text-[12px] font-semibold text-white transition hover:bg-[#2e7d6e] active:scale-[0.98]"
           >
             <Play className="h-3.5 w-3.5 fill-current" />
             Run Tour
@@ -123,7 +124,7 @@ export function DashboardTopBar({
             trigger={
               <button
                 type="button"
-                className="owners-states-export inline-flex h-10 items-center gap-2 rounded-full border border-slate-300 bg-white px-4 text-[12px] font-semibold text-[#10213f] shadow-sm transition hover:bg-slate-50 active:scale-[0.98]"
+                className="owners-states-export inline-flex h-10 items-center gap-2 rounded-full border border-slate-300 bg-white px-4 text-[12px] font-semibold text-[#132b26] shadow-sm transition hover:bg-slate-50 active:scale-[0.98]"
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -155,7 +156,7 @@ export function DashboardTopBar({
           <div className="owner-state-information group relative">
             <button
               type="button"
-              className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-[#10213f] shadow-sm transition hover:ring-4 hover:ring-slate-100"
+              className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-[#132b26] shadow-sm transition hover:ring-4 hover:ring-slate-100"
               aria-label="Account menu"
             >
               <User className="h-5 w-5" />
@@ -165,7 +166,7 @@ export function DashboardTopBar({
               <div className="min-w-[230px] rounded-3xl border border-slate-100 bg-white p-2 shadow-2xl">
                 <div className="mb-1 border-b border-slate-100 px-4 py-3">
                   {currentUserEmail ? (
-                    <p className="truncate text-[12px] font-semibold text-[#10213f]">
+                    <p className="truncate text-[12px] font-semibold text-[#132b26]">
                       {currentUserEmail}
                     </p>
                   ) : null}
@@ -177,7 +178,7 @@ export function DashboardTopBar({
                 <button
                   type="button"
                   onClick={onAccountInfo}
-                  className="w-full rounded-2xl px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#10213f]"
+                  className="w-full rounded-2xl px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#132b26]"
                 >
                   Account Info
                 </button>
@@ -185,7 +186,7 @@ export function DashboardTopBar({
                 <button
                   type="button"
                   onClick={onAccountInfo}
-                  className="w-full rounded-2xl px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#10213f]"
+                  className="w-full rounded-2xl px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#132b26]"
                 >
                   Security Keys
                 </button>
@@ -237,12 +238,12 @@ export function MobileTopBar({
       : 0;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white md:hidden">
+    <header className="sticky top-0 z-40 border-b border-[rgba(19,43,38,0.1)] bg-[var(--paper)] md:hidden">
       <div className="flex h-14 items-center gap-1 px-2.5">
         <button
           type="button"
           onClick={onMenuClick}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#10213f] active:bg-slate-100 active:scale-95"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#132b26] active:bg-slate-100 active:scale-95"
           aria-label="Open sections menu"
         >
           <Menu className="h-5 w-5" />
@@ -254,9 +255,9 @@ export function MobileTopBar({
           className="flex min-w-0 flex-1 items-center justify-start gap-2 px-1"
           aria-label="Orderly Affairs home"
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#10213f]/5 ring-1 ring-[#10213f]/10">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white ring-1 ring-[#132b26]/10">
             <Image
-              src="/images/brand-logo.png"
+              src={BRAND_LOGO}
               alt=""
               width={28}
               height={28}
@@ -264,7 +265,7 @@ export function MobileTopBar({
               priority
             />
           </span>
-          <span className="truncate text-[15px] font-semibold tracking-tight text-[#10213f]">
+          <span className="truncate text-[15px] font-semibold tracking-tight text-[#132b26]">
             Orderly Affairs
           </span>
         </button>
@@ -277,7 +278,7 @@ export function MobileTopBar({
           <button
             type="button"
             onClick={onAccountClick}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#10213f] text-white shadow-sm active:scale-95"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#132b26] text-white shadow-sm active:scale-95"
             aria-label="Open account menu"
           >
             <User className="h-4 w-4" />
@@ -286,9 +287,9 @@ export function MobileTopBar({
       </div>
 
       {showProgress ? (
-        <div className="flex items-end justify-between gap-3 border-t border-slate-100 bg-[#f8fafc] px-4 py-2.5">
+        <div className="flex items-end justify-between gap-3 border-t border-[rgba(19,43,38,0.08)] bg-[var(--paper)] px-4 py-2.5">
           <div className="min-w-0">
-            <h1 className="text-[18px] font-bold leading-tight text-[#10213f]">
+            <h1 className="text-[18px] font-bold leading-tight text-[#132b26]">
               {title}
             </h1>
             <p className="mt-0.5 text-[11px] font-medium text-slate-500">
@@ -296,7 +297,7 @@ export function MobileTopBar({
               {subtitle ? ` · ${subtitle}` : ''}
             </p>
           </div>
-          <span className="inline-flex shrink-0 items-center rounded-full bg-white px-2.5 py-1 text-[12px] font-bold text-[#10213f] ring-1 ring-slate-200 shadow-sm">
+          <span className="inline-flex shrink-0 items-center rounded-full bg-white px-2.5 py-1 text-[12px] font-bold text-[#132b26] ring-1 ring-slate-200 shadow-sm">
             {pct}%
           </span>
         </div>

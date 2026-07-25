@@ -72,6 +72,9 @@ const SECTION_7A = {
         'Job Loss',
         'Umbrella',
         'Annuity',
+        'Bank/Loan',
+        'Mortgage',
+        'Credit',
         'Other',
       ],
       required: true,
@@ -107,7 +110,7 @@ const SECTION_7A = {
     {
       key: 'policy_expiry',
       label: 'Policy Expiry Date',
-      type: 'TextInput',
+      type: 'DatePicker',
       helperText:
         'Policy end date, valid through, or the last date of the policy period',
     },
@@ -608,7 +611,7 @@ export default function Section7InsurancePolicies({
             scope: 'full',
             title: 'Upload document for one or more policies',
             description:
-              'Use for insurance declarations, cards, or statements that may list multiple policies. AI can create separate policy cards for each.',
+              'New policies are added as separate cards (vehicle, home, bank/loan, etc.). Re-uploading a renewal for the same policy number updates that card’s details and files.',
             buttonLabel: 'Extract Policies',
             onAutofill: () => handleAutofill('full'),
           })}
@@ -668,7 +671,7 @@ export default function Section7InsurancePolicies({
                   <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-[#10213f]">
+                        <p className="text-sm font-semibold text-[#132b26]">
                           Expiry reminder emails
                         </p>
                         <p className="mt-0.5 text-xs text-slate-500">
@@ -694,13 +697,13 @@ export default function Section7InsurancePolicies({
                               key={option.email}
                               className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
                                 selected
-                                  ? 'border-[#10213f]/20 bg-white text-[#10213f]'
+                                  ? 'border-[#132b26]/20 bg-white text-[#132b26]'
                                   : 'border-slate-200 bg-white/60 text-slate-500'
                               }`}
                             >
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 rounded border-slate-300 text-[#10213f] focus:ring-[#10213f]"
+                                className="h-4 w-4 rounded border-slate-300 text-[#132b26] focus:ring-[#132b26]"
                                 checked={selected}
                                 onChange={event =>
                                   toggleReminderRecipient(

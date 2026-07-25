@@ -172,6 +172,7 @@ describe('aiMultiItemAutofill', () => {
         {
           policy_company: 'Acme',
           policy_type: 'Life',
+          policy_number: 'P-99',
           coverage_amount: '100000',
           __rowId: 'a',
         },
@@ -198,6 +199,40 @@ describe('aiMultiItemAutofill', () => {
     expect(items[0].__rowId).toBe('a');
     expect(added).toBe(0);
     expect(updated).toBe(1);
+  });
+
+  it('adds a second insurance policy when policy numbers differ', () => {
+    const { items, added, updated } = applyItemsToIndexedList({
+      currentItems: [
+        {
+          policy_company: 'State Farm',
+          policy_type: 'Vehicle',
+          policy_number: 'AUTO-1',
+        },
+      ],
+      extractedItems: [
+        {
+          policy_company: 'State Farm',
+          policy_type: 'Vehicle',
+          policy_number: 'AUTO-2',
+        },
+        {
+          policy_company: 'Acme',
+          policy_type: 'Bank/Loan',
+          policy_number: 'LOAN-9',
+        },
+      ],
+      createEmpty: () => ({
+        policy_company: '',
+        policy_type: '',
+        policy_number: '',
+      }),
+      isDuplicate: insurancePoliciesAreDuplicates,
+    });
+
+    expect(items).toHaveLength(3);
+    expect(added).toBe(2);
+    expect(updated).toBe(0);
   });
 
   it('builds human notices and labels from objects safely', () => {
@@ -244,18 +279,33 @@ describe('aiItemDedup', () => {
         { policy_number: 'P-2' },
       ),
     ).toBe(false);
+    // Same company+type without numbers can still be a renewal of an incomplete card
     expect(
       insurancePoliciesAreDuplicates(
         { policy_company: 'Acme', policy_type: 'Life' },
         { policy_company: 'Acme', policy_type: { value: 'Life' } },
       ),
     ).toBe(true);
+    // Same insurer + Vehicle but one already has a number → separate policies
+    expect(
+      insurancePoliciesAreDuplicates(
+        {
+          policy_company: 'State Farm',
+          policy_type: 'Vehicle',
+          policy_number: 'V-100',
+        },
+        { insurance_company: 'State Farm Insurance', policy_type: 'Vehicle' },
+      ),
+    ).toBe(false);
     expect(
       insurancePoliciesAreDuplicates(
         { policy_company: 'State Farm', policy_type: 'Vehicle' },
-        { insurance_company: 'State Farm Insurance', policy_type: 'Vehicle' },
+        {
+          insurance_company: 'State Farm',
+          policy_type: 'Bank/Loan',
+        },
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('upserts matching policies and builds upsert notices', () => {
@@ -398,7 +448,7 @@ describe('aiSemanticFieldMatch', () => {
     expect(resolveSemanticConcept('Insurance Number')).toBe('policy_number');
     expect(resolveSemanticConcept('valid_through')).toBe('policy_expiry');
     expect(extractEndDateFromText('Policy period 01/01/2025 to 12/31/2025')).toBe(
-      '12/31/2025',
+      '2025-12-31',
     );
 
     const vehicle = applySemanticConceptsToItem(

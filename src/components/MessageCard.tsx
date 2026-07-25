@@ -127,7 +127,7 @@ export function MessageCard({
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md sm:p-5">
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#10213f] text-white">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#132b26] text-white">
           {typeConfig.icon}
         </div>
 
@@ -174,7 +174,7 @@ export function MessageCard({
                   type="button"
                   size="icon"
                   onClick={onPlay || onView}
-                  className="h-9 w-9 rounded-lg bg-[#10213f] text-white hover:bg-[#0c1a33]"
+                  className="h-9 w-9 rounded-lg bg-[#132b26] text-white hover:bg-[#0e1f1c]"
                   aria-label={`${actionLabel} message`}
                 >
                   {item.messageType === 'letter' ? (

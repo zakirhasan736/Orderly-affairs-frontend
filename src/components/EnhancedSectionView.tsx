@@ -463,7 +463,7 @@ const sectionHasData = useMemo(() => {
     if (value == null || value === '') return null;
     if (typeof value === 'string' || typeof value === 'number') {
       return (
-        <span className="text-[14px] leading-6 text-[#10213f]">
+        <span className="text-[14px] leading-6 text-[#132b26]">
           {String(value)}
         </span>
       );
@@ -484,7 +484,7 @@ const sectionHasData = useMemo(() => {
                           <span className="font-medium text-slate-500">
                             {formatFieldLabel(k)}:{' '}
                           </span>
-                          <span className="text-[#10213f]">{String(v)}</span>
+                          <span className="text-[#132b26]">{String(v)}</span>
                         </div>
                       ) : null,
                   )
@@ -502,7 +502,7 @@ const sectionHasData = useMemo(() => {
       );
     }
     return (
-      <span className="text-[14px] text-[#10213f]">{String(value)}</span>
+      <span className="text-[14px] text-[#132b26]">{String(value)}</span>
     );
   };
 
@@ -513,7 +513,7 @@ const sectionHasData = useMemo(() => {
           <p className="text-sm text-slate-500">Section not found</p>
           <Button
             onClick={onBack}
-            className="mt-4 w-auto rounded-xl bg-[#10213f]"
+            className="mt-4 w-auto rounded-xl bg-[#132b26]"
           >
             <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Button>
@@ -535,14 +535,14 @@ const sectionHasData = useMemo(() => {
           <button
             type="button"
             onClick={onBack}
-            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#10213f] shadow-sm"
+            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#132b26] shadow-sm"
             aria-label="Back"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
 
           <div className="min-w-0 flex-1 pt-0.5">
-            <h1 className="text-[15px] font-bold leading-snug tracking-tight text-[#10213f] sm:text-[17px]">
+            <h1 className="text-[15px] font-bold leading-snug tracking-tight text-[#132b26] sm:text-[17px]">
               {sectionHasDove ? '🕊️ ' : ''}
               {section.id}. {section.title}
             </h1>
@@ -559,14 +559,14 @@ const sectionHasData = useMemo(() => {
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
-            <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-[12px] font-bold tabular-nums text-[#10213f] shadow-sm">
+            <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-[12px] font-bold tabular-nums text-[#132b26] shadow-sm">
               <Clock className="h-3.5 w-3.5" />
               {timerLabel}
             </div>
             <button
               type="button"
               onClick={onLogout}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#10213f] shadow-sm"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#132b26] shadow-sm"
               aria-label="Log out"
             >
               <LogOut className="h-4 w-4" />
@@ -582,7 +582,7 @@ const sectionHasData = useMemo(() => {
               className={cn(
                 'rounded-[10px] px-2 py-2.5 text-center text-[12px] font-semibold transition',
                 activeTab === 'content'
-                  ? 'bg-white text-[#10213f] shadow-sm ring-1 ring-slate-200/80'
+                  ? 'bg-white text-[#132b26] shadow-sm ring-1 ring-slate-200/80'
                   : 'text-slate-500',
               )}
             >
@@ -590,7 +590,7 @@ const sectionHasData = useMemo(() => {
                 className={cn(
                   'inline-block border-b-2 pb-0.5',
                   activeTab === 'content'
-                    ? 'border-[#10213f]'
+                    ? 'border-[#132b26]'
                     : 'border-transparent',
                 )}
               >
@@ -604,7 +604,7 @@ const sectionHasData = useMemo(() => {
                 className={cn(
                   'rounded-[10px] px-2 py-2.5 text-center text-[12px] font-semibold transition',
                   activeTab === 'checklist'
-                    ? 'bg-white text-[#10213f] shadow-sm ring-1 ring-slate-200/80'
+                    ? 'bg-white text-[#132b26] shadow-sm ring-1 ring-slate-200/80'
                     : 'text-slate-500',
                 )}
               >
@@ -612,7 +612,7 @@ const sectionHasData = useMemo(() => {
                   className={cn(
                     'inline-block border-b-2 pb-0.5',
                     activeTab === 'checklist'
-                      ? 'border-[#10213f]'
+                      ? 'border-[#132b26]'
                       : 'border-transparent',
                   )}
                 >
@@ -630,7 +630,7 @@ const sectionHasData = useMemo(() => {
         {activeTab === 'content' && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-[#10213f] px-3 py-1 text-[11px] font-semibold text-white">
+              <span className="rounded-full bg-[#132b26] px-3 py-1 text-[11px] font-semibold text-white">
                 {visibleSubsections.length} subsection
                 {visibleSubsections.length !== 1 ? 's' : ''} with data
               </span>
@@ -698,10 +698,10 @@ const sectionHasData = useMemo(() => {
                     )}
                   >
                     <div className="flex items-center gap-2.5 border-b border-slate-100 px-4 py-3.5">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#10213f] text-[11px] font-bold text-white">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#132b26] text-[11px] font-bold text-white">
                         {subsection.id}
                       </span>
-                      <h2 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[#10213f]">
+                      <h2 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[#132b26]">
                         {hasDoveTag(sectionId, subsection.id) ? '🕊️ ' : ''}
                         {subsection.title}
                       </h2>
@@ -758,7 +758,7 @@ const sectionHasData = useMemo(() => {
                             )}
                           </div>
                         ) : (
-                          <p className="text-sm text-[#10213f]">
+                          <p className="text-sm text-[#132b26]">
                             {String(subsectionData)}
                           </p>
                         )
@@ -786,7 +786,7 @@ const sectionHasData = useMemo(() => {
             <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/80">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-[15px] font-semibold text-[#10213f]">
+                  <h2 className="text-[15px] font-semibold text-[#132b26]">
                     Action checklist
                   </h2>
                   <p className="mt-0.5 text-[12px] text-slate-500">
@@ -794,13 +794,13 @@ const sectionHasData = useMemo(() => {
                       'Recommended tasks for this section'}
                   </p>
                 </div>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-[#10213f]">
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-[#132b26]">
                   {Math.round(checklistProgress)}%
                 </span>
               </div>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
                 <div
-                  className="h-full rounded-full bg-[#10213f] transition-all"
+                  className="h-full rounded-full bg-[#132b26] transition-all"
                   style={{ width: `${checklistProgress}%` }}
                 />
               </div>
@@ -836,7 +836,7 @@ const sectionHasData = useMemo(() => {
                         'flex flex-wrap items-center gap-1.5 text-[13px] font-semibold',
                         checklistState[item.id]
                           ? 'text-slate-400 line-through'
-                          : 'text-[#10213f]',
+                          : 'text-[#132b26]',
                       )}
                     >
                       {item.label}
@@ -905,7 +905,7 @@ const sectionHasData = useMemo(() => {
                   setMoreOpen(false);
                   onOwnerLetterAccess();
                 }}
-                className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3.5 text-left text-[14px] font-medium text-[#10213f]"
+                className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3.5 text-left text-[14px] font-medium text-[#132b26]"
               >
                 <Heart className="h-4 w-4 text-rose-500" /> Personal letter
               </button>

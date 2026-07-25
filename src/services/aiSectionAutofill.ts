@@ -5,6 +5,7 @@ import {
 import type { AiDocumentRoutingContextValue } from '@/contexts/AiDocumentRoutingContext';
 import type { FieldDefinition } from '@/types/formTypes';
 import { buildFieldCatalogForAi } from '@/utils/aiPatchNormalizer';
+import { getSectionFieldCatalog } from '@/utils/aiSectionFieldCatalog';
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import {
   peekDashboardAiPatch,
@@ -152,7 +153,19 @@ export async function runAiSectionAutofill({
         aiRouting,
         useRoutedCache,
       ),
-      field_catalog: fields ? buildFieldCatalogForAi(fields) : undefined,
+      // Merge local section fields with formConfig catalog so no keys are omitted.
+      field_catalog: (() => {
+        const local = fields?.length ? buildFieldCatalogForAi(fields) : [];
+        const fromForm = getSectionFieldCatalog(sectionKey, null).catalog || [];
+        const byKey = new Map<string, (typeof fromForm)[number]>();
+        fromForm.forEach(item => {
+          if (item?.key) byKey.set(item.key, item);
+        });
+        local.forEach(item => {
+          if (item?.key) byKey.set(item.key, item);
+        });
+        return [...byKey.values()];
+      })(),
     });
 
     markAiSectionFilled(sectionId);

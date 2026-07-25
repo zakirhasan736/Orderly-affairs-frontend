@@ -34,7 +34,7 @@ export function isOverviewUrgentAlert(daysUntil: number): boolean {
 }
 
 const EXPIRY_KEY_RE =
-  /(expir|expiration|expiry|renewal_date|policy_expiry|registration_expiry|passport_expiry|license_expiry|drivers_license_expiry|valid_through|valid_until|end_date|lease_end_date|maturity_date|loan_maturity|mortgage_maturity|tax_filing_deadline|property_tax_due|filing_deadline|next_payment_due_date|next_due_date|cd_maturity|warranty_expiry|subscription_renewal)/i;
+  /(expir|expiration|expiry|renewal_date|policy_expiry|registration_expiry|passport_expiry|license_expiry|drivers_license_expiry|valid_through|valid_until|end_date|lease_end_date|maturity_date|loan_maturity|mortgage_maturity|tax_filing_deadline|property_tax_due|filing_deadline|next_payment_due_date|next_due_date|cd_maturity|warranty_expiry|subscription_renewal|account_expiry)/i;
 
 const SKIP_KEY_RE = /(requirement|instruction|header|note|location|document|upload)/i;
 const SKIP_EXACT_KEYS = new Set(['payment_due_date']);
@@ -56,6 +56,9 @@ const FIELD_LABELS: Record<string, string> = {
   next_payment_due_date: 'Next payment due',
   renewal_date: 'Membership renewal',
   cd_maturity_date: 'CD / account maturity',
+  last_statement_date: 'Last bank statement',
+  subscription_renewal_date: 'Subscription renewal',
+  account_expiry_date: 'Account / access expiry',
 };
 
 function asText(value: unknown): string {

@@ -148,6 +148,19 @@ const SECTION_12A = {
       helperText: 'Password for online banking',
     },
     {
+      key: 'cd_maturity_date',
+      label: 'CD / Account Maturity Date',
+      type: 'DatePicker',
+      helperText:
+        'Maturity date for CDs or other term accounts — used for expiry reminders',
+    },
+    {
+      key: 'last_statement_date',
+      label: 'Last Statement Date',
+      type: 'DatePicker',
+      helperText: 'Date of the most recent bank statement, if known',
+    },
+    {
       key: 'automatic_payments',
       label: 'Automatic Payments',
       type: 'TextArea',
@@ -259,6 +272,13 @@ const SECTION_12B = {
         'Two-factor authentication setup, security questions, or backup codes',
     },
     {
+      key: 'subscription_renewal_date',
+      label: 'Subscription / Plan Renewal Date',
+      type: 'DatePicker',
+      helperText:
+        'Next billing or plan renewal date for this payment service, if any',
+    },
+    {
       key: 'service_documents',
       label: 'Service Documents',
       type: 'TextInputWithUpload',
@@ -286,6 +306,8 @@ const SECTION_12A_GROUPS: FieldGroup[] = [
       'account_type_other',
       'account_number',
       'routing_number',
+      'cd_maturity_date',
+      'last_statement_date',
     ],
   },
   {
@@ -374,7 +396,7 @@ const SECTION_12B_GROUPS: FieldGroup[] = [
     accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
     iconWrap: 'bg-violet-500/10 text-violet-600',
     layout: 'grid',
-    fieldKeys: ['regular_transactions', 'security_info'],
+    fieldKeys: ['regular_transactions', 'security_info', 'subscription_renewal_date'],
   },
   {
     key: 'documents',

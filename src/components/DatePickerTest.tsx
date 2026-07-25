@@ -124,13 +124,13 @@ export function DatePickerTest() {
               <p>• <strong>Corner radius:</strong> 10px (same as DOB field)</p>
               <p>• <strong>Field height:</strong> 40px (same as DOB field)</p>
               <p>• <strong>Border color (default):</strong> #E0E0E0</p>
-              <p>• <strong>Border color (focus):</strong> #213D59 (Orderly Affairs brand color)</p>
+              <p>• <strong>Border color (focus):</strong> #132b26 (Orderly Affairs brand color)</p>
               <p>• <strong>Background:</strong> White</p>
               <p>• <strong>Placeholder color:</strong> #A6A6A6</p>
               <p>• <strong>Text color:</strong> #000000</p>
-              <p>• <strong>Selected date color:</strong> #213D59</p>
+              <p>• <strong>Selected date color:</strong> #132b26</p>
               <p>• <strong>Hover effect:</strong> Light gray background (#F7F7F7)</p>
-              <p>• <strong>Calendar icon:</strong> Same as DOB field (#213D59)</p>
+              <p>• <strong>Calendar icon:</strong> Same as DOB field (#132b26)</p>
             </div>
           </div>
         </CardContent>

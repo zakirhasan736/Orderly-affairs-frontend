@@ -122,7 +122,7 @@ export default function AdminSupportInboxPage() {
 
   return (
     <div className="min-h-screen bg-[#f4f6f9] text-slate-900">
-      <header className="border-b border-slate-200 bg-[#10213f] text-white">
+      <header className="border-b border-slate-200 bg-[#132b26] text-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10">
@@ -181,7 +181,7 @@ export default function AdminSupportInboxPage() {
                     onClick={() => setSelectedId(thread.id)}
                     className={cn(
                       'flex w-full flex-col gap-1 px-4 py-3 text-left transition hover:bg-slate-50',
-                      selectedId === thread.id && 'bg-[#10213f]/5',
+                      selectedId === thread.id && 'bg-[#132b26]/5',
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -189,7 +189,7 @@ export default function AdminSupportInboxPage() {
                         {thread.owner_email || 'Owner'}
                       </span>
                       {thread.unread > 0 ? (
-                        <span className="rounded-full bg-[#10213f] px-2 py-0.5 text-[10px] font-bold text-white">
+                        <span className="rounded-full bg-[#132b26] px-2 py-0.5 text-[10px] font-bold text-white">
                           {thread.unread}
                         </span>
                       ) : null}
@@ -227,7 +227,7 @@ export default function AdminSupportInboxPage() {
 
               <div
                 ref={scrollerRef}
-                className="flex-1 space-y-3 overflow-y-auto bg-[#f8fafc] px-4 py-4"
+                className="flex-1 space-y-3 overflow-y-auto bg-[#f7f6f2] px-4 py-4"
               >
                 {loadingThread && messages.length === 0 ? (
                   <p className="text-center text-sm text-slate-500">Loading…</p>
@@ -247,7 +247,7 @@ export default function AdminSupportInboxPage() {
                           className={cn(
                             'max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm',
                             isAdmin
-                              ? 'rounded-br-md bg-[#10213f] text-white'
+                              ? 'rounded-br-md bg-[#132b26] text-white'
                               : isOwner
                                 ? 'rounded-bl-md border border-slate-200 bg-white text-slate-800'
                                 : 'rounded-bl-md bg-slate-200 text-slate-600',
@@ -286,7 +286,7 @@ export default function AdminSupportInboxPage() {
                   <button
                     type="submit"
                     disabled={sending || !draft.trim()}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#10213f] text-white disabled:opacity-50"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#132b26] text-white disabled:opacity-50"
                     aria-label="Send reply"
                   >
                     <SendHorizontal className="h-4 w-4" />

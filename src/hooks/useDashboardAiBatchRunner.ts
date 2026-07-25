@@ -190,10 +190,7 @@ async function fillPartnerSectionsFast(args: {
               file_id,
               subsection: partnerMeta.defaultSubsection || null,
               use_routed_cache: true,
-              field_catalog: catalogForSection(
-                partnerKey,
-                partnerMeta.defaultSubsection || null,
-              ),
+              field_catalog: catalogForSection(partnerKey, null),
             }),
             45000,
             `Partner fill ${partnerKey}`,
@@ -290,7 +287,9 @@ const PROBE_SECTION_KEY = 'vital_information';
 const PROBE_SECTION_ID = '1';
 
 function catalogForSection(sectionKey: string, subsection?: string | null) {
-  return getSectionFieldCatalog(sectionKey, subsection).catalog;
+  // Prefer full-section catalogs so multi-subsection sections (12A/12B, etc.)
+  // get every field key/label/option — not only the default subsection.
+  return getSectionFieldCatalog(sectionKey, subsection ?? null).catalog;
 }
 
 const ACTIVE_STATUSES: DashboardAiJobStatus[] = [
@@ -524,7 +523,7 @@ export function useDashboardAiBatchRunner() {
             file_id,
             subsection: subsection || null,
             use_routed_cache: true,
-            field_catalog: catalogForSection(sectionKey, subsection || null),
+            field_catalog: catalogForSection(sectionKey, null),
           }),
           90000,
           'Primary autofill',

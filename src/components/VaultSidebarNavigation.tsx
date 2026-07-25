@@ -18,6 +18,7 @@ import {
   subsectionHasDynamicTopics,
 } from '@/utils/dynamicVaultTopics';
 import type { VaultSection } from '@/utils/vaultNavigation';
+import { BRAND_LOGO } from '@/constants/brand';
 
 type DragPayload =
   | { type: 'subsection'; sectionId: string; id: string }
@@ -138,7 +139,7 @@ function ReorderableNavItem({
         'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-45',
         isDropOver &&
-          'bg-blue-50/90 ring-2 ring-blue-300 ring-offset-1 ring-offset-white',
+          'bg-[#2e7d6e]/25 ring-2 ring-[#2e7d6e] ring-offset-1 ring-offset-[#132b26]',
         className,
       )}
     >
@@ -278,7 +279,7 @@ export function VaultSidebarNavigation({
   return (
     <aside
       className={cn(
-        'sidebar-navigation fixed inset-y-0 left-0 z-[70] w-[88vw] max-w-[330px] transform border-r border-black/20 bg-[#0b1222] text-white shadow-2xl transition-transform duration-300 ease-out md:sticky md:top-0 md:z-20 md:h-screen md:w-[272px] md:max-w-none md:translate-x-0 md:shadow-none',
+        'sidebar-navigation fixed inset-y-0 left-0 z-[70] w-[88vw] max-w-[330px] transform border-r border-black/20 bg-[#132b26] text-white shadow-2xl transition-transform duration-300 ease-out md:sticky md:top-0 md:z-20 md:h-screen md:w-[272px] md:max-w-none md:translate-x-0 md:shadow-none',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full',
       )}
     >
@@ -292,7 +293,7 @@ export function VaultSidebarNavigation({
               aria-label="Orderly Affairs home"
             >
               <Image
-                src="/images/brand-logo.png"
+                src={BRAND_LOGO}
                 alt="Orderly Affairs"
                 width={40}
                 height={40}
@@ -324,7 +325,7 @@ export function VaultSidebarNavigation({
             </div>
             <div className="h-1 overflow-hidden rounded-full bg-white/15">
               <div
-                className="h-full rounded-full bg-[#3b82f6] transition-all"
+                className="h-full rounded-full bg-[#2e7d6e] transition-all"
                 style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
               />
             </div>
@@ -338,7 +339,7 @@ export function VaultSidebarNavigation({
             className={cn(
               'owner-dashboard-item mb-2 flex w-full items-center gap-3 rounded-full px-3.5 py-2.5 text-left transition',
               activeSection === 'dashboard'
-                ? 'bg-[#3b82f6] text-white shadow-lg shadow-blue-950/40'
+                ? 'bg-[#2e7d6e] text-white shadow-lg shadow-black/25'
                 : 'text-white/85 hover:bg-white/10 hover:text-white',
             )}
           >
@@ -375,7 +376,7 @@ export function VaultSidebarNavigation({
                     className={cn(
                       `section-${section.id}-nav flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-left transition`,
                       isSelected
-                        ? 'bg-[#3b82f6] text-white shadow-lg shadow-blue-950/30'
+                        ? 'bg-[#2e7d6e] text-white shadow-lg shadow-black/25'
                         : 'text-white/80 hover:bg-white/10 hover:text-white',
                       disabledSections[section.id] && 'opacity-55',
                     )}
@@ -387,7 +388,7 @@ export function VaultSidebarNavigation({
                       )}
                     >
                       {isComplete ? (
-                        <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
+                        <CheckCircle className="h-3.5 w-3.5 text-emerald-300" />
                       ) : (
                         <Circle className="h-3.5 w-3.5 opacity-70" />
                       )}
@@ -409,10 +410,10 @@ export function VaultSidebarNavigation({
                       {hasAiReady && (
                         <span className="mt-1 inline-flex items-center gap-1.5">
                           <span className="relative flex h-2 w-2 shrink-0">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-300 opacity-75" />
-                            <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-300" />
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-300" />
                           </span>
-                          <span className="text-[10px] font-semibold text-sky-200">
+                          <span className="text-[10px] font-semibold text-emerald-200">
                             New data
                           </span>
                         </span>
@@ -518,7 +519,7 @@ export function VaultSidebarNavigation({
                                       className={cn(
                                         'px-1 py-0.5 text-xs',
                                         activeTopicId === topic.id
-                                          ? 'bg-sky-500/30 font-semibold text-white'
+                                          ? 'bg-[#2e7d6e]/40 font-semibold text-white'
                                           : 'text-white/50 hover:bg-white/10 hover:text-white/85',
                                       )}
                                     >
@@ -559,7 +560,7 @@ export function VaultSidebarNavigation({
                 );
                 onCloseSidebar();
               }}
-              className="inline-flex h-10 w-auto items-center justify-center gap-2 rounded-xl border border-white/25 bg-[#10213f] px-4 text-[12px] font-semibold text-white transition hover:bg-[#152a4d]"
+              className="inline-flex h-10 w-auto items-center justify-center gap-2 rounded-xl border border-white/20 bg-[#2e7d6e] px-4 text-[12px] font-semibold text-white transition hover:bg-[#26685c]"
             >
               <Headphones className="h-3.5 w-3.5" />
               Contact Support

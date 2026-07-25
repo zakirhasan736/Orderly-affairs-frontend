@@ -234,7 +234,7 @@ export function NotificationBell({
   const header = (
     <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 px-4 py-3.5">
       <div className="min-w-0">
-        <p className="text-[15px] font-semibold text-[#10213f] sm:text-sm">
+        <p className="text-[15px] font-semibold text-[#132b26] sm:text-sm">
           Alerts
         </p>
         <p className="mt-0.5 text-[11px] font-medium text-slate-500">
@@ -338,7 +338,7 @@ export function NotificationBell({
                         className={cn(
                           'text-[13px]',
                           unread
-                            ? 'font-bold text-[#10213f]'
+                            ? 'font-bold text-[#132b26]'
                             : 'font-semibold text-slate-700',
                         )}
                       >
@@ -361,7 +361,7 @@ export function NotificationBell({
                       onClick={event => {
                         runNoticeAction(event, () => markNoticeRead(notice.id));
                       }}
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-[#10213f]"
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-[#132b26]"
                     >
                       <MailOpen className="h-3 w-3" />
                       Mark as read
@@ -375,7 +375,7 @@ export function NotificationBell({
                           markNoticeUnread(notice.id),
                         );
                       }}
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-[#10213f]"
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-[#132b26]"
                     >
                       <Mail className="h-3 w-3" />
                       Mark as unread
@@ -410,7 +410,7 @@ export function NotificationBell({
           onClick={event => {
             runNoticeAction(event, () => setSeeAll(prev => !prev));
           }}
-          className="w-full rounded-xl bg-slate-50 px-3 py-2 text-center text-[12px] font-semibold text-[#10213f] transition hover:bg-slate-100"
+          className="w-full rounded-xl bg-slate-50 px-3 py-2 text-center text-[12px] font-semibold text-[#132b26] transition hover:bg-slate-100"
         >
           {seeAll
             ? 'Show less'
@@ -436,7 +436,7 @@ export function NotificationBell({
           >
             <button
               type="button"
-              className="absolute inset-0 bg-[#10213f]/45 backdrop-blur-[2px]"
+              className="absolute inset-0 bg-[#132b26]/45 backdrop-blur-[2px]"
               aria-label="Dismiss notifications"
               onClick={close}
             />
@@ -502,7 +502,7 @@ export function NotificationBell({
           setOpen(prev => !prev);
         }}
         className={cn(
-          'relative flex h-10 w-10 items-center justify-center rounded-full text-[#10213f] transition active:scale-95',
+          'relative flex h-10 w-10 items-center justify-center rounded-full text-[#132b26] transition active:scale-95',
           open ? 'bg-slate-100' : 'hover:bg-slate-50',
           buttonClassName,
         )}

@@ -21,6 +21,7 @@ import {
   useMotionValueEvent,
   useScroll,
 } from 'framer-motion';
+import { BRAND_LOGO } from '@/constants/brand';
 
 type MobileDashboardChromeProps = {
   activeSection: string;
@@ -90,7 +91,7 @@ function MobileNavItem({
         'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl px-2 py-2 transition-colors duration-200',
         active
           ? 'text-white'
-          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
+          : 'text-[rgba(19,43,38,0.55)] hover:bg-[rgba(46,125,110,0.08)] hover:text-[#132b26]',
       )}
       aria-current={active ? 'page' : undefined}
     >
@@ -98,7 +99,7 @@ function MobileNavItem({
         {active && (
           <motion.span
             layoutId="mobile-nav-active-pill"
-            className="absolute inset-0 rounded-2xl bg-slate-900 shadow-sm"
+            className="absolute inset-0 rounded-2xl bg-[#132b26]"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
@@ -115,7 +116,7 @@ function MobileNavItem({
         transition={chromeTransition}
         className={cx(
           'relative z-10 flex h-5 w-5 items-center justify-center',
-          active ? 'text-white' : 'text-slate-700',
+          active ? 'text-white' : 'text-[#132b26]',
         )}
       >
         {icon}
@@ -227,7 +228,7 @@ export default function MobileDashboardChrome({
         animate={chromeVisible ? 'show' : 'hide'}
         variants={topHeaderVariants}
         transition={chromeTransition}
-        className="fixed inset-x-0 top-0 z-[55] border-b border-slate-200/80 bg-white/95 backdrop-blur-xl md:hidden"
+        className="fixed inset-x-0 top-0 z-[55] border-b border-[rgba(19,43,38,0.1)] bg-[var(--paper)] md:hidden"
       >
         <div className="flex h-[76px] items-center justify-between px-4">
           <motion.button
@@ -238,11 +239,11 @@ export default function MobileDashboardChrome({
             aria-label="Go to dashboard"
           >
             <Image
-              src="/images/brand-logo.png"
+              src={BRAND_LOGO}
               alt="Orderly Affairs"
               width={42}
               height={42}
-              className="h-10 w-10 object-contain"
+              className="h-10 w-10 rounded-2xl bg-white object-contain p-0.5 ring-1 ring-[#132b26]/10"
               priority
             />
           </motion.button>
@@ -281,7 +282,7 @@ export default function MobileDashboardChrome({
         animate={chromeVisible ? 'show' : 'hide'}
         variants={bottomNavVariants}
         transition={chromeTransition}
-        className="fixed inset-x-0 bottom-0 z-[55] border-t border-slate-200/80 bg-white/95 px-3 pb-[calc(10px+env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_40px_rgba(15,23,42,0.10)] backdrop-blur-xl md:hidden"
+        className="fixed inset-x-0 bottom-0 z-[55] border-t border-[rgba(19,43,38,0.1)] bg-[var(--surface)] px-3 pb-[calc(10px+env(safe-area-inset-bottom))] pt-2 oa-float md:hidden"
       >
         <div className="mx-auto grid max-w-md grid-cols-4 gap-1 rounded-[28px]">
           <MobileNavItem

@@ -28,6 +28,7 @@ import { NOKLetterCard } from './NOKLetterCard';
 import { MessageCard } from './MessageCard';
 import { OverviewAiUploadCard } from './ai/OverviewAiUploadCard';
 import { OverviewTaskBoard } from './ai/OverviewTaskBoard';
+import { AiUploadSupportedSectionsHint } from './ai/AiUploadSupportedSectionsHint';
 import { useDashboardAiBatchRunner } from '@/hooks/useDashboardAiBatchRunner';
 import {
   buildExpiryReminderMailto,
@@ -285,7 +286,7 @@ export function DataBindingDashboard({
           />
 
           {/* 1) Overview snapshot — vault health (mobile + desktop) */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="overview-vault-snapshot grid grid-cols-3 gap-2 sm:gap-3">
             <OverviewStatCard
               icon={<CheckCircle2 className="h-4 w-4" />}
               accent="sky"
@@ -357,14 +358,19 @@ export function DataBindingDashboard({
             dismissJob={batch.dismissJob}
             maxConcurrent={batch.maxConcurrent}
           />
+          <div className="overview-upload-types">
+            <AiUploadSupportedSectionsHint />
+          </div>
 
           {/* 3) Continue where you left off slider (+ desktop grids) */}
-          <OverviewTaskBoard
-            jobs={batch.jobs}
-            completedSectionIds={completedSectionIds}
-            lastUpdatedBySection={lastUpdatedBySection}
-            onNavigateToSection={onNavigateToSection}
-          />
+          <div className="overview-task-board">
+            <OverviewTaskBoard
+              jobs={batch.jobs}
+              completedSectionIds={completedSectionIds}
+              lastUpdatedBySection={lastUpdatedBySection}
+              onNavigateToSection={onNavigateToSection}
+            />
+          </div>
 
           {/* 4) Quick actions */}
           <section className="md:hidden">
@@ -412,7 +418,7 @@ export function DataBindingDashboard({
                   className={cn(
                     'rounded-xl px-3 py-2.5 text-[12px] font-semibold transition',
                     mobileHubTab === 'people'
-                      ? 'bg-[#10213f] text-white shadow-sm'
+                      ? 'bg-[#132b26] text-white shadow-sm'
                       : 'text-slate-500',
                   )}
                 >
@@ -424,7 +430,7 @@ export function DataBindingDashboard({
                   className={cn(
                     'rounded-xl px-3 py-2.5 text-[12px] font-semibold transition',
                     mobileHubTab === 'activity'
-                      ? 'bg-[#10213f] text-white shadow-sm'
+                      ? 'bg-[#132b26] text-white shadow-sm'
                       : 'text-slate-500',
                   )}
                 >
@@ -472,7 +478,7 @@ export function DataBindingDashboard({
                         )}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-medium text-[#10213f]">
+                        <span className="block truncate text-[13px] font-medium text-[#132b26]">
                           {item.label}
                         </span>
                       </span>
@@ -489,7 +495,10 @@ export function DataBindingDashboard({
                 )}
               </div>
             ) : (
-              <div id="people-messages" className="scroll-mt-24 space-y-3">
+              <div
+                id="people-messages"
+                className="overview-people-hub scroll-mt-24 space-y-3"
+              >
                 <Tabs
                   value={activeTab}
                   onValueChange={value => setActiveTab(value as PeopleTab)}
@@ -497,19 +506,19 @@ export function DataBindingDashboard({
                   <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
                     <TabsTrigger
                       value="access"
-                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#10213f]"
+                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#132b26]"
                     >
                       Access ({accessPeople.length})
                     </TabsTrigger>
                     <TabsTrigger
                       value="nok-letters"
-                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#10213f]"
+                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#132b26]"
                     >
                       Letter ({nokLetter ? 1 : 0})
                     </TabsTrigger>
                     <TabsTrigger
                       value="messages"
-                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#10213f]"
+                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#132b26]"
                     >
                       Messages ({pendingMessages.length})
                     </TabsTrigger>
@@ -543,7 +552,7 @@ export function DataBindingDashboard({
                                     {String(name).charAt(0)}
                                   </span>
                                 }
-                                iconClassName="bg-[#10213f] text-white"
+                                iconClassName="bg-[#132b26] text-white"
                                 title={name}
                                 subtitle={relationship}
                                 onClick={() => onNavigateToSection('2')}
@@ -599,7 +608,7 @@ export function DataBindingDashboard({
                     />
                     {loadingMessages ? (
                       <div className="flex items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 py-10 text-sm text-slate-500">
-                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#10213f] border-t-transparent" />
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#132b26] border-t-transparent" />
                         Loading…
                       </div>
                     ) : pendingMessages.length > 0 ? (
@@ -656,14 +665,14 @@ export function DataBindingDashboard({
       <section
         id={isNextOfKin ? 'people-messages' : undefined}
         className={cn(
-          'scroll-mt-24 rounded-2xl border border-slate-200 bg-white shadow-sm',
+          'overview-people-hub scroll-mt-24 rounded-2xl border border-slate-200 bg-white shadow-sm',
           !isNextOfKin && 'hidden md:block',
         )}
       >
         <div className="border-b border-slate-100 px-5 py-4">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
-              <h2 className="text-lg font-semibold text-[#10213f]">
+              <h2 className="text-lg font-semibold text-[#132b26]">
                 People & messages
               </h2>
               <p className="mt-0.5 text-sm text-slate-500">
@@ -681,21 +690,21 @@ export function DataBindingDashboard({
             <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
               <TabsTrigger
                 value="access"
-                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#10213f]"
+                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#132b26]"
               >
                 <Users className="mr-1.5 h-4 w-4" />
                 Access ({accessPeople.length})
               </TabsTrigger>
               <TabsTrigger
                 value="nok-letters"
-                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#10213f]"
+                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#132b26]"
               >
                 <FileText className="mr-1.5 h-4 w-4" />
                 Letter ({nokLetter ? 1 : 0})
               </TabsTrigger>
               <TabsTrigger
                 value="messages"
-                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#10213f]"
+                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#132b26]"
               >
                 <MessageSquare className="mr-1.5 h-4 w-4" />
                 Messages ({pendingMessages.length})
@@ -732,11 +741,11 @@ export function DataBindingDashboard({
 
                 <aside className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-5 shadow-sm">
                   <div className="mx-auto mb-4 flex h-28 w-28 items-center justify-center rounded-full bg-white shadow-inner ring-1 ring-emerald-100">
-                    <div className="relative flex h-16 w-12 items-end justify-center rounded-md bg-[#10213f]">
+                    <div className="relative flex h-16 w-12 items-end justify-center rounded-md bg-[#132b26]">
                       <span className="mb-2 h-5 w-5 rounded-full border-2 border-emerald-400 bg-emerald-500 shadow" />
                     </div>
                   </div>
-                  <h3 className="text-center text-base font-semibold text-[#10213f]">
+                  <h3 className="text-center text-base font-semibold text-[#132b26]">
                     Your information is secure
                   </h3>
                   <p className="mt-2 text-center text-sm leading-relaxed text-slate-500">
@@ -746,7 +755,7 @@ export function DataBindingDashboard({
                   <Button
                     type="button"
                     onClick={() => onNavigateToSection('2')}
-                    className="mt-4 h-11 w-full rounded-xl bg-[#10213f] text-white hover:bg-[#0c1a33]"
+                    className="mt-4 h-11 w-full rounded-xl bg-[#132b26] text-white hover:bg-[#0e1f1c]"
                   >
                     Manage Access
                   </Button>
@@ -784,7 +793,7 @@ export function DataBindingDashboard({
               />
               {loadingMessages ? (
                 <div className="mt-4 flex items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 py-12 text-sm text-slate-500">
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#10213f] border-t-transparent" />
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#132b26] border-t-transparent" />
                   Loading messages…
                 </div>
               ) : pendingMessages.length > 0 ? (
@@ -876,7 +885,7 @@ function OverviewStatCard({
       >
         {icon}
       </span>
-      <span className="mt-2.5 text-[20px] font-bold leading-none tracking-tight text-[#10213f] sm:mt-3 sm:text-[24px]">
+      <span className="mt-2.5 text-[20px] font-bold leading-none tracking-tight text-[#132b26] sm:mt-3 sm:text-[24px]">
         {value}
       </span>
       <span className="mt-1 truncate text-[10px] font-semibold text-slate-700 sm:text-[11px]">
@@ -916,7 +925,7 @@ function QuickAction({
       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-sky-600">
         {icon}
       </span>
-      <span className="text-center text-[10px] font-semibold leading-tight text-[#10213f]">
+      <span className="text-center text-[10px] font-semibold leading-tight text-[#132b26]">
         {label}
       </span>
     </button>
@@ -934,7 +943,7 @@ function ListPanelHeader({
 }) {
   return (
     <div className="flex items-center justify-between gap-2 px-0.5">
-      <h2 className="text-[15px] font-semibold text-[#10213f]">{title}</h2>
+      <h2 className="text-[15px] font-semibold text-[#132b26]">{title}</h2>
       <button
         type="button"
         onClick={onAction}
@@ -980,7 +989,7 @@ function OverviewListRow({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14px] font-semibold text-[#10213f]">
+        <span className="block truncate text-[14px] font-semibold text-[#132b26]">
           {title}
         </span>
         <span className="mt-0.5 block truncate text-[12px] text-slate-500">
@@ -1061,8 +1070,8 @@ function OverviewAlertRow({
             className={cn(
               'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold transition',
               alert.emailDue
-                ? 'bg-[#10213f] text-white hover:bg-[#0c1a33]'
-                : 'border border-slate-200 bg-slate-50 text-[#10213f] hover:bg-white',
+                ? 'bg-[#132b26] text-white hover:bg-[#0e1f1c]'
+                : 'border border-slate-200 bg-slate-50 text-[#132b26] hover:bg-white',
             )}
           >
             <Mail className="h-3.5 w-3.5" />
@@ -1151,7 +1160,7 @@ function EmptyBlock({
       <Button
         type="button"
         onClick={onClick}
-        className="mt-4 rounded-xl bg-[#10213f] text-white hover:bg-[#0c1a33]"
+        className="mt-4 rounded-xl bg-[#132b26] text-white hover:bg-[#0e1f1c]"
       >
         {action}
       </Button>

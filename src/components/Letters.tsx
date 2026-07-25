@@ -26,6 +26,7 @@ import {
 
 import {
   MOBILE_SHEET_FOOTER_CLASS,
+  MOBILE_SHEET_SCROLL_CLASS,
   MOBILE_SHEET_SCROLL_PADDING,
   MobileBottomSheet,
   MobileSheetHandle,
@@ -613,7 +614,11 @@ export function Letters({
     }
 
     if (message.messageType !== 'letter' && !message.media?.url) {
-      toast.error('Please record or upload your media before saving');
+      toast.error(
+        message.messageType === 'video'
+          ? 'Add a video before saving (tap + Add Video)'
+          : 'Add audio before saving (tap + Add Audio)',
+      );
       return false;
     }
 
@@ -1085,6 +1090,7 @@ export function Letters({
             <div
               className={cn(
                 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3',
+                MOBILE_SHEET_SCROLL_CLASS,
                 MOBILE_SHEET_SCROLL_PADDING,
               )}
             >
@@ -1152,6 +1158,7 @@ export function Letters({
             <div
               className={cn(
                 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-3',
+                MOBILE_SHEET_SCROLL_CLASS,
                 MOBILE_SHEET_SCROLL_PADDING,
               )}
             >
@@ -1182,15 +1189,15 @@ export function Letters({
                 type="button"
                 variant="outline"
                 onClick={() => closeEditor()}
-                className="h-11 rounded-xl"
+                className="h-11 touch-manipulation rounded-xl"
               >
                 Cancel
               </Button>
               <Button
                 type="button"
                 disabled={saving}
-                onClick={saveMessage}
-                className="h-11 rounded-xl"
+                onClick={() => void saveMessage()}
+                className="relative z-10 h-11 touch-manipulation rounded-xl"
               >
                 <Save className="mr-2 h-4 w-4" />
                 {saving ? 'Saving...' : 'Save'}

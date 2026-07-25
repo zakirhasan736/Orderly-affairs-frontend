@@ -117,7 +117,41 @@ const MEANING_GROUPS: MeaningGroup[] = [
       'valid_thru',
       'end_date',
       'period_end',
+      'account_expiry_date',
+      'account_expiry',
+    ],
+  },
+  {
+    id: 'renewal_date',
+    terms: [
       'renewal_date',
+      'renewal',
+      'renews',
+      'dues_renewal',
+      'membership_renewal',
+      'subscription_renewal_date',
+      'subscription_renewal',
+      'plan_renewal',
+      'next_billing_date',
+    ],
+  },
+  {
+    id: 'maturity_date',
+    terms: [
+      'cd_maturity_date',
+      'maturity_date',
+      'maturity',
+      'matures',
+      'cd_maturity',
+    ],
+  },
+  {
+    id: 'last_statement_date',
+    terms: [
+      'last_statement_date',
+      'statement_date',
+      'statement_as_of',
+      'as_of_date',
     ],
   },
   {

@@ -67,16 +67,16 @@ export function AccessPersonCard({
   };
 
   return (
-    <article className="rounded-[20px] border border-slate-200/90 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)] sm:p-5">
+    <article className="rounded-[20px] border border-[rgba(19,43,38,0.1)] bg-[var(--surface)] p-4 sm:p-5">
       <div className="flex items-start gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#10213f] text-[15px] font-semibold uppercase text-white shadow-sm">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#132b26] text-[15px] font-semibold uppercase text-white">
           {name.charAt(0)}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="truncate text-[15px] font-bold uppercase tracking-wide text-[#10213f] sm:text-base">
+              <h3 className="truncate text-[15px] font-bold uppercase tracking-wide text-[#132b26] sm:text-base">
                 {name}
               </h3>
               <p className="mt-0.5 text-sm text-slate-500">{relationship}</p>
@@ -86,7 +86,7 @@ export function AccessPersonCard({
                 <button
                   type="button"
                   onClick={onEdit}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-50 hover:text-[#10213f]"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-50 hover:text-[#132b26]"
                   aria-label={`Edit ${name}`}
                 >
                   <Edit2 className="h-4 w-4" />

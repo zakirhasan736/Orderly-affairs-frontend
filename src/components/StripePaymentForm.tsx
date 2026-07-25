@@ -51,7 +51,7 @@ export const StripePaymentForm: React.FC<Props> = ({ onSuccess }) => {
             style: {
               base: {
                 fontSize: '16px',
-                color: '#0f172a',
+                color: '#132b26',
                 '::placeholder': {
                   color: '#94a3b8',
                 },

@@ -7,6 +7,11 @@ export type SemanticConcept =
   | 'policy_number'
   | 'policy_company'
   | 'policy_expiry'
+  | 'renewal_date'
+  | 'subscription_renewal'
+  | 'account_expiry'
+  | 'maturity_date'
+  | 'last_statement_date'
   | 'coverage_amount'
   | 'vehicle_vin'
   | 'license_plate';
@@ -85,27 +90,116 @@ const CONCEPTS: Record<SemanticConcept, ConceptMeta> = {
       'registration_expiration',
       'expiration_date',
       'expiry_date',
-    'expires',
-    'expire',
-    'valid_through',
-    'valid_thru',
-    'valid_until',
-    'valid_to',
-    'policy_period_end',
-    'period_end',
-    'end_date',
-    'coverage_ends',
-    'term_end',
-    'renewal_date',
-    'policy_period',
-    'coverage_period',
-    'effective_dates',
+      'expires',
+      'expire',
+      'valid_through',
+      'valid_thru',
+      'valid_until',
+      'valid_to',
+      'policy_period_end',
+      'period_end',
+      'end_date',
+      'coverage_ends',
+      'term_end',
+      'policy_period',
+      'coverage_period',
+      'effective_dates',
     ],
     targets: {
       vehicles: 'registration_expiry',
       '5': 'registration_expiry',
       insurance_policies: 'policy_expiry',
       '7': 'policy_expiry',
+    },
+  },
+  renewal_date: {
+    label: 'Membership / subscription renewal',
+    aliases: [
+      'renewal_date',
+      'membership_renewal',
+      'membership_renewal_date',
+      'dues_renewal',
+      'dues_date',
+      'next_renewal',
+      'renews_on',
+      'renewal',
+      'renews',
+    ],
+    targets: {
+      community_memberships: 'renewal_date',
+      '8': 'renewal_date',
+      passwords_online_accounts: 'subscription_renewal_date',
+      '13': 'subscription_renewal_date',
+      banking_financial_accounts: 'subscription_renewal_date',
+      '12': 'subscription_renewal_date',
+    },
+  },
+  subscription_renewal: {
+    label: 'Subscription / plan renewal',
+    aliases: [
+      'subscription_renewal_date',
+      'subscription_renewal',
+      'subscription_expires',
+      'plan_renewal',
+      'plan_renewal_date',
+      'billing_renewal',
+      'next_billing_date',
+      'next_bill_date',
+    ],
+    targets: {
+      passwords_online_accounts: 'subscription_renewal_date',
+      '13': 'subscription_renewal_date',
+      banking_financial_accounts: 'subscription_renewal_date',
+      '12': 'subscription_renewal_date',
+      community_memberships: 'renewal_date',
+      '8': 'renewal_date',
+    },
+  },
+  account_expiry: {
+    label: 'Account / access expiry',
+    aliases: [
+      'account_expiry_date',
+      'account_expiry',
+      'account_expiration',
+      'access_expires',
+      'trial_ends',
+      'trial_end_date',
+      'plan_expires',
+      'plan_end_date',
+    ],
+    targets: {
+      passwords_online_accounts: 'account_expiry_date',
+      '13': 'account_expiry_date',
+    },
+  },
+  maturity_date: {
+    label: 'CD / account maturity',
+    aliases: [
+      'cd_maturity_date',
+      'maturity_date',
+      'maturity',
+      'matures',
+      'matures_on',
+      'cd_maturity',
+      'certificate_maturity',
+    ],
+    targets: {
+      banking_financial_accounts: 'cd_maturity_date',
+      '12': 'cd_maturity_date',
+    },
+  },
+  last_statement_date: {
+    label: 'Last statement date',
+    aliases: [
+      'last_statement_date',
+      'statement_date',
+      'statement_as_of',
+      'as_of_date',
+      'statement_period_end',
+    ],
+    targets: {
+      banking_financial_accounts: 'last_statement_date',
+      '12': 'last_statement_date',
     },
   },
   coverage_amount: {
@@ -165,7 +259,7 @@ function asPlainText(value: unknown): string {
 }
 
 const PERIOD_END_RE =
-  /(?:policy\s*period|period|valid(?:\s*(?:from|thru|through|until))?|expires?(?:\s*on)?|expiration|coverage\s*(?:period|ends?)|term|effective|from)[^\d]{0,48}(?:(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}).{0,24}?(?:to|through|thru|until|–|-|—)\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})|(\d{4}-\d{2}-\d{2}).{0,24}?(?:to|through|thru|until|–|-|—)\s*(\d{4}-\d{2}-\d{2})|(?:to|through|thru|until|ends?)\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2}))/i;
+  /(?:policy\s*period|period|valid(?:\s*(?:from|thru|through|until))?|expires?(?:\s*on)?|expiration|coverage\s*(?:period|ends?)|term|effective|from|renew(?:al|s)?(?:\s*(?:date|on|by))?|dues(?:\s*(?:due|date))?|matures?(?:\s*on)?)[^\d]{0,48}(?:(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}).{0,24}?(?:to|through|thru|until|–|-|—)\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})|(\d{4}-\d{2}-\d{2}).{0,24}?(?:to|through|thru|until|–|-|—)\s*(\d{4}-\d{2}-\d{2})|(?:to|through|thru|until|ends?)\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})|(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2}))/i;
 
 const BARE_RANGE_RE =
   /(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})\s*(?:to|through|thru|until|–|-|—)\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})/i;
@@ -224,8 +318,21 @@ export function normalizeDateToIso(value: string | null | undefined): string {
     }
   }
 
-  return text;
+  const named = text.match(
+    /^(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i,
+  );
+  if (named) {
+    const month = MONTH_NAME_TO_NUM[named[1].toLowerCase().replace(/\.$/, '')];
+    if (month) {
+      return `${String(Number(named[3])).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(Number(named[2])).padStart(2, '0')}`;
+    }
+  }
+
+  return '';
 }
+
+const EMBEDDED_DATE_RE =
+  /(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})/gi;
 
 export function extractEndDateFromText(text: string | null | undefined): string {
   if (!text) return '';
@@ -243,7 +350,15 @@ export function extractEndDateFromText(text: string | null | undefined): string 
 
   const match = raw.match(PERIOD_END_RE);
   if (match) {
-    const end = (match[2] || match[4] || match[5] || match[3] || match[1] || '').trim();
+    const end = (
+      match[2] ||
+      match[4] ||
+      match[5] ||
+      match[6] ||
+      match[3] ||
+      match[1] ||
+      ''
+    ).trim();
     return normalizeDateToIso(end);
   }
 
@@ -252,6 +367,17 @@ export function extractEndDateFromText(text: string | null | undefined): string 
 
   if (/^(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})$/.test(raw.trim())) {
     return normalizeDateToIso(raw.trim());
+  }
+
+  if (
+    /\b(renew|renewal|renews|dues|maturity|matures|expir|valid|statement|as of|trial)\b/i.test(
+      raw,
+    )
+  ) {
+    const embedded = [...raw.matchAll(EMBEDDED_DATE_RE)];
+    if (embedded.length) {
+      return normalizeDateToIso(embedded[embedded.length - 1][1]);
+    }
   }
 
   return '';
@@ -332,6 +458,49 @@ export function conceptLabel(concept: SemanticConcept | string | null | undefine
   return CONCEPTS[concept as SemanticConcept]?.label || String(concept).replace(/_/g, ' ');
 }
 
+const DATE_CONCEPTS = new Set<SemanticConcept>([
+  'policy_expiry',
+  'renewal_date',
+  'subscription_renewal',
+  'account_expiry',
+  'maturity_date',
+  'last_statement_date',
+]);
+
+function inferDateConceptFromText(key: string, text: string): SemanticConcept | null {
+  const blob = `${normalizeKey(key)} ${normalizeKey(text.slice(0, 160))}`.replace(
+    /_/g,
+    ' ',
+  );
+  if (
+    /\b(subscription renew|plan renew|billing renew|next bill|next billing)\b/.test(
+      blob,
+    )
+  ) {
+    return 'subscription_renewal';
+  }
+  if (/\b(renewal|renews|dues|membership renew)\b/.test(blob)) {
+    return 'renewal_date';
+  }
+  if (/\b(maturity|matures|cd maturity|certificate of deposit)\b/.test(blob)) {
+    return 'maturity_date';
+  }
+  if (/\b(statement date|as of|statement period|last statement)\b/.test(blob)) {
+    return 'last_statement_date';
+  }
+  if (/\b(account expir|access expir|trial end|plan expir|plan end)\b/.test(blob)) {
+    return 'account_expiry';
+  }
+  if (
+    /\b(policy|coverage|valid through|valid until|expir|period end|term end)\b/.test(
+      blob,
+    )
+  ) {
+    return 'policy_expiry';
+  }
+  return null;
+}
+
 export function collectConceptsFromItem(
   item: Record<string, unknown>,
 ): Partial<Record<SemanticConcept, string>> {
@@ -343,8 +512,9 @@ export function collectConceptsFromItem(
     if (!text) return;
     const concept = resolveSemanticConcept(key);
     if (concept && !found[concept]) {
-      if (concept === 'policy_expiry') {
-        found[concept] = extractEndDateFromText(text) || normalizeDateToIso(text) || text;
+      if (DATE_CONCEPTS.has(concept)) {
+        found[concept] =
+          extractEndDateFromText(text) || normalizeDateToIso(text) || text;
       } else {
         found[concept] = text;
       }
@@ -371,6 +541,18 @@ export function collectConceptsFromItem(
     }
   }
 
+  Object.entries(item).forEach(([key, value]) => {
+    if (key === '__rowId') return;
+    const text = asPlainText(value);
+    if (!text) return;
+    const end = extractEndDateFromText(text) || normalizeDateToIso(text);
+    if (!end) return;
+    const concept = inferDateConceptFromText(key, text);
+    if (concept && !found[concept]) {
+      found[concept] = end;
+    }
+  });
+
   if (!found.policy_expiry) {
     for (const [key, value] of Object.entries(item)) {
       if (key === '__rowId') continue;
@@ -382,10 +564,11 @@ export function collectConceptsFromItem(
     }
   }
 
-  if (found.policy_expiry) {
-    found.policy_expiry =
-      normalizeDateToIso(found.policy_expiry) || found.policy_expiry;
-  }
+  DATE_CONCEPTS.forEach(concept => {
+    if (found[concept]) {
+      found[concept] = normalizeDateToIso(found[concept]!) || found[concept];
+    }
+  });
 
   return found;
 }

@@ -74,7 +74,7 @@ export function NokBottomNav({
   return (
     <nav
       className={cn(
-        'fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/80 bg-white/95 px-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl md:hidden',
+        'fixed inset-x-0 bottom-0 z-50 border-t border-[rgba(19,43,38,0.1)] bg-[var(--surface)] px-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1.5 oa-float md:hidden',
         className,
       )}
     >
@@ -89,7 +89,7 @@ export function NokBottomNav({
               onClick={item.onClick}
               className={cn(
                 'relative flex flex-col items-center justify-center rounded-xl px-0.5 py-1.5 transition active:scale-95',
-                isActive ? 'text-[#10213f]' : 'text-slate-400',
+                isActive ? 'text-[#132b26]' : 'text-slate-400',
               )}
             >
               <span

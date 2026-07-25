@@ -2,27 +2,130 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Button } from '@common/ui/button';
-import { Input } from '@common/ui/input';
-import { Label } from '@common/ui/label';
-import { Alert, AlertDescription } from '@common/ui/alert';
-import {
-  Eye,
-  EyeOff,
-  Lock,
-  Mail,
-  AlertTriangle,
-  ArrowLeft,
-  ShieldCheck,
-} from 'lucide-react';
+import { cn } from '@common/ui/utils';
+import { Eye, EyeOff, Lock, Mail, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { BRAND_LOGO } from '@/constants/brand';
 
 interface NextOfKinLoginPageProps {
-  onLoginSuccess: (nokData: any) => void;
+  onLoginSuccess: (nokData: {
+    email: string;
+    password: string;
+  }) => void | Promise<void>;
   onBackToOwner: () => void;
-  formData: any;
+  formData?: unknown;
   captchaSlot?: React.ReactNode;
   /** When captcha is shown, block submit until Cloudflare finishes. */
   captchaReady?: boolean;
+}
+
+function ShieldIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#132b26"
+      strokeWidth="1.7"
+      className={className}
+      aria-hidden
+    >
+      <path
+        d="M12 3l7 3v5.5c0 4.2-2.9 7.6-7 8.5-4.1-.9-7-4.3-7-8.5V6z"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m9 12 2 2 4-4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function BrandAside({ onBackToOwner }: { onBackToOwner: () => void }) {
+  return (
+    <aside className="relative hidden min-h-[100dvh] w-full max-w-[min(100%,37.5rem)] flex-col bg-[#132b26] px-12 py-12 text-white lg:flex">
+      <button
+        type="button"
+        onClick={onBackToOwner}
+        className="inline-flex h-8 w-fit items-center gap-2 self-start rounded-2xl bg-white/10 px-3.5 text-[12.5px] font-medium text-white/90"
+        style={{ fontFamily: "'Instrument Sans', sans-serif" }}
+      >
+        <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.7} />
+        Owner dashboard
+      </button>
+
+      <div className="mt-auto flex items-start gap-[18px]">
+        <div className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-[18px] bg-white">
+          <Image
+            src={BRAND_LOGO}
+            alt="Orderly Affairs"
+            width={42}
+            height={42}
+            className="h-[70%] w-[70%] object-contain"
+            priority
+          />
+        </div>
+        <div className="min-w-0">
+          <p className="nok-mono m-0 text-[10px] font-medium tracking-[0.14em] uppercase text-white/55">
+            Orderly Affairs
+          </p>
+          <h1 className="nok-serif mt-2.5 mb-0 text-[40px] leading-[1.1] font-normal text-white">
+            Next of Kin
+          </h1>
+          <p className="mt-3.5 mb-0 max-w-[40ch] text-[16px] leading-[1.7] text-white/72">
+            Secure access to the vault shared with you.
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-10 mb-0 border-t border-white/14 pt-[22px] text-[13.5px] leading-[1.7] text-white/60">
+        You&apos;ll receive an email or SMS notification for every sign-in.
+        Access is logged with time and IP address.
+      </p>
+    </aside>
+  );
+}
+
+function MobileBrandHeader({ onBackToOwner }: { onBackToOwner: () => void }) {
+  return (
+    <div className="bg-[#132b26] px-5 pb-[30px] pt-[max(0.75rem,env(safe-area-inset-top))] text-white lg:hidden">
+      <button
+        type="button"
+        onClick={onBackToOwner}
+        className="inline-flex h-[30px] w-fit items-center gap-[7px] rounded-[15px] bg-white/10 px-3 text-xs font-medium text-white/90"
+        style={{ fontFamily: "'Instrument Sans', sans-serif" }}
+      >
+        <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.7} />
+        Owner dashboard
+      </button>
+
+      <div className="mt-[22px] flex items-start gap-3.5">
+        <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl bg-white">
+          <Image
+            src={BRAND_LOGO}
+            alt="Orderly Affairs"
+            width={36}
+            height={36}
+            className="h-[70%] w-[70%] object-contain"
+            priority
+          />
+        </div>
+        <div className="min-w-0">
+          <p className="nok-mono m-0 text-[9.5px] font-medium tracking-[0.14em] uppercase text-white/55">
+            Orderly Affairs
+          </p>
+          <h1 className="nok-serif mt-1.5 mb-0 text-[28px] leading-[1.1] font-normal text-white">
+            Next of Kin
+          </h1>
+          <p className="mt-2 mb-0 text-sm leading-[1.55] text-white/70">
+            Secure access to the vault shared with you.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
@@ -36,8 +139,11 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [failedAttempts] = useState(0);
-  const [isLocked] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+
+  const maxAttempts = 3;
+  const attemptsLeft = Math.max(0, maxAttempts - failedAttempts);
+  const isLocked = failedAttempts >= maxAttempts;
 
   const handleLogin = async () => {
     if (!emailOrPhone || !password) {
@@ -48,12 +154,19 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
       setError('Complete the security check before signing in.');
       return;
     }
+    if (isLocked) {
+      setError('Too many failed attempts. Try again later.');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
     try {
       await onLoginSuccess({ email: emailOrPhone, password });
-    } catch (err: any) {
-      setError(err?.message || 'Login failed');
+      setFailedAttempts(0);
+    } catch (err: unknown) {
+      setFailedAttempts(n => n + 1);
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setIsLoading(false);
     }
@@ -69,172 +182,134 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
   const isFormValid =
     emailOrPhone.trim().length > 0 &&
     password.trim().length > 0 &&
-    (!captchaSlot || captchaReady);
+    (!captchaSlot || captchaReady) &&
+    !isLocked;
 
   return (
-    <div
-      className="relative flex min-h-[100dvh] flex-col overflow-x-hidden"
-      style={{
-        background:
-          'radial-gradient(1000px 480px at 50% -10%, rgba(37,99,235,0.14), transparent 55%), linear-gradient(180deg, #10213f 0%, #152a4d 36%, #eef2f7 36%, #f8fafc 100%)',
-      }}
-    >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-[40%] opacity-30"
-        style={{
-          backgroundImage:
-            'radial-gradient(rgba(255,255,255,0.18) 1px, transparent 1px)',
-          backgroundSize: '20px 20px',
-        }}
-      />
+    <div className="nok-login flex min-h-[100dvh] flex-col lg:flex-row">
+      <BrandAside onBackToOwner={onBackToOwner} />
+      <MobileBrandHeader onBackToOwner={onBackToOwner} />
 
-      <div className="relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.25rem,env(safe-area-inset-top))] sm:max-w-lg">
-        <button
-          type="button"
-          onClick={onBackToOwner}
-          className="mb-6 inline-flex w-auto items-center gap-1.5 self-start rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-medium text-white/90 ring-1 ring-white/15 transition active:scale-95"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Owner dashboard
-        </button>
-
-        <div className="mb-6 flex items-start gap-3 text-white sm:mb-8">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] bg-white/12 ring-1 ring-white/20">
-            <Image
-              src="/images/brand-logo.png"
-              alt="Orderly Affairs"
-              width={40}
-              height={40}
-              className="h-9 w-9 rounded-lg object-contain"
-            />
-          </div>
-          <div className="min-w-0 pt-0.5">
-            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/60">
-              Orderly Affairs
-            </p>
-            <h1 className="mt-1 text-[1.75rem] font-semibold leading-tight tracking-tight sm:text-[2rem]">
-              Next of Kin
-            </h1>
-            <p className="mt-1.5 text-sm leading-6 text-white/70">
-              Secure access to the vault shared with you.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-auto rounded-[28px] border border-white/80 bg-white p-5 shadow-[0_28px_70px_rgba(16,33,63,0.16)] sm:p-7">
-          <div className="mb-5 flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-[#10213f]" />
-            <div>
-              <h2 className="text-lg font-semibold tracking-tight text-[#10213f]">
-                Sign in
-              </h2>
-              <p className="text-[13px] text-slate-500">
-                Registered email and password
-              </p>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] lg:items-center lg:justify-center lg:p-12">
+        <div className="mx-auto flex w-full max-w-[min(100%,28.75rem)] flex-1 flex-col lg:flex-none">
+          <div className="rounded-[18px] border border-[#e4e6e1] bg-white p-5 lg:p-[34px]">
+            <div className="flex items-center gap-[11px]">
+              <ShieldIcon className="shrink-0" />
+              <div className="min-w-0">
+                <h2 className="m-0 text-[17px] font-semibold text-[#132b26] lg:text-[19px]">
+                  Sign in
+                </h2>
+                <p className="mt-0.5 mb-0 text-[12.5px] text-[#8b9995] lg:mt-[2px] lg:text-[13px]">
+                  Registered email and password
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-4">
             {error ? (
-              <Alert variant={isLocked ? 'destructive' : 'default'}>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
+              <div
+                className={cn(
+                  'mt-5 flex items-start gap-2.5 rounded-xl border px-3.5 py-[13px] text-[13px] leading-[1.5]',
+                  isLocked
+                    ? 'border-[#f0c9c5] bg-[#fdf4f3] text-[#b4483f]'
+                    : 'border-[#e8d9b5] bg-[#fdf8ee] text-[#8a6420]',
+                )}
+              >
+                <AlertTriangle className="mt-px h-[15px] w-[15px] shrink-0" strokeWidth={1.9} />
+                <span>{error}</span>
+              </div>
             ) : null}
 
-            {failedAttempts > 0 && failedAttempts < 3 ? (
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  {3 - failedAttempts} attempt
-                  {3 - failedAttempts !== 1 ? 's' : ''} remaining before lockout.
-                </AlertDescription>
-              </Alert>
+            {!error && failedAttempts > 0 && attemptsLeft > 0 ? (
+              <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-[#e8d9b5] bg-[#fdf8ee] px-3.5 py-[13px] text-[13px] leading-[1.5] text-[#8a6420]">
+                <AlertTriangle className="mt-px h-[15px] w-[15px] shrink-0" strokeWidth={1.9} />
+                <span>
+                  {attemptsLeft} attempt{attemptsLeft !== 1 ? 's' : ''} remaining
+                  before lockout.
+                </span>
+              </div>
             ) : null}
 
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-[#10213f]">
-                Email
-              </Label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  id="email"
+            <label className="mt-[18px] flex flex-col gap-[7px]">
+              <span className="nok-field-label">Email</span>
+              <span className="relative block">
+                <Mail
+                  className="pointer-events-none absolute top-1/2 left-3.5 h-[15px] w-[15px] -translate-y-1/2 text-[#a5b1ad]"
+                  strokeWidth={1.7}
+                />
+                <input
+                  id="nok-email"
                   type="email"
+                  autoComplete="email"
                   placeholder="your.email@example.com"
                   value={emailOrPhone}
                   onChange={e => setEmailOrPhone(e.target.value)}
                   onKeyDown={handleKeyPress}
-                  className="h-12 rounded-2xl border-slate-200 bg-[#f8fafc] pl-10"
+                  className="nok-field"
                   disabled={isLocked || isLoading}
                 />
-              </div>
-            </div>
+              </span>
+            </label>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-[#10213f]">
-                Password
-              </Label>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  id="password"
+            <label className="mt-3.5 flex flex-col gap-[7px] lg:mt-[14px]">
+              <span className="nok-field-label">Password</span>
+              <span className="relative block">
+                <Lock
+                  className="pointer-events-none absolute top-1/2 left-3.5 h-[15px] w-[15px] -translate-y-1/2 text-[#8b9995]"
+                  strokeWidth={1.7}
+                />
+                <input
+                  id="nok-password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  placeholder="••••••••••"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   onKeyDown={handleKeyPress}
-                  className="h-12 rounded-2xl border-slate-200 bg-[#f8fafc] pl-10 pr-11"
+                  className="nok-field nok-field-password"
                   disabled={isLocked || isLoading}
                 />
                 <button
                   type="button"
-                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-[#10213f]"
+                  className="absolute top-1/2 right-3.5 -translate-y-1/2 text-[#8b9995]"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={isLocked || isLoading}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
+                    <EyeOff className="h-4 w-4" strokeWidth={1.7} />
                   ) : (
-                    <Eye className="h-4 w-4" />
+                    <Eye className="h-4 w-4" strokeWidth={1.7} />
                   )}
                 </button>
-              </div>
-            </div>
+              </span>
+            </label>
 
             {captchaSlot ? (
-              <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-slate-50/90 p-2.5">
-                <div className="flex min-h-[65px] items-center justify-center">
+              <div className="mt-4 rounded-[14px] border border-[#f2f1ec] bg-[#f7f6f2] p-2.5 lg:mt-4 lg:p-2.5">
+                <div className="flex min-h-[62px] items-center justify-center overflow-x-auto rounded-[10px] border border-[#e4e6e1] bg-white px-3.5 py-2 lg:min-h-[65px]">
                   {captchaSlot}
                 </div>
               </div>
             ) : null}
 
-            <Button
+            <button
+              type="button"
+              className="nok-submit"
               onClick={() => void handleLogin()}
-              disabled={!isFormValid || isLocked || isLoading || (Boolean(captchaSlot) && !captchaReady)}
-              className="h-12 w-full rounded-2xl bg-[#10213f] text-[15px] font-semibold text-white hover:bg-[#1a335f] sm:w-auto sm:min-w-[200px] sm:px-8"
-              size="lg"
+              disabled={!isFormValid || isLoading}
             >
-              {isLoading ? (
-                <span className="flex items-center gap-2">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  Authenticating…
-                </span>
-              ) : captchaSlot && !captchaReady ? (
-                'Waiting for security check…'
-              ) : (
-                'Continue securely'
-              )}
-            </Button>
+              {isLoading
+                ? 'Authenticating…'
+                : captchaSlot && !captchaReady
+                  ? 'Waiting for security check…'
+                  : 'Continue securely'}
+            </button>
           </div>
-        </div>
 
-        <p className="mt-5 text-center text-[11px] leading-5 text-slate-500">
-          Protected access for authorized next of kin only
-        </p>
+          <p className="mt-auto pt-[18px] text-center text-xs text-[#8b9995] lg:mt-[18px] lg:pt-0 lg:text-[12.5px]">
+            Protected access for authorized next of kin only
+          </p>
+        </div>
       </div>
     </div>
   );

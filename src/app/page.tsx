@@ -7,15 +7,12 @@ import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
 import {
   Mail,
-  Lock,
   Eye,
   EyeOff,
   Smartphone,
-  Shield,
   MessageSquare,
   AlertCircle,
   ArrowLeft,
-  ShieldIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
@@ -39,11 +36,18 @@ import {
   useResendSmsMfaMutation,
   useResumePendingSignupMutation,
 } from '@/services/authApi';
-import { Card, CardContent } from '@/components/common/ui/card';
 import { Input } from '@/components/common/ui/input';
 import { PhoneNumberInput } from '@/components/PhoneNumberInput';
 import { SixDigitOtpInput } from '@/components/SixDigitOtpInput';
 import { TurnstileCaptcha } from '@/components/TurnstileCaptcha';
+import {
+  AuthPortalShell,
+  AuthCard,
+  AuthModeToggle,
+  AuthFieldLabel,
+  PasswordStrengthBars,
+} from '@/components/auth/AuthPortalShell';
+import { cn } from '@common/ui/utils';
 import { isValidE164PhoneNumber } from '@/utils/phoneCountries';
 import { getOtpSessionId } from '@/utils/otpSession';
 import {
@@ -56,10 +60,8 @@ import {
   RateLimitBanner,
   rateLimitedButtonLabel,
 } from '@/components/RateLimitBanner';
-import { Label } from '@/components/common/ui/label';
 import { Button } from '@/components/common/ui/button';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
-import { Badge } from '@/components/common/ui/badge';
 import {
   useCreateCustomerMutation,
   useConfirmCardMutation,
@@ -81,6 +83,11 @@ type MFAStep =
 
 type OnboardingStep = MFAStep | 'plan_selection' | 'payment';
 
+/** Module-level — never call loadStripe inside a component (remounts Elements every render). */
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
+);
+
 type AuthLoadingAction =
   | 'sign_in'
   | 'forgot_password'
@@ -101,6 +108,15 @@ type AuthLoadingAction =
 // ------------------------------
 const isValidEmail = (email: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+/** Login identifier: email address or phone (8+ digits). */
+const isValidLoginIdentifier = (value: string) => {
+  const raw = value.trim();
+  if (!raw) return false;
+  if (isValidEmail(raw)) return true;
+  const digits = raw.replace(/\D/g, '');
+  return digits.length >= 8;
+};
 
 const verifyTOTPCode = (code: string) => /^\d{6}$/.test(code);
 
@@ -253,8 +269,12 @@ function PaymentForm({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cardReady, setCardReady] = useState(false);
+  const [cardFocused, setCardFocused] = useState(false);
 
   const needsCardNow = !isTrial || trialMode === 'card_on_file';
+  const stripeReady = Boolean(stripe && elements);
+  const canPay = !needsCardNow || (stripeReady && cardReady);
 
   const handleSubmit = async () => {
     setError(null);
@@ -265,7 +285,7 @@ function PaymentForm({
 
       if (needsCardNow) {
         if (!stripe || !elements) {
-          throw new Error('Stripe not ready');
+          throw new Error('Secure card form is still loading. Please wait a moment.');
         }
 
         const { client_secret } = await setupIntent().unwrap();
@@ -307,69 +327,109 @@ function PaymentForm({
   };
 
   return (
-    <div className="space-y-4">
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+    <div className="space-y-5 text-left">
+      <div className="space-y-0">
+        <p className="auth-step-kicker">Step 3 of 3</p>
+        <h2 className="auth-serif-title mt-3 mb-1 text-[19px] font-semibold lg:text-[21px]">
+          {isTrial ? 'Start your trial' : 'Secure checkout'}
+        </h2>
+        <p className="mb-0 text-[13.5px] leading-snug text-[#6e7c77]">
+          {isTrial
+            ? trialMode === 'cardless'
+              ? 'No card needed today. You can add payment anytime in settings.'
+              : 'Verify your card now — you won’t be charged until the trial ends.'
+            : `You’re subscribing to the ${selectedPlan} plan.`}
+        </p>
+      </div>
 
-      {isTrial && trialMode === 'cardless' && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-left text-sm text-slate-700">
-          <p className="font-semibold text-slate-900">Cardless trial</p>
-          <p className="mt-1">
-            No card required today. When the trial ends without a card on file,
-            vault access pauses until you add payment. You can add a card anytime
-            in settings to avoid interruption.
+      {error ? (
+        <p className="text-[13px] text-red-600">{error}</p>
+      ) : null}
+
+      {isTrial && trialMode === 'cardless' ? (
+        <div className="rounded-[13px] border border-[#e4e6e1] bg-[#f7f6f2] p-4">
+          <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
+            Cardless trial
+          </p>
+          <p className="mt-1.5 mb-0 text-[12.5px] leading-snug text-[#5c6b66]">
+            When the trial ends without a card on file, vault access pauses
+            until you add payment.
           </p>
         </div>
-      )}
+      ) : null}
 
-      {isTrial && trialMode === 'card_on_file' && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-4 text-left text-sm text-emerald-950">
-          <p className="font-semibold">Card verified — no charge today</p>
-          <p className="mt-1">
-            Verify your card now to avoid interruption. You will not be charged
-            until the trial ends. After the trial, your card is charged
-            automatically if auto-renew stays on (you can turn auto-renew off in
-            settings).
+      {isTrial && trialMode === 'card_on_file' ? (
+        <div className="rounded-[13px] border border-[#2e7d6e] bg-[#f4f8f7] p-4">
+          <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
+            Card verified — no charge today
+          </p>
+          <p className="mt-1.5 mb-0 text-[12.5px] leading-snug text-[#5c6b66]">
+            After the trial, your card is charged automatically if auto-renew
+            stays on. You can turn auto-renew off in settings.
           </p>
         </div>
-      )}
+      ) : null}
 
-      {needsCardNow && (
-        <div className="border rounded-md p-4">
-          <CardElement
-            options={{
-              hidePostalCode: true,
-              style: {
-                base: {
-                  fontSize: '16px',
-                  color: '#0f172a',
-                  '::placeholder': {
-                    color: '#94a3b8',
+      {needsCardNow ? (
+        <div>
+          <AuthFieldLabel>Card details</AuthFieldLabel>
+          <div
+            className={cn(
+              'auth-stripe-field',
+              cardFocused && 'auth-stripe-field--focused',
+            )}
+          >
+            {!stripeReady ? (
+              <p className="m-0 text-[13.5px] text-[#8b9995]">
+                Loading secure card form…
+              </p>
+            ) : (
+              <CardElement
+                options={{
+                  hidePostalCode: true,
+                  style: {
+                    base: {
+                      fontSize: '15px',
+                      lineHeight: '24px',
+                      color: '#132b26',
+                      fontFamily:
+                        "'Instrument Sans', ui-sans-serif, system-ui, sans-serif",
+                      '::placeholder': {
+                        color: '#a5b1ad',
+                      },
+                    },
+                    invalid: {
+                      color: '#b4483f',
+                    },
                   },
-                },
-              },
-            }}
-          />
+                }}
+                onReady={() => setCardReady(true)}
+                onFocus={() => setCardFocused(true)}
+                onBlur={() => setCardFocused(false)}
+              />
+            )}
+          </div>
+          <p className="mt-2 mb-0 text-[12px] text-[#8b9995]">
+            Card fields are provided by Stripe. Do not refresh while they load.
+          </p>
         </div>
-      )}
+      ) : null}
 
       <Button
         data-cy="checkout-submit"
-        className="w-full"
-        disabled={loading}
+        className="w-full btn-primary"
+        disabled={loading || !canPay}
         onClick={() => void handleSubmit()}
       >
         {loading
           ? 'Please wait…'
-          : isTrial
-            ? trialMode === 'cardless'
-              ? 'Start cardless trial'
-              : 'Verify card & start trial'
-            : 'Subscribe now'}
+          : needsCardNow && !canPay
+            ? 'Loading card form…'
+            : isTrial
+              ? trialMode === 'cardless'
+                ? 'Start cardless trial'
+                : 'Verify card & start trial'
+              : 'Subscribe now'}
       </Button>
     </div>
   );
@@ -378,9 +438,6 @@ function PaymentForm({
 export default function LoginPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const stripePromise = loadStripe(
-    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
-  );
 const [resumePendingSignup] = useResumePendingSignupMutation();
 
   // 🔗 API hooks
@@ -423,9 +480,13 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   const [hasLinkedAuthenticator, setHasLinkedAuthenticator] = useState(false);
 
   const [email, setEmail] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [showPhoneValidation, setShowPhoneValidation] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
   const [captchaReady, setCaptchaReady] = useState(
@@ -549,7 +610,7 @@ const guardRateLimit = useCallback(() => {
 const handleSendEmailCode = async () => {
   if (guardRateLimit()) return;
   if (isAuthBusy) return;
-  if (!securityReady) {
+  if (!isNewUser && !securityReady) {
     setError('Wait for the security check to finish before requesting a code');
     toast.error('Wait for the security check to finish');
     return;
@@ -561,7 +622,9 @@ const handleSendEmailCode = async () => {
   try {
     const res = await sendEmailOtp({
       email,
-      captcha_token: captchaToken,
+      ...(isNewUser
+        ? { flow: 'signup' }
+        : { captcha_token: captchaToken }),
       otp_session_id: getOtpSessionId(),
       ...(mfaChallengeToken
         ? { mfa_challenge_token: mfaChallengeToken }
@@ -606,6 +669,7 @@ const handleSendEmailCode = async () => {
        refreshCaptcha();
        setResetOtp('');
        setRateLimitSeconds(0);
+       setCooldown(45);
        toast.success('If an account exists for that email, a reset code has been sent.');
        setStep('reset_password');
      } catch (err: unknown) {
@@ -615,6 +679,7 @@ const handleSendEmailCode = async () => {
        stopAuthLoading();
      }
    } else {
+     setResetEmail(email);
      setStep('forgot_password');
    }
  };
@@ -640,6 +705,7 @@ const handleSendEmailCode = async () => {
      setResetOtp('');
      setRateLimitSeconds(0);
      toast.success('If an account exists for that email, a reset code has been sent.');
+     setCooldown(45);
      setStep('reset_password');
    } catch (err: unknown) {
      applyAuthError(err, 'Failed to send reset code');
@@ -684,6 +750,8 @@ const beginLinkedLoginMfa = async (
     cooldownSeconds?: number;
     loginChallenge?: boolean;
     challengeToken?: string;
+    /** Resolved account email (needed when user signed in with phone). */
+    accountEmail?: string;
   },
 ) => {
   setSelectedMFAMethod(method);
@@ -691,6 +759,7 @@ const beginLinkedLoginMfa = async (
 
   const useLoginChallenge = options?.loginChallenge ?? isLoginMfaChallenge;
   const challengeToken = options?.challengeToken ?? mfaChallengeToken;
+  const accountEmail = (options?.accountEmail || email).trim();
 
   if (method === 'authenticator') {
     setHasLinkedAuthenticator(true);
@@ -726,7 +795,7 @@ const beginLinkedLoginMfa = async (
       startAuthLoading('login_mfa_email_send');
       try {
         const res = await startEmailMfa({
-          email,
+          email: accountEmail,
           mfa_challenge_token: challengeToken,
         }).unwrap();
         setVerificationSent(true);
@@ -774,7 +843,7 @@ const beginLinkedLoginMfa = async (
   startAuthLoading('start_sms');
   try {
     const smsRes = await startSmsMfa({
-      email,
+      email: accountEmail,
       ...(useLoginChallenge && challengeToken
         ? { mfa_challenge_token: challengeToken }
         : {}),
@@ -826,28 +895,6 @@ const beginLinkedLoginMfa = async (
     });
   };
 
-  const getPasswordStrengthInfo = () => {
-    switch (passwordStrength.score) {
-      case 5:
-        return {
-          text: 'Very strong',
-          color: 'text-green-600',
-          bg: 'bg-green-600',
-        };
-      case 4:
-        return { text: 'Strong', color: 'text-green-500', bg: 'bg-green-500' };
-      case 3:
-        return {
-          text: 'Moderate',
-          color: 'text-yellow-500',
-          bg: 'bg-yellow-500',
-        };
-      case 2:
-        return { text: 'Weak', color: 'text-orange-500', bg: 'bg-orange-500' };
-      default:
-        return { text: 'Very weak', color: 'text-red-500', bg: 'bg-red-500' };
-    }
-  };
 
   // -----------------------------------------------------------
   // HANDLERS
@@ -863,12 +910,22 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
   if (guardRateLimit()) return;
 
   try {
-    if (!isValidEmail(email)) throw new Error('Enter a valid email');
+    if (isNewUser) {
+      if (!isValidEmail(email)) throw new Error('Enter a valid email');
+    } else if (!isValidLoginIdentifier(email)) {
+      throw new Error('Enter a valid email or phone number');
+    }
     if (password.length < 8) {
       throw new Error('Password must be at least 8 characters');
     }
 
     if (isNewUser) {
+      if (!firstName.trim()) {
+        throw new Error('Enter your first name');
+      }
+      if (!lastName.trim()) {
+        throw new Error('Enter your last name');
+      }
       if (password !== confirmPassword) {
         throw new Error('Passwords do not match');
       }
@@ -877,13 +934,10 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
         throw new Error('Use a stronger password');
       }
 
-      if (!securityReady) {
-        setError('Complete the security check before continuing');
-        toast.error('Complete the security check before continuing');
-        return;
+      if (!agreeToTerms) {
+        throw new Error('Please agree to the terms to continue');
       }
 
-      // Keep the Turnstile token for /signup (tokens are single-use — do not remount yet).
       setStep('mfa_method_selection');
       return;
     }
@@ -907,6 +961,12 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
           }
         : {}),
     }).unwrap();
+
+    // Phone login returns the account email — keep it for MFA / session calls
+    const accountEmail = (res.email || email).trim();
+    if (res.email) {
+      setEmail(res.email);
+    }
 
     if (res.mfa_required) {
       const activeMethods = normalizeMfaMethods(
@@ -942,12 +1002,13 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
         cooldownSeconds: res.cooldown_seconds,
         loginChallenge: true,
         challengeToken: res.mfa_challenge_token ?? '',
+        accountEmail,
       });
       return;
     }
 
     await completeOwnerAuth(router, dispatch, {
-      email,
+      email: accountEmail,
       requiresBilling: Boolean(res.requires_billing),
       onNeedsBilling: () => {
         setError('');
@@ -985,31 +1046,31 @@ const handleMFAMethodSelection = async () => {
         throw new Error('Enter a valid phone number for the selected country');
       }
 
+      const composedName = `${firstName.trim()} ${lastName.trim()}`.trim();
       const signupPayload: {
         email: string;
         password: string;
+        full_name?: string;
+        first_name?: string;
+        last_name?: string;
         mfa_method: MFAMethod;
         phone_number?: string;
-        captcha_token?: string;
         otp_session_id?: string;
       } = {
         email,
         password,
+        full_name: composedName || undefined,
+        first_name: firstName.trim() || undefined,
+        last_name: lastName.trim() || undefined,
         mfa_method: selectedMFAMethod,
         otp_session_id: getOtpSessionId(),
       };
 
-      if (!captchaToken) {
-        throw new Error('Complete the CAPTCHA before continuing');
-      }
-      signupPayload.captcha_token = captchaToken;
-
-      if (selectedMFAMethod === 'sms') {
+      if (phoneNumber.trim()) {
         signupPayload.phone_number = phoneNumber.trim();
       }
 
       const signupRes = await signup(signupPayload).unwrap();
-      refreshCaptcha();
 
       // ✅ NEW USER → AUTHENTICATOR
       if (selectedMFAMethod === 'authenticator') {
@@ -1128,7 +1189,6 @@ const handleMFAMethodSelection = async () => {
       try {
         const resumeRes = await resumePendingSignup({
           email,
-          captcha_token: captchaToken,
           otp_session_id: getOtpSessionId(),
         }).unwrap();
 
@@ -1156,11 +1216,25 @@ const handleMFAMethodSelection = async () => {
       }
 
       if (selectedMFAMethod === 'sms') {
-        setSmsSent(true);
-        setOtp(Array(OTP_LENGTH).fill(''));
-        setAttempts(0);
-        setStep('verifySms');
-        return;
+        try {
+          const resendRes = await resendSmsMfa({
+            email,
+            otp_session_id: getOtpSessionId(),
+          }).unwrap();
+          setSmsSent(true);
+          setOtp(Array(OTP_LENGTH).fill(''));
+          setAttempts(0);
+          setCooldown(resendRes.cooldown_seconds ?? 45);
+          setError('');
+          setStep('verifySms');
+          return;
+        } catch (resendErr: unknown) {
+          applyAuthError(
+            resendErr,
+            'Signup already started, but SMS resend failed. Try again or pick another method.',
+          );
+          return;
+        }
       }
     }
 
@@ -1433,7 +1507,7 @@ useEffect(() => {
 const handleResendEmail = async () => {
   if (cooldown > 0 || guardRateLimit() || isAuthBusy) return;
 
-  if (!captchaToken) {
+  if (!isNewUser && !captchaToken) {
     setError('Complete the CAPTCHA before resending the OTP');
     return;
   }
@@ -1444,7 +1518,7 @@ const handleResendEmail = async () => {
 
     const res = await sendEmailOtp({
       email,
-      captcha_token: captchaToken,
+      ...(isNewUser ? { flow: 'signup' } : { captcha_token: captchaToken }),
       otp_session_id: getOtpSessionId(),
       ...(mfaChallengeToken
         ? { mfa_challenge_token: mfaChallengeToken }
@@ -1454,11 +1528,11 @@ const handleResendEmail = async () => {
     setRateLimitSeconds(0);
     setCooldown(res.cooldown_seconds ?? 45);
     setEmailCode('');
-    setCaptchaToken('');
+    if (!isNewUser) setCaptchaToken('');
     setVerificationSent(true);
   } catch (err: unknown) {
     applyAuthError(err, 'Failed to resend OTP');
-    refreshCaptcha();
+    if (!isNewUser) refreshCaptcha();
   } finally {
     stopAuthLoading('resend_email');
   }
@@ -1498,7 +1572,7 @@ useEffect(() => {
 const handleResendSms = async () => {
   if (cooldown > 0 || guardRateLimit() || isAuthBusy) return;
 
-  if (!captchaToken) {
+  if (!isNewUser && !captchaToken) {
     setError('Complete the CAPTCHA before resending the OTP');
     return;
   }
@@ -1509,17 +1583,17 @@ const handleResendSms = async () => {
 
     const res = await resendSmsMfa({
       email,
-      captcha_token: captchaToken,
+      ...(isNewUser ? { flow: 'signup' } : { captcha_token: captchaToken }),
       otp_session_id: getOtpSessionId(),
     }).unwrap();
 
     setRateLimitSeconds(0);
     setCooldown(res.cooldown_seconds ?? 45);
     setOtp(Array(OTP_LENGTH).fill(''));
-    refreshCaptcha();
+    if (!isNewUser) refreshCaptcha();
   } catch (err: unknown) {
     applyAuthError(err, 'Failed to resend OTP');
-    refreshCaptcha();
+    if (!isNewUser) refreshCaptcha();
   } finally {
     stopAuthLoading('resend_sms');
   }
@@ -1576,8 +1650,7 @@ const showSmsPhoneInput =
   (isNewUser || (!isLoginMfaChallenge && !isNewUser));
 
 const showEmailCaptcha =
-  selectedMFAMethod === 'email' &&
-  (isNewUser || (!isLoginMfaChallenge && !isNewUser));
+  selectedMFAMethod === 'email' && !isNewUser && !isLoginMfaChallenge;
 
 const orderedMfaMethods =
   isLoginMfaChallenge && loginPrimaryMFAMethod
@@ -1590,9 +1663,10 @@ const orderedMfaMethods =
 const getMfaMethodMeta = (method: MFAMethod) => {
   if (method === 'authenticator') {
     return {
-      icon: <Smartphone className="h-4 w-4 text-primary" />,
-      title: 'Authenticator App',
-      description: 'Use Google Authenticator, Authy, or similar apps.',
+      icon: <Smartphone className="h-4 w-4 text-[var(--accent-teal)]" />,
+      title: 'Authenticator app',
+      description:
+        'Codes from Google Authenticator, 1Password, or Authy.',
       fallbackBadge: 'Most Secure',
       badgeVariant: 'secondary' as const,
     };
@@ -1600,22 +1674,99 @@ const getMfaMethodMeta = (method: MFAMethod) => {
 
   if (method === 'email') {
     return {
-      icon: <Mail className="h-4 w-4 text-blue-500" />,
-      title: 'Email Verification',
-      description: 'Receive codes via email.',
+      icon: <Mail className="h-4 w-4 text-[var(--accent-teal)]" />,
+      title: 'Email code',
+      description: email
+        ? `A 6-digit code to ${email}.`
+        : 'A 6-digit code to your email.',
       fallbackBadge: 'Convenient',
       badgeVariant: 'outline' as const,
     };
   }
 
+  const phoneHint = phoneNumber.trim()
+    ? `A code to ${phoneNumber.trim().replace(/\d(?=\d{4})/g, '·')}.`
+    : 'A code to your mobile number.';
+
   return {
-    icon: <MessageSquare className="h-4 w-4 text-gray-400" />,
-    title: 'SMS / Text Message',
-    description: 'Receive verification codes via SMS.',
+    icon: <MessageSquare className="h-4 w-4 text-[var(--ink-muted)]" />,
+    title: 'Text message',
+    description: phoneHint,
     fallbackBadge: 'Medium',
     badgeVariant: 'outline' as const,
   };
 };
+
+const signupStepIndex: 1 | 2 | 3 =
+  step === 'plan_selection' || step === 'payment'
+    ? 3
+    : step === 'credentials'
+      ? 1
+      : 2;
+
+const authMode: 'login' | 'signup' = isNewUser ? 'signup' : 'login';
+
+const mobileStepLabel = (() => {
+  if (isNewUser) {
+    if (step === 'credentials') return 'Step 1 of 3';
+    if (step === 'plan_selection' || step === 'payment') return 'Step 3 of 3';
+    if (
+      step === 'mfa_method_selection' ||
+      step === 'setupMfa' ||
+      step === 'verifyMfa' ||
+      step === 'verifyEmail' ||
+      step === 'verifySms'
+    ) {
+      return 'Step 2 of 3';
+    }
+  }
+  if (
+    !isNewUser &&
+    (step === 'verifyMfa' ||
+      step === 'verifyEmail' ||
+      step === 'verifySms' ||
+      step === 'mfa_method_selection')
+  ) {
+    return 'Step 2 of 2';
+  }
+  return undefined;
+})();
+
+const mobileTitle = (() => {
+  if (step === 'plan_selection') return 'Choose your plan';
+  if (step === 'payment') return 'Secure checkout';
+  if (step === 'credentials') {
+    return isNewUser ? 'Create your account' : 'Welcome back';
+  }
+  if (step === 'mfa_method_selection') {
+    return isLoginMfaChallenge
+      ? 'Try another way'
+      : 'How should we verify it’s you?';
+  }
+  if (
+    step === 'verifyMfa' ||
+    step === 'verifyEmail' ||
+    step === 'verifySms' ||
+    step === 'setupMfa'
+  ) {
+    return 'Enter the code we texted you';
+  }
+  if (step === 'forgot_password') return 'Forgot password';
+  if (step === 'reset_password') return 'Reset password';
+  return 'Orderly Affairs';
+})();
+
+const passwordStrengthHint = (() => {
+  if (!password) return undefined;
+  if (passwordStrength.score >= 5) return 'Very strong';
+  if (passwordStrength.score >= 4) {
+    return passwordStrength.special
+      ? 'Strong'
+      : 'Strong · add one more symbol for the best score';
+  }
+  if (passwordStrength.score >= 3) return 'Moderate · keep going';
+  return 'Weak · add length and variety';
+})();
 
 const backButtonLabel =
   isLoginMfaChallenge &&
@@ -1626,71 +1777,44 @@ const backButtonLabel =
   // -----------------------------------------------------------
   // RENDER
   // -----------------------------------------------------------
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-3">
-          <Image
-            src="/images/brand-logo.png"
-            alt="Orderly Logo"
-            width={120}
-            height={60}
-            className="mx-auto"
-          />
-          <h1 className="text-2xl font-bold">
-            {step === 'plan_selection'
-              ? 'Choose Your Plan'
-              : step === 'payment'
-                ? 'Secure Checkout'
-                : step === 'credentials'
-                  ? isNewUser
-                    ? 'Create Your Account'
-                    : 'Welcome Back'
-                  : step === 'mfa_method_selection'
-                    ? isLoginMfaChallenge
-                      ? 'Try Another Way'
-                      : 'Choose Security Method'
-                    : step === 'setupMfa'
-                      ? 'Set Up Two-Factor Authentication'
-                      : 'Enter Verification Code'}
-          </h1>
+  const isPasswordResetFlow =
+    step === 'forgot_password' || step === 'reset_password';
 
-          <p className="text-muted-foreground mt-2">
-            {step === 'plan_selection'
-              ? 'Select the subscription that works best for you'
-              : step === 'payment'
-                ? 'Complete your secure payment'
-                : step === 'credentials'
-                  ? isNewUser
-                    ? 'Set up your secure Orderly Affairs account'
-                    : 'Sign in to your Orderly Affairs account'
-                  : step === 'mfa_method_selection'
-                    ? isLoginMfaChallenge
-                      ? 'Use another linked verification method'
-                      : 'Select your preferred two-factor authentication method'
-                    : step === 'setupMfa'
-                      ? 'Complete your security setup'
-                      : 'Enter the code to verify your identity'}
-          </p>
-        </div>
-        <Card className="glass-card shadow-[0_40px_80px_-20px_rgba(30,41,59,0.12)] border border-slate-100">
-          <CardContent className="px-0 sm:px-6 pt-6 md:pt-9">
+  return (
+    <AuthPortalShell
+      mode={authMode}
+      signupStep={signupStepIndex}
+      mobileTitle={mobileTitle}
+      mobileStepLabel={mobileStepLabel}
+      mobileShowTagline={!isNewUser && step === 'credentials'}
+      mobileChrome={isPasswordResetFlow ? 'reset' : 'brand'}
+      onMobileBack={handleBack}
+    >
+      <AuthCard
+        flushOnMobile={
+          step === 'credentials' || step === 'reset_password'
+        }
+      >
             {error &&
               rateLimitSeconds <= 0 &&
               step !== 'payment' &&
-              step !== 'plan_selection' && (
+              step !== 'plan_selection' &&
+              step !== 'forgot_password' &&
+              step !== 'reset_password' && (
               <Alert variant="destructive" className="mb-4">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
             <RateLimitBanner seconds={rateLimitSeconds} />
-            {step !== 'credentials' && (
+            {step !== 'credentials' &&
+              step !== 'forgot_password' &&
+              step !== 'reset_password' && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleBack}
-                className="mb-4 flex items-center gap-2"
+                className="mb-4 flex items-center gap-2 text-[var(--ink-muted)]"
               >
                 <ArrowLeft className="h-4 w-4" />
                 {backButtonLabel}
@@ -1698,6 +1822,7 @@ const backButtonLabel =
             )}
 
             <AnimatePresence mode="wait">
+              {step !== 'payment' ? (
               <motion.div
                 key={step}
                 variants={stepVariants}
@@ -1711,300 +1836,456 @@ const backButtonLabel =
                   <form
                     data-cy="auth-credentials-form"
                     onSubmit={handleCredentialsSubmit}
-                    className="space-y-4"
+                    className="space-y-3 lg:space-y-4"
                   >
-                    {/* Cloudflare first — then form unlocks */}
-                    <TurnstileCaptcha
-                      gateMode
-                      onTokenChange={setCaptchaToken}
-                      onReadyChange={setCaptchaReady}
-                      resetKey={captchaResetKey}
-                    />
+                    {!isNewUser ? (
+                      <AuthModeToggle
+                        isNewUser={isNewUser}
+                        disabled={isAuthBusy}
+                        onChange={next => {
+                          setIsNewUser(next);
+                          // Captcha is login/reset only — don't gate signup on it
+                          if (!next) refreshCaptcha();
+                          else {
+                            setCaptchaToken('');
+                            setCaptchaReady(true);
+                          }
+                        }}
+                      />
+                    ) : null}
 
-                    {!securityReady ? (
-                      <p className="text-center text-sm text-muted-foreground">
-                        Form unlocks after Cloudflare security check finishes.
+                    <div
+                      className={cn(
+                        'mb-0 space-y-0',
+                        isNewUser ? 'lg:mb-[22px]' : 'mb-6 hidden lg:block',
+                      )}
+                    >
+                      <h2
+                        className={cn(
+                          'auth-serif-title m-0 font-semibold',
+                          isNewUser
+                            ? 'hidden text-[21px] lg:block'
+                            : 'text-[22px]',
+                        )}
+                      >
+                        {isNewUser ? 'Create Your Account' : 'Welcome back'}
+                      </h2>
+                      <p
+                        className={cn(
+                          'mt-[7px] mb-0 text-[14px] leading-snug text-[#6e7c77]',
+                          isNewUser ? 'hidden lg:block' : '',
+                        )}
+                      >
+                        {isNewUser
+                          ? 'Set up your secure Orderly Affairs account.'
+                          : 'Sign in with your email or phone number.'}
                       </p>
+                    </div>
+
+                    {!isNewUser ? (
+                      <>
+                        <TurnstileCaptcha
+                          gateMode
+                          onTokenChange={setCaptchaToken}
+                          onReadyChange={setCaptchaReady}
+                          resetKey={captchaResetKey}
+                        />
+
+                        {!securityReady ? (
+                          <p className="text-center text-sm text-[#6e7c77]">
+                            Form unlocks after Cloudflare security check finishes.
+                          </p>
+                        ) : null}
+                      </>
                     ) : null}
 
                     <div
                       className={
-                        !securityReady
-                          ? 'space-y-4 opacity-40 pointer-events-none select-none'
-                          : 'space-y-4'
+                        !isNewUser && !securityReady
+                          ? 'space-y-3 opacity-40 pointer-events-none select-none lg:space-y-3.5'
+                          : 'space-y-3 lg:space-y-3.5'
                       }
-                      aria-disabled={!securityReady}
+                      aria-disabled={!isNewUser && !securityReady}
                     >
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email Address</Label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="email"
-                          data-cy="auth-email"
-                          type="email"
-                          value={email}
-                          onChange={e => setEmail(e.target.value)}
-                          placeholder="Enter your email"
-                          className="pl-9 enhanced-field-frame"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="password">Password</Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="password"
-                          data-cy="auth-password"
-                          type={showPassword ? 'text' : 'password'}
-                          value={password}
-                          onChange={e => {
-                            setPassword(e.target.value);
-                            evaluatePasswordStrength(e.target.value);
-                          }}
-                          placeholder="Enter your password"
-                          className="pl-9 enhanced-field-frame"
-                          required
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
-                        >
-                          {showPassword ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                      {!isNewUser && (
-                        <Button
-                          type="button"
-                          data-cy="auth-forgot-password"
-                          variant="link"
-                          className="text-xs cursor-pointer flex items-center gap-2"
-                          onClick={handleForgotPasswordClick}
-                          disabled={isAuthBusy}
-                        >
-                          {isAuthLoading('forgot_password') && (
-                            <span className="h-3 w-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></span>
-                          )}
-                          Forgot password?
-                        </Button>
-                      )}
-                    </div>
-
-                    {isNewUser && (
-                      <>
-                        {password && (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">
-                                Password Strength
-                              </span>
-                              <span
-                                className={`text-sm ${
-                                  getPasswordStrengthInfo().color
-                                }`}
-                              >
-                                {getPasswordStrengthInfo().text}
-                              </span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-1.5">
-                              <div
-                                className={`h-1.5 rounded-full transition-all duration-300 ${
-                                  getPasswordStrengthInfo().bg
-                                }`}
-                                style={{
-                                  width: `${
-                                    (passwordStrength.score / 5) * 100
-                                  }%`,
-                                }}
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-1 text-xs">
-                              <div
-                                className={
-                                  passwordStrength.length
-                                    ? 'text-green-600'
-                                    : 'text-gray-400'
-                                }
-                              >
-                                ✓ 12+ characters
-                              </div>
-                              <div
-                                className={
-                                  passwordStrength.uppercase
-                                    ? 'text-green-600'
-                                    : 'text-gray-400'
-                                }
-                              >
-                                ✓ Uppercase letter
-                              </div>
-                              <div
-                                className={
-                                  passwordStrength.lowercase
-                                    ? 'text-green-600'
-                                    : 'text-gray-400'
-                                }
-                              >
-                                ✓ Lowercase letter
-                              </div>
-                              <div
-                                className={
-                                  passwordStrength.number
-                                    ? 'text-green-600'
-                                    : 'text-gray-400'
-                                }
-                              >
-                                ✓ Number
-                              </div>
-                              <div
-                                className={
-                                  passwordStrength.special
-                                    ? 'text-green-600'
-                                    : 'text-gray-400'
-                                }
-                              >
-                                ✓ Special character
-                              </div>
-                            </div>
+                    {isNewUser ? (
+                      <div className="space-y-3.5">
+                        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                          <div>
+                            <AuthFieldLabel htmlFor="firstName">
+                              First name
+                            </AuthFieldLabel>
+                            <Input
+                              id="firstName"
+                              data-cy="auth-first-name"
+                              type="text"
+                              value={firstName}
+                              onChange={e => setFirstName(e.target.value)}
+                              placeholder="Margaret"
+                              className="auth-field"
+                              autoComplete="given-name"
+                              required
+                            />
                           </div>
-                        )}
-                        <div className="space-y-2">
-                          <Label htmlFor="confirmPassword">
-                            Confirm Password
-                          </Label>
+                          <div>
+                            <AuthFieldLabel htmlFor="lastName">
+                              Last name
+                            </AuthFieldLabel>
+                            <Input
+                              id="lastName"
+                              data-cy="auth-last-name"
+                              type="text"
+                              value={lastName}
+                              onChange={e => setLastName(e.target.value)}
+                              placeholder="Bell"
+                              className="auth-field"
+                              autoComplete="family-name"
+                              required
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <AuthFieldLabel htmlFor="email">Email</AuthFieldLabel>
+                          <Input
+                            id="email"
+                            data-cy="auth-email"
+                            type="email"
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                            placeholder="you@email.com"
+                            className="auth-field"
+                            autoComplete="email"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <AuthFieldLabel htmlFor="password">
+                            New password
+                          </AuthFieldLabel>
                           <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              id="password"
+                              data-cy="auth-password"
+                              type={showPassword ? 'text' : 'password'}
+                              value={password}
+                              onChange={e => {
+                                setPassword(e.target.value);
+                                evaluatePasswordStrength(e.target.value);
+                              }}
+                              placeholder="Create a password"
+                              className="auth-field pr-16"
+                              autoComplete="new-password"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="auth-show-toggle absolute right-1 top-1/2 -translate-y-1/2"
+                            >
+                              {showPassword ? 'Hide' : 'Show'}
+                            </button>
+                          </div>
+                          {password ? (
+                            <PasswordStrengthBars
+                              score={passwordStrength.score}
+                              hint={passwordStrengthHint}
+                            />
+                          ) : null}
+                        </div>
+                        <div>
+                          <AuthFieldLabel htmlFor="confirmPassword">
+                            Confirm password
+                          </AuthFieldLabel>
+                          <div className="relative">
                             <Input
                               id="confirmPassword"
                               data-cy="auth-confirm-password"
                               type={showConfirmPassword ? 'text' : 'password'}
                               value={confirmPassword}
                               onChange={e => setConfirmPassword(e.target.value)}
-                              placeholder="Confirm your password"
-                              className="pl-9 enhanced-field-frame"
+                              placeholder="Re-enter your password"
+                              className="auth-field pr-16"
+                              autoComplete="new-password"
                               required
                             />
-                            <Button
+                            <button
                               type="button"
-                              variant="ghost"
-                              size="sm"
                               onClick={() =>
                                 setShowConfirmPassword(!showConfirmPassword)
                               }
-                              className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
+                              className="auth-show-toggle absolute right-1 top-1/2 -translate-y-1/2"
                             >
-                              {showConfirmPassword ? (
-                                <EyeOff className="h-4 w-4" />
-                              ) : (
-                                <Eye className="h-4 w-4" />
+                              {showConfirmPassword ? 'Hide' : 'Show'}
+                            </button>
+                          </div>
+                          {confirmPassword && password !== confirmPassword ? (
+                            <p className="mt-1.5 text-xs text-red-500">
+                              Passwords do not match
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <AuthFieldLabel htmlFor="email">
+                            Email or phone
+                          </AuthFieldLabel>
+                          <Input
+                            id="email"
+                            data-cy="auth-email"
+                            type="text"
+                            inputMode="email"
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                            placeholder="you@email.com or +1…"
+                            className="auth-field"
+                            autoComplete="username"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <AuthFieldLabel htmlFor="password">
+                            Password
+                          </AuthFieldLabel>
+                          <div className="relative">
+                            <Input
+                              id="password"
+                              data-cy="auth-password"
+                              type={showPassword ? 'text' : 'password'}
+                              value={password}
+                              onChange={e => {
+                                setPassword(e.target.value);
+                                evaluatePasswordStrength(e.target.value);
+                              }}
+                              placeholder="Enter your password"
+                              className="auth-field pr-16"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="auth-show-toggle absolute right-1 top-1/2 -translate-y-1/2"
+                            >
+                              {showPassword ? 'Hide' : 'Show'}
+                            </button>
+                          </div>
+                          <div className="mt-3 mb-[22px] hidden items-center justify-between gap-3 text-[13px] lg:flex">
+                            <label className="flex items-center gap-2 text-[#3c4a46]">
+                              <input
+                                type="checkbox"
+                                checked={keepSignedIn}
+                                onChange={e =>
+                                  setKeepSignedIn(e.target.checked)
+                                }
+                                className="h-[17px] w-[17px] rounded-[5px] border-[1.5px] border-[#cfd8d4] accent-[#2e7d6e]"
+                              />
+                              Keep me signed in
+                            </label>
+                            <Button
+                              type="button"
+                              data-cy="auth-forgot-password"
+                              variant="link"
+                              className="auth-link h-auto p-0 text-[13px]"
+                              onClick={handleForgotPasswordClick}
+                              disabled={isAuthBusy}
+                            >
+                              {isAuthLoading('forgot_password') && (
+                                <span className="mr-2 h-3 w-3 border-2 border-[#2e7d6e] border-t-transparent rounded-full animate-spin"></span>
                               )}
+                              Forgot password?
                             </Button>
                           </div>
                         </div>
                       </>
                     )}
 
+                    {isNewUser && (
+                      <label className="mt-1 flex items-start gap-2.5 text-[12.5px] leading-[1.5] text-[#3c4a46] lg:mt-4 lg:text-[13px]">
+                        <input
+                          type="checkbox"
+                          checked={agreeToTerms}
+                          onChange={e => setAgreeToTerms(e.target.checked)}
+                          className="mt-0.5 h-[18px] w-[18px] shrink-0 rounded-[5px] border-[1.5px] border-[#2e7d6e] accent-[#2e7d6e]"
+                        />
+                        <span>
+                          I agree to the terms and understand this kit is not
+                          legal advice.
+                        </span>
+                      </label>
+                    )}
+
                     <Button
                       data-cy="auth-submit"
-                      className="w-full btn-primary"
+                      className="w-full btn-primary mt-auto lg:mt-[18px]"
                       disabled={
                         isAuthBusy ||
                         rateLimitSeconds > 0 ||
-                        !securityReady
+                        (!isNewUser && !securityReady) ||
+                        (isNewUser &&
+                          (!!confirmPassword && password !== confirmPassword))
                       }
                     >
                       {rateLimitedButtonLabel(
                         rateLimitSeconds,
-                        isNewUser ? 'Create Account' : 'Sign In',
+                        'Continue',
                         'Please wait…',
                         isAuthLoading('sign_in'),
                       )}
                     </Button>
 
-                    <Button
-                      type="button"
-                      data-cy="auth-toggle-mode"
-                      variant="link"
-                      onClick={() => {
-                        setIsNewUser(!isNewUser);
-                        refreshCaptcha();
-                      }}
-                      className="w-full text-sm cursor-pointer"
-                    >
-                      {isNewUser
-                        ? 'Already have an account? Sign in'
-                        : 'Need an account? Create one'}
-                    </Button>
+                    {!isNewUser ? (
+                      <>
+                        <button
+                          type="button"
+                          className="inline-flex min-h-[52px] w-full items-center justify-center rounded-[26px] border border-[#e4e6e1] bg-white text-[14px] font-medium text-[#132b26] lg:hidden"
+                          onClick={() =>
+                            toast.message('Face ID coming soon', {
+                              description:
+                                'Use email and password for now.',
+                            })
+                          }
+                        >
+                          Use Face ID
+                        </button>
+
+                        <div className="relative my-5 hidden items-center gap-3 text-[12px] text-[#a5b1ad] lg:flex">
+                          <span className="h-px flex-1 bg-[#eceae4]" />
+                          or
+                          <span className="h-px flex-1 bg-[#eceae4]" />
+                        </div>
+                        <button
+                          type="button"
+                          className="hidden min-h-12 w-full items-center justify-center rounded-3xl border border-[#e4e6e1] bg-white text-[14px] font-medium text-[#132b26] transition hover:bg-[#f7f6f2] lg:inline-flex"
+                          onClick={() =>
+                            toast.message('Passkeys coming soon', {
+                              description:
+                                'Use email and password for now.',
+                            })
+                          }
+                        >
+                          Use a passkey instead
+                        </button>
+                        <p className="mt-[22px] mb-0 hidden text-center text-[13px] text-[#6e7c77] lg:block">
+                          Given a password card?{' '}
+                          <button
+                            type="button"
+                            className="auth-link"
+                            onClick={() =>
+                              toast.message('Access codes coming soon', {
+                                description:
+                                  'Sign in with your email and password for now.',
+                              })
+                            }
+                          >
+                            Enter your access code
+                          </button>
+                        </p>
+                        <button
+                          type="button"
+                          data-cy="auth-forgot-password-mobile"
+                          className="auth-link mx-auto block text-center text-[13px] lg:hidden"
+                          onClick={handleForgotPasswordClick}
+                          disabled={isAuthBusy}
+                        >
+                          Forgot password?
+                        </button>
+                      </>
+                    ) : (
+                      <p className="mb-1.5 mt-4 text-center text-[12.5px] text-[#6e7c77] lg:mt-4 lg:text-[13px]">
+                        Already have an account?{' '}
+                        <button
+                          type="button"
+                          data-cy="auth-toggle-mode"
+                          onClick={() => {
+                            setIsNewUser(false);
+                            refreshCaptcha();
+                          }}
+                          className="auth-link"
+                        >
+                          Sign in
+                        </button>
+                      </p>
+                    )}
                     </div>
                   </form>
                 )}
                 {step === 'mfa_method_selection' && (
                   <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      {isLoginMfaChallenge && !isNewUser
-                        ? 'Your primary method starts automatically. Choose another linked method if you need a fallback.'
-                        : "Choose how you'd like to receive verification codes for two-factor authentication:"}
-                    </p>
+                    <div className="space-y-0">
+                      {isNewUser ? (
+                        <p className="auth-step-kicker">Step 2 of 3</p>
+                      ) : null}
+                      <h2 className="auth-serif-title mt-3 mb-1 text-[19px] font-semibold">
+                        {isLoginMfaChallenge
+                          ? 'Try another way'
+                          : 'How should we verify it’s you?'}
+                      </h2>
+                      <p className="mb-4 text-[13.5px] leading-snug text-[#6e7c77]">
+                        {isLoginMfaChallenge && !isNewUser
+                          ? 'Your primary method starts automatically. Choose another linked method if you need a fallback.'
+                          : 'You can add the others later in Settings.'}
+                      </p>
+                    </div>
 
-                    <div className="space-y-3">
+                    <div className="flex flex-col gap-2.5">
                       {orderedMfaMethods.map(method => {
                         const meta = getMfaMethodMeta(method);
                         const available = isMethodAvailable(method);
+                        const selected = selectedMFAMethod === method;
+                        const badge =
+                          getMethodBadge(method) || meta.fallbackBadge;
 
                         return (
                           <label
                             key={method}
-                            className={`flex items-start gap-3 p-4 border rounded-lg transition-colors ${
-                              available
-                                ? 'cursor-pointer hover:bg-muted/50'
-                                : 'cursor-not-allowed opacity-50'
-                            } ${
-                              isLoginMfaChallenge &&
-                              method === loginPrimaryMFAMethod
-                                ? 'border-primary/40 bg-primary/5'
-                                : ''
-                            }`}
+                            className={cn(
+                              'flex cursor-pointer items-center gap-3.5 rounded-[13px] p-4 transition',
+                              selected
+                                ? 'border-[1.5px] border-[#2e7d6e] bg-[#f4f8f7]'
+                                : 'border border-[#e4e6e1] bg-white',
+                              !available && 'cursor-not-allowed opacity-50',
+                            )}
                           >
                             <input
                               type="radio"
                               name="mfaMethod"
                               value={method}
-                              checked={selectedMFAMethod === method}
+                              checked={selected}
                               disabled={!available}
                               onChange={e =>
                                 setSelectedMFAMethod(
                                   e.target.value as MFAMethod,
                                 )
                               }
-                              className="mt-1"
+                              className="sr-only"
                             />
-                            <div className="flex-1">
-                              <div className="flex flex-wrap items-center gap-2 mb-1">
-                                {meta.icon}
-                                <span className="font-medium">
-                                  {meta.title}
-                                </span>
-                                <Badge
-                                  variant={meta.badgeVariant}
-                                  className="text-xs"
-                                >
-                                  {getMethodBadge(method) ||
-                                    meta.fallbackBadge}
-                                </Badge>
-                              </div>
-                              <p className="text-sm text-muted-foreground">
+                            <span
+                              className={cn(
+                                'h-[18px] w-[18px] shrink-0 rounded-full',
+                                selected
+                                  ? 'bg-[#2e7d6e] shadow-[inset_0_0_0_3px_#fff]'
+                                  : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
+                              )}
+                              aria-hidden
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
+                                {meta.title}
+                              </p>
+                              <p className="mt-[3px] mb-0 text-[12.5px] text-[#5c6b66]">
                                 {meta.description}
                               </p>
                             </div>
+                            <span
+                              className={cn(
+                                'shrink-0 rounded-[5px] px-2 py-1 text-[11px] font-medium',
+                                selected || method === 'authenticator'
+                                  ? 'bg-[#e8f1ee] text-[#1f5c52]'
+                                  : 'bg-[#f2f1ec] text-[#5c6b66]',
+                              )}
+                            >
+                              {badge}
+                            </span>
                           </label>
                         );
                       })}
@@ -2018,23 +2299,25 @@ const backButtonLabel =
                           label="Mobile Number"
                           showValidation={showPhoneValidation}
                         />
-                        <TurnstileCaptcha
-                          gateMode
-                          onTokenChange={setCaptchaToken}
-                          onReadyChange={setCaptchaReady}
-                          resetKey={captchaResetKey}
-                        />
+                        {!isNewUser ? (
+                          <TurnstileCaptcha
+                            gateMode
+                            onTokenChange={setCaptchaToken}
+                            onReadyChange={setCaptchaReady}
+                            resetKey={captchaResetKey}
+                          />
+                        ) : null}
                       </>
                     )}
 
-                    {showEmailCaptcha && (
+                    {showEmailCaptcha && !isNewUser ? (
                       <TurnstileCaptcha
                           gateMode
                           onTokenChange={setCaptchaToken}
                           onReadyChange={setCaptchaReady}
                           resetKey={captchaResetKey}
                         />
-                    )}
+                    ) : null}
 
                     <Button
                       data-cy="auth-mfa-continue"
@@ -2042,62 +2325,51 @@ const backButtonLabel =
                       className="w-full btn-primary"
                       disabled={
                         isAuthBusy ||
-                        (showSmsPhoneInput && !securityReady) ||
-                        (showEmailCaptcha && !securityReady)
+                        (!isNewUser && showSmsPhoneInput && !securityReady) ||
+                        (!isNewUser && showEmailCaptcha && !securityReady)
                       }
                     >
                       {isAuthLoading('mfa_method')
                         ? isLoginMfaChallenge
                           ? 'Starting...'
                           : 'Setting up...'
-                        : isNewUser
-                          ? 'Create Account'
-                          : isLoginMfaChallenge
-                            ? 'Use This Method'
-                            : 'Continue'}
+                        : isLoginMfaChallenge
+                          ? 'Use this method'
+                          : 'Continue'}
                     </Button>
                   </div>
                 )}
                 {/* STEP 3: Authenticator Setup/Verify */}
                 {(step === 'setupMfa' || step === 'verifyMfa') && (
-                  <div className="space-y-4 text-center">
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <p className="auth-step-kicker">
+                        {isNewUser ? 'Step 2 of 3' : 'Step 2 of 2'}
+                      </p>
+                      <h2 className="auth-serif-title text-[1.65rem]">
+                        Enter the code from your app
+                      </h2>
+                      <p className="text-[14px] text-[var(--ink-muted)]">
+                        {!hasLinkedAuthenticator && qrCodeUrl
+                          ? 'Scan the QR code, then enter the 6-digit code.'
+                          : 'Open your authenticator app and enter the 6-digit code.'}
+                      </p>
+                    </div>
                     {!hasLinkedAuthenticator && qrCodeUrl ? (
                       <>
-                        {/* <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setStep('mfa_method_selection')}
-                          className="flex items-center gap-1 mb-2"
-                        >
-                          <ArrowLeft className="h-4 w-4" /> Back
-                        </Button> */}
-
-                        <Alert>
-                          <Smartphone className="h-4 w-4" />
-                          <AlertDescription>
-                            Scan this QR code with your authenticator app.
-                          </AlertDescription>
-                        </Alert>
                         <Image
                           src={qrCodeUrl}
                           alt="QR"
                           width={192}
                           height={192}
-                          className="mx-auto"
+                          className="mx-auto rounded-xl border border-[rgba(19,43,38,0.1)]"
                         />
-                        <form onSubmit={handleVerifyMfa} className="space-y-3">
-                          <Input
-                            type="text"
+                        <form onSubmit={handleVerifyMfa} className="space-y-4">
+                          <SixDigitOtpInput
+                            idPrefix="totp-setup"
                             value={mfaCode}
-                            onChange={e =>
-                              setMfaCode(
-                                e.target.value.replace(/\D/g, '').slice(0, 6),
-                              )
-                            }
-                            placeholder="Enter 6-digit code"
-                            className="text-center tracking-widest text-lg"
-                            required
-                            maxLength={6}
+                            onChange={setMfaCode}
+                            disabled={isAuthLoading('verify_mfa')}
                           />
                           <Button
                             type="submit"
@@ -2109,73 +2381,68 @@ const backButtonLabel =
                           >
                             {isAuthLoading('verify_mfa')
                               ? 'Verifying...'
-                              : 'Verify & Complete Setup'}
+                              : 'Open my vault'}
                           </Button>
                         </form>
                       </>
                     ) : (
-                      <>
-                        <Alert>
-                          <Smartphone className="h-4 w-4" />
-                          <AlertDescription>
-                            Open your authenticator app and enter the 6-digit
-                            code for Orderly Affairs.
-                          </AlertDescription>
-                        </Alert>
-                        <form onSubmit={handleVerifyMfa} className="space-y-3">
-                          <Input
-                            type="text"
-                            value={mfaCode}
-                            onChange={e =>
-                              setMfaCode(
-                                e.target.value.replace(/\D/g, '').slice(0, 6),
-                              )
-                            }
-                            placeholder="Enter 6-digit code"
-                            className="text-center tracking-widest text-lg"
-                            required
-                            maxLength={6}
-                          />
-                          <Button
-                            type="submit"
-                            className="w-full btn-primary"
-                            disabled={
-                              isAuthLoading('verify_mfa') ||
-                              mfaCode.length !== 6
-                            }
-                          >
-                            {isAuthLoading('verify_mfa')
-                              ? 'Verifying...'
-                              : 'Verify & Complete Setup'}
-                          </Button>
-                        </form>
-                      </>
+                      <form onSubmit={handleVerifyMfa} className="space-y-4">
+                        <SixDigitOtpInput
+                          idPrefix="totp-verify"
+                          value={mfaCode}
+                          onChange={setMfaCode}
+                          disabled={isAuthLoading('verify_mfa')}
+                        />
+                        <Button
+                          type="submit"
+                          className="w-full btn-primary"
+                          disabled={
+                            isAuthLoading('verify_mfa') ||
+                            mfaCode.length !== 6
+                          }
+                        >
+                          {isAuthLoading('verify_mfa')
+                            ? 'Verifying...'
+                            : 'Open my vault'}
+                        </Button>
+                      </form>
                     )}
 
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="cursor-pointer"
-                      onClick={() => {
-                        setStep('mfa_method_selection');
-                      }}
-                    >
-                      Choose another method
-                    </Button>
+                    <p className="text-center text-[13px] text-[var(--ink-muted)]">
+                      Didn&apos;t arrive?{' '}
+                      <button
+                        type="button"
+                        className="auth-link"
+                        onClick={() => {
+                          setStep('mfa_method_selection');
+                        }}
+                      >
+                        Choose another method
+                      </button>
+                    </p>
                   </div>
                 )}
 
                 {/* STEP 4: Email Verification */}
                 {step === 'verifyEmail' && (
-                  <div className="space-y-4 text-center">
-                    <Alert>
-                      <Mail className="h-4 w-4" />
-                      <AlertDescription>
+                  <div className="space-y-4">
+                    <div className="space-y-0">
+                      <p className="auth-step-kicker">
+                        {isNewUser ? 'Step 2 of 3' : 'Step 2 of 2'}
+                      </p>
+                      <h2 className="auth-serif-title mt-3 mb-0 text-[22px] font-semibold">
+                        Enter the code we emailed you
+                      </h2>
+                      <p className="mt-[7px] mb-6 text-[14px] text-[#6e7c77]">
                         {verificationSent
-                          ? `A verification code has been sent to ${email}.`
-                          : `We'll send a 6-digit verification code to ${email}.`}
-                      </AlertDescription>
-                    </Alert>
+                          ? `Sent to ${email}.${
+                              cooldown > 0
+                                ? ` It expires in ${formatRetryCountdown(cooldown)}.`
+                                : ''
+                            }`
+                          : `We'll send a 6-digit code to ${email}.`}
+                      </p>
+                    </div>
 
                     {!verificationSent ? (
                       isLoginMfaChallenge &&
@@ -2188,19 +2455,21 @@ const backButtonLabel =
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          <TurnstileCaptcha
+                          {!isNewUser ? (
+                            <TurnstileCaptcha
                           gateMode
                           onTokenChange={setCaptchaToken}
                           onReadyChange={setCaptchaReady}
                           resetKey={captchaResetKey}
                         />
+                          ) : null}
                           <Button
                             onClick={handleSendEmailCode}
                             className="w-full btn-primary"
                             disabled={
                               isAuthBusy ||
                               rateLimitSeconds > 0 ||
-                              !securityReady
+                              (!isNewUser && !securityReady)
                             }
                           >
                             {rateLimitedButtonLabel(
@@ -2213,19 +2482,15 @@ const backButtonLabel =
                         </div>
                       )
                     ) : (
-                      <form onSubmit={handleVerifyEmail} className="space-y-3">
-                        <Input
-                          type="text"
+                      <form onSubmit={handleVerifyEmail} className="space-y-5">
+                        <SixDigitOtpInput
+                          idPrefix="email-otp"
                           value={emailCode}
-                          onChange={e =>
-                            setEmailCode(
-                              e.target.value.replace(/\D/g, '').slice(0, 6),
-                            )
+                          onChange={setEmailCode}
+                          disabled={
+                            isAuthLoading('verify_email') ||
+                            attempts >= MAX_ATTEMPTS
                           }
-                          placeholder="Enter 6-digit code"
-                          className="text-center tracking-widest text-lg"
-                          required
-                          maxLength={6}
                         />
                         <Button
                           type="submit"
@@ -2239,7 +2504,7 @@ const backButtonLabel =
                         >
                           {rateLimitedButtonLabel(
                             rateLimitSeconds,
-                            'Verify & Continue',
+                            'Open my vault',
                             'Verifying…',
                             isAuthLoading('verify_email'),
                           )}
@@ -2249,57 +2514,76 @@ const backButtonLabel =
 
                     {verificationSent && (
                       <>
-                        <Button
-                          variant="link"
-                          disabled={
-                            cooldown > 0 ||
-                            rateLimitSeconds > 0 ||
-                            !securityReady
-                          }
-                          onClick={handleResendEmail}
-                        >
-                          {rateLimitedButtonLabel(
-                            Math.max(cooldown, rateLimitSeconds),
-                            'Resend Code',
-                          )}
-                        </Button>
+                        <p className="mt-[18px] mb-0 text-center text-[13px] text-[#6e7c77]">
+                      Didn&apos;t arrive?{' '}
+                      <button
+                        type="button"
+                        className="auth-link disabled:opacity-50"
+                        disabled={
+                          cooldown > 0 ||
+                          rateLimitSeconds > 0 ||
+                          (!isNewUser && !securityReady)
+                        }
+                        onClick={handleResendEmail}
+                      >
+                        {rateLimitedButtonLabel(
+                          Math.max(cooldown, rateLimitSeconds),
+                          'Send it again',
+                        )}
+                      </button>
+                    </p>
 
-                        <TurnstileCaptcha
+                        {!isNewUser ? (
+                          <TurnstileCaptcha
                           gateMode
                           onTokenChange={setCaptchaToken}
                           onReadyChange={setCaptchaReady}
                           resetKey={captchaResetKey}
                         />
+                        ) : null}
 
                         {attempts > 0 && attempts < MAX_ATTEMPTS && (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-[#6e7c77]">
                             Failed attempts: {attempts} / {MAX_ATTEMPTS}
                           </p>
                         )}
                       </>
                     )}
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="cursor-pointer"
-                      onClick={() => {
-                        setSelectedMFAMethod('authenticator');
-                        setStep('mfa_method_selection');
-                      }}
-                    >
-                      Choose another method
-                    </Button>
+                    {!verificationSent ? (
+                      <p className="text-center text-[13px] text-[#6e7c77]">
+                        <button
+                          type="button"
+                          className="auth-link"
+                          onClick={() => {
+                            setSelectedMFAMethod('authenticator');
+                            setStep('mfa_method_selection');
+                          }}
+                        >
+                          Choose another method
+                        </button>
+                      </p>
+                    ) : null}
                   </div>
                 )}
                 {/* STEP: SMS Verification */}
                 {step === 'verifySms' && (
-                  <div className="space-y-4 text-center">
-                    <Alert>
-                      <MessageSquare className="h-4 w-4" />
-                      <AlertDescription>
-                        Enter the 6-digit code sent to your registered phone.
-                      </AlertDescription>
-                    </Alert>
+                  <div className="space-y-4">
+                    <div className="space-y-0">
+                      <p className="auth-step-kicker">
+                        {isNewUser ? 'Step 2 of 3' : 'Step 2 of 2'}
+                      </p>
+                      <h2 className="auth-serif-title mt-3 mb-0 text-[22px] font-semibold">
+                        Enter the code we texted you
+                      </h2>
+                      <p className="mt-[7px] mb-6 text-[14px] text-[#6e7c77]">
+                        {phoneNumber.trim()
+                          ? `Sent to ${phoneNumber.trim().replace(/\d(?=\d{4})/g, '·')}.`
+                          : 'Enter the 6-digit code sent to your phone.'}
+                        {cooldown > 0
+                          ? ` It expires in ${formatRetryCountdown(cooldown)}.`
+                          : ''}
+                      </p>
+                    </div>
 
                     <form onSubmit={handleVerifySms} className="space-y-4">
                       <SixDigitOtpInput
@@ -2327,40 +2611,39 @@ const backButtonLabel =
                       >
                         {isAuthLoading('verify_sms')
                           ? 'Verifying…'
-                          : 'Verify & Continue'}
+                          : 'Open my vault'}
                       </Button>
                     </form>
 
-                    <Button
-                      variant="link"
-                      disabled={
-                        cooldown > 0 ||
-                        rateLimitSeconds > 0 ||
-                        !securityReady
-                      }
-                      onClick={handleResendSms}
-                    >
-                      {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend Code'}
-                    </Button>
+                    <p className="mt-[18px] mb-0 text-center text-[13px] text-[#6e7c77]">
+                      Didn&apos;t arrive?{' '}
+                      <button
+                        type="button"
+                        className="auth-link disabled:opacity-50"
+                        disabled={
+                          cooldown > 0 ||
+                          rateLimitSeconds > 0 ||
+                          (!isNewUser && !securityReady)
+                        }
+                        onClick={handleResendSms}
+                      >
+                        {cooldown > 0
+                          ? `Send it again in ${cooldown}s`
+                          : 'Send it again'}
+                      </button>
+                    </p>
 
-                    <TurnstileCaptcha
-                          gateMode
-                          onTokenChange={setCaptchaToken}
-                          onReadyChange={setCaptchaReady}
-                          resetKey={captchaResetKey}
-                        />
-
-                    <Button
-                      type="button"
-                      variant="link"
-                      className="cursor-pointer"
-                      onClick={() => setStep('mfa_method_selection')}
-                    >
-                      Choose another method
-                    </Button>
+                    {!isNewUser ? (
+                      <TurnstileCaptcha
+                      gateMode
+                      onTokenChange={setCaptchaToken}
+                      onReadyChange={setCaptchaReady}
+                      resetKey={captchaResetKey}
+                    />
+                    ) : null}
 
                     {attempts > 0 && attempts < MAX_ATTEMPTS && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-[#6e7c77]">
                         Failed attempts: {attempts} / {MAX_ATTEMPTS}
                       </p>
                     )}
@@ -2369,228 +2652,434 @@ const backButtonLabel =
 
                 
                 {step === 'forgot_password' && (
-                  <div className="space-y-4">
-                    <Input
-                      type="email"
-                      value={resetEmail || email}
-                      onChange={e => {
-                        setResetEmail(e.target.value);
-                        setResetEmailSent(false);
-                      }}
-                      placeholder="Enter your email"
-                    />
+                  <div className="space-y-0">
+                    <button
+                      type="button"
+                      onClick={handleBack}
+                      className="text-[13px] text-[#6e7c77] no-underline"
+                    >
+                      ← Back to sign in
+                    </button>
+                    <h1 className="mt-5 mb-0 text-[21px] font-semibold text-[#132b26]">
+                      Forgot your password?
+                    </h1>
+                    <p className="mt-2 mb-[22px] text-[14px] leading-[1.6] text-[#6e7c77]">
+                      Enter the email on your account and we&apos;ll send a
+                      6-digit reset code. It expires in 10 minutes.
+                    </p>
 
-                    <TurnstileCaptcha
-                      gateMode
-                      onTokenChange={setCaptchaToken}
-                      onReadyChange={setCaptchaReady}
-                      resetKey={captchaResetKey}
-                      className="flex justify-center"
-                    />
+                    <div>
+                      <AuthFieldLabel htmlFor="reset-email">
+                        Email
+                      </AuthFieldLabel>
+                      <Input
+                        id="reset-email"
+                        type="email"
+                        value={resetEmail || email}
+                        onChange={e => {
+                          setResetEmail(e.target.value);
+                          setResetEmailSent(false);
+                        }}
+                        placeholder="you@email.com"
+                        className="auth-field"
+                      />
+                    </div>
+
+                    <div className="mt-3.5 rounded-[14px] border border-[#f2f1ec] bg-[#f7f6f2] p-2">
+                      <div className="min-h-[62px] rounded-[10px] border border-[#e4e6e1] bg-white px-3 py-2">
+                        <TurnstileCaptcha
+                          gateMode
+                          onTokenChange={setCaptchaToken}
+                          onReadyChange={setCaptchaReady}
+                          resetKey={captchaResetKey}
+                          className="w-full"
+                        />
+                        {securityReady ? (
+                          <div className="mt-1 flex items-center gap-2.5">
+                            <span className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] border-[#2e7d6e]">
+                              <svg
+                                width="10"
+                                height="10"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="#2e7d6e"
+                                strokeWidth="3"
+                                aria-hidden
+                              >
+                                <path
+                                  d="m5 13 4 4L19 7"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </span>
+                            <span className="flex-1 text-[13px] text-[#3c4a46]">
+                              Security check passed
+                            </span>
+                            <span className="font-mono text-[9px] font-medium uppercase tracking-wide text-[#a5b1ad]">
+                              Cloudflare
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
 
                     <Button
-                      className="w-full btn-primary flex items-center justify-center"
+                      className="btn-primary mt-4 flex w-full items-center justify-center"
                       onClick={handleRequestReset}
                       disabled={
                         isAuthBusy ||
                         rateLimitSeconds > 0 ||
-                        !resetEmail ||
+                        !(resetEmail || email) ||
                         !securityReady
                       }
                     >
-                      {isAuthLoading('request_reset') && rateLimitSeconds <= 0 && (
-                        <span className="mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      )}
-
+                      {isAuthLoading('request_reset') &&
+                        rateLimitSeconds <= 0 && (
+                          <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        )}
                       {rateLimitedButtonLabel(
                         rateLimitSeconds,
-                        resetEmailSent ? 'Code Sent' : 'Send Reset Code',
-                        'Sending Reset Code...',
+                        resetEmailSent ? 'Code sent' : 'Send reset code',
+                        'Sending…',
                         isAuthLoading('request_reset'),
                       )}
                     </Button>
 
-                    {resetEmailSent && (
-                      <div className="bg-green-50 text-green-700 text-sm p-3 rounded-md">
-                        ✅ Reset code sent! Check your email.
-                      </div>
-                    )}
-
-                    {error && (
-                      <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md">
-                        {error}
-                      </div>
-                    )}
+                    {error && rateLimitSeconds <= 0 ? (
+                      <p className="mt-3 text-[13px] text-red-600">{error}</p>
+                    ) : null}
                   </div>
                 )}
 
                 {step === 'reset_password' && (
-                  <div className="space-y-4">
-                    {/* OTP */}
-                    <Input
-                      type="text"
-                      placeholder="Enter OTP from email"
-                      value={resetOtp}
-                      onChange={e =>
-                        setResetOtp(
-                          e.target.value.replace(/\D/g, '').slice(0, 6),
-                        )
-                      }
-                    />
-
-                    {/* New Password */}
-                    <div className="relative">
-                      <Input
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="New Password"
-                        value={newPassword}
-                        onChange={e => setNewPassword(e.target.value)}
-                      />
-
-                      <button
-                        type="button"
-                        className="absolute right-3 top-2.5 text-gray-500"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <EyeOff size={18} />
-                        ) : (
-                          <Eye size={18} />
+                  <div className="flex flex-1 flex-col gap-3.5 lg:gap-0">
+                    {/* Desktop: single card body; Mobile: OTP card + fields */}
+                    <div className="rounded-2xl border border-[#e4e6e1] bg-white p-[18px] lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0">
+                      <p className="auth-step-kicker hidden lg:block">
+                        Check your inbox
+                      </p>
+                      <h2 className="m-0 text-[15.5px] font-semibold text-[#132b26] lg:mt-3 lg:text-[21px]">
+                        <span className="lg:hidden">
+                          Enter the code we emailed
+                        </span>
+                        <span className="hidden lg:inline">
+                          Set a new password
+                        </span>
+                      </h2>
+                      <p className="mt-1.5 mb-3.5 text-[12.5px] text-[#8b9995] lg:mb-5 lg:mt-2 lg:text-[14px] lg:text-[#6e7c77]">
+                        {(resetEmail || email) && (
+                          <>
+                            <span className="lg:hidden">
+                              {resetEmail || email} ·{' '}
+                            </span>
+                            <span className="hidden lg:inline">
+                              Code sent to {resetEmail || email} ·{' '}
+                            </span>
+                          </>
                         )}
-                      </button>
+                        {cooldown > 0 || rateLimitSeconds > 0
+                          ? `resend in ${formatRetryCountdown(
+                              Math.max(cooldown, rateLimitSeconds),
+                            )}`
+                          : 'you can resend a new code'}
+                      </p>
+
+                      <SixDigitOtpInput
+                        idPrefix="reset-otp"
+                        value={resetOtp}
+                        onChange={setResetOtp}
+                        disabled={isAuthLoading('reset_password')}
+                        className="mb-0"
+                      />
                     </div>
 
-                    {/* Confirm Password */}
-                    <div className="relative">
-                      <Input
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        placeholder="Confirm Password"
-                        value={confirmPassword}
-                        onChange={e => setConfirmPassword(e.target.value)}
-                      />
+                    <div className="flex flex-1 flex-col gap-3 lg:mt-[18px]">
+                      <div>
+                        <AuthFieldLabel htmlFor="new-password">
+                          New password
+                        </AuthFieldLabel>
+                        <div className="relative">
+                          <Input
+                            id="new-password"
+                            type={showPassword ? 'text' : 'password'}
+                            value={newPassword}
+                            onChange={e => setNewPassword(e.target.value)}
+                            placeholder="••••••••••••"
+                            className="auth-field pr-16"
+                          />
+                          <button
+                            type="button"
+                            className="auth-show-toggle absolute right-1 top-1/2 -translate-y-1/2"
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? 'Hide' : 'Show'}
+                          </button>
+                        </div>
+                      </div>
 
-                      <button
-                        type="button"
-                        className="absolute right-3 top-2.5 text-gray-500"
-                        onClick={() =>
-                          setShowConfirmPassword(!showConfirmPassword)
+                      <div>
+                        <AuthFieldLabel htmlFor="confirm-new-password">
+                          Confirm new password
+                        </AuthFieldLabel>
+                        <div className="relative">
+                          <Input
+                            id="confirm-new-password"
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            value={confirmPassword}
+                            onChange={e => setConfirmPassword(e.target.value)}
+                            placeholder="••••••••••••"
+                            className="auth-field pr-16"
+                          />
+                          <button
+                            type="button"
+                            className="auth-show-toggle absolute right-1 top-1/2 -translate-y-1/2"
+                            onClick={() =>
+                              setShowConfirmPassword(!showConfirmPassword)
+                            }
+                          >
+                            {showConfirmPassword ? 'Hide' : 'Show'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {confirmPassword && newPassword !== confirmPassword && (
+                        <p className="text-xs text-red-500">
+                          Passwords do not match
+                        </p>
+                      )}
+
+                      {error && rateLimitSeconds <= 0 ? (
+                        <p className="text-[13px] text-red-600">{error}</p>
+                      ) : null}
+
+                      <Button
+                        className="btn-primary mt-auto w-full lg:mt-[18px]"
+                        onClick={handleResetPassword}
+                        disabled={
+                          isAuthBusy ||
+                          rateLimitSeconds > 0 ||
+                          resetOtp.length !== 6 ||
+                          !newPassword ||
+                          newPassword !== confirmPassword
                         }
                       >
-                        {showConfirmPassword ? (
-                          <EyeOff size={18} />
-                        ) : (
-                          <Eye size={18} />
-                        )}
+                        {rateLimitSeconds > 0 || isAuthLoading('reset_password')
+                          ? rateLimitedButtonLabel(
+                              rateLimitSeconds,
+                              'Reset password',
+                              'Resetting…',
+                              isAuthLoading('reset_password'),
+                            )
+                          : (
+                              <>
+                                <span className="lg:hidden">Reset password</span>
+                                <span className="hidden lg:inline">
+                                  Reset password &amp; sign in
+                                </span>
+                              </>
+                            )}
+                      </Button>
+
+                      <p className="mb-0 mt-3.5 hidden text-center text-[12.5px] text-[#8b9995] lg:block">
+                        Everyone you&apos;ve invited keeps their access — only
+                        your own sign-in changes.
+                      </p>
+
+                      <button
+                        type="button"
+                        className="auth-link mx-auto hidden text-[13px] disabled:opacity-50 lg:block"
+                        disabled={
+                          cooldown > 0 ||
+                          rateLimitSeconds > 0 ||
+                          !securityReady
+                        }
+                        onClick={handleRequestReset}
+                      >
+                        {cooldown > 0 || rateLimitSeconds > 0
+                          ? `Resend in ${formatRetryCountdown(
+                              Math.max(cooldown, rateLimitSeconds),
+                            )}`
+                          : 'Resend code'}
                       </button>
                     </div>
-
-                    {/* Password mismatch warning */}
-                    {confirmPassword && newPassword !== confirmPassword && (
-                      <p className="text-red-500 text-xs">
-                        Passwords do not match
-                      </p>
-                    )}
-
-                    {/* Reset Button */}
-                    <Button
-                      className="w-full btn-primary"
-                      onClick={handleResetPassword}
-                      disabled={
-                        isAuthBusy ||
-                        rateLimitSeconds > 0 ||
-                        !resetOtp ||
-                        !newPassword ||
-                        newPassword !== confirmPassword
-                      }
-                    >
-                      {rateLimitedButtonLabel(
-                        rateLimitSeconds,
-                        'Reset Password',
-                        'Resetting...',
-                        isAuthLoading('reset_password'),
-                      )}
-                    </Button>
                   </div>
                 )}
                 {step === 'plan_selection' && (
-                  <div data-cy="checkout-plan-selection" className="space-y-4 text-center">
-                    <h2 className="text-xl font-bold">Choose Your Plan</h2>
+                  <div
+                    data-cy="checkout-plan-selection"
+                    className="space-y-5 text-left"
+                  >
+                    <div className="space-y-0">
+                      <p className="auth-step-kicker">Step 3 of 3</p>
+                      <h2 className="auth-serif-title mt-3 mb-1 text-[19px] font-semibold lg:text-[21px]">
+                        Choose your plan
+                      </h2>
+                      <p className="mb-0 text-[13.5px] leading-snug text-[#6e7c77]">
+                        Start paid now, or begin a 14-day trial with no charge
+                        today.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <AuthFieldLabel>Billing cycle</AuthFieldLabel>
+                      {(
+                        [
+                          {
+                            id: 'yearly' as const,
+                            title: 'Yearly',
+                            price: '$94.95 / year',
+                            description: 'Best value — save about 20%.',
+                            badge: 'Save 20%',
+                          },
+                          {
+                            id: 'monthly' as const,
+                            title: 'Monthly',
+                            price: '$9.95 / month',
+                            description: 'Flexible month-to-month access.',
+                            badge: 'Flexible',
+                          },
+                        ] as const
+                      ).map(plan => {
+                        const selected = selectedPlan === plan.id;
+                        return (
+                          <label
+                            key={plan.id}
+                            data-cy={`checkout-plan-${plan.id}`}
+                            className={cn(
+                              'flex cursor-pointer items-center gap-3.5 rounded-[13px] p-4 transition',
+                              selected
+                                ? 'border-[1.5px] border-[#2e7d6e] bg-[#f4f8f7]'
+                                : 'border border-[#e4e6e1] bg-white',
+                            )}
+                          >
+                            <input
+                              type="radio"
+                              name="billingPlan"
+                              value={plan.id}
+                              checked={selected}
+                              onChange={() => setSelectedPlan(plan.id)}
+                              className="sr-only"
+                            />
+                            <span
+                              className={cn(
+                                'h-[18px] w-[18px] shrink-0 rounded-full',
+                                selected
+                                  ? 'bg-[#2e7d6e] shadow-[inset_0_0_0_3px_#fff]'
+                                  : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
+                              )}
+                              aria-hidden
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
+                                {plan.title}
+                              </p>
+                              <p className="mt-[3px] mb-0 text-[12.5px] text-[#5c6b66]">
+                                {plan.price} · {plan.description}
+                              </p>
+                            </div>
+                            <span
+                              className={cn(
+                                'shrink-0 rounded-[5px] px-2 py-1 text-[11px] font-medium',
+                                selected
+                                  ? 'bg-[#e8f1ee] text-[#1f5c52]'
+                                  : 'bg-[#f2f1ec] text-[#5c6b66]',
+                              )}
+                            >
+                              {plan.badge}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
 
                     <Button
-                      data-cy="checkout-plan-monthly"
-                      variant={
-                        selectedPlan === 'monthly' ? 'default' : 'outline'
-                      }
-                      className="w-full"
-                      onClick={() => setSelectedPlan('monthly')}
-                    >
-                      Monthly — $9.95
-                    </Button>
-
-                    <Button
-                      data-cy="checkout-plan-yearly"
-                      variant={
-                        selectedPlan === 'yearly' ? 'default' : 'outline'
-                      }
-                      className="w-full"
-                      onClick={() => setSelectedPlan('yearly')}
-                    >
-                      Yearly — $94.95 (Save 20%)
-                    </Button>
-
-                      <Button
                       data-cy="checkout-continue-payment"
-                      className="w-full"
+                      className="w-full btn-primary"
                       onClick={() => {
                         setError('');
                         setIsTrial(false);
                         setStep('payment');
                       }}
                     >
-                      Continue to Payment
+                      Continue to payment
                     </Button>
 
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-left space-y-3">
-                      <p className="text-sm font-semibold text-slate-900">
-                        Or start a free trial
+                    <div className="space-y-2.5 border-t border-[#e4e6e1] pt-5">
+                      <AuthFieldLabel>Or start a free trial</AuthFieldLabel>
+                      <p className="m-0 text-[12.5px] leading-snug text-[#6e7c77]">
+                        14 days free. Pick how you want to handle the card.
                       </p>
+
                       <button
                         type="button"
                         data-cy="checkout-trial-cardless"
-                        className={`w-full rounded-lg border p-3 text-left text-sm ${
+                        className={cn(
+                          'flex w-full cursor-pointer items-start gap-3.5 rounded-[13px] p-4 text-left transition',
                           trialMode === 'cardless'
-                            ? 'border-slate-900 bg-white'
-                            : 'border-slate-200 bg-white/60'
-                        }`}
+                            ? 'border-[1.5px] border-[#2e7d6e] bg-[#f4f8f7]'
+                            : 'border border-[#e4e6e1] bg-white',
+                        )}
                         onClick={() => setTrialMode('cardless')}
                       >
-                        <span className="font-medium">Cardless trial</span>
-                        <span className="mt-1 block text-slate-600">
-                          No card now. Access pauses after trial until you
-                          pay.
-                        </span>
+                        <span
+                          className={cn(
+                            'mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full',
+                            trialMode === 'cardless'
+                              ? 'bg-[#2e7d6e] shadow-[inset_0_0_0_3px_#fff]'
+                              : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
+                          )}
+                          aria-hidden
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
+                            Cardless trial
+                          </p>
+                          <p className="mt-[3px] mb-0 text-[12.5px] text-[#5c6b66]">
+                            No card now. Access pauses after trial until you
+                            pay.
+                          </p>
+                        </div>
                       </button>
+
                       <button
                         type="button"
-                        className={`w-full rounded-lg border p-3 text-left text-sm ${
+                        className={cn(
+                          'flex w-full cursor-pointer items-start gap-3.5 rounded-[13px] p-4 text-left transition',
                           trialMode === 'card_on_file'
-                            ? 'border-emerald-700 bg-emerald-50'
-                            : 'border-slate-200 bg-white/60'
-                        }`}
+                            ? 'border-[1.5px] border-[#2e7d6e] bg-[#f4f8f7]'
+                            : 'border border-[#e4e6e1] bg-white',
+                        )}
                         onClick={() => setTrialMode('card_on_file')}
                       >
-                        <span className="font-medium">
-                          Card on file (recommended)
-                        </span>
-                        <span className="mt-1 block text-slate-600">
-                          Verify card now — no charge today. After trial,
-                          auto-charge if auto-renew is on (you can turn it off).
-                        </span>
+                        <span
+                          className={cn(
+                            'mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full',
+                            trialMode === 'card_on_file'
+                              ? 'bg-[#2e7d6e] shadow-[inset_0_0_0_3px_#fff]'
+                              : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
+                          )}
+                          aria-hidden
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
+                              Card on file
+                            </p>
+                            <span className="rounded-[5px] bg-[#e8f1ee] px-2 py-1 text-[11px] font-medium text-[#1f5c52]">
+                              Recommended
+                            </span>
+                          </div>
+                          <p className="mt-[3px] mb-0 text-[12.5px] text-[#5c6b66]">
+                            Verify card now — no charge today. After trial,
+                            auto-charge if auto-renew is on.
+                          </p>
+                        </div>
                       </button>
+
                       <Button
                         data-cy="checkout-continue-trial"
-                        variant="outline"
-                        className="w-full"
+                        className="w-full btn-primary"
                         onClick={() => {
                           setError('');
                           setIsTrial(true);
@@ -2606,33 +3095,36 @@ const backButtonLabel =
                   </div>
                 )}
 
-                {step === 'payment' && (
-                  <Elements stripe={stripePromise}>
-                    <PaymentForm
-                      isTrial={isTrial}
-                      trialMode={trialMode}
-                      selectedPlan={selectedPlan}
-                      router={router}
-                    />
-                  </Elements>
-                )}
               </motion.div>
+              ) : null}
             </AnimatePresence>
-          </CardContent>
-        </Card>
-        {/* Footer Notice */}
-        <div className="mt-12 w-full bg-slate-100/40 rounded-2xl p-4 md:p-6 flex items-start gap-5 border border-slate-200/40 shadow-[0_40px_80px_-20px_rgba(30,41,59,0.12)]">
-          <div className="shrink-0 w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm">
-            <ShieldIcon />
-          </div>
-          <p className="text-[9px] md:text-[10px] font-bold text-slate-500 leading-relaxed uppercase tracking-widest">
-            Secured by{' '}
-            <span className="text-[#1e293b]">Bank-Level AES-256-GCM</span>{' '}
-            encryption at rest. Vault data is transmitted over TLS and decrypted
-            only during your authorized session.
-          </p>
-        </div>
-      </div>
-    </div>
+
+            {step === 'payment' ? (
+              <div className="relative z-10">
+                <Elements
+                  stripe={stripePromise}
+                  options={{
+                    fonts: [
+                      {
+                        cssSrc:
+                          'https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap',
+                      },
+                    ],
+                  }}
+                >
+                  <PaymentForm
+                    isTrial={isTrial}
+                    trialMode={trialMode}
+                    selectedPlan={selectedPlan}
+                    router={router}
+                  />
+                </Elements>
+              </div>
+            ) : null}
+      </AuthCard>
+      <p className="mt-6 px-1 text-center text-[11px] leading-relaxed text-[rgba(19,43,38,0.45)] lg:hidden">
+        Encrypted at rest · You choose who opens it
+      </p>
+    </AuthPortalShell>
   );
 }

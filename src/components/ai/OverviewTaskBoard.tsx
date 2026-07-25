@@ -147,18 +147,18 @@ function TagIcon({ tag }: { tag: OverviewTaskTag }) {
 function ProgressLine({ state }: { state: CardVisualState }) {
   const barClass =
     state.kind === 'done'
-      ? 'bg-emerald-500'
+      ? 'bg-[#2e7d6e]'
       : state.kind === 'active'
-        ? 'bg-sky-500'
+        ? 'bg-[#2e7d6e]'
         : state.kind === 'waiting'
-          ? 'bg-amber-400'
+          ? 'bg-[#b98a3e]'
           : state.kind === 'partial'
-            ? 'bg-rose-400'
-            : 'bg-slate-200';
+            ? 'bg-[#b98a3e]'
+            : 'bg-[rgba(19,43,38,0.12)]';
 
   return (
     <div className="mt-auto flex items-center gap-2.5 pt-4">
-      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100">
+      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[rgba(19,43,38,0.06)]">
         <div
           className={cn(
             'h-full rounded-full transition-all duration-500',
@@ -172,12 +172,12 @@ function ProgressLine({ state }: { state: CardVisualState }) {
         className={cn(
           'shrink-0 text-[11px] font-semibold',
           state.kind === 'done' || state.isNew
-            ? 'text-emerald-600'
+            ? 'text-[#2e7d6e]'
             : state.kind === 'active'
-              ? 'text-sky-600'
+              ? 'text-[#2e7d6e]'
               : state.kind === 'waiting'
-                ? 'text-amber-600'
-                : 'text-slate-400',
+                ? 'text-[#b98a3e]'
+                : 'text-[rgba(19,43,38,0.45)]',
         )}
       >
         {state.label}
@@ -210,22 +210,22 @@ function SliderTaskCard({
       type="button"
       onClick={onOpen}
       className={cn(
-        'relative flex h-[210px] w-[168px] shrink-0 snap-start flex-col rounded-[22px] border bg-white p-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition active:scale-[0.98]',
+        'relative flex h-[210px] w-[168px] shrink-0 snap-start flex-col rounded-[20px] border bg-[var(--surface)] p-4 text-left transition active:scale-[0.98]',
         state.kind === 'active'
-          ? 'border-sky-200 ring-1 ring-sky-100'
+          ? 'border-[rgba(46,125,110,0.35)] ring-1 ring-[rgba(46,125,110,0.12)]'
           : state.kind === 'waiting'
-            ? 'border-amber-200'
+            ? 'border-[rgba(185,138,62,0.45)] ring-1 ring-[rgba(185,138,62,0.12)]'
             : state.isNew
-              ? 'border-emerald-300'
+              ? 'border-[rgba(46,125,110,0.4)]'
               : state.kind === 'done'
-                ? 'border-emerald-100'
-                : 'border-slate-200/90',
+                ? 'border-[rgba(46,125,110,0.2)]'
+                : 'border-[rgba(19,43,38,0.1)]',
       )}
       data-overview-task={card.sectionId}
       data-overview-task-state={state.kind}
     >
       {state.isNew ? (
-        <span className="absolute right-3 top-3 rounded-md bg-emerald-600 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
+        <span className="absolute right-3 top-3 rounded-md bg-[#2e7d6e] px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
           New
         </span>
       ) : null}
@@ -245,7 +245,7 @@ function SliderTaskCard({
       >
         <TagIcon tag={card.tag} />
       </div>
-      <h3 className="mt-3 line-clamp-2 text-[14px] font-semibold leading-snug text-[#10213f]">
+      <h3 className="mt-3 line-clamp-2 text-[14px] font-semibold leading-snug text-[#132b26]">
         {card.title}
       </h3>
       <ProgressLine state={state} />
@@ -271,23 +271,23 @@ function GridTaskCard({
       type="button"
       onClick={onOpen}
       className={cn(
-        'relative rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-5',
+        'relative rounded-2xl border bg-[var(--surface)] p-4 text-left transition hover:-translate-y-0.5 oa-float-sm sm:p-5',
         state.kind === 'active'
-          ? 'border-sky-200 ring-1 ring-sky-100'
+          ? 'border-[rgba(46,125,110,0.35)] ring-1 ring-[rgba(46,125,110,0.12)]'
           : state.kind === 'waiting'
-            ? 'border-amber-200 ring-1 ring-amber-100'
+            ? 'border-[rgba(185,138,62,0.45)] ring-1 ring-[rgba(185,138,62,0.12)]'
             : state.isNew
-              ? 'border-emerald-300 ring-1 ring-emerald-100'
+              ? 'border-[rgba(46,125,110,0.4)] ring-1 ring-[rgba(46,125,110,0.12)]'
               : state.kind === 'done'
-                ? 'border-emerald-100'
-                : 'border-slate-200',
+                ? 'border-[rgba(46,125,110,0.2)]'
+                : 'border-[rgba(19,43,38,0.1)]',
       )}
       data-overview-task={card.sectionId}
       data-overview-task-state={state.kind}
       data-overview-task-new={state.isNew ? 'true' : undefined}
     >
       {state.isNew && (
-        <span className="absolute right-3 top-3 inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+        <span className="absolute right-3 top-3 inline-flex items-center rounded-md bg-[#2e7d6e] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
           Filled
         </span>
       )}
@@ -299,20 +299,20 @@ function GridTaskCard({
       >
         {tag.label}
       </span>
-      <h3 className="mt-3 text-base font-semibold text-[#10213f]">
+      <h3 className="mt-3 text-base font-semibold text-[#132b26]">
         {card.title}
       </h3>
-      <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-500">
+      <p className="mt-1 line-clamp-2 text-sm leading-5 text-[rgba(19,43,38,0.58)]">
         {state.kind === 'active'
           ? 'Reading your document and filling this section…'
           : state.kind === 'waiting'
-            ? 'Queued — waiting for another file to finish.'
+            ? 'Needs you — queued while another file finishes.'
             : state.isNew
               ? 'Filled automatically — tap only if you want to review.'
               : card.description}
       </p>
       {lastUpdatedLabel ? (
-        <p className="mt-2 text-xs font-medium text-slate-400">
+        <p className="mt-2 text-xs font-medium text-[rgba(19,43,38,0.45)]">
           {lastUpdatedLabel}
         </p>
       ) : null}
@@ -397,7 +397,7 @@ export function OverviewTaskBoard({
       <section className="md:hidden">
         <div className="mb-3 flex items-end justify-between gap-3 px-0.5">
           <div>
-            <h2 className="text-base font-semibold text-[#10213f]">
+            <h2 className="text-base font-semibold text-[#132b26]">
               Continue where you left off
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
@@ -428,7 +428,7 @@ export function OverviewTaskBoard({
       <div className="hidden space-y-8 md:block">
         {OVERVIEW_TASK_GROUPS.map(group => (
           <section key={group.id}>
-            <h2 className="mb-3 text-lg font-semibold text-[#10213f]">
+            <h2 className="mb-3 text-lg font-semibold text-[#132b26]">
               {group.title}
             </h2>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

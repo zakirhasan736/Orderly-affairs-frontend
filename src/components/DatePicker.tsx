@@ -6,6 +6,7 @@ import { EnhancedCalendar } from './EnhancedCalendar';
 import {
   MobileBottomSheet,
   MobileSheetHandle,
+  MOBILE_NESTED_SHEET_Z,
   useIsMobile,
 } from './MobileBottomSheet';
 import { cn } from '@common/ui/utils';
@@ -31,7 +32,8 @@ interface DatePickerProps {
   sheetTitle?: string;
 }
 
-export const DATE_PICKER_SHEET_Z = 'z-[85]';
+export const DATE_PICKER_SHEET_Z = 'z-[130]'; // alias of MOBILE_NESTED_SHEET_Z
+
 
 export function DatePicker({
   value,
@@ -91,7 +93,7 @@ export function DatePicker({
     'border-2 border-[#E0E0E0] dark:border-[#404040]',
     'rounded-[10px]',
     'h-11 min-h-11 px-3',
-    'text-sm font-normal text-[#213D59] dark:text-white',
+    'text-sm font-normal text-[#132b26] dark:text-white',
     'shadow-[0_2px_4px_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_4px_rgba(0,0,0,0.2),inset_0_1px_2px_rgba(255,255,255,0.05)]',
     'transition-all duration-200 ease-in-out',
     'hover:bg-white hover:border-[#B0B0B0] hover:shadow-[0_2px_6px_rgba(0,0,0,0.08),inset_0_1px_2px_rgba(0,0,0,0.03)]',
@@ -107,7 +109,7 @@ export function DatePicker({
 
   const iconClasses = cn(
     'h-4 w-4 calendar-icon',
-    'text-[#213D59] dark:text-accent-blue',
+    'text-[#132b26] dark:text-accent-blue',
     variant !== 'no-icon' && 'mr-2',
   );
 
@@ -163,7 +165,7 @@ export function DatePicker({
             onClose={() => setSheetOpen(false)}
             className="max-h-[88dvh]"
             labelledBy="date-picker-sheet-title"
-            zClassName={DATE_PICKER_SHEET_Z}
+            zClassName={MOBILE_NESTED_SHEET_Z}
           >
             <div className="flex h-full min-h-0 flex-col">
               <MobileSheetHandle />
@@ -185,7 +187,7 @@ export function DatePicker({
                   <X className="h-5 w-5" />
                 </Button>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 mobile-sheet-scroll">
                 <EnhancedCalendar
                   mode="single"
                   selected={selectedDate}

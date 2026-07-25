@@ -43,6 +43,7 @@ import { DatePicker } from '@/components/DatePicker';
 import { toast } from 'sonner';
 
 import {
+  MOBILE_SHEET_SCROLL_CLASS,
   MOBILE_SHEET_SCROLL_PADDING,
   MOBILE_SHEET_FOOTER_CLASS,
   MobileBottomSheet,
@@ -1558,6 +1559,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
         <div
           className={cn(
             'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6',
+            MOBILE_SHEET_SCROLL_CLASS,
             compactSheet ? 'py-3' : 'py-5',
             embeddedInSheet && MOBILE_SHEET_SCROLL_PADDING,
           )}
@@ -1634,6 +1636,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
           <div
             className={cn(
               'min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/30 px-4 py-4',
+              MOBILE_SHEET_SCROLL_CLASS,
               MOBILE_SHEET_SCROLL_PADDING,
             )}
           >

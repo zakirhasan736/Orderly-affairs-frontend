@@ -83,7 +83,7 @@ export function OverviewSectionShortcuts({
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
               Vault sections
             </p>
-            <h2 className="mt-1 text-lg font-semibold text-[#10213f]">
+            <h2 className="mt-1 text-lg font-semibold text-[#132b26]">
               Jump to any section
             </h2>
           </div>
@@ -107,7 +107,7 @@ export function OverviewSectionShortcuts({
                 className={cn(
                   'rounded-xl border px-3.5 py-3 text-left transition',
                   active
-                    ? 'border-[#10213f] bg-[#10213f] text-white shadow-sm'
+                    ? 'border-[#132b26] bg-[#132b26] text-white shadow-sm'
                     : 'border-slate-200 bg-slate-50/80 text-slate-700 hover:border-slate-300 hover:bg-white',
                 )}
               >
@@ -145,7 +145,7 @@ export function OverviewSectionShortcuts({
                   ? 'border-sky-300 bg-sky-50 ring-1 ring-sky-200'
                   : isDone
                     ? 'border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50'
-                    : 'border-slate-200 bg-white hover:border-[#10213f]/25 hover:bg-slate-50',
+                    : 'border-slate-200 bg-white hover:border-[#132b26]/25 hover:bg-slate-50',
               )}
             >
               <span
@@ -155,7 +155,7 @@ export function OverviewSectionShortcuts({
                     ? 'bg-sky-600 text-white'
                     : isDone
                       ? 'bg-emerald-600 text-white'
-                      : 'bg-[#10213f] text-white',
+                      : 'bg-[#132b26] text-white',
                 )}
               >
                 {sectionId}
@@ -172,7 +172,7 @@ export function OverviewSectionShortcuts({
                       : 'Open section'}
                 </span>
               </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-[#10213f]" />
+              <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-[#132b26]" />
             </button>
           );
         })}

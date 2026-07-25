@@ -17,56 +17,80 @@ export const SpotlightOverlay = ({
   const [rect, setRect] = useState<DOMRect | null>(null);
 
   useEffect(() => {
-    const el = document.querySelector(targetSelector);
-    if (!el) return;
+    let cancelled = false;
+    let el: Element | null = null;
+    let tries = 0;
 
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const update = () => {
+      if (!el || cancelled) return;
+      setRect(el.getBoundingClientRect());
+    };
 
-    const update = () => setRect(el.getBoundingClientRect());
+    const attach = (node: Element) => {
+      el = node;
+      node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      update();
+      window.addEventListener('resize', update);
+      window.addEventListener('scroll', update, true);
+    };
 
-    update();
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update);
+    const find = () => {
+      if (cancelled) return;
+      const candidates = Array.from(
+        document.querySelectorAll(targetSelector),
+      );
+      const node =
+        candidates.find(item => {
+          const box = item.getBoundingClientRect();
+          return box.width > 2 && box.height > 2;
+        }) || null;
+
+      if (node) {
+        attach(node);
+        return;
+      }
+      setRect(null);
+      tries += 1;
+      if (tries < 20) {
+        window.setTimeout(find, 80);
+      }
+    };
+
+    find();
 
     return () => {
+      cancelled = true;
       window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update);
+      window.removeEventListener('scroll', update, true);
     };
   }, [targetSelector]);
 
-  if (!rect) return null;
-
   return (
     <div className="fixed inset-0 z-[999]" onClick={onClose}>
-      {/* Dark backdrop */}
-      <div className="absolute inset-0 bg-black/60 transition-opacity duration-300" />
+      <div className="absolute inset-0 bg-[rgba(19,43,38,0.55)] transition-opacity duration-300" />
 
-      {/* Highlight box */}
-      <motion.div
-        className="absolute rounded-xl"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.3 }}
-        style={{
-          top: rect.top - 12,
-          left: rect.left - 12,
-          width: rect.width + 24,
-          height: rect.height + 24,
-        }}
-      >
-        {/* Glow Border */}
-        <div
-          className="absolute inset-0 rounded-xl 
-    border-2 border-amber-400 shadow-[0_0_40px_rgba(251,191,36,0.6)]"
-        />
-
-        {/* Floating Pulse Dot */}
+      {rect ? (
         <motion.div
-          className="absolute -top-2 -right-2 w-4 h-4 bg-amber-400 rounded-full"
-          animate={{ scale: [1, 1.5, 1] }}
-          transition={{ repeat: Infinity, duration: 1.6 }}
-        />
-      </motion.div>
+          className="pointer-events-none absolute rounded-xl"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+          style={{
+            top: rect.top - 12,
+            left: rect.left - 12,
+            width: rect.width + 24,
+            height: rect.height + 24,
+            boxShadow: '0 0 0 9999px rgba(19,43,38,0.55)',
+          }}
+        >
+          <div className="absolute inset-0 rounded-xl border-2 border-[#2e7d6e] shadow-[0_0_0_4px_rgba(46,125,110,0.2)]" />
+          <motion.div
+            className="absolute -top-2 -right-2 h-3.5 w-3.5 rounded-full bg-[#2e7d6e]"
+            animate={{ scale: [1, 1.35, 1] }}
+            transition={{ repeat: Infinity, duration: 1.6 }}
+          />
+        </motion.div>
+      ) : null}
 
       <div
         className="relative z-[1000] h-full"

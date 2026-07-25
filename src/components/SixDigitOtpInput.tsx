@@ -53,7 +53,7 @@ export function SixDigitOtpInput({
 
   return (
     <div
-      className={cn('flex justify-center gap-2', className)}
+      className={cn('flex w-full gap-2.5', className)}
       onPaste={handlePaste}
     >
       {digits.map((digit, index) => (
@@ -68,7 +68,8 @@ export function SixDigitOtpInput({
           disabled={disabled}
           onChange={event => handleChange(event.target.value, index)}
           onKeyDown={event => handleKeyDown(event, index)}
-          className="h-12 w-10 rounded-xl border border-input bg-background text-center text-lg font-semibold shadow-sm transition focus:border-ring focus:outline-none focus:ring-[3px] focus:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 sm:h-14 sm:w-11"
+                      className="h-15 w-full min-w-0 flex-1 rounded-[12px] border border-[#cfd8d4] bg-white text-center text-[24px] font-medium shadow-none transition focus:border-[#2e7d6e] focus:outline-none focus:ring-0 focus:shadow-[0_0_0_3px_#e8f1ee] disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ height: 60, fontFamily: "ui-monospace, 'IBM Plex Mono', monospace" }}
         />
       ))}
     </div>

@@ -288,7 +288,7 @@ export function AiUploadHistoryPopup({
             className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-left"
           >
             <div className="min-w-0">
-              <p className="truncate text-xs font-semibold text-[#10213f]">
+              <p className="truncate text-xs font-semibold text-[#132b26]">
                 Uploaded documents
               </p>
               <p className="text-[10px] text-slate-500">
@@ -416,14 +416,14 @@ export function AiUploadHistoryPopup({
         }}
         className={cn(
           absolute ? 'absolute bottom-3 right-3 z-10' : 'relative',
-          'inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#10213f] shadow-sm transition hover:border-[#10213f]/30 hover:bg-slate-50',
-          count > 0 && 'ring-1 ring-[#10213f]/10',
+          'inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#132b26] shadow-sm transition hover:border-[#132b26]/30 hover:bg-slate-50',
+          count > 0 && 'ring-1 ring-[#132b26]/10',
           className,
         )}
       >
         <FileStack className="h-5 w-5" />
         {count > 0 ? (
-          <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#10213f] px-1 text-[10px] font-bold text-white">
+          <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#132b26] px-1 text-[10px] font-bold text-white">
             {count > 99 ? '99+' : count}
           </span>
         ) : null}
@@ -432,7 +432,7 @@ export function AiUploadHistoryPopup({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] w-[min(96vw,56rem)] max-w-[56rem] overflow-hidden p-4 sm:p-6">
           <DialogHeader className="pr-8 text-left">
-            <DialogTitle className="text-[#10213f]">
+            <DialogTitle className="text-[#132b26]">
               Uploaded documents
             </DialogTitle>
             <DialogDescription>

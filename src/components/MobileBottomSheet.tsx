@@ -14,9 +14,13 @@ export const MOBILE_SHEET_SPRING = {
 
 /**
  * Above dashboard mobile chrome (header/nav z-55, more menu z-80).
+ * Nested pickers (date) should use a higher z via zClassName.
  * Sheets are portaled to document.body so parent transforms cannot trap stacking.
  */
 export const MOBILE_SHEET_Z = 'z-[100]';
+
+/** Nested sheets (date picker, confirm) must sit above the parent sheet. */
+export const MOBILE_NESTED_SHEET_Z = 'z-[130]';
 
 /** Extra room so last fields clear the sticky footer + home indicator */
 export const MOBILE_SHEET_SCROLL_PADDING =
@@ -26,8 +30,28 @@ export const MOBILE_SHEET_SCROLL_PADDING =
 export const MOBILE_SHEET_PANEL_CLASS = 'mobile-sheet-panel';
 export const MOBILE_SHEET_OVERLAY_CLASS = 'mobile-sheet-overlay';
 export const MOBILE_SHEET_FOOTER_CLASS = 'mobile-sheet-footer';
+export const MOBILE_SHEET_SCROLL_CLASS = 'mobile-sheet-scroll';
 
 const BODY_SHEET_OPEN_CLASS = 'mobile-sheet-open';
+
+/** Nested sheets share one body lock — don't unlock until the last sheet closes. */
+let openSheetCount = 0;
+
+function lockBodyForSheet() {
+  openSheetCount += 1;
+  if (openSheetCount === 1) {
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add(BODY_SHEET_OPEN_CLASS);
+  }
+}
+
+function unlockBodyForSheet() {
+  openSheetCount = Math.max(0, openSheetCount - 1);
+  if (openSheetCount === 0) {
+    document.body.style.overflow = '';
+    document.body.classList.remove(BODY_SHEET_OPEN_CLASS);
+  }
+}
 
 export function useIsMobile(breakpoint = 768) {
   const query = `(max-width: ${breakpoint - 1}px)`;
@@ -67,21 +91,22 @@ export function MobileBottomSheet({
   zClassName?: string;
 }) {
   const [mounted, setMounted] = useState(false);
+  /** After open spring finishes, drop transform so iOS can scroll nested overflow. */
+  const [scrollReady, setScrollReady] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setScrollReady(false);
+      return;
+    }
 
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    document.body.classList.add(BODY_SHEET_OPEN_CLASS);
-
+    lockBodyForSheet();
     return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.classList.remove(BODY_SHEET_OPEN_CLASS);
+      unlockBodyForSheet();
     };
   }, [open]);
 
@@ -109,6 +134,10 @@ export function MobileBottomSheet({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={MOBILE_SHEET_SPRING}
+            onAnimationComplete={() => {
+              if (open) setScrollReady(true);
+            }}
+            style={scrollReady ? { transform: 'none' } : undefined}
             className={cn(
               'absolute inset-x-0 bottom-0 flex max-h-[min(96dvh,100svh)] flex-col overflow-hidden rounded-t-[1.75rem] shadow-2xl',
               'pb-[env(safe-area-inset-bottom)]',

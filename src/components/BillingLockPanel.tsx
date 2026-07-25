@@ -94,14 +94,14 @@ function RepairPaymentInner({ message, onResolved }: Props) {
   };
 
   return (
-    <div className="mx-auto max-w-lg space-y-6 rounded-2xl border border-amber-200 bg-amber-50/80 p-6 shadow-sm">
+    <div className="mx-auto max-w-lg space-y-6 rounded-[20px] border border-[rgba(185,138,62,0.35)] bg-[var(--needs-you-soft)] p-6">
       <div className="flex items-start gap-3">
-        <Shield className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+        <Shield className="mt-0.5 h-5 w-5 shrink-0 text-[#b98a3e]" />
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-[#132b26]">
             Vault access paused
           </h2>
-          <p className="mt-1 text-sm text-slate-700">
+          <p className="mt-1 text-[15px] text-[rgba(19,43,38,0.7)]">
             {message ||
               'Update your payment method or activate a plan to restore full access. Other vault features stay locked until billing is fixed.'}
           </p>
@@ -143,7 +143,7 @@ function RepairPaymentInner({ message, onResolved }: Props) {
             style: {
               base: {
                 fontSize: '16px',
-                color: '#0f172a',
+                color: '#132b26',
                 '::placeholder': { color: '#94a3b8' },
               },
             },

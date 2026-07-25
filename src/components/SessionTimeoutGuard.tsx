@@ -1,0 +1,206 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { cn } from '@common/ui/utils';
+import { useLogout } from '@/libs/logoutHandler';
+
+const IDLE_MS = 14 * 60 * 1000; // warn after 14 min idle
+const WARN_SECONDS = 60;
+const ACTIVITY_EVENTS = [
+  'mousedown',
+  'mousemove',
+  'keydown',
+  'touchstart',
+  'scroll',
+  'click',
+  'wheel',
+] as const;
+
+function formatCountdown(totalSeconds: number) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+}
+
+/**
+ * Idle session guard for authenticated vault areas.
+ * After idle, shows a branded countdown; then auto-logout.
+ */
+export function SessionTimeoutGuard({
+  enabled = true,
+}: {
+  enabled?: boolean;
+}) {
+  const logout = useLogout();
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(WARN_SECONDS);
+
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const warningOpenRef = useRef(false);
+  const loggingOutRef = useRef(false);
+
+  const clearIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+  }, []);
+
+  const clearCountdown = useCallback(() => {
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+  }, []);
+
+  const doLogout = useCallback(async () => {
+    if (loggingOutRef.current) return;
+    loggingOutRef.current = true;
+    clearIdleTimer();
+    clearCountdown();
+    setWarningOpen(false);
+    warningOpenRef.current = false;
+    try {
+      await logout();
+    } finally {
+      loggingOutRef.current = false;
+    }
+  }, [clearCountdown, clearIdleTimer, logout]);
+
+  const startWarning = useCallback(() => {
+    if (warningOpenRef.current || loggingOutRef.current) return;
+    warningOpenRef.current = true;
+    setWarningOpen(true);
+    setSecondsLeft(WARN_SECONDS);
+    clearCountdown();
+    countdownRef.current = setInterval(() => {
+      setSecondsLeft(prev => {
+        if (prev <= 1) {
+          clearCountdown();
+          void doLogout();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [clearCountdown, doLogout]);
+
+  const armIdleTimer = useCallback(() => {
+    if (!enabled || warningOpenRef.current) return;
+    clearIdleTimer();
+    idleTimerRef.current = setTimeout(() => {
+      startWarning();
+    }, IDLE_MS);
+  }, [clearIdleTimer, enabled, startWarning]);
+
+  const staySignedIn = useCallback(() => {
+    clearCountdown();
+    warningOpenRef.current = false;
+    setWarningOpen(false);
+    setSecondsLeft(WARN_SECONDS);
+    armIdleTimer();
+  }, [armIdleTimer, clearCountdown]);
+
+  useEffect(() => {
+    warningOpenRef.current = warningOpen;
+  }, [warningOpen]);
+
+  useEffect(() => {
+    if (!enabled) {
+      clearIdleTimer();
+      clearCountdown();
+      setWarningOpen(false);
+      warningOpenRef.current = false;
+      return;
+    }
+
+    armIdleTimer();
+
+    let throttleUntil = 0;
+    const onActivity = () => {
+      if (warningOpenRef.current || loggingOutRef.current) return;
+      const now = Date.now();
+      if (now < throttleUntil) return;
+      throttleUntil = now + 1000;
+      armIdleTimer();
+    };
+
+    ACTIVITY_EVENTS.forEach(event => {
+      window.addEventListener(event, onActivity, { passive: true });
+    });
+    document.addEventListener('visibilitychange', onActivity);
+
+    return () => {
+      clearIdleTimer();
+      clearCountdown();
+      ACTIVITY_EVENTS.forEach(event => {
+        window.removeEventListener(event, onActivity);
+      });
+      document.removeEventListener('visibilitychange', onActivity);
+    };
+  }, [armIdleTimer, clearCountdown, clearIdleTimer, enabled]);
+
+  if (!warningOpen) return null;
+
+  const progressPct = Math.max(
+    0,
+    Math.min(100, (secondsLeft / WARN_SECONDS) * 100),
+  );
+
+  return (
+    <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-[rgba(19,43,38,0.45)] p-4 sm:p-6">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="session-timeout-title"
+        className={cn(
+          'w-full max-w-[min(100%,26rem)] rounded-2xl bg-white p-6',
+          'shadow-[0_20px_50px_rgba(19,43,38,0.24)]',
+        )}
+      >
+        <p className="m-0 font-mono text-[10px] font-medium tracking-[0.14em] uppercase text-[#a5b1ad]">
+          Still there?
+        </p>
+        <h3
+          id="session-timeout-title"
+          className="mt-3 mb-0 text-[17px] font-semibold text-[#132b26]"
+        >
+          We&apos;ll sign you out in {WARN_SECONDS} seconds
+        </h3>
+        <p className="mt-2.5 mb-0 text-[13.5px] leading-relaxed text-[#5c6b66]">
+          For safety on shared computers. Everything you&apos;ve typed is
+          already saved.
+        </p>
+
+        <div className="mt-[18px] h-1.5 overflow-hidden rounded-[3px] bg-[#f2f1ec]">
+          <span
+            className="block h-full rounded-[3px] bg-[#132b26] transition-[width] duration-1000 linear"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+        <p className="mt-2.5 mb-0 font-mono text-[20px] font-medium tabular-nums text-[#132b26]">
+          {formatCountdown(secondsLeft)}
+        </p>
+
+        <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => void doLogout()}
+            className="h-[42px] flex-1 rounded-[21px] border border-[#e4e6e1] bg-white text-[13px] font-medium text-[#132b26] transition hover:bg-[#f7f6f2]"
+          >
+            Sign out now
+          </button>
+          <button
+            type="button"
+            onClick={staySignedIn}
+            className="h-[42px] flex-1 rounded-[21px] border-0 bg-[#132b26] text-[13px] font-medium text-white transition hover:bg-[#2e7d6e]"
+          >
+            Stay signed in
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -38,7 +38,6 @@ function CircularDocProgress({
     isWorking && clamped < 8 ? Math.max(clamped, 12) : clamped;
   const offset = circumference - (displayProgress / 100) * circumference;
   const complete = clamped >= 100 && !isWorking;
-  const idle = !isWorking && clamped <= 0;
   const inner = compact ? 'h-8 w-8' : 'h-12 w-12';
 
   return (
@@ -65,7 +64,7 @@ function CircularDocProgress({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke={compact ? '#e2e8f0' : 'rgba(255,255,255,0.28)'}
+          stroke={compact ? '#e8e6e0' : 'rgba(19,43,38,0.12)'}
           strokeWidth={stroke}
         />
         <g
@@ -79,12 +78,10 @@ function CircularDocProgress({
             fill="none"
             stroke={
               complete
-                ? compact
-                  ? '#10b981'
-                  : '#34d399'
+                ? '#2e7d6e'
                 : compact
-                  ? '#10213f'
-                  : '#ffffff'
+                  ? '#132b26'
+                  : '#2e7d6e'
             }
             strokeWidth={stroke}
             strokeLinecap="round"
@@ -107,20 +104,10 @@ function CircularDocProgress({
           'relative z-[1] flex flex-col items-center justify-center rounded-full transition-colors duration-300',
           inner,
           complete
-            ? compact
-              ? 'bg-emerald-50 text-emerald-600'
-              : 'bg-emerald-400/20 text-emerald-100'
+            ? 'bg-[rgba(46,125,110,0.12)] text-[#2e7d6e]'
             : isWorking
-              ? compact
-                ? 'bg-[#10213f] text-white'
-                : 'bg-white text-[#10213f] shadow-lg'
-              : idle
-                ? compact
-                  ? 'bg-slate-50 text-[#10213f]'
-                  : 'bg-white/15 text-white'
-                : compact
-                  ? 'bg-slate-50 text-[#10213f]'
-                  : 'bg-white/20 text-white',
+              ? 'bg-[#132b26] text-white'
+              : 'bg-[rgba(19,43,38,0.05)] text-[#132b26]',
         )}
       >
         {complete ? (
@@ -290,27 +277,26 @@ export function OverviewAiUploadCard({
           onFiles(event.dataTransfer.files);
         }}
         className={cn(
-          'relative cursor-pointer overflow-hidden rounded-[22px] border-2 border-dashed p-4 transition sm:rounded-[24px] sm:p-5',
+          'relative cursor-pointer overflow-hidden rounded-[20px] border border-dashed p-4 transition sm:p-5',
           isDragging
-            ? 'border-white scale-[1.01] shadow-xl'
-            : 'border-white/35 hover:border-white/70',
-          'bg-[linear-gradient(135deg,#10213f_0%,#1a3a6b_48%,#2563eb_100%)] text-white shadow-[0_18px_50px_rgba(16,33,63,0.28)]',
+            ? 'border-[var(--accent-teal)] bg-[rgba(46,125,110,0.08)] scale-[1.01]'
+            : 'border-[rgba(19,43,38,0.18)] bg-[var(--surface)] hover:border-[var(--accent-teal)]',
         )}
       >
-        <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-sky-400/20 blur-2xl" />
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <CircularDocProgress
               progress={totalCount ? batchProgress : 0}
               isWorking={isWorking}
+              compact
             />
             <div className="min-w-0">
-              <p className="text-[16px] font-semibold leading-snug text-white sm:text-lg">
+              <p className="text-[15px] font-semibold leading-snug text-[var(--ink)] sm:text-base">
                 {isWorking
                   ? liveTitle
-                  : 'Drop a document. We’ll take it from there.'}
+                  : 'Document inbox — drop files to fill matching sections'}
               </p>
-              <p className="mt-1 text-[12px] text-white/75 sm:text-sm">
+              <p className="mt-1 text-[12px] text-[var(--ink-muted)] sm:text-[13px]">
                 {summaryText}
               </p>
             </div>
@@ -334,10 +320,10 @@ export function OverviewAiUploadCard({
                 event.stopPropagation();
                 openPicker();
               }}
-              className="h-11 shrink-0 rounded-xl bg-white px-4 text-[12px] font-bold text-[#10213f] hover:bg-sky-50 sm:px-5 sm:text-[13px]"
+              className="h-11 shrink-0 rounded-xl bg-[var(--ink)] px-4 text-[12px] font-semibold text-white hover:bg-[var(--accent-teal)] sm:px-5 sm:text-[13px]"
             >
               <UploadCloud className="mr-2 h-4 w-4" />
-              Upload a document
+              Upload
             </Button>
           </div>
         </div>

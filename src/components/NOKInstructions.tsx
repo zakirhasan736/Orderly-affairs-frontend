@@ -79,7 +79,7 @@ export function NOKInstructions({
           className="flex w-full items-center gap-2.5 px-4 py-3.5 text-left"
         >
           <Heart className="h-[18px] w-[18px] shrink-0 text-sky-500" />
-          <span className="min-w-0 flex-1 text-[15px] font-semibold text-[#10213f]">
+          <span className="min-w-0 flex-1 text-[15px] font-semibold text-[#132b26]">
             A Gentle Start
           </span>
           {gentleOpen ? (
@@ -106,7 +106,7 @@ export function NOKInstructions({
 
       {/* Important First Steps */}
       <section className="overflow-hidden rounded-[18px] border border-slate-200/80 bg-white p-3.5 shadow-sm sm:p-4">
-        <h3 className="mb-3 text-[15px] font-semibold text-[#10213f]">
+        <h3 className="mb-3 text-[15px] font-semibold text-[#132b26]">
           Important First Steps
         </h3>
         <div className="space-y-2.5">
@@ -119,7 +119,7 @@ export function NOKInstructions({
               <Heart className="h-5 w-5" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold text-[#10213f]">
+              <span className="block text-[14px] font-semibold text-[#132b26]">
                 Read Your Personal Letter
               </span>
               <span className="mt-0.5 block text-[12px] leading-5 text-slate-500">
@@ -138,7 +138,7 @@ export function NOKInstructions({
               <Mail className="h-5 w-5" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold text-[#10213f]">
+              <span className="block text-[14px] font-semibold text-[#132b26]">
                 Deliver Messages to Others
               </span>
               <span className="mt-0.5 block text-[12px] leading-5 text-slate-500">
@@ -154,7 +154,7 @@ export function NOKInstructions({
       <section className="overflow-hidden rounded-[18px] border border-slate-200/80 bg-white p-3.5 shadow-sm sm:p-4">
         <div className="mb-2 flex items-center gap-2">
           <FolderOpen className="h-[18px] w-[18px] text-orange-500" />
-          <h3 className="min-w-0 flex-1 text-[15px] font-semibold text-[#10213f]">
+          <h3 className="min-w-0 flex-1 text-[15px] font-semibold text-[#132b26]">
             Next of Kin Early Tasks
           </h3>
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
@@ -189,7 +189,7 @@ export function NOKInstructions({
                 <span className="min-w-0 flex-1">
                   <span
                     className={cn(
-                      'block text-[13px] font-semibold text-[#10213f]',
+                      'block text-[13px] font-semibold text-[#132b26]',
                       checked && 'text-slate-400 line-through',
                     )}
                   >
@@ -208,7 +208,7 @@ export function NOKInstructions({
                       [task.id]: !prev[task.id],
                     }))
                   }
-                  className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-[#10213f]"
+                  className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-[#132b26]"
                 />
               </label>
             );
@@ -218,7 +218,7 @@ export function NOKInstructions({
 
       {/* What This Kit Is For */}
       <section className="overflow-hidden rounded-[18px] border border-slate-200/80 bg-white p-4 shadow-sm">
-        <h3 className="text-[15px] font-semibold text-[#10213f]">
+        <h3 className="text-[15px] font-semibold text-[#132b26]">
           What This Kit Is For
         </h3>
         <div className="mt-2 space-y-2.5 text-[13px] leading-6 text-slate-600">
@@ -227,7 +227,7 @@ export function NOKInstructions({
             others may require formal legal steps like probate.
           </p>
           <div className="rounded-2xl bg-slate-50 px-3.5 py-3">
-            <p className="text-[12px] font-semibold text-[#10213f]">
+            <p className="text-[12px] font-semibold text-[#132b26]">
               This kit holds the information you&apos;ll need to:
             </p>
             <ul className="mt-1.5 space-y-1 text-[12px] text-slate-500">
@@ -250,7 +250,7 @@ export function NOKInstructions({
 
       {/* Obituary */}
       <section className="overflow-hidden rounded-[18px] border border-violet-100 bg-violet-50/70 p-4 shadow-sm">
-        <h3 className="flex items-center gap-2 text-[15px] font-semibold text-[#10213f]">
+        <h3 className="flex items-center gap-2 text-[15px] font-semibold text-[#132b26]">
           <span aria-hidden>🕊️</span> Obituary Content
         </h3>
         <p className="mt-2 text-[13px] leading-6 text-slate-600">
@@ -262,7 +262,7 @@ export function NOKInstructions({
 
       {/* Resources */}
       <section className="overflow-hidden rounded-[18px] border border-slate-200/80 bg-white p-4 shadow-sm">
-        <h3 className="flex items-center gap-2 text-[15px] font-semibold text-[#10213f]">
+        <h3 className="flex items-center gap-2 text-[15px] font-semibold text-[#132b26]">
           <ExternalLink className="h-4 w-4" />
           Additional Resources
         </h3>
@@ -284,7 +284,7 @@ export function NOKInstructions({
 
       {/* Anchor */}
       <section className="overflow-hidden rounded-[18px] border border-emerald-100 bg-emerald-50/70 p-4 shadow-sm">
-        <h3 className="flex items-center gap-2 text-[15px] font-semibold text-[#10213f]">
+        <h3 className="flex items-center gap-2 text-[15px] font-semibold text-[#132b26]">
           <CheckCircle2 className="h-5 w-5 text-emerald-500" />
           Use This Kit as Your Anchor
         </h3>

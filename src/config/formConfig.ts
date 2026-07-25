@@ -1042,6 +1042,9 @@ export const formConfig: FormConfig = {
                     'Job Loss',
                     'Umbrella',
                     'Annuity',
+                    'Bank/Loan',
+                    'Mortgage',
+                    'Credit',
                     'Other',
                   ],
                   required: true,
@@ -1074,6 +1077,13 @@ export const formConfig: FormConfig = {
                   type: 'TextInputWithUpload',
                   helperText:
                     'Enter the policy number or upload a photo of the policy showing the number',
+                },
+                {
+                  key: 'policy_expiry',
+                  label: 'Policy Expiry Date',
+                  type: 'DatePicker',
+                  helperText:
+                    'Policy end date, valid through, or the last date of the policy period',
                 },
                 {
                   key: 'coverage_amount',
@@ -1174,6 +1184,13 @@ export const formConfig: FormConfig = {
                   type: 'TextArea',
                   helperText:
                     'Your role, membership number, or special responsibilities',
+                },
+                {
+                  key: 'renewal_date',
+                  label: 'Membership Renewal Date',
+                  type: 'DatePicker',
+                  helperText:
+                    'When dues or membership renew — reminder emails at 10, 5, 1 days and on the day',
                 },
                 {
                   key: 'contact_info',
@@ -1621,6 +1638,19 @@ export const formConfig: FormConfig = {
                   helperText: 'Password for online banking',
                 },
                 {
+                  key: 'cd_maturity_date',
+                  label: 'CD / Account Maturity Date',
+                  type: 'DatePicker',
+                  helperText:
+                    'Maturity date for CDs or other term accounts — used for expiry reminders',
+                },
+                {
+                  key: 'last_statement_date',
+                  label: 'Last Statement Date',
+                  type: 'DatePicker',
+                  helperText: 'Date of the most recent bank statement, if known',
+                },
+                {
                   key: 'automatic_payments',
                   label: 'Automatic Payments',
                   type: 'TextArea',
@@ -1733,6 +1763,13 @@ export const formConfig: FormConfig = {
                   type: 'TextArea',
                   helperText:
                     'Two-factor authentication setup, security questions, or backup codes',
+                },
+                {
+                  key: 'subscription_renewal_date',
+                  label: 'Subscription / Plan Renewal Date',
+                  type: 'DatePicker',
+                  helperText:
+                    'Next billing or plan renewal date for this payment service, if any',
                 },
                 {
                   key: 'service_documents',
@@ -1854,6 +1891,20 @@ export const formConfig: FormConfig = {
                   type: 'TextArea',
                   helperText:
                     'Financial value, personal importance, or business significance',
+                },
+                {
+                  key: 'subscription_renewal_date',
+                  label: 'Subscription Renewal Date',
+                  type: 'DatePicker',
+                  helperText:
+                    'When this subscription or paid plan renews next (streaming, SaaS, memberships)',
+                },
+                {
+                  key: 'account_expiry_date',
+                  label: 'Account / Access Expiry Date',
+                  type: 'DatePicker',
+                  helperText:
+                    'When access, trial, or the account itself expires (if different from renewal)',
                 },
                 {
                   key: 'closure_instructions',

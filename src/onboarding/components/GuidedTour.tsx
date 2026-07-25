@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 
@@ -9,6 +9,7 @@ import { nextKinTour } from '@/onboarding/config/nextKinTour';
 import { SpotlightOverlay } from './SpotlightOverlay';
 import { useOnboarding } from './OnboardingProvider';
 import { useUpdateTourStatusMutation } from '@/services/onboardingApi';
+import { cn } from '@common/ui/utils';
 
 type Props = {
   role: 'owner' | 'nextkin';
@@ -24,132 +25,128 @@ export const GuidedTour = ({
   const { stopTour } = useOnboarding();
   const [updateStatus] = useUpdateTourStatusMutation();
   const [index, setIndex] = useState(0);
+  const [ready, setReady] = useState(false);
 
   const steps = role === 'owner' ? ownerTour : nextKinTour;
   const step = steps[index];
+  const total = steps.length;
 
-  const progress = ((index + 1) / steps.length) * 100;
+  // Keep the right screen visible for each step (overview targets need dashboard).
+  useEffect(() => {
+    if (!step) return;
 
-  // ----------------------------------
-  // Keyboard Navigation
-  // ----------------------------------
+    const ensure =
+      'ensureSection' in step && step.ensureSection
+        ? step.ensureSection
+        : null;
+
+    if (ensure && activeSection !== ensure) {
+      setReady(false);
+      setActiveSection(ensure);
+      return;
+    }
+
+    // Allow layout to paint after section switch before spotlight measures.
+    setReady(false);
+    const timer = window.setTimeout(() => setReady(true), ensure ? 180 : 40);
+    return () => window.clearTimeout(timer);
+  }, [activeSection, setActiveSection, step]);
+
+  const finish = useCallback(async () => {
+    await updateStatus({ has_completed: true });
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.7 },
+      colors: ['#132b26', '#2e7d6e', '#f7f6f2', '#e8f1ee'],
+    });
+    stopTour();
+  }, [stopTour, updateStatus]);
+
+  const next = useCallback(async () => {
+    if (index + 1 >= total) {
+      await finish();
+      return;
+    }
+    setIndex(i => i + 1);
+  }, [finish, index, total]);
+
+  const back = useCallback(() => {
+    if (index > 0) setIndex(i => i - 1);
+  }, [index]);
+
+  const skip = useCallback(async () => {
+    await updateStatus({ has_completed: true });
+    stopTour();
+  }, [stopTour, updateStatus]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight') next();
+      if (e.key === 'ArrowRight') void next();
       if (e.key === 'ArrowLeft') back();
-      if (e.key === 'Escape') skip();
+      if (e.key === 'Escape') void skip();
     };
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  });
+  }, [back, next, skip]);
 
-  if (!step) return null;
-
-  const next = async () => {
-    const nextIndex = index + 1;
-
-    if (nextIndex >= steps.length) {
-      await updateStatus({ has_completed: true });
-
-      // 🎉 Confetti burst
-      confetti({
-        particleCount: 120,
-        spread: 80,
-        origin: { y: 0.6 },
-      });
-
-      stopTour();
-      return;
-    }
-
-    setIndex(nextIndex);
-  };
-
-  const back = () => {
-    if (index > 0) setIndex(index - 1);
-  };
-
-  const skip = async () => {
-    await updateStatus({ has_completed: true });
-    stopTour();
-  };
+  if (!step || !ready) return null;
 
   return (
-    <SpotlightOverlay targetSelector={step.selector} onClose={skip}>
+    <SpotlightOverlay targetSelector={step.selector} onClose={() => void skip()}>
       <AnimatePresence mode="wait">
         <motion.div
           key={index}
-          initial={{ opacity: 0, y: 30, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -20, scale: 0.95 }}
-          transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="absolute bottom-12 left-1/2 -translate-x-1/2 
-            w-[500px] max-w-[92vw]  
-            bg-white/90 dark:bg-neutral-900/90 
-            p-8 rounded-3xl 
-            shadow-2xl border border-white/20"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.28, ease: 'easeOut' }}
+          className={cn(
+            'absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-[1001] w-[calc(100%-2rem)] max-w-md -translate-x-1/2',
+            'rounded-[14px] bg-[#132b26] px-5 py-[18px] text-white shadow-[0_18px_40px_rgba(19,43,38,0.35)]',
+          )}
         >
-          {/* Arrow Pointer */}
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 
-            w-6 h-6 bg-white dark:bg-neutral-900 rotate-45 border-l border-t border-white/20" />
-
-          {/* Header */}
-          <div className="mb-6">
-            <div className="text-xs uppercase tracking-widest text-amber-500 font-semibold mb-2">
-              Guided Tour
-            </div>
-
-            <h3 className="text-2xl font-semibold mb-2">
+          <p className="m-0 text-[11.5px] font-medium text-white/55">
+            Step {index + 1} of {total}
+          </p>
+          {step.title ? (
+            <p className="mt-2 mb-0 text-[15px] font-semibold leading-snug text-white">
               {step.title}
-            </h3>
-
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              {step.description}
             </p>
-          </div>
+          ) : null}
+          <p
+            className={cn(
+              'mb-0 text-[15px] leading-[1.55] text-pretty text-white/90',
+              step.title ? 'mt-1.5' : 'mt-2',
+            )}
+          >
+            {step.description}
+          </p>
 
-          {/* Progress */}
-          <div className="mb-6">
-            <div className="h-1.5 bg-neutral-200 dark:bg-neutral-800 rounded-full overflow-hidden">
-              <motion.div
-                className="h-full bg-gradient-to-r from-amber-400 to-amber-500"
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.4 }}
-              />
-            </div>
-            <div className="text-xs mt-2 text-muted-foreground">
-              Step {index + 1} of {steps.length}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex justify-between items-center">
+          <div className="mt-4 flex flex-wrap items-center gap-2.5">
             <button
+              type="button"
               disabled={index === 0}
               onClick={back}
-              className="text-sm text-muted-foreground hover:text-foreground transition disabled:opacity-30"
+              className="h-[38px] rounded-[19px] border border-white/30 bg-transparent px-3.5 text-[12.5px] font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              ← Back
+              Back
             </button>
-
-            <div className="flex gap-3">
-              <button
-                onClick={skip}
-                className="text-sm text-muted-foreground hover:text-foreground transition"
-              >
-                Skip
-              </button>
-
-              <button
-                onClick={next}
-                className="px-5 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 
-                text-black font-medium text-sm transition shadow-md hover:shadow-lg"
-              >
-                {index === steps.length - 1 ? 'Finish 🎉' : 'Next →'}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => void next()}
+              className="h-[38px] rounded-[19px] border-0 bg-white px-4 text-[12.5px] font-medium text-[#132b26] transition hover:bg-[#f7f6f2]"
+            >
+              {index === total - 1 ? 'Finish' : 'Next'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void skip()}
+              className="ml-auto text-[12.5px] font-medium text-white/55 transition hover:text-white"
+            >
+              Skip
+            </button>
           </div>
         </motion.div>
       </AnimatePresence>

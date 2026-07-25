@@ -207,6 +207,20 @@ const SECTION_13A = {
         'Financial value, personal importance, or business significance',
     },
     {
+      key: 'subscription_renewal_date',
+      label: 'Subscription Renewal Date',
+      type: 'DatePicker',
+      helperText:
+        'When this subscription or paid plan renews next (streaming, SaaS, memberships)',
+    },
+    {
+      key: 'account_expiry_date',
+      label: 'Account / Access Expiry Date',
+      type: 'DatePicker',
+      helperText:
+        'When access, trial, or the account itself expires (if different from renewal)',
+    },
+    {
       key: 'closure_instructions',
       label: 'Account Closure Instructions',
       type: 'TextArea',
@@ -259,7 +273,12 @@ const SECTION_13A_GROUPS: FieldGroup[] = [
     accent: 'from-amber-500/[0.07] to-orange-500/[0.03]',
     iconWrap: 'bg-amber-500/10 text-amber-700',
     layout: 'stack',
-    fieldKeys: ['account_value', 'closure_instructions'],
+    fieldKeys: [
+      'account_value',
+      'subscription_renewal_date',
+      'account_expiry_date',
+      'closure_instructions',
+    ],
   },
   {
     key: 'documents',

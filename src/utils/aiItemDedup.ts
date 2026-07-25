@@ -115,9 +115,12 @@ export function vehiclesAreDuplicates(
 }
 
 /**
- * Same insurance topic when:
+ * Same insurance policy (renewal / re-upload) when:
  * - both have the same policy number, OR
- * - company + policy type match (fuzzy company), and policy numbers don't conflict
+ * - neither has a policy number AND company + type (+ other subtype) match
+ *
+ * Different policy numbers, or same company/type with a conflicting number,
+ * are treated as separate policies (vehicle, bank/loan, home, etc.).
  */
 export function insurancePoliciesAreDuplicates(
   existing: Record<string, unknown>,
@@ -130,23 +133,42 @@ export function insurancePoliciesAreDuplicates(
     return existingPolicy === incomingPolicy;
   }
 
+  // One side has a number and the other doesn't (or numbers differ) → different policies.
+  // Do not collapse multiple Vehicle/State Farm cards into one.
+  if (existingPolicy || incomingPolicy) {
+    return false;
+  }
+
   const existingCompany = getInsuranceCompany(existing);
   const incomingCompany = getInsuranceCompany(incoming);
   const existingType = getPolicyType(existing);
   const incomingType = getPolicyType(incoming);
+  const existingOther = normalizeComparable(
+    existing.policy_type_other ?? existing.type_other,
+  );
+  const incomingOther = normalizeComparable(
+    incoming.policy_type_other ?? incoming.type_other,
+  );
 
   if (
-    existingCompany &&
-    incomingCompany &&
-    existingType &&
-    incomingType &&
-    companiesMatch(existingCompany, incomingCompany) &&
-    existingType === incomingType
+    !existingCompany ||
+    !incomingCompany ||
+    !existingType ||
+    !incomingType ||
+    !companiesMatch(existingCompany, incomingCompany) ||
+    existingType !== incomingType
   ) {
-    return true;
+    return false;
   }
 
-  return false;
+  // "Other" subtypes must also match when both specify them.
+  if (existingType === 'other') {
+    if (existingOther && incomingOther && existingOther !== incomingOther) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 /** Merge non-empty incoming fields into an existing card (never wipe with empties). */

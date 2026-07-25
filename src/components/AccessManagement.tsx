@@ -15,16 +15,7 @@ import { Input } from '@common/ui/input';
 import { Label } from '@common/ui/label';
 import { Textarea } from '@common/ui/textarea';
 import { Badge } from '@common/ui/badge';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@common/ui/alert-dialog';
+import { BrandDangerConfirm } from '@/components/BrandDangerConfirm';
 import {
   Sheet,
   SheetContent,
@@ -82,6 +73,7 @@ import {
 import { PasswordCard } from './PasswordCard';
 import {
   MOBILE_SHEET_FOOTER_CLASS,
+  MOBILE_SHEET_SCROLL_CLASS,
   MOBILE_SHEET_SCROLL_PADDING,
   MobileBottomSheet,
   MobileSheetHandle,
@@ -1253,6 +1245,7 @@ export const AccessManagement = forwardRef<
   const [originalMasterPassword, setOriginalMasterPassword] = useState('');
   const [detailViewIndex, setDetailViewIndex] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [cancelPendingInvite, setCancelPendingInvite] = useState(false);
   const [revokeAllOpen, setRevokeAllOpen] = useState(false);
 
   const [createNextKin] = useCreateNextKinMutation();
@@ -1596,6 +1589,7 @@ export const AccessManagement = forwardRef<
     if (!person._id) {
       setAuthorizedPeople(prev => prev.filter((_, idx) => idx !== index));
       setDeleteTarget(null);
+      setCancelPendingInvite(false);
       return;
     }
 
@@ -1605,7 +1599,11 @@ export const AccessManagement = forwardRef<
     try {
       await deleteNextKin(person._id).unwrap();
       setAuthorizedPeople(prev => prev.filter((_, idx) => idx !== index));
-      toast.success('Deleted');
+      toast.success(
+        cancelPendingInvite
+          ? 'Access removed and pending invitation cancelled'
+          : 'Access removed',
+      );
       refetch();
     } catch (error) {
       console.error(error);
@@ -1613,6 +1611,7 @@ export const AccessManagement = forwardRef<
     } finally {
       setPersonAction(personKey);
       setDeleteTarget(null);
+      setCancelPendingInvite(false);
     }
   };
 
@@ -1772,6 +1771,7 @@ export const AccessManagement = forwardRef<
           <div
             className={cn(
               'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6',
+              MOBILE_SHEET_SCROLL_CLASS,
               isMobile
                 ? cn('py-3', MOBILE_SHEET_SCROLL_PADDING)
                 : 'py-5',
@@ -2443,10 +2443,10 @@ export const AccessManagement = forwardRef<
               ) : (
                 <Button
                   type="button"
-                  onClick={saveWizard}
+                  onClick={() => void saveWizard()}
                   disabled={isWizardSaving}
                   className={cn(
-                    'rounded-2xl',
+                    'relative z-10 touch-manipulation rounded-2xl',
                     MIN_TOUCH,
                     isMobile ? 'flex-[1.4]' : 'w-auto',
                   )}
@@ -2822,6 +2822,7 @@ export const AccessManagement = forwardRef<
                     <div
                       className={cn(
                         'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3',
+                        MOBILE_SHEET_SCROLL_CLASS,
                         MOBILE_SHEET_SCROLL_PADDING,
                       )}
                     >
@@ -2981,54 +2982,60 @@ export const AccessManagement = forwardRef<
       )}
 
       {/* Delete confirmation */}
-      <AlertDialog
+      <BrandDangerConfirm
         open={deleteTarget !== null}
-        onOpenChange={open => !open && setDeleteTarget(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete trusted person?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteTarget !== null &&
-                `This will permanently remove ${authorizedPeople[deleteTarget]?.full_name || 'this person'} from your access list.`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className={MIN_TOUCH}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDelete}
-              className={cn(
-                'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-                MIN_TOUCH,
-              )}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title={
+          deleteTarget !== null
+            ? (() => {
+                const raw =
+                  authorizedPeople[deleteTarget]?.full_name?.trim() ||
+                  'this person';
+                const first =
+                  raw.split(/\s+/).filter(Boolean)[0] || 'this person';
+                return `Remove ${first}'s access?`;
+              })()
+            : 'Remove access?'
+        }
+        description={
+          deleteTarget !== null
+            ? (() => {
+                const raw =
+                  authorizedPeople[deleteTarget]?.full_name?.trim() || '';
+                const first = raw.split(/\s+/).filter(Boolean)[0];
+                const who = first || 'This person';
+                return `${who} will no longer be able to open any part of your vault, and their invitation link will stop working. You can add them again later.`;
+              })()
+            : 'They will no longer be able to open any part of your vault.'
+        }
+        cancelLabel="Keep access"
+        confirmLabel="Remove"
+        checkboxLabel="Also cancel their pending invitation email"
+        checkboxChecked={cancelPendingInvite}
+        onCheckboxChange={setCancelPendingInvite}
+        onCancel={() => {
+          setDeleteTarget(null);
+          setCancelPendingInvite(false);
+        }}
+        onConfirm={() => void confirmDelete()}
+        busy={
+          deleteTarget !== null &&
+          personActions[
+            getPersonKey(authorizedPeople[deleteTarget], deleteTarget)
+          ] === 'deleting'
+        }
+      />
 
       {/* Revoke all confirmation */}
-      <AlertDialog open={revokeAllOpen} onOpenChange={setRevokeAllOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Revoke all access?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will immediately revoke access for every trusted person on
-              your account.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className={MIN_TOUCH}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmRevokeAll}
-              className={MIN_TOUCH}
-            >
-              Revoke All
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <BrandDangerConfirm
+        open={revokeAllOpen}
+        title="Revoke all access?"
+        description="This will immediately revoke access for every trusted person on your account. They won’t be able to open your vault until you restore them."
+        cancelLabel="Keep access"
+        confirmLabel="Revoke all"
+        onCancel={() => setRevokeAllOpen(false)}
+        onConfirm={() => void confirmRevokeAll()}
+        busy={isRevokingAll}
+      />
 
       {isMobile && !wizardOpen && detailViewIndex === null && (
         <div className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 md:hidden">

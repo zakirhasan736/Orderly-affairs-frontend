@@ -59,6 +59,7 @@ import {
 } from '@/components/MobileBottomSheet';
 import { NokBottomNav } from '@/components/nok/NokBottomNav';
 import { cn } from '@common/ui/utils';
+import { BRAND_LOGO } from '@/constants/brand';
 
 interface KitSection {
   id: string;
@@ -422,7 +423,7 @@ export function EnhancedNOKDashboard({
   if (!isPreview && accessLoading) {
     return (
       <div className="grid min-h-[100dvh] place-items-center bg-[#f6f8fb]">
-        <div className="h-10 w-10 animate-pulse rounded-2xl bg-[#10213f]" />
+        <div className="h-10 w-10 animate-pulse rounded-2xl bg-[#132b26]" />
       </div>
     );
   }
@@ -431,8 +432,8 @@ export function EnhancedNOKDashboard({
     return (
       <div className="grid min-h-[100dvh] place-items-center bg-[#f6f8fb] px-5">
         <div className="w-full max-w-md rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
-          <Shield className="mb-3 h-8 w-8 text-[#10213f]" />
-          <h2 className="text-xl font-semibold text-[#10213f]">
+          <Shield className="mb-3 h-8 w-8 text-[#132b26]" />
+          <h2 className="text-xl font-semibold text-[#132b26]">
             Awaiting approval
           </h2>
           <p className="mt-2 text-sm text-slate-600">
@@ -491,13 +492,13 @@ export function EnhancedNOKDashboard({
           className="flex min-w-0 items-center gap-2.5 text-left"
         >
           <Image
-            src="/images/brand-logo.png"
+            src={BRAND_LOGO}
             alt="Orderly Affairs"
             width={40}
             height={40}
-            className="h-10 w-10 rounded-xl object-contain"
+            className="h-10 w-10 rounded-xl bg-white object-contain p-0.5 ring-1 ring-[#132b26]/10"
           />
-          <span className="truncate text-[15px] font-semibold tracking-tight text-[#10213f]">
+          <span className="truncate text-[15px] font-semibold tracking-tight text-[#132b26]">
             Orderly Affairs
           </span>
         </button>
@@ -523,7 +524,7 @@ export function EnhancedNOKDashboard({
               className={cn(
                 'flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-[13px] font-semibold transition',
                 active
-                  ? 'bg-[#10213f] text-white shadow-md shadow-slate-900/10'
+                  ? 'bg-[#132b26] text-white shadow-md shadow-slate-900/10'
                   : 'text-slate-600 hover:bg-slate-100',
               )}
             >
@@ -543,7 +544,7 @@ export function EnhancedNOKDashboard({
           <Settings className="h-4 w-4" />
           Settings
         </button>
-        <div className="rounded-2xl bg-[#10213f] p-4 text-white">
+        <div className="rounded-2xl bg-[#132b26] p-4 text-white">
           <p className="text-[13px] font-semibold">Need Help?</p>
           <p className="mt-1 text-[11px] leading-4 text-white/70">
             We&apos;re here if you need guidance.
@@ -557,7 +558,7 @@ export function EnhancedNOKDashboard({
                 }),
               )
             }
-            className="mt-3 h-9 w-auto rounded-xl bg-white px-3 text-[12px] font-semibold text-[#10213f] hover:bg-slate-100"
+            className="mt-3 h-9 w-auto rounded-xl bg-white px-3 text-[12px] font-semibold text-[#132b26] hover:bg-slate-100"
           >
             Contact Support
           </Button>
@@ -568,7 +569,7 @@ export function EnhancedNOKDashboard({
 
   const RightRail = (
     <aside className="hidden w-[300px] shrink-0 space-y-4 xl:block">
-      <div className="overflow-hidden rounded-[24px] bg-[#10213f] p-5 text-white shadow-lg shadow-slate-900/10">
+      <div className="overflow-hidden rounded-[24px] bg-[#132b26] p-5 text-white shadow-lg shadow-slate-900/10">
         <p className="text-[12px] font-medium text-white/70">Overall Progress</p>
         <div className="mt-4 flex justify-center">
           <ProgressRing value={stats.progress} />
@@ -592,7 +593,7 @@ export function EnhancedNOKDashboard({
       </div>
 
       <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-[13px] font-semibold text-[#10213f]">Quick Actions</p>
+        <p className="text-[13px] font-semibold text-[#132b26]">Quick Actions</p>
         <div className="mt-3 space-y-1">
           {[
             {
@@ -626,7 +627,7 @@ export function EnhancedNOKDashboard({
                 onClick={item.onClick}
                 className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left text-[13px] font-medium text-slate-700 transition hover:bg-slate-50"
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-[#10213f]">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-[#132b26]">
                   <Icon className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">{item.label}</span>
@@ -643,7 +644,7 @@ export function EnhancedNOKDashboard({
       </div>
 
       <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-[13px] font-semibold text-[#10213f]">
+        <p className="text-[13px] font-semibold text-[#132b26]">
           Recent Activity
         </p>
         <div className="mt-3 space-y-3">
@@ -661,7 +662,7 @@ export function EnhancedNOKDashboard({
                   <CheckCircle2 className="h-4 w-4" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-[13px] font-medium text-[#10213f]">
+                  <span className="block truncate text-[13px] font-medium text-[#132b26]">
                     {item.title}
                   </span>
                   <span className="text-[11px] text-slate-400">{item.when}</span>
@@ -680,7 +681,7 @@ export function EnhancedNOKDashboard({
       <div className={cn('px-5', isMobile ? 'pb-2 pt-1' : 'pt-5')}>
         <h3
           id="nok-report-title"
-          className="text-lg font-semibold text-[#10213f]"
+          className="text-lg font-semibold text-[#132b26]"
         >
           Confirm passing report
         </h3>
@@ -752,19 +753,19 @@ export function EnhancedNOKDashboard({
               <button
                 type="button"
                 onClick={() => setSidebarOpen(true)}
-                className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-[#10213f] md:hidden"
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-[#132b26] md:hidden"
                 aria-label="Open menu"
               >
                 <Menu className="h-5 w-5" />
               </button>
 
               <div className="min-w-0 flex-1">
-                <h1 className="truncate text-[17px] font-semibold tracking-tight text-[#10213f] sm:text-xl md:text-2xl">
+                <h1 className="truncate text-[17px] font-semibold tracking-tight text-[#132b26] sm:text-xl md:text-2xl">
                   {isPreview ? 'NOK Preview' : 'Next of Kin Dashboard'}
                 </h1>
                 <p className="mt-0.5 truncate text-[12px] text-slate-500 sm:text-[13px]">
                   Welcome,{' '}
-                  <span className="font-semibold text-[#10213f]">
+                  <span className="font-semibold text-[#132b26]">
                     {displayName}
                   </span>{' '}
                   — {accessLabel}
@@ -790,11 +791,11 @@ export function EnhancedNOKDashboard({
                     onClick={() => setProfileOpen(v => !v)}
                     className="flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1 pl-1 pr-2 transition hover:bg-slate-50 sm:pr-3"
                   >
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#10213f] text-[11px] font-bold text-white">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#132b26] text-[11px] font-bold text-white">
                       {initials || 'NK'}
                     </span>
                     <span className="hidden min-w-0 text-left sm:block">
-                      <span className="block max-w-[120px] truncate text-[12px] font-semibold text-[#10213f]">
+                      <span className="block max-w-[120px] truncate text-[12px] font-semibold text-[#132b26]">
                         {displayName}
                       </span>
                       <span className="block text-[10px] text-slate-400">
@@ -834,7 +835,7 @@ export function EnhancedNOKDashboard({
           <main className="min-w-0 flex-1">
             <div className="mx-auto w-full max-w-[1480px] px-4 py-4 sm:px-5 md:px-6 md:py-6 lg:px-8 xl:px-10">
               <div className="flex gap-6">
-                <div className="min-w-0 flex-1 space-y-4 md:space-y-5">
+                <div className="nok-welcome min-w-0 flex-1 space-y-4 md:space-y-5">
                   {/* Stats */}
                   <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3">
                     {[
@@ -883,7 +884,7 @@ export function EnhancedNOKDashboard({
                           )}
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <p className="text-[12px] font-semibold leading-5 text-[#10213f] sm:text-[13px]">
+                            <p className="text-[12px] font-semibold leading-5 text-[#132b26] sm:text-[13px]">
                               {card.label}
                             </p>
                             <span
@@ -914,7 +915,7 @@ export function EnhancedNOKDashboard({
                   </div>
 
                   {/* Tablet progress (right rail substitute) */}
-                  <div className="hidden rounded-[20px] bg-[#10213f] p-4 text-white md:block xl:hidden">
+                  <div className="hidden rounded-[20px] bg-[#132b26] p-4 text-white md:block xl:hidden">
                     <div className="flex items-center gap-4">
                       <ProgressRing value={stats.progress} size={72} stroke={6} />
                       <div className="min-w-0">
@@ -970,8 +971,8 @@ export function EnhancedNOKDashboard({
                     )}
 
                   {/* Important actions */}
-                  <section>
-                    <h2 className="mb-3 text-[15px] font-semibold text-[#10213f]">
+                  <section className="owner-letter">
+                    <h2 className="mb-3 text-[15px] font-semibold text-[#132b26]">
                       Important Actions
                     </h2>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -984,7 +985,7 @@ export function EnhancedNOKDashboard({
                           <Heart className="h-5 w-5" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[14px] font-semibold text-[#10213f]">
+                          <span className="block text-[14px] font-semibold text-[#132b26]">
                             Read Personal Letter
                           </span>
                           <span className="mt-0.5 block text-[12px] text-slate-500">
@@ -1004,7 +1005,7 @@ export function EnhancedNOKDashboard({
                           <Mail className="h-5 w-5" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[14px] font-semibold text-[#10213f]">
+                          <span className="block text-[14px] font-semibold text-[#132b26]">
                             Deliver Messages
                           </span>
                           <span className="mt-0.5 block text-[12px] text-slate-500">
@@ -1021,10 +1022,10 @@ export function EnhancedNOKDashboard({
                   {/* Sections */}
                   <section
                     id="nok-sections"
-                    className="rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:p-5"
+                    className="authorized-sections rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:p-5"
                   >
                     <div className="mb-3 flex items-center justify-between gap-2">
-                      <h2 className="text-[15px] font-semibold text-[#10213f]">
+                      <h2 className="text-[15px] font-semibold text-[#132b26]">
                         All Sections
                       </h2>
                       <button
@@ -1072,8 +1073,8 @@ export function EnhancedNOKDashboard({
                             className={cn(
                               'shrink-0 border-b-2 px-3 py-2 text-[13px] font-semibold transition',
                               active
-                                ? 'border-[#10213f] text-[#10213f]'
-                                : 'border-transparent text-slate-500 hover:text-[#10213f]',
+                                ? 'border-[#132b26] text-[#132b26]'
+                                : 'border-transparent text-slate-500 hover:text-[#132b26]',
                             )}
                           >
                             {tab.label}
@@ -1134,7 +1135,7 @@ export function EnhancedNOKDashboard({
                                   <Icon className="h-[18px] w-[18px]" />
                                 </span>
                                 <span className="min-w-0 flex-1">
-                                  <span className="block truncate text-[13px] font-semibold text-[#10213f]">
+                                  <span className="block truncate text-[13px] font-semibold text-[#132b26]">
                                     {section.id}. {section.title}
                                   </span>
                                   <span className="text-[11px] text-slate-400">
@@ -1180,7 +1181,7 @@ export function EnhancedNOKDashboard({
                                   onPrefetchSection?.(section.id)
                                 }
                                 disabled={isOpening}
-                                className="flex items-center gap-3 rounded-[18px] border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:border-[#10213f]/25 hover:shadow-md active:scale-[0.99] disabled:opacity-70"
+                                className="flex items-center gap-3 rounded-[18px] border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:border-[#132b26]/25 hover:shadow-md active:scale-[0.99] disabled:opacity-70"
                               >
                                 <span
                                   className={cn(
@@ -1192,7 +1193,7 @@ export function EnhancedNOKDashboard({
                                   <Icon className="h-[18px] w-[18px]" />
                                 </span>
                                 <span className="min-w-0 flex-1">
-                                  <span className="block truncate text-[13px] font-semibold text-[#10213f]">
+                                  <span className="block truncate text-[13px] font-semibold text-[#132b26]">
                                     {section.id}. {section.title}
                                   </span>
                                   <span className="mt-0.5 block text-[11px] text-slate-400">

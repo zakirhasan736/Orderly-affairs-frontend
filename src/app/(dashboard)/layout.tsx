@@ -1,6 +1,7 @@
 'use client';
 import AuthWatcher from '@services/AuthWatcher';
 import { BillingAccessGate } from '@/components/BillingAccessGate';
+import { SessionTimeoutGuard } from '@/components/SessionTimeoutGuard';
 import { Elements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 const stripePromise = loadStripe(
@@ -16,6 +17,7 @@ export default function DashboardLayout({
       <AuthWatcher>
         <Elements stripe={stripePromise}>
           <BillingAccessGate>
+            <SessionTimeoutGuard />
             <main className="">{children}</main>
           </BillingAccessGate>
         </Elements>

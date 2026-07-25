@@ -657,7 +657,7 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
                 emailAttempts >= MAX_EMAIL_ATTEMPTS
               }
               onClick={verifyEmailMfa}
-              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#10213f] px-5 text-sm font-semibold text-white disabled:opacity-60"
+              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#132b26] px-5 text-sm font-semibold text-white disabled:opacity-60"
             >
               Verify Email
             </button>
@@ -711,7 +711,7 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
               type="button"
               disabled={busy || authCode.length !== 6}
               onClick={verifyAuthenticatorMfa}
-              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#10213f] px-5 text-sm font-semibold text-white disabled:opacity-60"
+              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#132b26] px-5 text-sm font-semibold text-white disabled:opacity-60"
             >
               Verify Authenticator
             </button>
@@ -736,7 +736,7 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
                   type="button"
                   disabled={busy}
                   onClick={beginSmsMfa}
-                  className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#10213f] px-5 text-sm font-semibold text-white disabled:opacity-60"
+                  className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#132b26] px-5 text-sm font-semibold text-white disabled:opacity-60"
                 >
                   {busy ? 'Sending...' : 'Send SMS Code'}
                 </button>
@@ -765,7 +765,7 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
                   type="button"
                   disabled={busy || smsCode.length !== 6}
                   onClick={verifySmsMfa}
-                  className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#10213f] px-5 text-sm font-semibold text-white disabled:opacity-60"
+                  className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#132b26] px-5 text-sm font-semibold text-white disabled:opacity-60"
                 >
                   Verify SMS
                 </button>
@@ -783,7 +783,7 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
               type="button"
               disabled={busy || !emailCaptchaToken}
               onClick={beginEmailMfa}
-              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#10213f] px-5 text-sm font-semibold text-white disabled:opacity-60"
+              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#132b26] px-5 text-sm font-semibold text-white disabled:opacity-60"
             >
               {busy ? 'Sending...' : 'Send Email Code'}
             </button>
@@ -797,7 +797,7 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
             type="button"
             disabled={busy}
             onClick={beginAuthenticatorMfa}
-            className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#10213f] px-5 text-sm font-semibold text-white disabled:opacity-60"
+            className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#132b26] px-5 text-sm font-semibold text-white disabled:opacity-60"
           >
             {busy ? 'Starting...' : 'Set Up QR Code'}
           </button>
@@ -814,7 +814,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
     <div className="vault-settings-section w-full space-y-4 pb-24 sm:space-y-5 sm:pb-28">
       {/* OWNER MFA SETTINGS */}
       <section className="w-full overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[28px]">
-        <div className="relative overflow-hidden bg-[linear-gradient(135deg,#10213f_0%,#1a3a6b_55%,#2563eb_100%)] px-4 py-5 text-white sm:px-6 sm:py-6 md:px-8">
+        <div className="relative overflow-hidden bg-[linear-gradient(135deg,#132b26_0%,#1a3d36_55%,#2563eb_100%)] px-4 py-5 text-white sm:px-6 sm:py-6 md:px-8">
           <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-sky-300/20 blur-2xl" />
           <div className="relative flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -850,7 +850,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                       'flex w-full min-h-[76px] items-center gap-3 rounded-[22px] border px-3.5 py-3.5 text-left transition active:scale-[0.99]',
                       active
                         ? 'border-emerald-200/90 bg-[linear-gradient(90deg,#ffffff_0%,#ecfdf5_100%)] shadow-sm'
-                        : 'border-slate-200 bg-[#f8fafc] shadow-sm',
+                        : 'border-slate-200 bg-[#f7f6f2] shadow-sm',
                     )}
                   >
                     <div
@@ -858,14 +858,14 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                         'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl',
                         active
                           ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'bg-white text-[#10213f] ring-1 ring-slate-200',
+                          : 'bg-white text-[#132b26] ring-1 ring-slate-200',
                       )}
                     >
                       {option.icon}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-[15px] font-semibold text-[#10213f]">
+                        <span className="truncate text-[15px] font-semibold text-[#132b26]">
                           {option.title}
                         </span>
                         <span
@@ -914,13 +914,13 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                             'flex h-11 w-11 items-center justify-center rounded-2xl',
                             active
                               ? 'bg-emerald-600 text-white'
-                              : 'bg-white text-[#10213f] ring-1 ring-slate-200',
+                              : 'bg-white text-[#132b26] ring-1 ring-slate-200',
                           )}
                         >
                           {option.icon}
                         </div>
                         <div>
-                          <h3 className="font-semibold text-[#10213f]">
+                          <h3 className="font-semibold text-[#132b26]">
                             {option.title}
                           </h3>
                           <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -963,7 +963,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
               Billing
             </p>
-            <h2 className="mt-1 text-[18px] font-bold tracking-tight text-[#10213f] sm:text-xl">
+            <h2 className="mt-1 text-[18px] font-bold tracking-tight text-[#132b26] sm:text-xl">
               {isTrial ? 'Free Trial Phase' : 'Subscription Active'}
             </h2>
             <p className="mt-1.5 text-[12px] font-medium text-slate-500">
@@ -1040,7 +1040,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                 'inline-flex h-11 w-auto items-center justify-center whitespace-nowrap rounded-xl px-5 text-xs font-bold uppercase',
                 disableActions
                   ? 'cursor-not-allowed bg-slate-300 text-slate-600'
-                  : 'bg-[#10213f] text-white hover:bg-[#0c1a33]',
+                  : 'bg-[#132b26] text-white hover:bg-[#0e1f1c]',
               )}
             >
               {!billing.has_payment_method
@@ -1071,7 +1071,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
             <button
               type="button"
               onClick={openBillingPortal}
-              className="inline-flex h-11 w-auto items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-5 text-xs font-bold uppercase text-[#10213f] hover:bg-slate-50"
+              className="inline-flex h-11 w-auto items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-5 text-xs font-bold uppercase text-[#132b26] hover:bg-slate-50"
             >
               Manage Billing
             </button>
@@ -1082,7 +1082,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
       {/* INVOICES */}
       <section className="w-full overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px]">
         <div className="border-b border-slate-100 px-4 py-4 sm:px-6 md:px-8">
-          <h2 className="text-[17px] font-bold tracking-tight text-[#10213f]">
+          <h2 className="text-[17px] font-bold tracking-tight text-[#132b26]">
             Invoices
           </h2>
           <p className="mt-1 text-[12px] text-slate-500">
@@ -1097,7 +1097,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
             invoices?.map((inv: Invoice) => (
               <div
                 key={inv.id}
-                className="rounded-2xl border border-slate-200 bg-[#f8fafc] p-3.5"
+                className="rounded-2xl border border-slate-200 bg-[#f7f6f2] p-3.5"
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="truncate font-mono text-[11px] text-slate-500">
@@ -1116,7 +1116,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                 </div>
                 <div className="mt-2 flex items-end justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold text-[#10213f]">
+                    <p className="text-sm font-semibold text-[#132b26]">
                       ${inv.amount_due.toFixed(2)}
                     </p>
                     <p className="text-[11px] text-slate-500">
@@ -1128,7 +1128,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                       href={inv.pdf}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex h-9 w-auto items-center rounded-lg bg-[#10213f] px-3 text-[11px] font-bold text-white"
+                      className="inline-flex h-9 w-auto items-center rounded-lg bg-[#132b26] px-3 text-[11px] font-bold text-white"
                     >
                       PDF
                     </a>
@@ -1183,7 +1183,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                     <td className="p-4 text-slate-700">
                       {formatDate(inv.created)}
                     </td>
-                    <td className="p-4 font-semibold text-[#10213f]">
+                    <td className="p-4 font-semibold text-[#132b26]">
                       ${inv.amount_due.toFixed(2)}
                     </td>
                     <td className="p-4 capitalize">
@@ -1204,7 +1204,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                           href={inv.pdf}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex h-9 w-auto items-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-[#10213f] hover:bg-slate-50"
+                          className="inline-flex h-9 w-auto items-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-[#132b26] hover:bg-slate-50"
                         >
                           PDF
                         </a>
@@ -1238,7 +1238,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
           className="max-h-[92dvh]"
           labelledBy="vault-mfa-sheet-title"
         >
-          <div className="flex h-full min-h-0 flex-col bg-[#f8fafc]">
+          <div className="flex h-full min-h-0 flex-col bg-[#f7f6f2]">
             <MobileSheetHandle />
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200/80 bg-white px-4 pb-4 pt-1">
               <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -1247,7 +1247,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                     'mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl',
                     mfaSheetMethod && mfaMethods[mfaSheetMethod]
                       ? 'bg-emerald-600 text-white'
-                      : 'bg-[#10213f] text-white',
+                      : 'bg-[#132b26] text-white',
                   )}
                 >
                   {mfaSheetOption?.icon}
@@ -1255,7 +1255,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                 <div className="min-w-0">
                   <h3
                     id="vault-mfa-sheet-title"
-                    className="text-[17px] font-bold tracking-tight text-[#10213f]"
+                    className="text-[17px] font-bold tracking-tight text-[#132b26]"
                   >
                     {mfaSheetOption?.title || 'MFA Method'}
                   </h3>

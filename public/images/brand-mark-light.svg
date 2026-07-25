@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+  <!-- Orderly Affairs crest  tree from organizer (light mark for ink backgrounds) -->
+  <rect x="14" y="38" width="36" height="16" rx="2.5" stroke="#F7F6F2" stroke-width="2"/>
+  <path d="M20 38v-3.5h8V38M28 38v-3.5h8V38M36 38v-3.5h8V38" stroke="#F7F6F2" stroke-width="1.75" stroke-linecap="round"/>
+  <path d="M28 46.5h8" stroke="#F7F6F2" stroke-width="1.75" stroke-linecap="round"/>
+  <path d="M32 38V22" stroke="#F7F6F2" stroke-width="2" stroke-linecap="round"/>
+  <path
+    d="M32 24c-6-1.5-10-6-10-11.5 0 0 4.5 1.5 10 1.5s10-1.5 10-1.5C42 18 38 22.5 32 24Z"
+    stroke="#F7F6F2"
+    stroke-width="1.75"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M22 16.5c2.2-3.2 5.4-5 10-5s7.8 1.8 10 5"
+    stroke="#F7F6F2"
+    stroke-width="1.5"
+    stroke-linecap="round"
+  />
+  <path d="M26 20.5c1.8-2 3.8-3 6-3s4.2 1 6 3" stroke="#F7F6F2" stroke-width="1.4" stroke-linecap="round"/>
+  <circle cx="24.5" cy="14" r="1.2" fill="#F7F6F2"/>
+  <circle cx="32" cy="11.5" r="1.2" fill="#F7F6F2"/>
+  <circle cx="39.5" cy="14" r="1.2" fill="#F7F6F2"/>
+  <circle cx="27" cy="18.5" r="1.1" fill="#F7F6F2"/>
+  <circle cx="37" cy="18.5" r="1.1" fill="#F7F6F2"/>
+</svg>

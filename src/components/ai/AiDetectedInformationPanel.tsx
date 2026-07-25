@@ -82,7 +82,7 @@ export function AiDetectedInformationPanel({
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
             Detected data (temporary)
           </p>
-          <h3 className="text-lg font-semibold text-[#10213f]">
+          <h3 className="text-lg font-semibold text-[#132b26]">
             Matched fields ready to place
           </h3>
         </div>
@@ -106,7 +106,7 @@ export function AiDetectedInformationPanel({
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-slate-700">
                   <FileText className="h-4 w-4 text-emerald-600" />
-                  <span className="font-semibold text-[#10213f]">{label}</span>
+                  <span className="font-semibold text-[#132b26]">{label}</span>
                 </div>
                 <p className="text-sm text-slate-600">
                   {fieldCount > 0
@@ -121,7 +121,7 @@ export function AiDetectedInformationPanel({
                         key={`${fact.label}:${fact.value}`}
                         className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700"
                       >
-                        <span className="font-semibold text-[#10213f]">
+                        <span className="font-semibold text-[#132b26]">
                           {fact.label}:
                         </span>{' '}
                         <span className="break-all">{fact.value}</span>

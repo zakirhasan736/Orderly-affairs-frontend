@@ -382,8 +382,18 @@ export function coerceAiFieldValues(
   const next: Record<string, unknown> = {};
 
   Object.entries(remapped).forEach(([key, value]) => {
+    if (key.startsWith('__')) return;
+
     const field = fieldMap.get(key);
-    if (!field || SKIP_FIELD_TYPES.has(field.type)) return;
+    if (!field) {
+      // Keep schema keys even when the catalog/formConfig was incomplete.
+      // Catalog guides placement — it must not delete extracted data.
+      if (!isEmptyAiValue(value)) {
+        next[key] = value;
+      }
+      return;
+    }
+    if (SKIP_FIELD_TYPES.has(field.type)) return;
     next[key] = coerceAiFieldValue(field, value);
   });
 
