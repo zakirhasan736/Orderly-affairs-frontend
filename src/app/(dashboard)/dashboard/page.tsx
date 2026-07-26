@@ -769,7 +769,8 @@ export default function DashboardPage() {
     if (!/^\d+$/.test(activeSection)) return;
 
     const stash = peekDashboardAiPatch(activeSection);
-    if (!stash?.result && !(stash?.detectedFields || []).length) return;
+    if (!stash) return;
+    if (!stash.result && !(stash.detectedFields || []).length) return;
 
     const shownKey = `${activeSection}:${stash.file_id}:${stash.createdAt}`;
     if (sectionMatchShownRef.current === shownKey) return;
