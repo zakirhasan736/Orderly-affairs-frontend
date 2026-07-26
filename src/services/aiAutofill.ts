@@ -98,6 +98,9 @@ export async function autofillSectionFromDocument(payload: {
     document_deleted?: boolean;
     file_id?: string;
     mime_type?: string;
+    read_source?: 'system' | 'gemini' | 'cache' | string;
+    extract_method?: string | null;
+    extract_meta?: Record<string, unknown>;
     detected_facts?: import('@/utils/aiSemanticFieldMatch').DetectedFact[];
     partner_results?: Record<string, unknown>;
   };
