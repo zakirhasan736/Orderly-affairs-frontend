@@ -95,6 +95,7 @@ export async function autofillSectionFromDocument(payload: {
     document_summary?: string;
     file_kept?: boolean;
     from_cache?: boolean;
+    extract_reuse?: boolean;
     document_deleted?: boolean;
     file_id?: string;
     mime_type?: string;
