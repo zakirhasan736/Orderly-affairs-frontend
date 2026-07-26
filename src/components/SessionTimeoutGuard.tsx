@@ -150,7 +150,7 @@ export function SessionTimeoutGuard({
   );
 
   return (
-    <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-[rgba(33, 61, 89,0.45)] p-4 sm:p-6">
+    <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-[rgba(33,61,89,0.05)] p-4 sm:p-6">
       <div
         role="alertdialog"
         aria-modal="true"

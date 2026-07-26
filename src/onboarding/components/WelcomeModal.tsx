@@ -22,13 +22,8 @@ export const WelcomeModal: React.FC<Props> = ({
   return (
     <div
       className="fixed inset-0 z-[1200] flex items-center justify-center p-4 sm:p-6"
-      style={{ background: 'rgba(33, 61, 89, 0.52)' }}
+      style={{ background: 'rgba(33, 61, 89, 0.05)' }}
     >
-      {/* Soft full-screen veil so the dialog reads as a modal */}
-      <div
-        className="pointer-events-none absolute inset-0 bg-black/[0.05]"
-        aria-hidden
-      />
       <div
         role="dialog"
         aria-modal="true"

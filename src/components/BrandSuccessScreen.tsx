@@ -161,7 +161,7 @@ export function BrandSuccessScreen({
 
   return (
     <div
-      className="fixed inset-0 z-[1200] flex items-center justify-center bg-[rgba(33,61,89,0.45)] p-4 sm:p-6"
+      className="fixed inset-0 z-[1200] flex items-center justify-center bg-[rgba(33,61,89,0.05)] p-4 sm:p-6"
       onClick={onClose}
       role="presentation"
     >
