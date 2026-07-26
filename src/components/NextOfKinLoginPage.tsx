@@ -25,7 +25,7 @@ function ShieldIcon({ className }: { className?: string }) {
       height="20"
       viewBox="0 0 24 24"
       fill="none"
-      stroke="#132b26"
+      stroke="#213D59"
       strokeWidth="1.7"
       className={className}
       aria-hidden
@@ -45,12 +45,12 @@ function ShieldIcon({ className }: { className?: string }) {
 
 function BrandAside({ onBackToOwner }: { onBackToOwner: () => void }) {
   return (
-    <aside className="relative hidden min-h-[100dvh] w-full max-w-[min(100%,37.5rem)] flex-col bg-[#132b26] px-12 py-12 text-white lg:flex">
+    <aside className="relative hidden min-h-[100dvh] w-full max-w-[min(100%,37.5rem)] flex-col bg-[#213D59] px-12 py-12 text-white lg:flex">
       <button
         type="button"
         onClick={onBackToOwner}
-        className="inline-flex h-8 w-fit items-center gap-2 self-start rounded-2xl bg-white/10 px-3.5 text-[12.5px] font-medium text-white/90"
-        style={{ fontFamily: "'Instrument Sans', sans-serif" }}
+        className="inline-flex h-11 w-fit items-center gap-2 self-start rounded-2xl bg-white/10 px-3.5 text-[12.5px] font-medium text-white/90"
+        style={{ fontFamily: "'Manrope', sans-serif" }}
       >
         <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.7} />
         Owner dashboard
@@ -68,7 +68,7 @@ function BrandAside({ onBackToOwner }: { onBackToOwner: () => void }) {
           />
         </div>
         <div className="min-w-0">
-          <p className="nok-mono m-0 text-[10px] font-medium tracking-[0.14em] uppercase text-white/55">
+          <p className="nok-mono m-0 text-[11px] font-medium tracking-[0.14em] uppercase text-white/55">
             Orderly Affairs
           </p>
           <h1 className="nok-serif mt-2.5 mb-0 text-[40px] leading-[1.1] font-normal text-white">
@@ -90,12 +90,12 @@ function BrandAside({ onBackToOwner }: { onBackToOwner: () => void }) {
 
 function MobileBrandHeader({ onBackToOwner }: { onBackToOwner: () => void }) {
   return (
-    <div className="bg-[#132b26] px-5 pb-[30px] pt-[max(0.75rem,env(safe-area-inset-top))] text-white lg:hidden">
+    <div className="bg-[#213D59] px-5 pb-[30px] pt-[max(0.75rem,env(safe-area-inset-top))] text-white lg:hidden">
       <button
         type="button"
         onClick={onBackToOwner}
-        className="inline-flex h-[30px] w-fit items-center gap-[7px] rounded-[15px] bg-white/10 px-3 text-xs font-medium text-white/90"
-        style={{ fontFamily: "'Instrument Sans', sans-serif" }}
+        className="inline-flex h-11 w-fit items-center gap-[7px] rounded-[15px] bg-white/10 px-3 text-xs font-medium text-white/90"
+        style={{ fontFamily: "'Manrope', sans-serif" }}
       >
         <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.7} />
         Owner dashboard
@@ -196,7 +196,7 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
             <div className="flex items-center gap-[11px]">
               <ShieldIcon className="shrink-0" />
               <div className="min-w-0">
-                <h2 className="m-0 text-[17px] font-semibold text-[#132b26] lg:text-[19px]">
+                <h2 className="m-0 text-[17px] font-semibold text-[#213D59] lg:text-[19px]">
                   Sign in
                 </h2>
                 <p className="mt-0.5 mb-0 text-[12.5px] text-[#8b9995] lg:mt-[2px] lg:text-[13px]">
@@ -285,7 +285,7 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
             </label>
 
             {captchaSlot ? (
-              <div className="mt-4 rounded-[14px] border border-[#f2f1ec] bg-[#f7f6f2] p-2.5 lg:mt-4 lg:p-2.5">
+              <div className="mt-4 rounded-[14px] border border-[#f2f1ec] bg-[#f5f8fc] p-2.5 lg:mt-4 lg:p-2.5">
                 <div className="flex min-h-[62px] items-center justify-center overflow-x-auto rounded-[10px] border border-[#e4e6e1] bg-white px-3.5 py-2 lg:min-h-[65px]">
                   {captchaSlot}
                 </div>

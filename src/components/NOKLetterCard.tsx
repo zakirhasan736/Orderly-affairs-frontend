@@ -65,18 +65,18 @@ export function NOKLetterCard({
   const recipient = obj.letter_to || 'Next of Kin';
 
   return (
-    <article className="rounded-[20px] border border-[rgba(19,43,38,0.1)] bg-[var(--surface)] p-4 sm:p-5">
+    <article className="rounded-[20px] border border-[rgba(33, 61, 89,0.1)] bg-[var(--surface)] p-4 sm:p-5">
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#132b26] text-white">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#213D59] text-white">
           <FileText className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-[rgba(19,43,38,0.45)]">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-[rgba(33, 61, 89,0.45)]">
                 Next of kin letter
               </p>
-              <h3 className="font-serif mt-1 truncate text-base font-normal text-[#132b26]">
+              <h3 className="font-serif mt-1 truncate text-base font-normal text-[#213D59]">
                 Letter to {recipient}
               </h3>
             </div>
@@ -86,7 +86,7 @@ export function NOKLetterCard({
                   type="button"
                   size="icon"
                   onClick={onView}
-                  className="h-9 w-9 rounded-lg bg-[#132b26] text-white hover:bg-[#0e1f1c]"
+                  className="h-9 w-9 rounded-lg bg-[#213D59] text-white hover:bg-[#00305C]"
                   aria-label="View letter"
                 >
                   <Eye className="h-4 w-4" />

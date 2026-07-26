@@ -450,11 +450,13 @@ export default function Section5Vehicles({
       uploadLabel={uploadLabel}
       compact={compact}
       tone={tone}
+      sectionId="5"
       disabled={isAnyAIActionRunning}
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}
       uploadedFile={getUploadedFileForScope(scope)}
       highlightUpload={aiRouting?.shouldHighlightUpload('5', String(scope)) ?? false}
+      showOverviewPin={aiRouting?.shouldShowOverviewPin('5') ?? false}
       onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
       onAutofill={onAutofill}
     />

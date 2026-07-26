@@ -17,6 +17,7 @@ import {
   getAiAutofillDoneForSection,
   isAiAutofillDoneForSection,
 } from '@/utils/aiAutofillDoneSections';
+import { peekDashboardAiPatch } from '@/utils/aiDashboardPatchCache';
 import {
   type AiAdditionalSection,
   type AiAutofillSuccessMeta,
@@ -76,6 +77,8 @@ type AiDocumentRoutingContextValue = {
     scope?: string,
   ) => UploadedAIFile | null;
   shouldHighlightUpload: (sectionId: string, scope?: string) => boolean;
+  /** Overview already read/filled this section — show pin, do not re-read. */
+  shouldShowOverviewPin: (sectionId: string) => boolean;
   clearPendingForSection: (sectionId: string, scope?: string) => void;
   clearAllPendingForFile: (fileId: string) => void;
   dismissHighlight: (sectionId: string, scope?: string) => void;
@@ -170,7 +173,19 @@ export function AiDocumentRoutingProvider({
   } | null>(null);
 
   useEffect(() => {
-    setPendingUploads(readPendingUploadsFromStorage());
+    const stored = readPendingUploadsFromStorage();
+    // Drop stale "New data" pins from failed fills (e.g. Gemini 503 after
+    // classify queued review sections but never wrote a stash / done marker).
+    const cleaned = stored.filter(upload => {
+      if (peekDashboardAiPatch(upload.targetSectionId)) return true;
+      if (isAiAutofillDoneForSection(upload.targetSectionId)) return true;
+      if (upload.navigateIntent === 'review') return false;
+      return true;
+    });
+    if (cleaned.length !== stored.length) {
+      writePendingUploadsToStorage(cleaned);
+    }
+    setPendingUploads(cleaned);
     setFilledSectionsByFile(readFilledSectionsFromStorage());
   }, []);
 
@@ -650,16 +665,35 @@ export function AiDocumentRoutingProvider({
 
   const shouldHighlightUpload = useCallback(
     (sectionId: string, scope = 'full') => {
+      // Overview already filled this section — show pin only, never "ready to read".
+      if (isAiAutofillDoneForSection(sectionId)) return false;
+
       return pendingUploads.some(
         item =>
           item.targetSectionId === sectionId &&
           item.uploadScope === scope &&
-          item.highlightUpload,
+          item.highlightUpload &&
+          item.navigateIntent !== 'review',
       ) || pendingUploads.some(
         item =>
           item.targetSectionId === sectionId &&
           item.uploadScope === 'full' &&
-          item.highlightUpload,
+          item.highlightUpload &&
+          item.navigateIntent !== 'review',
+      );
+    },
+    [pendingUploads],
+  );
+
+  const shouldShowOverviewPin = useCallback(
+    (sectionId: string) => {
+      if (!sectionId) return false;
+      if (isAiAutofillDoneForSection(sectionId)) return true;
+      return pendingUploads.some(
+        item =>
+          item.targetSectionId === sectionId &&
+          (item.navigateIntent === 'review' ||
+            item.uploadedFromSectionId === 'dashboard'),
       );
     },
     [pendingUploads],
@@ -722,6 +756,7 @@ export function AiDocumentRoutingProvider({
       getPendingUploadsForSection,
       getPendingFileForSection,
       shouldHighlightUpload,
+      shouldShowOverviewPin,
       clearPendingForSection,
       clearAllPendingForFile,
       dismissHighlight,
@@ -739,6 +774,7 @@ export function AiDocumentRoutingProvider({
       getPendingUploadsForSection,
       getPendingFileForSection,
       shouldHighlightUpload,
+      shouldShowOverviewPin,
       clearPendingForSection,
       clearAllPendingForFile,
       dismissHighlight,

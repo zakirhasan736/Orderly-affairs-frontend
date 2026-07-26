@@ -8,9 +8,9 @@
   --font-size: 16px;
   
   /* Brand Colors */
-  --brand-primary: #132b26;
+  --brand-primary: #213D59;
   --brand-primary-rgb: 33, 61, 89;
-  --accent-blue: #2e7d6e;
+  --accent-blue: #2B5A8C;
   
   /* Glass Morphism Colors */
   --glass-light-fill: rgba(255, 255, 255, 1);
@@ -42,13 +42,13 @@
   
   /* System Colors - Light Mode */
   --background: rgba(248, 249, 250, 0.95);
-  --foreground: #132b26;
+  --foreground: #213D59;
   --card: var(--glass-light-fill);
-  --card-foreground: #132b26;
-  --primary: #132b26;
+  --card-foreground: #213D59;
+  --primary: #213D59;
   --primary-foreground: #ffffff;
   --secondary: rgba(255, 255, 255, 0.25);
-  --secondary-foreground: #132b26;
+  --secondary-foreground: #213D59;
   --muted: rgba(255, 255, 255, 0.20);
   --muted-foreground: rgba(33, 61, 89, 0.7);
   --accent: var(--accent-blue);
@@ -263,7 +263,7 @@
   border-radius: calc(var(--corner-radius-button) - 2px);
   transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05), inset 0 1px 2px rgba(0, 0, 0, 0.05);
-  color: #132b26;
+  color: #213D59;
   padding: 0.75rem;
   width: 100%;
   font-size: var(--font-body-size);
@@ -381,7 +381,7 @@
 }
 
 .sidebar-item:hover {
-  background: rgba(46, 125, 110, 0.12);
+  background: rgba(43, 90, 140, 0.12);
   text-decoration: none;
   color: var(--foreground);
 }
@@ -728,7 +728,7 @@
     --foreground: #ffffff;
     --card: var(--glass-light-fill);
     --card-foreground: #ffffff;
-    --primary: #2e7d6e;
+    --primary: #2B5A8C;
     --primary-foreground: #ffffff;
     --secondary: rgba(0, 0, 0, 0.25);
     --secondary-foreground: #ffffff;

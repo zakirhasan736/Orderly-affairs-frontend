@@ -1,6 +1,10 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
 let refreshPromise: Promise<boolean> | null = null;
+let lastRefreshAt = 0;
+
+/** Soft refresh at most once per minute during long AI batches. */
+const REFRESH_COOLDOWN_MS = 60_000;
 
 async function tryRefreshSession(): Promise<boolean> {
   if (!API_BASE) return false;
@@ -11,7 +15,13 @@ async function tryRefreshSession(): Promise<boolean> {
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
     })
-      .then(res => res.ok)
+      .then(res => {
+        if (res.ok) {
+          lastRefreshAt = Date.now();
+          return true;
+        }
+        return false;
+      })
       .catch(() => false)
       .finally(() => {
         refreshPromise = null;
@@ -19,6 +29,22 @@ async function tryRefreshSession(): Promise<boolean> {
   }
 
   return refreshPromise;
+}
+
+/**
+ * Keep cookies fresh during long AI uploads (access token can expire mid-batch).
+ * Safe to call often — cooldown prevents refresh spam.
+ */
+export async function ensureFreshSession(): Promise<boolean> {
+  if (Date.now() - lastRefreshAt < REFRESH_COOLDOWN_MS) {
+    return true;
+  }
+  return tryRefreshSession();
+}
+
+function notifySessionExpired() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('orderly-session-expired'));
 }
 
 export async function secureFetch(
@@ -50,6 +76,7 @@ export async function secureFetch(
     if (refreshed) {
       return secureFetch(path, options, true);
     }
+    notifySessionExpired();
   }
 
   return res;

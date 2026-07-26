@@ -1,3 +1,5 @@
+import { clearAiSectionReviewed } from '@/utils/aiSectionReviewState';
+
 const STORAGE_KEY = 'orderly_dashboard_ai_patches';
 
 export type DetectedAiFact = {
@@ -56,6 +58,7 @@ export function stashDashboardAiPatch(entry: StashedAiPatch) {
     createdAt: entry.createdAt || Date.now(),
   };
   writeMap(map);
+  clearAiSectionReviewed(entry.section_id);
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(

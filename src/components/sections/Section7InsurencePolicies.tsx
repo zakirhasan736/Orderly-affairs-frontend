@@ -555,11 +555,13 @@ export default function Section7InsurancePolicies({
       uploadLabel={uploadLabel}
       compact={compact}
       tone={tone}
+      sectionId="7"
       disabled={isAnyAIActionRunning}
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}
       uploadedFile={getUploadedFileForScope(scope)}
       highlightUpload={aiRouting?.shouldHighlightUpload('7', String(scope)) ?? false}
+      showOverviewPin={aiRouting?.shouldShowOverviewPin('7') ?? false}
       onUpload={file => handleDocumentUpload(file, scope, onAutofill)}
       onAutofill={onAutofill}
     />
@@ -676,7 +678,7 @@ export default function Section7InsurancePolicies({
                   <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-[#132b26]">
+                        <p className="text-sm font-semibold text-[#213D59]">
                           Expiry reminder emails
                         </p>
                         <p className="mt-0.5 text-xs text-slate-500">
@@ -702,13 +704,13 @@ export default function Section7InsurancePolicies({
                               key={option.email}
                               className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
                                 selected
-                                  ? 'border-[#132b26]/20 bg-white text-[#132b26]'
+                                  ? 'border-[#213D59]/20 bg-white text-[#213D59]'
                                   : 'border-slate-200 bg-white/60 text-slate-500'
                               }`}
                             >
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 rounded border-slate-300 text-[#132b26] focus:ring-[#132b26]"
+                                className="h-4 w-4 rounded border-slate-300 text-[#213D59] focus:ring-[#213D59]"
                                 checked={selected}
                                 onChange={event =>
                                   toggleReminderRecipient(

@@ -129,7 +129,7 @@ export function PasswordCard({
       padding: 28px;
       background: #f5f7fb;
       font-family: Arial, sans-serif;
-      color: #132b26;
+      color: #213D59;
     }
 
     .wrap {
@@ -141,7 +141,7 @@ export function PasswordCard({
       margin: 0 0 18px;
       font-size: 22px;
       font-weight: 800;
-      color: #132b26;
+      color: #213D59;
     }
 
     .card {

@@ -150,14 +150,14 @@ export function SessionTimeoutGuard({
   );
 
   return (
-    <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-[rgba(19,43,38,0.45)] p-4 sm:p-6">
+    <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-[rgba(33, 61, 89,0.45)] p-4 sm:p-6">
       <div
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="session-timeout-title"
         className={cn(
           'w-full max-w-[min(100%,26rem)] rounded-2xl bg-white p-6',
-          'shadow-[0_20px_50px_rgba(19,43,38,0.24)]',
+          'shadow-[0_20px_50px_rgba(33, 61, 89,0.24)]',
         )}
       >
         <p className="m-0 font-mono text-[10px] font-medium tracking-[0.14em] uppercase text-[#a5b1ad]">
@@ -165,7 +165,7 @@ export function SessionTimeoutGuard({
         </p>
         <h3
           id="session-timeout-title"
-          className="mt-3 mb-0 text-[17px] font-semibold text-[#132b26]"
+          className="mt-3 mb-0 text-[17px] font-semibold text-[#213D59]"
         >
           We&apos;ll sign you out in {WARN_SECONDS} seconds
         </h3>
@@ -176,11 +176,11 @@ export function SessionTimeoutGuard({
 
         <div className="mt-[18px] h-1.5 overflow-hidden rounded-[3px] bg-[#f2f1ec]">
           <span
-            className="block h-full rounded-[3px] bg-[#132b26] transition-[width] duration-1000 linear"
+            className="block h-full rounded-[3px] bg-[#213D59] transition-[width] duration-1000 linear"
             style={{ width: `${progressPct}%` }}
           />
         </div>
-        <p className="mt-2.5 mb-0 font-mono text-[20px] font-medium tabular-nums text-[#132b26]">
+        <p className="mt-2.5 mb-0 font-mono text-[20px] font-medium tabular-nums text-[#213D59]">
           {formatCountdown(secondsLeft)}
         </p>
 
@@ -188,14 +188,14 @@ export function SessionTimeoutGuard({
           <button
             type="button"
             onClick={() => void doLogout()}
-            className="h-[42px] flex-1 rounded-[21px] border border-[#e4e6e1] bg-white text-[13px] font-medium text-[#132b26] transition hover:bg-[#f7f6f2]"
+            className="h-[42px] flex-1 rounded-[21px] border border-[#e4e6e1] bg-white text-[13px] font-medium text-[#213D59] transition hover:bg-[#f5f8fc]"
           >
             Sign out now
           </button>
           <button
             type="button"
             onClick={staySignedIn}
-            className="h-[42px] flex-1 rounded-[21px] border-0 bg-[#132b26] text-[13px] font-medium text-white transition hover:bg-[#2e7d6e]"
+            className="h-[42px] flex-1 rounded-[21px] border-0 bg-[#213D59] text-[13px] font-medium text-white transition hover:bg-[#2B5A8C]"
           >
             Stay signed in
           </button>

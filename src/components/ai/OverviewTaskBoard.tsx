@@ -147,18 +147,18 @@ function TagIcon({ tag }: { tag: OverviewTaskTag }) {
 function ProgressLine({ state }: { state: CardVisualState }) {
   const barClass =
     state.kind === 'done'
-      ? 'bg-[#2e7d6e]'
+      ? 'bg-[#2B5A8C]'
       : state.kind === 'active'
-        ? 'bg-[#2e7d6e]'
+        ? 'bg-[#2B5A8C]'
         : state.kind === 'waiting'
           ? 'bg-[#b98a3e]'
           : state.kind === 'partial'
             ? 'bg-[#b98a3e]'
-            : 'bg-[rgba(19,43,38,0.12)]';
+            : 'bg-[rgba(33, 61, 89,0.12)]';
 
   return (
     <div className="mt-auto flex items-center gap-2.5 pt-4">
-      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[rgba(19,43,38,0.06)]">
+      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[rgba(33, 61, 89,0.06)]">
         <div
           className={cn(
             'h-full rounded-full transition-all duration-500',
@@ -172,12 +172,12 @@ function ProgressLine({ state }: { state: CardVisualState }) {
         className={cn(
           'shrink-0 text-[11px] font-semibold',
           state.kind === 'done' || state.isNew
-            ? 'text-[#2e7d6e]'
+            ? 'text-[#2B5A8C]'
             : state.kind === 'active'
-              ? 'text-[#2e7d6e]'
+              ? 'text-[#2B5A8C]'
               : state.kind === 'waiting'
                 ? 'text-[#b98a3e]'
-                : 'text-[rgba(19,43,38,0.45)]',
+                : 'text-[rgba(33, 61, 89,0.45)]',
         )}
       >
         {state.label}
@@ -212,20 +212,20 @@ function SliderTaskCard({
       className={cn(
         'relative flex h-[210px] w-[168px] shrink-0 snap-start flex-col rounded-[20px] border bg-[var(--surface)] p-4 text-left transition active:scale-[0.98]',
         state.kind === 'active'
-          ? 'border-[rgba(46,125,110,0.35)] ring-1 ring-[rgba(46,125,110,0.12)]'
+          ? 'border-[rgba(43, 90, 140,0.35)] ring-1 ring-[rgba(43, 90, 140,0.12)]'
           : state.kind === 'waiting'
             ? 'border-[rgba(185,138,62,0.45)] ring-1 ring-[rgba(185,138,62,0.12)]'
             : state.isNew
-              ? 'border-[rgba(46,125,110,0.4)]'
+              ? 'border-[rgba(43, 90, 140,0.4)]'
               : state.kind === 'done'
-                ? 'border-[rgba(46,125,110,0.2)]'
-                : 'border-[rgba(19,43,38,0.1)]',
+                ? 'border-[rgba(43, 90, 140,0.2)]'
+                : 'border-[rgba(33, 61, 89,0.1)]',
       )}
       data-overview-task={card.sectionId}
       data-overview-task-state={state.kind}
     >
       {state.isNew ? (
-        <span className="absolute right-3 top-3 rounded-md bg-[#2e7d6e] px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
+        <span className="absolute right-3 top-3 rounded-md bg-[#2B5A8C] px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
           New
         </span>
       ) : null}
@@ -245,7 +245,7 @@ function SliderTaskCard({
       >
         <TagIcon tag={card.tag} />
       </div>
-      <h3 className="mt-3 line-clamp-2 text-[14px] font-semibold leading-snug text-[#132b26]">
+      <h3 className="mt-3 line-clamp-2 text-[14px] font-semibold leading-snug text-[#213D59]">
         {card.title}
       </h3>
       <ProgressLine state={state} />
@@ -273,21 +273,21 @@ function GridTaskCard({
       className={cn(
         'relative rounded-2xl border bg-[var(--surface)] p-4 text-left transition hover:-translate-y-0.5 oa-float-sm sm:p-5',
         state.kind === 'active'
-          ? 'border-[rgba(46,125,110,0.35)] ring-1 ring-[rgba(46,125,110,0.12)]'
+          ? 'border-[rgba(43, 90, 140,0.35)] ring-1 ring-[rgba(43, 90, 140,0.12)]'
           : state.kind === 'waiting'
             ? 'border-[rgba(185,138,62,0.45)] ring-1 ring-[rgba(185,138,62,0.12)]'
             : state.isNew
-              ? 'border-[rgba(46,125,110,0.4)] ring-1 ring-[rgba(46,125,110,0.12)]'
+              ? 'border-[rgba(43, 90, 140,0.4)] ring-1 ring-[rgba(43, 90, 140,0.12)]'
               : state.kind === 'done'
-                ? 'border-[rgba(46,125,110,0.2)]'
-                : 'border-[rgba(19,43,38,0.1)]',
+                ? 'border-[rgba(43, 90, 140,0.2)]'
+                : 'border-[rgba(33, 61, 89,0.1)]',
       )}
       data-overview-task={card.sectionId}
       data-overview-task-state={state.kind}
       data-overview-task-new={state.isNew ? 'true' : undefined}
     >
       {state.isNew && (
-        <span className="absolute right-3 top-3 inline-flex items-center rounded-md bg-[#2e7d6e] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+        <span className="absolute right-3 top-3 inline-flex items-center rounded-md bg-[#2B5A8C] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
           Filled
         </span>
       )}
@@ -299,10 +299,10 @@ function GridTaskCard({
       >
         {tag.label}
       </span>
-      <h3 className="mt-3 text-base font-semibold text-[#132b26]">
+      <h3 className="mt-3 text-base font-semibold text-[#213D59]">
         {card.title}
       </h3>
-      <p className="mt-1 line-clamp-2 text-sm leading-5 text-[rgba(19,43,38,0.58)]">
+      <p className="mt-1 line-clamp-2 text-sm leading-5 text-[rgba(33, 61, 89,0.58)]">
         {state.kind === 'active'
           ? 'Reading your document and filling this section…'
           : state.kind === 'waiting'
@@ -312,7 +312,7 @@ function GridTaskCard({
               : card.description}
       </p>
       {lastUpdatedLabel ? (
-        <p className="mt-2 text-xs font-medium text-[rgba(19,43,38,0.45)]">
+        <p className="mt-2 text-xs font-medium text-[rgba(33, 61, 89,0.45)]">
           {lastUpdatedLabel}
         </p>
       ) : null}
@@ -397,7 +397,7 @@ export function OverviewTaskBoard({
       <section className="md:hidden">
         <div className="mb-3 flex items-end justify-between gap-3 px-0.5">
           <div>
-            <h2 className="text-base font-semibold text-[#132b26]">
+            <h2 className="text-base font-semibold text-[#213D59]">
               Continue where you left off
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
@@ -428,7 +428,7 @@ export function OverviewTaskBoard({
       <div className="hidden space-y-8 md:block">
         {OVERVIEW_TASK_GROUPS.map(group => (
           <section key={group.id}>
-            <h2 className="mb-3 text-lg font-semibold text-[#132b26]">
+            <h2 className="mb-3 text-lg font-semibold text-[#213D59]">
               {group.title}
             </h2>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

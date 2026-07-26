@@ -26,6 +26,14 @@ export type AIDocumentUploadResponse = {
   updated_at?: string;
   replaced?: boolean;
   replaced_file_ids?: string[];
+  /** Exact same file bytes as a prior upload with reusable AI cache. */
+  unchanged?: boolean;
+  extract_reuse?: boolean;
+  content_hash?: string;
+  reused_from_file_id?: string | null;
+  needs_vision?: boolean;
+  extract_method?: string;
+  extract_quality?: number;
 };
 
 export type OwnerAiDocument = {

@@ -89,25 +89,25 @@ export function AiRoutingFloatingNotifications() {
     <div className={AI_MOBILE_FLOATING_STACK}>
       <div
         key={`${active.targetSectionId}:${active.file_id}`}
-        className="pointer-events-auto overflow-hidden rounded-2xl border border-indigo-200/90 bg-white/95 shadow-xl shadow-slate-900/15 backdrop-blur-sm sm:shadow-lg"
+        className="pointer-events-auto overflow-hidden rounded-2xl border border-[#7688a1]/50 bg-white shadow-xl shadow-[rgba(33, 61, 89,0.12)] sm:shadow-lg"
       >
         <div className="flex items-start gap-3 p-3.5 sm:p-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#e7eef7] text-[#2B5A8C] ring-1 ring-[#2B5A8C]/20">
             <MapPin className="h-4 w-4" />
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-slate-900">
+            <p className="text-sm font-semibold text-[#213D59]">
               Next: {label}
             </p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+            <p className="mt-1 text-xs leading-relaxed text-[#5a6b80]">
               {active.documentSummary ||
                 (fieldCount > 0
                   ? `${fieldCount} field${fieldCount === 1 ? '' : 's'} ready to review`
                   : 'Related data from your upload — open to review')}
             </p>
             {remaining > 0 ? (
-              <p className="mt-1 text-[11px] font-medium text-slate-400">
+              <p className="mt-1 text-[11px] font-medium text-[#5a6b80]">
                 +{remaining} more section{remaining === 1 ? '' : 's'} after this
               </p>
             ) : null}

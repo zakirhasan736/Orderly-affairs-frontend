@@ -395,6 +395,21 @@ export const authApi = createApi({
     >({
       query: b => ({ url: '/mfa/disable', method: 'POST', body: b }),
     }),
+    deleteAccount: builder.mutation<
+      {
+        success: boolean;
+        message: string;
+        summary?: Record<string, unknown>;
+      },
+      {
+        password: string;
+        confirm: string;
+        mfa_challenge_token?: string;
+        step_up_token?: string;
+      }
+    >({
+      query: b => ({ url: '/delete-account', method: 'POST', body: b }),
+    }),
 
     // Session helpers
     getSession: builder.query<
@@ -467,4 +482,5 @@ export const {
   useResendSmsMfaMutation,
   useResumePendingSignupMutation,
   useDisableMfaMethodMutation,
+  useDeleteAccountMutation,
 } = authApi;

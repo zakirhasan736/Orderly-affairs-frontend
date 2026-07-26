@@ -60,7 +60,7 @@ export function BrandDangerConfirm({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-[rgba(19,43,38,0.45)] p-4 sm:p-6">
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-[rgba(33, 61, 89,0.45)] p-4 sm:p-6">
       <div
         role="alertdialog"
         aria-modal="true"
@@ -68,13 +68,13 @@ export function BrandDangerConfirm({
         aria-describedby="brand-danger-desc"
         className={cn(
           'w-full max-w-[min(100%,26rem)] rounded-2xl bg-white p-6',
-          'shadow-[0_20px_50px_rgba(19,43,38,0.24)]',
+          'shadow-[0_20px_50px_rgba(33, 61, 89,0.24)]',
         )}
       >
         <WarningGlyph />
         <h3
           id="brand-danger-title"
-          className="mt-4 mb-0 text-[17px] font-semibold text-[#132b26]"
+          className="mt-4 mb-0 text-[17px] font-semibold text-[#213D59]"
         >
           {title}
         </h3>
@@ -91,7 +91,7 @@ export function BrandDangerConfirm({
               type="checkbox"
               checked={checkboxChecked}
               onChange={e => onCheckboxChange?.(e.target.checked)}
-              className="mt-0.5 h-[17px] w-[17px] shrink-0 rounded-[5px] border-[1.5px] border-[#cfd8d4] accent-[#132b26]"
+              className="mt-0.5 h-[17px] w-[17px] shrink-0 rounded-[5px] border-[1.5px] border-[#cfd8d4] accent-[#213D59]"
             />
             <span>{checkboxLabel}</span>
           </label>
@@ -102,7 +102,7 @@ export function BrandDangerConfirm({
             type="button"
             disabled={busy}
             onClick={onCancel}
-            className="h-[42px] flex-1 rounded-[21px] border border-[#e4e6e1] bg-white text-[13px] font-medium text-[#132b26] transition hover:bg-[#f7f6f2] disabled:opacity-50"
+            className="h-[42px] flex-1 rounded-[21px] border border-[#e4e6e1] bg-white text-[13px] font-medium text-[#213D59] transition hover:bg-[#f5f8fc] disabled:opacity-50"
           >
             {cancelLabel}
           </button>

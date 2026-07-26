@@ -397,6 +397,44 @@ export function bindAiUploadHistoryFileId(args: {
   });
 }
 
+/**
+ * Stamp additional related section ids onto an existing history card so the
+ * same overview upload appears in each partner section's bottom-right panel.
+ */
+export function linkAiUploadHistorySections(args: {
+  fileId?: string | null;
+  fileName?: string | null;
+  sectionIds: Array<string | null | undefined>;
+}) {
+  const fileId = args.fileId ? String(args.fileId) : '';
+  const fileName = args.fileName ? String(args.fileName) : '';
+  const extraIds = Array.from(
+    new Set(
+      (args.sectionIds || [])
+        .map(id => String(id || '').trim())
+        .filter(id => Boolean(id) && id !== 'overview'),
+    ),
+  );
+  if (!extraIds.length || (!fileId && !fileName)) return;
+
+  const existing = readHistory();
+  const match =
+    existing.find(row => fileId && row.fileId && row.fileId === fileId) ||
+    existing.find(
+      row =>
+        fileName &&
+        normalizeFileName(row.fileName) === normalizeFileName(fileName),
+    );
+  if (!match) return;
+
+  upsertAiUploadHistory({
+    ...match,
+    fileId: fileId || match.fileId,
+    sectionIds: mergeSectionIds(match.sectionIds, match.sectionId, extraIds),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 /** Clear all upload footprints (localStorage + memory). */
 export function clearAiUploadHistory() {
   memoryCache = [];

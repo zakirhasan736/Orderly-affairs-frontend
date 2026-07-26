@@ -67,7 +67,7 @@ export const SpotlightOverlay = ({
 
   return (
     <div className="fixed inset-0 z-[999]" onClick={onClose}>
-      <div className="absolute inset-0 bg-[rgba(19,43,38,0.55)] transition-opacity duration-300" />
+      <div className="absolute inset-0 bg-[rgba(33, 61, 89,0.55)] transition-opacity duration-300" />
 
       {rect ? (
         <motion.div
@@ -80,12 +80,12 @@ export const SpotlightOverlay = ({
             left: rect.left - 12,
             width: rect.width + 24,
             height: rect.height + 24,
-            boxShadow: '0 0 0 9999px rgba(19,43,38,0.55)',
+            boxShadow: '0 0 0 9999px rgba(33, 61, 89,0.55)',
           }}
         >
-          <div className="absolute inset-0 rounded-xl border-2 border-[#2e7d6e] shadow-[0_0_0_4px_rgba(46,125,110,0.2)]" />
+          <div className="absolute inset-0 rounded-xl border-2 border-[#2B5A8C] shadow-[0_0_0_4px_rgba(43, 90, 140,0.2)]" />
           <motion.div
-            className="absolute -top-2 -right-2 h-3.5 w-3.5 rounded-full bg-[#2e7d6e]"
+            className="absolute -top-2 -right-2 h-3.5 w-3.5 rounded-full bg-[#2B5A8C]"
             animate={{ scale: [1, 1.35, 1] }}
             transition={{ repeat: Infinity, duration: 1.6 }}
           />

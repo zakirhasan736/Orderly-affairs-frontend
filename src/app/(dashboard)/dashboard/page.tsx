@@ -25,13 +25,16 @@ import {
 } from '@/utils/vaultNavOrder';
 import { VaultSidebarNavigation } from '@/components/VaultSidebarNavigation';
 import { AiDocumentRoutingProvider } from '@/contexts/AiDocumentRoutingContext';
+import { DashboardAiBatchProvider } from '@/contexts/DashboardAiBatchContext';
 import { HelpAssistantProvider } from '@/components/help/HelpAssistantContext';
 import { HelpAssistantHost } from '@/components/help/HelpAssistantHost';
 import { AiActiveSectionProvider } from '@/contexts/AiActiveSectionContext';
 import { AiPendingUploadSectionBanner } from '@/components/ai/AiPendingUploadSectionBanner';
+import { AiSectionFieldMatchDialog } from '@/components/ai/AiSectionFieldMatchDialog';
 import {
   peekDashboardAiPatch,
   takeDashboardAiPatch,
+  type StashedAiPatch,
 } from '@/utils/aiDashboardPatchCache';
 import {
   markAiSectionFilled,
@@ -41,6 +44,11 @@ import {
   applyAiResultToSectionForm,
   countFilledAiFields,
 } from '@/utils/aiSectionFormApply';
+import { applyFieldEditsToSectionData } from '@/utils/aiFieldMatchReview';
+import {
+  isAiSectionReviewed,
+  markAiSectionReviewed,
+} from '@/utils/aiSectionReviewState';
 import {
   listSectionLastUpdated,
   setSectionLastUpdated,
@@ -270,6 +278,10 @@ export default function DashboardPage() {
   const [autoSaving, setAutoSaving] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [sectionMatchReview, setSectionMatchReview] =
+    useState<StashedAiPatch | null>(null);
+  const [sectionMatchApplying, setSectionMatchApplying] = useState(false);
+  const sectionMatchShownRef = useRef<string | null>(null);
   const [disabledSections, setDisabledSections] = useState<
     Record<string, boolean>
   >({});
@@ -744,31 +756,29 @@ export default function DashboardPage() {
     setFormData(prev => ({ ...prev, [sectionId]: data }));
   }, []);
 
-  // When owner opens a section after overview upload: apply temp-stored AI
-  // extraction into the exact section form fields automatically.
+  // When owner opens a section after overview upload: show read↔field match dialog.
+  // Background persist already saved values — this dialog lets the user review
+  // and fill any remaining AI values that did not land yet.
+  useEffect(() => {
+    sectionMatchShownRef.current = null;
+  }, [activeSection]);
+
   useEffect(() => {
     if (appMode !== 'owner') return;
     if (!activeSection || activeSection === 'dashboard') return;
     if (!/^\d+$/.test(activeSection)) return;
 
     const stash = peekDashboardAiPatch(activeSection);
-    if (!stash?.result) return;
+    if (!stash?.result && !(stash?.detectedFields || []).length) return;
 
-    const applied = applyAiResultToSectionForm(
-      activeSection,
-      formData[activeSection],
-      stash.result,
-      stash.subsection,
-    );
+    const shownKey = `${activeSection}:${stash.file_id}:${stash.createdAt}`;
+    if (sectionMatchShownRef.current === shownKey) return;
+    if (isAiSectionReviewed(activeSection, stash.file_id)) return;
 
-    if (!applied) return;
-
-    takeDashboardAiPatch(activeSection);
-    markAiSectionFilled(activeSection);
-    updateSectionData(activeSection, applied);
+    sectionMatchShownRef.current = shownKey;
+    setSectionMatchReview(stash);
 
     if (stash.subsection) {
-      // UI subsection ids are like 21A / 1A; map vital_info → 1A for nav.
       const uiSubsection =
         stash.subsection === 'vital_info'
           ? '1A'
@@ -779,14 +789,6 @@ export default function DashboardPage() {
             : stash.subsection;
       setActiveSubsection(uiSubsection);
     }
-
-    const filledCount = countFilledAiFields(applied);
-    toast.success(
-      filledCount > 0
-        ? `AI filled ${filledCount} field${filledCount === 1 ? '' : 's'} in this section`
-        : 'AI data applied — please review this section',
-    );
-    // Only when navigating into a section — stash is the trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection, appMode]);
 
@@ -1888,6 +1890,7 @@ export default function DashboardPage() {
           goToSection(sectionId);
         }}
       >
+      <DashboardAiBatchProvider>
       <HelpAssistantProvider>
       <div className="min-h-screen bg-[#f6f8fb] text-slate-950 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
         <MobileTopBar
@@ -2020,7 +2023,7 @@ export default function DashboardPage() {
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
                       Secure Account
                     </p>
-                    <h2 className="mt-1 text-xl font-semibold text-[#132b26] sm:text-2xl md:text-3xl">
+                    <h2 className="mt-1 text-xl font-semibold text-[#213D59] sm:text-2xl md:text-3xl">
                       Vault Settings
                     </h2>
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
@@ -2036,13 +2039,115 @@ export default function DashboardPage() {
                       activeSectionId={activeSection}
                     />
                   )}
+                  {appMode === 'owner' && sectionMatchReview ? (
+                    <AiSectionFieldMatchDialog
+                      open={Boolean(sectionMatchReview)}
+                      onOpenChange={open => {
+                        if (!open) setSectionMatchReview(null);
+                      }}
+                      sectionId={sectionMatchReview.section_id}
+                      subsection={sectionMatchReview.subsection}
+                      fileName={sectionMatchReview.file_name}
+                      documentSummary={sectionMatchReview.document_summary}
+                      facts={sectionMatchReview.detectedFields || []}
+                      sectionData={formData[sectionMatchReview.section_id]}
+                      applying={sectionMatchApplying}
+                      onCloseReviewed={() => {
+                        markAiSectionReviewed({
+                          sectionId: sectionMatchReview.section_id,
+                          fileId: sectionMatchReview.file_id,
+                        });
+                        takeDashboardAiPatch(sectionMatchReview.section_id);
+                        setSectionMatchReview(null);
+                      }}
+                      onApplyRemaining={async () => {
+                        setSectionMatchApplying(true);
+                        try {
+                          const applied = applyAiResultToSectionForm(
+                            sectionMatchReview.section_id,
+                            formData[sectionMatchReview.section_id],
+                            sectionMatchReview.result,
+                            sectionMatchReview.subsection,
+                          );
+                          if (applied) {
+                            markAiSectionFilled(sectionMatchReview.section_id);
+                            updateSectionData(
+                              sectionMatchReview.section_id,
+                              applied,
+                            );
+                            const saver =
+                              sectionSaveMap[sectionMatchReview.section_id];
+                            if (saver) {
+                              await saver(applied);
+                              setSectionLastUpdated(
+                                sectionMatchReview.section_id,
+                              );
+                              setSectionLastUpdatedMap(
+                                listSectionLastUpdated(),
+                              );
+                            }
+                            const filledCount = countFilledAiFields(applied);
+                            toast.success(
+                              filledCount > 0
+                                ? `Filled ${filledCount} field${filledCount === 1 ? '' : 's'} from AI`
+                                : 'Section updated from AI data',
+                            );
+                          }
+                          markAiSectionReviewed({
+                            sectionId: sectionMatchReview.section_id,
+                            fileId: sectionMatchReview.file_id,
+                          });
+                          takeDashboardAiPatch(sectionMatchReview.section_id);
+                          setSectionMatchReview(null);
+                        } finally {
+                          setSectionMatchApplying(false);
+                        }
+                      }}
+                      onSaveEdits={async edits => {
+                        if (!Object.keys(edits).length) return;
+                        setSectionMatchApplying(true);
+                        try {
+                          const next = applyFieldEditsToSectionData({
+                            sectionId: sectionMatchReview.section_id,
+                            subsection: sectionMatchReview.subsection,
+                            sectionData:
+                              formData[sectionMatchReview.section_id],
+                            edits,
+                          });
+                          markAiSectionFilled(sectionMatchReview.section_id);
+                          updateSectionData(
+                            sectionMatchReview.section_id,
+                            next,
+                          );
+                          const saver =
+                            sectionSaveMap[sectionMatchReview.section_id];
+                          if (saver) {
+                            await saver(next);
+                            setSectionLastUpdated(
+                              sectionMatchReview.section_id,
+                            );
+                            setSectionLastUpdatedMap(listSectionLastUpdated());
+                          }
+                          toast.success('Saved your field edits');
+                          markAiSectionReviewed({
+                            sectionId: sectionMatchReview.section_id,
+                            fileId: sectionMatchReview.file_id,
+                          });
+                          takeDashboardAiPatch(sectionMatchReview.section_id);
+                          setSectionMatchReview(null);
+                        } finally {
+                          setSectionMatchApplying(false);
+                        }
+                      }}
+                    />
+                  ) : null}
                   <section className="overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-sm">
                     <div className="relative p-5 sm:p-6 md:p-7">
-                      <div className="pointer-events-none absolute right-0 top-0 h-28 w-28 rounded-bl-[60px] bg-[#132b26]/5" />
+                      <div className="pointer-events-none absolute right-0 top-0 h-28 w-28 rounded-bl-[60px] bg-[#213D59]/5" />
                       <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0 flex-1">
                           <div className="mb-3 flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-[#132b26] px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-white">
+                            <span className="rounded-full bg-[#213D59] px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-white">
                               Section {currentSection.id}
                             </span>
                             {activeSubsection && (
@@ -2052,7 +2157,7 @@ export default function DashboardPage() {
                             )}
                           </div>
 
-                          <h2 className="text-[24px] font-semibold leading-tight text-[#132b26] sm:text-[30px] md:text-[34px]">
+                          <h2 className="text-[24px] font-semibold leading-tight text-[#213D59] sm:text-[30px] md:text-[34px]">
                             {(obituarySections.has(currentSection.id) ||
                               hasDoveTag(currentSection.id)) && (
                               <span className="mr-2">🕊️</span>
@@ -2108,7 +2213,7 @@ export default function DashboardPage() {
                           className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-primary focus:ring-primary sm:mt-0"
                         />
                         <span className="min-w-0">
-                          <span className="block text-sm font-semibold text-[#132b26] sm:text-[15px]">
+                          <span className="block text-sm font-semibold text-[#213D59] sm:text-[15px]">
                             I have not served in the military
                           </span>
                           <span className="mt-1 block text-sm leading-6 text-slate-500">
@@ -2118,12 +2223,12 @@ export default function DashboardPage() {
                       </label>
 
                       <div className="flex items-start gap-3 rounded-[20px] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-[24px] sm:p-5">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-[#132b26]">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-[#213D59]">
                           <FileText className="h-5 w-5" />
                         </div>
                         <div className="min-w-0 flex-1 space-y-2">
                           <div>
-                            <h3 className="text-sm font-semibold text-[#132b26]">
+                            <h3 className="text-sm font-semibold text-[#213D59]">
                               VA Burial Benefits
                             </h3>
                             <p className="mt-0.5 text-sm text-slate-500">
@@ -2160,7 +2265,7 @@ export default function DashboardPage() {
                         className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-primary focus:ring-primary sm:mt-0"
                       />
                       <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-[#132b26] sm:text-[15px]">
+                        <span className="block text-sm font-semibold text-[#213D59] sm:text-[15px]">
                           I am not a business owner
                         </span>
                         <span className="mt-1 block text-sm leading-6 text-slate-500">
@@ -2186,7 +2291,7 @@ export default function DashboardPage() {
                         className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-primary focus:ring-primary sm:mt-0"
                       />
                       <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-[#132b26] sm:text-[15px]">
+                        <span className="block text-sm font-semibold text-[#213D59] sm:text-[15px]">
                           I am not a business owner — business taxes do not
                           apply
                         </span>
@@ -2278,7 +2383,7 @@ export default function DashboardPage() {
                   Account
                 </p>
                 {currentUser && (
-                  <p className="mt-1 truncate text-sm font-semibold text-[#132b26]">
+                  <p className="mt-1 truncate text-sm font-semibold text-[#213D59]">
                     {currentUser.email}
                   </p>
                 )}
@@ -2288,14 +2393,14 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => goToSection('vault-settings')}
-                  className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#132b26]"
+                  className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#213D59]"
                 >
                   Vault Settings <ChevronRight className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
                   onClick={manualSave}
-                  className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#132b26]"
+                  className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#213D59]"
                 >
                   Save Now <Save className="h-4 w-4" />
                 </button>
@@ -2305,7 +2410,7 @@ export default function DashboardPage() {
                   trigger={
                     <button
                       type="button"
-                      className="flex w-full items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#132b26]"
+                      className="flex w-full items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#213D59]"
                     >
                       Export Data <ExportIcon />
                     </button>
@@ -2333,12 +2438,12 @@ export default function DashboardPage() {
               }}
               className={`relative flex flex-col items-center justify-center rounded-xl px-1 py-2 transition active:scale-95 ${
                 activeSection === 'dashboard'
-                  ? 'text-[#132b26]'
+                  ? 'text-[#213D59]'
                   : 'text-slate-400'
               }`}
             >
               {activeSection === 'dashboard' ? (
-                <span className="absolute left-1/2 top-0 h-0.5 w-6 -translate-x-1/2 rounded-full bg-[#132b26]" />
+                <span className="absolute left-1/2 top-0 h-0.5 w-6 -translate-x-1/2 rounded-full bg-[#213D59]" />
               ) : null}
               <Home className="h-5 w-5" />
               <span className="mt-1 text-[9px] font-semibold">Dashboard</span>
@@ -2376,7 +2481,7 @@ export default function DashboardPage() {
               type="button"
               onClick={() => goToSection('4')}
               className={`flex flex-col items-center justify-center rounded-xl px-1 py-2 transition active:scale-95 ${
-                activeSection === '4' ? 'text-[#132b26]' : 'text-slate-400'
+                activeSection === '4' ? 'text-[#213D59]' : 'text-slate-400'
               }`}
             >
               <FileText className="h-5 w-5" />
@@ -2387,7 +2492,7 @@ export default function DashboardPage() {
               type="button"
               onClick={() => setMobileMoreOpen(prev => !prev)}
               className={`flex flex-col items-center justify-center rounded-xl px-1 py-2 transition active:scale-95 ${
-                mobileMoreOpen ? 'text-[#132b26]' : 'text-slate-400'
+                mobileMoreOpen ? 'text-[#213D59]' : 'text-slate-400'
               }`}
             >
               <MoreHorizontal className="h-5 w-5" />
@@ -2468,6 +2573,7 @@ export default function DashboardPage() {
         />
       </div>
       </HelpAssistantProvider>
+      </DashboardAiBatchProvider>
       </AiDocumentRoutingProvider>
     </>
   );

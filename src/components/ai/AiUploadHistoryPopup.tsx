@@ -283,6 +283,16 @@ export function AiUploadHistoryPopup({
     setPreview({ fileId, fileName: item.fileName });
   }, [jobs]);
 
+  const handlePreviewMissing = useCallback(
+    (fileId: string) => {
+      removeAiUploadHistoryItem({ fileId });
+      refreshHistory();
+      setPreview(null);
+      toast.error('Document no longer on the server. Upload it again to preview.');
+    },
+    [refreshHistory],
+  );
+
   const previewDialog = (
     <AiDocumentPreviewDialog
       open={Boolean(preview)}
@@ -291,6 +301,7 @@ export function AiUploadHistoryPopup({
       }}
       fileId={preview?.fileId}
       fileName={preview?.fileName}
+      onNotFound={handlePreviewMissing}
     />
   );
 
@@ -316,7 +327,7 @@ export function AiUploadHistoryPopup({
             className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-left"
           >
             <div className="min-w-0">
-              <p className="truncate text-xs font-semibold text-[#132b26]">
+              <p className="truncate text-xs font-semibold text-[#213D59]">
                 Uploaded documents
               </p>
               <p className="text-[10px] text-slate-500">
@@ -351,7 +362,7 @@ export function AiUploadHistoryPopup({
                       <button
                         type="button"
                         onClick={() => openPreview(item)}
-                        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm transition hover:text-[#2e7d6e]"
+                        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm transition hover:text-[#2B5A8C]"
                         title="View document"
                         aria-label={`View ${item.fileName}`}
                       >
@@ -381,7 +392,7 @@ export function AiUploadHistoryPopup({
                           <span className="text-[10px] font-semibold text-slate-600">
                             {progress}%
                           </span>
-                          <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-[#2e7d6e]">
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-[#2B5A8C]">
                             <Eye className="h-2.5 w-2.5" />
                             View
                           </span>
@@ -412,7 +423,7 @@ export function AiUploadHistoryPopup({
                     ) : null}
 
                     <div className="mt-1.5 space-y-0.5 text-[9px] leading-snug text-slate-500">
-                      <p className="font-semibold text-[#2e7d6e]">
+                      <p className="font-semibold text-[#2B5A8C]">
                         {formatUploadRelativeDays(item.updatedAt)}
                       </p>
                       <p>
@@ -464,14 +475,14 @@ export function AiUploadHistoryPopup({
         }}
         className={cn(
           absolute ? 'absolute bottom-3 right-3 z-10' : 'relative',
-          'inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#132b26] shadow-sm transition hover:border-[#132b26]/30 hover:bg-slate-50',
-          count > 0 && 'ring-1 ring-[#132b26]/10',
+          'inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#213D59] shadow-sm transition hover:border-[#213D59]/30 hover:bg-slate-50',
+          count > 0 && 'ring-1 ring-[#213D59]/10',
           className,
         )}
       >
         <FileStack className="h-5 w-5" />
         {count > 0 ? (
-          <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#132b26] px-1 text-[10px] font-bold text-white">
+          <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#213D59] px-1 text-[10px] font-bold text-white">
             {count > 99 ? '99+' : count}
           </span>
         ) : null}
@@ -480,7 +491,7 @@ export function AiUploadHistoryPopup({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] w-[min(96vw,56rem)] max-w-[56rem] overflow-hidden p-4 sm:p-6">
           <DialogHeader className="pr-8 text-left">
-            <DialogTitle className="text-[#132b26]">
+            <DialogTitle className="text-[#213D59]">
               Uploaded documents
             </DialogTitle>
             <DialogDescription>
@@ -516,7 +527,7 @@ export function AiUploadHistoryPopup({
                         <button
                           type="button"
                           onClick={() => openPreview(item)}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-500 transition hover:bg-emerald-50 hover:text-[#2e7d6e] sm:h-9 sm:w-9"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-500 transition hover:bg-emerald-50 hover:text-[#2B5A8C] sm:h-9 sm:w-9"
                           title="View document"
                           aria-label={`View ${item.fileName}`}
                         >
@@ -548,7 +559,7 @@ export function AiUploadHistoryPopup({
                                 {progress}%
                               </span>
                             ) : null}
-                            <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-[#2e7d6e] sm:text-[10px]">
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-[#2B5A8C] sm:text-[10px]">
                               <Eye className="h-3 w-3" />
                               View
                             </span>
@@ -590,7 +601,7 @@ export function AiUploadHistoryPopup({
                       ) : null}
 
                       <div className="mt-auto space-y-0.5 pt-2 text-[9px] leading-snug text-slate-500 sm:text-[11px]">
-                        <p className="font-semibold text-[#2e7d6e]">
+                        <p className="font-semibold text-[#2B5A8C]">
                           {formatUploadRelativeDays(item.updatedAt)}
                         </p>
                         <p>

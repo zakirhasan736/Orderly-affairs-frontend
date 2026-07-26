@@ -9,7 +9,6 @@ import {
   getAiAutofillDoneForSection,
   isAiAutofillDoneForSection,
 } from '@/utils/aiAutofillDoneSections';
-import { deleteAIDocument } from '@/services/aiDocumentUpload';
 import {
   runGuidedNavigationToUpload,
   scrollToAiUploadZone,
@@ -21,71 +20,44 @@ type Props = {
 
 /**
  * When the user opens a section that overview already filled, show "done"
- * guidance and delete the temporary AI document once no pending sections remain.
+ * guidance. Keep the uploaded AI document on the server so section / overview
+ * history preview still works until TTL expiry or the user deletes it.
  */
-async function cleanupTempDocumentIfReady(args: {
-  fileId: string;
-  pendingForFile: number;
-  clearAllPendingForFile: (fileId: string) => void;
-}) {
-  if (!args.fileId) return;
-  // Keep the temp file while other sections for this file still need review.
-  if (args.pendingForFile > 0) return;
-
-  await deleteAIDocument(args.fileId);
-  args.clearAllPendingForFile(args.fileId);
-}
-
 export function AiPendingUploadSectionBanner({ activeSectionId }: Props) {
   const {
     getPendingUploadsForSection,
-    pendingUploads,
     dismissHighlight,
     clearNavigateIntent,
     clearPendingForSection,
-    clearAllPendingForFile,
   } = useAiDocumentRouting();
   const pendingForSection = getPendingUploadsForSection(activeSectionId);
   const pendingUpload = pendingForSection.find(item => item.highlightUpload);
   const handledIntentRef = useRef<string | null>(null);
-  const cleanedFileRef = useRef<string | null>(null);
+  const clearedPendingRef = useRef<string | null>(null);
 
   const sectionAlreadyFilled = isAiAutofillDoneForSection(activeSectionId);
   const doneRecord = getAiAutofillDoneForSection(activeSectionId);
 
   useEffect(() => {
-    const fileId = doneRecord?.fileId || pendingUpload?.file_id;
-    if (!fileId || cleanedFileRef.current === fileId) return;
     if (!sectionAlreadyFilled && !wasAiSectionRecentlyFilled(activeSectionId, 120000)) {
       return;
     }
 
-    const stillPending = pendingUploads.filter(
-      item =>
-        item.file_id === fileId &&
-        item.targetSectionId !== activeSectionId &&
-        !isAiAutofillDoneForSection(item.targetSectionId),
-    ).length;
-
-    cleanedFileRef.current = fileId;
-    void cleanupTempDocumentIfReady({
-      fileId,
-      pendingForFile: stillPending,
-      clearAllPendingForFile,
-    });
+    const clearKey = `${activeSectionId}:${doneRecord?.fileId || pendingUpload?.file_id || 'done'}`;
+    if (clearedPendingRef.current === clearKey) return;
+    clearedPendingRef.current = clearKey;
 
     // Clear pending autofill hooks for this section so UI shows "Auto fill done".
+    // Do NOT delete the temp AI document here — history preview needs it.
     clearPendingForSection(activeSectionId, pendingUpload?.uploadScope || 'full');
     dismissHighlight(activeSectionId, pendingUpload?.uploadScope || 'full');
   }, [
     activeSectionId,
-    clearAllPendingForFile,
     clearPendingForSection,
     dismissHighlight,
     doneRecord?.fileId,
     pendingUpload?.file_id,
     pendingUpload?.uploadScope,
-    pendingUploads,
     sectionAlreadyFilled,
   ]);
 
@@ -96,7 +68,7 @@ export function AiPendingUploadSectionBanner({ activeSectionId }: Props) {
     if (handledIntentRef.current === intentKey) return;
     handledIntentRef.current = intentKey;
 
-    // Overview already filled — never re-run Auto-fill for the same temp file.
+    // Overview already filled — never re-run Auto-fill; pin stays on the zone.
     if (
       sectionAlreadyFilled ||
       wasAiSectionRecentlyFilled(activeSectionId, 120000) ||
@@ -106,13 +78,8 @@ export function AiPendingUploadSectionBanner({ activeSectionId }: Props) {
         pendingUpload.targetSectionId,
         pendingUpload.uploadScope,
       );
-      const timer = window.setTimeout(() => {
-        runGuidedNavigationToUpload(
-          getAiSectionLabel(pendingUpload.targetSectionId),
-          { autofill: false },
-        );
-      }, 350);
-      return () => window.clearTimeout(timer);
+      // Do not scroll/pulse the section drop zone as if it needs another read.
+      return;
     }
 
     // Legacy autofill intent without done marker — still do not auto-click if
@@ -141,13 +108,13 @@ export function AiPendingUploadSectionBanner({ activeSectionId }: Props) {
 
   if (sectionAlreadyFilled) {
     return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-        <p className="font-semibold">Auto fill done for this section</p>
-        <p className="mt-1 text-xs text-emerald-800/90">
+      <div className="rounded-2xl border border-[#2c7a63]/30 bg-[#e7f2ee] px-4 py-3 text-sm text-[#213D59]">
+        <p className="font-semibold text-[#2c7a63]">Pinned from Overview</p>
+        <p className="mt-1 text-xs text-[#33506e]">
           Fields were filled from your overview upload
-          {doneRecord?.fileName ? ` (${doneRecord.fileName})` : ''}. The temporary
-          document is removed after you review — do not run Auto-fill again for
-          that file.
+          {doneRecord?.fileName ? ` (${doneRecord.fileName})` : ''}. The
+          document was only read there — the section drop zone shows a pin, not
+          another read.
         </p>
       </div>
     );

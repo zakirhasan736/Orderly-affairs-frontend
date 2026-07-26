@@ -64,7 +64,7 @@ function CircularDocProgress({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke={compact ? '#e8e6e0' : 'rgba(19,43,38,0.12)'}
+          stroke={compact ? '#e8e6e0' : 'rgba(33, 61, 89,0.12)'}
           strokeWidth={stroke}
         />
         <g
@@ -78,10 +78,10 @@ function CircularDocProgress({
             fill="none"
             stroke={
               complete
-                ? '#2e7d6e'
+                ? '#2B5A8C'
                 : compact
-                  ? '#132b26'
-                  : '#2e7d6e'
+                  ? '#213D59'
+                  : '#2B5A8C'
             }
             strokeWidth={stroke}
             strokeLinecap="round"
@@ -104,10 +104,10 @@ function CircularDocProgress({
           'relative z-[1] flex flex-col items-center justify-center rounded-full transition-colors duration-300',
           inner,
           complete
-            ? 'bg-[rgba(46,125,110,0.12)] text-[#2e7d6e]'
+            ? 'bg-[#e7eef7] text-[#2B5A8C]'
             : isWorking
-              ? 'bg-[#132b26] text-white'
-              : 'bg-[rgba(19,43,38,0.05)] text-[#132b26]',
+              ? 'bg-[#213D59] text-white'
+              : 'bg-[rgba(33,61,89,0.05)] text-[#213D59]',
         )}
       >
         {complete ? (
@@ -223,12 +223,15 @@ export function OverviewAiUploadCard({
         job.status !== 'done' &&
         job.status !== 'error',
     );
-    if (live?.status === 'filling' || live?.status === 'routing') {
-      return 'Filling matched sections…';
+    if (live?.status === 'filling') return 'Filling matched fields…';
+    if (live?.status === 'routing') return 'Matching vault sections…';
+    if (live?.status === 'almost') return 'Finishing the read…';
+    if (live?.status === 'uploading' || live?.status === 'starting') {
+      return 'Uploading securely…';
     }
-    if (live?.status === 'almost') return 'Almost done…';
-    if (live?.status === 'uploading') return 'Uploading…';
-    return 'Reading document…';
+    if (live?.readSource === 'system') return 'Our system is reading…';
+    if (live?.readSource === 'cache') return 'Reusing a prior read…';
+    return 'Virtual Assistant is reading…';
   }, [isWorking, jobs]);
 
   const openPicker = () => inputRef.current?.click();
@@ -247,7 +250,7 @@ export function OverviewAiUploadCard({
         }}
       />
 
-      {/* Single navy drop zone — mobile + desktop */}
+      {/* Document inbox — flat lane, not a gradient hero */}
       <div
         role="button"
         tabIndex={0}
@@ -279,8 +282,8 @@ export function OverviewAiUploadCard({
         className={cn(
           'relative cursor-pointer overflow-hidden rounded-[20px] border border-dashed p-4 transition sm:p-5',
           isDragging
-            ? 'border-[var(--accent-teal)] bg-[rgba(46,125,110,0.08)] scale-[1.01]'
-            : 'border-[rgba(19,43,38,0.18)] bg-[var(--surface)] hover:border-[var(--accent-teal)]',
+            ? 'scale-[1.01] border-[#2B5A8C] bg-[#e7eef7]'
+            : 'border-[rgba(33,61,89,0.18)] bg-white hover:border-[#2B5A8C] hover:bg-[#e7eef7]/50',
         )}
       >
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

@@ -13,7 +13,7 @@ export const AI_SUPPORTED_UPLOAD_CATEGORIES = [
 ] as const;
 
 export const AI_PENDING_ROUTED_HINT =
-  'Your document is ready here. Auto-fill will run automatically — no need to read or upload again.';
+  'This document was read on Overview and linked here. Fields are filled already — no need to upload or read again.';
 
 export const AI_GUIDED_NAVIGATION_EVENT = 'orderly-ai-guided-navigation';
 
@@ -23,6 +23,12 @@ export type AiGuidedNavigationDetail = {
 };
 
 export function scrollToAiUploadZone() {
+  const pinned = document.querySelector('[data-ai-upload-zone="pinned"]');
+  if (pinned) {
+    pinned.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return pinned;
+  }
+
   const highlighted = document.querySelector('[data-ai-upload-zone="highlight"]');
   if (highlighted) {
     highlighted.scrollIntoView({ behavior: 'smooth', block: 'center' });

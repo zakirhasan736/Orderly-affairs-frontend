@@ -4,7 +4,11 @@ import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAppDispatch } from '@/store/hooks';
 import { clearSession } from '@/store/slices/authSlice';
-import { fetchSession, markPortalSession } from '@/libs/secureFetch';
+import {
+  clearPortalSession,
+  fetchSession,
+  markPortalSession,
+} from '@/libs/secureFetch';
 
 export default function AuthWatcher({
   children,
@@ -43,15 +47,34 @@ export default function AuthWatcher({
         return;
       }
 
-      if (session.role === 'owner') {
+      // Incomplete subscription/checkout — send back to plan selection.
+      if (
+        isOwnerArea &&
+        session.role === 'owner' &&
+        session.requires_billing
+      ) {
+        router.replace('/?resume=checkout');
+        return;
+      }
+
+      if (session.role === 'owner' && !session.requires_billing) {
         await markPortalSession();
       }
     };
 
     void verify();
 
+    const onSessionExpired = () => {
+      dispatch(clearSession());
+      void clearPortalSession().finally(() => {
+        router.replace('/?session=expired');
+      });
+    };
+    window.addEventListener('orderly-session-expired', onSessionExpired);
+
     return () => {
       cancelled = true;
+      window.removeEventListener('orderly-session-expired', onSessionExpired);
     };
   }, [pathname, router, dispatch]);
 

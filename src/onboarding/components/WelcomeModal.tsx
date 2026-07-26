@@ -20,17 +20,26 @@ export const WelcomeModal: React.FC<Props> = ({
   const greetingName = (firstName || '').trim() || 'there';
 
   return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-[rgba(19,43,38,0.45)] p-4 sm:p-6">
+    <div
+      className="fixed inset-0 z-[1200] flex items-center justify-center p-4 sm:p-6"
+      style={{ background: 'rgba(33, 61, 89, 0.52)' }}
+    >
+      {/* Soft full-screen veil so the dialog reads as a modal */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-black/[0.05]"
+        aria-hidden
+      />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="welcome-tour-title"
         className={cn(
-          'w-full max-w-[min(100%,34rem)] rounded-[18px] bg-white p-6 sm:p-[30px]',
-          'shadow-[0_24px_60px_rgba(19,43,38,0.3)]',
+          'relative z-[1] w-full max-w-[min(100%,34rem)] rounded-[18px] bg-white p-6 sm:p-[30px]',
+          'shadow-[0_12px_40px_rgba(33,61,89,0.22),0_2px_8px_rgba(33,61,89,0.08)]',
+          'ring-1 ring-[#213D59]/10',
         )}
       >
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white ring-1 ring-[#132b26]/12">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white ring-1 ring-[#213D59]/12">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={BRAND_LOGO}
@@ -43,7 +52,7 @@ export const WelcomeModal: React.FC<Props> = ({
 
         <h2
           id="welcome-tour-title"
-          className="mt-5 mb-0 font-[family-name:var(--font-family-serif)] text-[clamp(1.5rem,4vw,1.875rem)] font-normal leading-[1.2] text-[#132b26]"
+          className="mt-5 mb-0 font-[family-name:var(--font-family-display)] text-[clamp(1.5rem,4vw,1.875rem)] font-normal leading-[1.2] text-[#213D59]"
         >
           Welcome, {greetingName}.
         </h2>
@@ -54,11 +63,8 @@ export const WelcomeModal: React.FC<Props> = ({
             : 'We’ll show you the areas you’re authorized to open, and how to find letters and instructions left for you.'}
         </p>
 
-        <div
-          className="mt-[22px] mb-5 flex gap-1.5"
-          aria-hidden
-        >
-          <span className="h-1 w-[22px] rounded-sm bg-[#132b26]" />
+        <div className="mt-[22px] mb-5 flex gap-1.5" aria-hidden>
+          <span className="h-1 w-[22px] rounded-sm bg-[#213D59]" />
           <span className="h-1 w-[22px] rounded-sm bg-[#e4e6e1]" />
           <span className="h-1 w-[22px] rounded-sm bg-[#e4e6e1]" />
         </div>
@@ -67,14 +73,14 @@ export const WelcomeModal: React.FC<Props> = ({
           <button
             type="button"
             onClick={onSkip}
-            className="h-11 rounded-[22px] border border-[#e4e6e1] bg-white px-[18px] text-[13px] font-medium text-[#132b26] transition hover:bg-[#f7f6f2]"
+            className="h-11 rounded-[22px] border border-[#e4e6e1] bg-white px-[18px] text-[13px] font-medium text-[#213D59] transition hover:bg-[#f5f8fc]"
           >
             Skip the tour
           </button>
           <button
             type="button"
             onClick={onStart}
-            className="h-11 rounded-[22px] border-0 bg-[#132b26] px-5 text-[13px] font-medium text-white transition hover:bg-[#2e7d6e]"
+            className="h-11 rounded-[22px] border-0 bg-[#213D59] px-5 text-[13px] font-medium text-white transition hover:bg-[#2B5A8C]"
           >
             Show me around (2 min)
           </button>

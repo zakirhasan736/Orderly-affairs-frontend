@@ -22,11 +22,10 @@ function hasOwnerCue(req: NextRequest): boolean {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Logged-in cue on login page → go dashboard (best-effort UX)
+  // Logged-in cue on login page → leave routing to the client.
+  // Owners still finishing plan/trial/payment must stay on checkout; only the
+  // session API knows requires_billing, so middleware must not force /dashboard.
   if (pathname === '/' || pathname.startsWith('/login')) {
-    if (hasOwnerCue(req)) {
-      return NextResponse.redirect(new URL('/dashboard', req.url));
-    }
     return NextResponse.next();
   }
 

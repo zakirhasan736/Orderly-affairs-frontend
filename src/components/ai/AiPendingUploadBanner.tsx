@@ -26,20 +26,18 @@ export function AiPendingUploadBanner({
   const isReview = mode === 'review';
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50 via-white to-violet-50 p-3.5 shadow-sm sm:p-4">
-      <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-indigo-100/80 blur-2xl" />
-
+    <div className="relative overflow-hidden rounded-2xl border border-[#7688a1]/40 bg-[#e7eef7] p-3.5 shadow-sm sm:p-4">
       <div className="relative flex flex-col gap-3.5 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
         <div className="flex min-w-0 flex-1 items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#2B5A8C] shadow-sm ring-1 ring-[#2B5A8C]/20">
             {isReview ? <Eye className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
           </div>
 
           <div className="min-w-0 flex-1 space-y-1">
-            <p className="font-semibold text-slate-900">
+            <p className="font-semibold text-[#213D59]">
               {isReview ? 'AI found information to review' : 'Ready to auto-fill'}
             </p>
-            <p className="break-words text-sm leading-relaxed text-slate-600">
+            <p className="break-words text-sm leading-relaxed text-[#33506e]">
               {fileLabel}
               {pendingUpload.file_name ? ` · ${pendingUpload.file_name}` : ''}
               {pendingUpload.documentSummary

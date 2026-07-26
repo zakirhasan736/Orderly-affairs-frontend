@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@common/ui/utils';
-import { BRAND_LOGO } from '@/constants/brand';
+import { BRAND_LOGO, BRAND_MARK_LIGHT } from '@/constants/brand';
 
 export type AuthPortalMode = 'login' | 'signup';
 
@@ -45,8 +45,8 @@ type AuthPortalShellProps = {
   mobileStepLabel?: string;
   mobileSubtitle?: string;
   mobileShowTagline?: boolean;
-  /** Mobile top chrome: brand ink banner vs reset white bar vs checkout */
-  mobileChrome?: 'brand' | 'reset' | 'checkout';
+  /** Mobile top chrome: brand ink banner vs reset white bar vs checkout vs plan */
+  mobileChrome?: 'brand' | 'reset' | 'checkout' | 'plan';
   onMobileBack?: () => void;
   children: React.ReactNode;
   className?: string;
@@ -69,7 +69,7 @@ function BrandMark({
     >
       <div
         className={cn(
-          'flex shrink-0 items-center justify-center bg-white',
+          'flex shrink-0 items-center justify-center overflow-hidden bg-white',
           compact
             ? 'h-[34px] w-[34px] rounded-[9px]'
             : 'h-11 w-11 rounded-[11px]',
@@ -82,12 +82,19 @@ function BrandMark({
           width={compact ? 26 : 32}
           height={compact ? 26 : 32}
           className="h-[78%] w-[78%] object-contain"
+          onError={e => {
+            const el = e.currentTarget;
+            if (el.dataset.fallback === '1') return;
+            el.dataset.fallback = '1';
+            el.src = BRAND_MARK_LIGHT;
+            el.className = 'h-[78%] w-[78%] object-contain brightness-0';
+          }}
         />
       </div>
       <span
         className={cn(
           'font-semibold tracking-[-0.01em] text-white',
-          compact ? 'text-[14px]' : 'text-[15px]',
+          compact ? 'text-[14.5px]' : 'text-[15px]',
         )}
       >
         Orderly Affairs
@@ -99,14 +106,27 @@ function BrandMark({
 function BrandAside({
   children,
   contentMaxWidth = '600px',
+  wide,
 }: {
   children: React.ReactNode;
   contentMaxWidth?: string;
+  /** Checkout order panel — ~38–40% brand column. */
+  wide?: boolean;
 }) {
   return (
-    <aside className="relative hidden min-h-[100dvh] w-[44%] bg-[#132b26] text-white lg:flex xl:w-[42%]">
+    <aside
+      className={cn(
+        'relative hidden min-h-[100dvh] bg-[#213D59] text-white lg:flex',
+        wide
+          ? 'w-[min(40%,560px)] shrink-0'
+          : 'w-[44%] xl:w-[42%]',
+      )}
+    >
       <div
-        className="ml-auto flex h-full w-full flex-col p-11"
+        className={cn(
+          'ml-auto flex h-full w-full flex-col',
+          wide ? 'px-[46px] py-11' : 'p-11',
+        )}
         style={{ maxWidth: contentMaxWidth }}
       >
         {children}
@@ -121,7 +141,7 @@ function LoginBrandPanel() {
       <BrandMark />
 
       <div className="mt-auto max-w-[34ch]">
-        <h2 className="m-0 font-[family-name:var(--font-family-serif)] text-[44px] font-normal leading-[1.12] text-white">
+        <h2 className="m-0 font-[family-name:var(--font-family-display)] text-[44px] font-normal leading-[1.12] text-white">
           One place, so nobody has to guess.
         </h2>
         <p
@@ -166,7 +186,7 @@ function SignupBrandPanel({
                 className={cn(
                   'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[12px] font-semibold',
                   isActive
-                    ? 'bg-white text-[#132b26]'
+                    ? 'bg-white text-[#213D59] ring-2 ring-white/35 ring-offset-2 ring-offset-[#213D59]'
                     : isComplete
                       ? 'bg-[rgba(255,255,255,.22)] text-white'
                       : 'bg-[rgba(255,255,255,.16)] text-white/60',
@@ -221,42 +241,69 @@ function SignupBrandPanel({
 
 function CheckoutBrandPanel({ summary }: { summary: CheckoutOrderSummary }) {
   return (
-    <BrandAside contentMaxWidth="520px">
+    <BrandAside contentMaxWidth="520px" wide>
       <BrandMark />
 
-      <div className="mt-auto max-w-[26rem]">
-        <p className="m-0 text-[11px] font-medium tracking-[0.14em] text-white/50">
-          YOUR ORDER
+      <div className="mt-auto w-full">
+        <p
+          className="m-0 font-[family-name:var(--font-family-mono)] text-[11px] font-medium tracking-[0.14em] uppercase"
+          style={{ color: 'rgba(255,255,255,.82)' }}
+        >
+          Your order
         </p>
-        <div className="mt-3 rounded-[14px] border border-white/15 bg-white/[0.06] p-5">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="m-0 font-[family-name:var(--font-family-serif)] text-[22px] text-white">
+        <div
+          className="mt-5 rounded-2xl border px-6 py-[22px]"
+          style={{
+            background: 'rgba(255,255,255,.06)',
+            borderColor: 'rgba(255,255,255,.12)',
+          }}
+        >
+          <div className="flex items-baseline gap-3">
+            <span className="flex-1 text-[16.5px] font-semibold text-white">
               {summary.planLabel}
-            </p>
-            <p className="m-0 font-[family-name:var(--font-family-serif)] text-[22px] text-white">
+            </span>
+            <span className="font-[family-name:var(--font-family-display)] text-[22px] font-normal leading-none text-white">
               {summary.planPrice}
-            </p>
+            </span>
           </div>
-          <p className="mt-1.5 mb-0 text-[12.5px] text-white/55">
+          <p
+            className="mt-2 mb-0 text-sm"
+            style={{ color: 'rgba(255,255,255,.85)' }}
+          >
             {summary.planNote}
           </p>
 
-          <div className="my-4 h-px bg-white/12" />
-
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="m-0 text-[14px] font-semibold text-white">Due today</p>
-            <p className="m-0 text-[14px] font-semibold text-white">
+          <div
+            className="mt-[18px] flex items-baseline gap-3 border-t pt-4"
+            style={{ borderColor: 'rgba(255,255,255,.12)' }}
+          >
+            <span
+              className="flex-1 text-[14.5px]"
+              style={{ color: 'rgba(255,255,255,.9)' }}
+            >
+              Due today
+            </span>
+            <span className="text-[16.5px] font-semibold text-white">
               {summary.dueToday}
-            </p>
+            </span>
           </div>
-          <p className="mt-1.5 mb-0 text-[12.5px] leading-snug text-white/55">
+          <p
+            className="mt-2 mb-0 text-[13.5px] leading-snug text-pretty"
+            style={{ color: 'rgba(255,255,255,.82)' }}
+          >
             {summary.dueNote}
           </p>
         </div>
 
-        <p className="mt-8 mb-0 text-[12px] leading-[1.65] text-white/45">
+        <div
+          className="mt-[26px] border-t pt-[22px] text-sm leading-[1.7] text-pretty"
+          style={{
+            borderColor: 'rgba(255,255,255,.14)',
+            color: 'rgba(255,255,255,.85)',
+          }}
+        >
           {summary.footerNote}
-        </p>
+        </div>
       </div>
     </BrandAside>
   );
@@ -278,6 +325,8 @@ export function AuthPortalShell({
 }: AuthPortalShellProps) {
   const isResetChrome = mobileChrome === 'reset';
   const isCheckoutChrome = mobileChrome === 'checkout';
+  const isPlanChrome = mobileChrome === 'plan';
+  const isFillChrome = isPlanChrome || isCheckoutChrome;
 
   const aside =
     checkoutSummary ? (
@@ -291,19 +340,29 @@ export function AuthPortalShell({
   return (
     <div
       className={cn(
-        'auth-portal flex min-h-[100dvh] w-full bg-[#f7f6f2]',
+        'auth-portal flex w-full bg-[#f5f8fc]',
+        isFillChrome
+          ? 'h-[100dvh] max-h-[100dvh] overflow-hidden lg:min-h-[100dvh] lg:h-auto lg:max-h-none lg:overflow-visible'
+          : 'min-h-[100dvh]',
         className,
       )}
     >
       {aside}
 
-      <div className="flex min-h-[100dvh] flex-1 flex-col">
+      <div
+        className={cn(
+          'flex flex-1 flex-col',
+          isFillChrome
+            ? 'min-h-0 overflow-hidden lg:min-h-[100dvh] lg:overflow-visible'
+            : 'min-h-[100dvh]',
+        )}
+      >
         {isResetChrome ? (
           <header className="flex h-auto shrink-0 items-center gap-2.5 border-b border-[#e4e6e1] bg-white px-4 pb-3.5 pt-[max(0.5rem,env(safe-area-inset-top))] lg:hidden">
             <button
               type="button"
               onClick={onMobileBack}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[#e4e6e1] bg-white text-[#132b26]"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border border-[#7688a1] bg-white text-[#213D59]"
               aria-label="Back"
             >
               <svg
@@ -311,79 +370,112 @@ export function AuthPortalShell({
                 height="15"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#132b26"
+                stroke="#213D59"
                 strokeWidth="2"
                 aria-hidden
               >
                 <path d="m14 6-6 6 6 6" strokeLinecap="round" />
               </svg>
             </button>
-            <span className="text-[15px] font-semibold text-[#132b26]">
+            <span className="text-[15px] font-semibold text-[#213D59]">
               Reset password
             </span>
           </header>
         ) : isCheckoutChrome ? (
-          <header className="h-auto bg-[#132b26] px-5 pb-7 pt-[max(0.875rem,env(safe-area-inset-top))] text-white lg:hidden">
-            <div className="flex items-center gap-2.5">
+          <header
+            className="h-auto shrink-0 bg-[#213D59] text-white lg:hidden"
+            style={{
+              paddingTop: 'max(0.875rem, env(safe-area-inset-top))',
+              paddingRight: 20,
+              paddingBottom: 20,
+              paddingLeft: 20,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button
                 type="button"
                 onClick={onMobileBack}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-white/20 bg-white/5"
                 aria-label="Back"
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  border: '1px solid rgba(255,255,255,.22)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'transparent',
+                  padding: 0,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
               >
                 <svg
                   width="15"
                   height="15"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="white"
+                  stroke="#fff"
                   strokeWidth="2"
                   aria-hidden
                 >
                   <path d="m14 6-6 6 6 6" strokeLinecap="round" />
                 </svg>
               </button>
-              <span className="text-[15px] font-medium text-white">
+              <span style={{ flex: 1, fontSize: 14.5, fontWeight: 600 }}>
                 Secure checkout
               </span>
             </div>
             {mobileStepLabel ? (
-              <p className="mb-0 mt-[18px] text-[11px] font-medium tracking-[0.14em] text-white/55">
+              <p
+                style={{
+                  margin: '16px 0 0',
+                  font: "500 11px 'IBM Plex Mono', monospace",
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color: 'rgba(255,255,255,.82)',
+                }}
+              >
                 {mobileStepLabel}
               </p>
             ) : null}
-            <h1 className="mt-1.5 mb-0 font-[family-name:var(--font-family-serif)] text-[28px] font-normal leading-[1.15] text-white">
+            <h1
+              style={{
+                margin: '8px 0 0',
+                font: "400 25px/1.2 'Poppins', 'Manrope', sans-serif",
+                color: '#fff',
+              }}
+            >
               {mobileTitle}
             </h1>
-            {mobileSubtitle ? (
-              <p className="mb-0 mt-2 max-w-[34ch] text-[13.5px] leading-snug text-white/65">
-                {mobileSubtitle}
-              </p>
-            ) : null}
           </header>
         ) : (
           <header
             className={cn(
-              'h-auto bg-[#132b26] text-white lg:hidden',
+              'h-auto shrink-0 bg-[#213D59] text-white lg:hidden',
               mobileShowTagline
                 ? 'px-6 pb-[30px] pt-[max(20px,env(safe-area-inset-top))]'
-                : mobileSubtitle
-                  ? 'px-5 pb-7 pt-[max(0.875rem,env(safe-area-inset-top))]'
-                  : 'px-5 pb-6 pt-[max(0.875rem,env(safe-area-inset-top))]',
+                : isPlanChrome
+                  ? 'px-5 pb-[22px] pt-[max(0.875rem,env(safe-area-inset-top))]'
+                  : mobileSubtitle
+                    ? 'px-5 pb-7 pt-[max(0.875rem,env(safe-area-inset-top))]'
+                    : 'px-5 pb-6 pt-[max(0.875rem,env(safe-area-inset-top))]',
             )}
           >
             <BrandMark compact />
             {mobileStepLabel && !mobileShowTagline ? (
-              <p className="mb-0 mt-[18px] text-[11px] font-medium tracking-[0.14em] text-white/60">
+              <p className="mb-0 mt-[18px] font-[family-name:var(--font-family-mono)] text-[11px] font-medium tracking-[0.14em] uppercase text-white/82">
                 {mobileStepLabel}
               </p>
             ) : null}
             <h1
               className={cn(
-                'm-0 font-[family-name:var(--font-family-serif)] font-normal leading-[1.2] text-white',
+                'm-0 font-[family-name:var(--font-family-display)] font-normal leading-[1.2] text-white',
                 mobileShowTagline
                   ? 'mt-[22px] text-[30px]'
-                  : 'mt-1.5 max-w-[16ch] text-[26px]',
+                  : isPlanChrome
+                    ? 'mt-2 text-[26px]'
+                    : 'mt-1.5 max-w-[16ch] text-[26px]',
               )}
             >
               {mobileShowTagline
@@ -391,7 +483,14 @@ export function AuthPortalShell({
                 : mobileTitle}
             </h1>
             {mobileSubtitle && !mobileShowTagline ? (
-              <p className="mb-0 mt-2 max-w-[34ch] text-[13.5px] leading-snug text-white/70">
+              <p
+                className={cn(
+                  'mb-0 mt-2 leading-snug text-white/90',
+                  isPlanChrome
+                    ? 'max-w-none text-[14.5px] leading-[1.55]'
+                    : 'max-w-[34ch] text-[13.5px] text-white/70',
+                )}
+              >
                 {mobileSubtitle}
               </p>
             ) : null}
@@ -400,15 +499,22 @@ export function AuthPortalShell({
 
         <main
           className={cn(
-            'flex flex-1 flex-col items-center px-5 sm:px-8 lg:justify-center lg:gap-6 lg:p-14',
-            isResetChrome
-              ? 'justify-start gap-3.5 py-5'
-              : isCheckoutChrome
-                ? 'justify-start gap-3 py-4'
-                : 'justify-start gap-3 py-[18px]',
+            'flex flex-1 flex-col',
+            isFillChrome
+              ? 'min-h-0 items-stretch overflow-hidden px-0 py-0 lg:items-start lg:justify-start lg:overflow-visible lg:p-0'
+              : isResetChrome
+                ? 'items-center justify-start gap-3.5 px-5 py-5 sm:px-8 lg:justify-center lg:gap-6 lg:p-14'
+                : 'items-center justify-start gap-3 px-5 py-[18px] sm:px-8 lg:justify-center lg:gap-6 lg:p-14',
           )}
         >
-          <div className="flex w-full max-w-[520px] flex-1 flex-col gap-3.5 lg:flex-none lg:gap-6">
+          <div
+            className={cn(
+              'flex w-full flex-col',
+              isFillChrome
+                ? 'min-h-0 max-w-none flex-1 gap-0 lg:mx-0 lg:max-w-[880px] lg:flex-none'
+                : 'max-w-[520px] flex-1 gap-3.5 lg:flex-none lg:gap-6',
+            )}
+          >
             {children}
           </div>
         </main>
@@ -422,21 +528,33 @@ export function AuthCard({
   className,
   flushOnMobile = false,
   flush = false,
+  wide = false,
 }: {
   children: React.ReactNode;
   className?: string;
   flushOnMobile?: boolean;
   /** No card chrome on any breakpoint (paper background, nested cards only). */
   flush?: boolean;
+  /** Wider desktop content (plan / payment) — fluid width. */
+  wide?: boolean;
 }) {
   return (
     <div
       className={cn(
-        'w-full max-w-[520px]',
+        'w-full',
+        wide ? 'max-w-[880px]' : 'max-w-[520px]',
         flush
-          ? 'rounded-none border-0 bg-transparent p-0'
+          ? cn(
+              'flex min-h-0 flex-1 flex-col rounded-none border-0 bg-transparent p-0 lg:flex-none',
+              wide && 'lg:w-full lg:max-w-[880px]',
+            )
           : flushOnMobile
-            ? 'rounded-none border-0 bg-transparent p-0 lg:rounded-[18px] lg:border lg:border-[#e4e6e1] lg:bg-white lg:p-[34px]'
+            ? cn(
+                'flex min-h-0 flex-1 flex-col rounded-none border-0 bg-transparent p-0 lg:block lg:flex-none',
+                wide
+                  ? 'lg:rounded-[18px] lg:border lg:border-[#7688a1]/35 lg:bg-white lg:px-[52px] lg:py-[44px]'
+                  : 'lg:rounded-[18px] lg:border lg:border-[#e4e6e1] lg:bg-white lg:p-[34px]',
+              )
             : 'rounded-[18px] border border-[#e4e6e1] bg-white p-[18px] sm:p-[26px] lg:p-[34px]',
         className,
       )}
@@ -470,7 +588,7 @@ export function AuthModeToggle({
         className={cn(
           'flex-1 rounded-[9px] px-3 py-[9px] text-center text-[13.5px] font-medium transition',
           !isNewUser
-            ? 'bg-white text-[#132b26] shadow-[0_1px_2px_rgba(19,43,38,.08)]'
+            ? 'bg-white text-[#213D59] shadow-[0_1px_2px_rgba(33, 61, 89,.08)]'
             : 'text-[#6e7c77]',
         )}
       >
@@ -485,7 +603,7 @@ export function AuthModeToggle({
         className={cn(
           'flex-1 rounded-[9px] px-3 py-[9px] text-center text-[13.5px] font-medium transition',
           isNewUser
-            ? 'bg-white text-[#132b26] shadow-[0_1px_2px_rgba(19,43,38,.08)]'
+            ? 'bg-white text-[#213D59] shadow-[0_1px_2px_rgba(33, 61, 89,.08)]'
             : 'text-[#6e7c77]',
         )}
       >
@@ -528,7 +646,7 @@ export function PasswordStrengthBars({
             key={i}
             className={cn(
               'h-1 flex-1 rounded-sm',
-              i < filled ? 'bg-[#2e7d6e]' : 'bg-[#e4e6e1]',
+              i < filled ? 'bg-[#2B5A8C]' : 'bg-[#e4e6e1]',
             )}
           />
         ))}

@@ -83,11 +83,20 @@ export function vehiclesAreDuplicates(
     return true;
   }
 
+  // Conflicting VINs = different vehicles.
+  if (existingVin && incomingVin && existingVin !== incomingVin) {
+    return false;
+  }
+
   const existingPlate = getUploadText(existing.license_plate);
   const incomingPlate = getUploadText(incoming.license_plate);
 
   if (existingPlate && incomingPlate && existingPlate === incomingPlate) {
     return true;
+  }
+
+  if (existingPlate && incomingPlate && existingPlate !== incomingPlate) {
+    return false;
   }
 
   const existingYear = normalizeComparable(existing.year);
@@ -109,6 +118,36 @@ export function vehiclesAreDuplicates(
     existingModel === incomingModel
   ) {
     return true;
+  }
+
+  // Soft match: thin insurance seed ↔ richer vehicle extract sharing a policy.
+  // Prevents overview multi-write from appending 2–3 partial vehicle rows.
+  const existingPolicy = normalizePolicyNumber(
+    existing.insurance_policy ?? existing.policy_number,
+  );
+  const incomingPolicy = normalizePolicyNumber(
+    incoming.insurance_policy ?? incoming.policy_number,
+  );
+  if (existingPolicy && incomingPolicy && existingPolicy === incomingPolicy) {
+    const existingIdentity =
+      Boolean(existingVin || existingPlate) ||
+      Boolean(existingYear && existingMake && existingModel);
+    const incomingIdentity =
+      Boolean(incomingVin || incomingPlate) ||
+      Boolean(incomingYear && incomingMake && incomingModel);
+    // Same policy + at least one side lacks full identity → treat as one car.
+    if (!existingIdentity || !incomingIdentity) {
+      return true;
+    }
+    // Both have identity but no conflicting VIN/plate and make matches.
+    if (
+      existingMake &&
+      incomingMake &&
+      existingMake === incomingMake &&
+      (!existingYear || !incomingYear || existingYear === incomingYear)
+    ) {
+      return true;
+    }
   }
 
   return false;

@@ -156,7 +156,7 @@ function ChatBubble({
           className={cn(
             'mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full shadow-sm ring-1 ring-white',
             isLive
-              ? 'bg-[#132b26] text-white'
+              ? 'bg-[#213D59] text-white'
               : isSystem
                 ? 'bg-slate-200 text-slate-600'
                 : 'bg-white/80 text-[#7c3aed]',
@@ -175,7 +175,7 @@ function ChatBubble({
           isUser
             ? 'rounded-br-md bg-[#1e1b4b] text-white'
             : isLive
-              ? 'rounded-bl-md border border-[#132b26]/15 bg-[#132b26] text-white'
+              ? 'rounded-bl-md border border-[#213D59]/15 bg-[#213D59] text-white'
               : isSystem
                 ? 'rounded-bl-md border border-slate-200 bg-slate-100/90 text-slate-600'
                 : 'rounded-bl-md border border-white/70 bg-white/75 text-[#334155] backdrop-blur-md',
@@ -397,7 +397,7 @@ export function HelpAssistantPanel({
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/70 text-[#5b21b6] shadow-sm ring-1 ring-white/80 backdrop-blur">
               {mode === 'live' ? (
-                <Headphones className="h-5 w-5 text-[#132b26]" />
+                <Headphones className="h-5 w-5 text-[#213D59]" />
               ) : (
                 <Sparkles className="h-5 w-5" />
               )}
@@ -526,7 +526,7 @@ export function HelpAssistantPanel({
 
           {mode === 'live' && (
             <div className="space-y-3.5">
-              <div className="rounded-[20px] border border-[#132b26]/10 bg-white/75 px-3.5 py-2.5 text-xs text-slate-600 shadow-sm backdrop-blur">
+              <div className="rounded-[20px] border border-[#213D59]/10 bg-white/75 px-3.5 py-2.5 text-xs text-slate-600 shadow-sm backdrop-blur">
                 {liveConnecting
                   ? 'Connecting to live support…'
                   : liveConnected
@@ -538,7 +538,7 @@ export function HelpAssistantPanel({
                 {!liveConnected && !liveConnecting ? (
                   <Button
                     type="button"
-                    className="mt-2 w-full rounded-2xl bg-[#132b26] text-white hover:bg-[#1a3d36]"
+                    className="mt-2 w-full rounded-2xl bg-[#213D59] text-white hover:bg-[#00305C]"
                     onClick={() => void connectLiveAgent()}
                   >
                     Connect to live agent
@@ -614,7 +614,7 @@ export function HelpAssistantPanel({
                 <button
                   type="submit"
                   disabled={!liveConnected || liveSending || !liveDraft.trim()}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[#132b26] text-white shadow-md disabled:opacity-50"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[#213D59] text-white shadow-md disabled:opacity-50"
                   aria-label="Send to live agent"
                 >
                   <SendHorizontal className="h-4 w-4" />
@@ -639,7 +639,7 @@ export function HelpAssistantFab() {
       type="button"
       data-help-assistant-fab
       onClick={() => openHelp({ mode: 'chat' })}
-      className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-3 z-[90] flex h-11 w-11 items-center justify-center rounded-full bg-[#132b26] text-white shadow-lg ring-2 ring-white/90 md:bottom-6 md:right-4 md:h-12 md:w-12 md:z-[90]"
+      className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-3 z-[90] flex h-11 w-11 items-center justify-center rounded-full bg-[#213D59] text-white shadow-lg ring-2 ring-white/90 md:bottom-6 md:right-4 md:h-12 md:w-12 md:z-[90]"
       aria-label="Open help assistant"
     >
       <Sparkles className="h-[18px] w-[18px]" />

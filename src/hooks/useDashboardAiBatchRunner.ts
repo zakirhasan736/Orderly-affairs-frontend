@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { uploadAIDocument } from '@/services/aiDocumentUpload';
 import { autofillSectionFromDocument } from '@/services/aiAutofill';
+import { ensureFreshSession } from '@/libs/secureFetch';
 import {
   AiDocumentMismatchError,
   AiDocumentUnavailableError,
@@ -24,16 +25,22 @@ import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContex
 import { getSectionFieldCatalog } from '@/utils/aiSectionFieldCatalog';
 import { markAiSectionFilled } from '@/utils/aiSectionFillGuard';
 import { markAiAutofillDoneForSection } from '@/utils/aiAutofillDoneSections';
-import { upsertAiUploadHistory } from '@/utils/aiUploadHistory';
+import {
+  linkAiUploadHistorySections,
+  upsertAiUploadHistory,
+} from '@/utils/aiUploadHistory';
 
 /** Always also fill related sections in background when one of the pair is targeted. */
 const FORCE_BACKGROUND_PARTNERS: Record<string, string[]> = {
+  // Auto insurance card / vehicle docs: Vehicles ↔ Insurance only.
+  // Never force Main Residence — that is for homeowners/renters policies.
   vehicles: ['insurance_policies'],
-  insurance_policies: ['vehicles', 'main_residence'],
+  insurance_policies: ['vehicles'],
   health_information: ['insurance_policies'],
   employment_business: ['banking_financial_accounts'],
   banking_financial_accounts: ['investment_accounts'],
   investment_accounts: ['banking_financial_accounts'],
+  // Home docs may also carry a homeowners policy — not the reverse for auto cards.
   main_residence: ['insurance_policies'],
   legal_documents_records: ['estate_planning_final_wishes'],
   estate_planning_final_wishes: ['legal_documents_records'],
@@ -82,6 +89,9 @@ async function stashAndPersist(args: {
     createdAt: Date.now(),
   });
 
+  // Access token may expire during long Gemini reads — refresh before save.
+  await ensureFreshSession();
+
   // Background: merge into saved section data — user does not open the section.
   const persistResult = await persistAiResultToSectionBackground({
     sectionId: args.sectionId,
@@ -96,6 +106,11 @@ async function stashAndPersist(args: {
       sectionId: args.sectionId,
       fileId: args.file_id,
       fileName: args.fileName,
+    });
+    linkAiUploadHistorySections({
+      fileId: args.file_id,
+      fileName: args.fileName,
+      sectionIds: [args.sectionId],
     });
     args.onFilled?.({
       file_id: args.file_id,
@@ -170,82 +185,94 @@ async function fillPartnerSectionsFast(args: {
 
   // Soft progress nudge only — job may already be marked done.
   patchJob(jobId, {
-    message: 'Filling related sections in background…',
+    message: 'Filling related sections one by one…',
   });
 
-  await Promise.allSettled(
-    partnerList.map(async partnerKey => {
-      const partnerMeta = AI_SECTION_BY_KEY[partnerKey];
-      if (!partnerMeta) return;
+  // Sequential: full document → related section A (catalog map) → B → …
+  // Never persist a thin partner seed as the final section fill.
+  for (const partnerKey of partnerList) {
+    const partnerMeta = AI_SECTION_BY_KEY[partnerKey];
+    if (!partnerMeta) continue;
 
-      try {
-        const cached = partnerResults?.[partnerKey];
-        let result = cached;
-        let summary = documentSummary;
+    try {
+      await ensureFreshSession();
+      patchJob(jobId, {
+        activeFillSectionId: partnerMeta.id,
+        message: `Filling ${partnerMeta.label} from the document…`,
+      });
 
-        if (!result) {
-          const partnerFilled = await withTimeout(
-            autofillSectionFromDocument({
-              section: partnerKey,
-              file_id,
-              subsection: partnerMeta.defaultSubsection || null,
-              use_routed_cache: true,
-              field_catalog: catalogForSection(partnerKey, null),
-            }),
-            45000,
-            `Partner fill ${partnerKey}`,
-          );
-          result = partnerFilled.result;
-          summary = partnerFilled.document_summary || documentSummary;
-        }
+      const partnerFilled = await withTimeout(
+        autofillSectionFromDocument({
+          section: partnerKey,
+          file_id,
+          subsection: partnerMeta.defaultSubsection || null,
+          use_routed_cache: true,
+          field_catalog: catalogForSection(partnerKey, null),
+        }),
+        60000,
+        `Partner fill ${partnerKey}`,
+      );
 
-        await withTimeout(
-          stashAndPersist({
-            file_id,
-            fileName,
-            sectionId: partnerMeta.id,
-            sectionKey: partnerKey,
-            subsection: partnerMeta.defaultSubsection || null,
-            result,
-            detectedFields: factsFromFill({
-              result,
-              section: partnerKey,
-            }),
-            documentSummary: summary,
-            onFilled: () => notifySectionFilled(partnerMeta.id),
-          }),
-          30000,
-          `Partner persist ${partnerKey}`,
-        );
-
-        routing?.queueRoutedSectionsSilently(
-          {
-            code: 'section_mismatch',
-            message: 'Partner section filled',
-            requested_section: sectionKey,
-            suggested_section: partnerKey,
-            suggested_section_id: partnerMeta.id,
-            suggested_section_label: partnerMeta.label,
-            suggested_subsection: partnerMeta.defaultSubsection,
-            document_summary: summary,
-            file_id,
-            mime_type,
-            additional_sections: [],
-          },
-          {
-            currentSectionId: 'dashboard',
-            navigateIntent: 'review',
-          },
-        );
-      } catch (partnerError) {
-        console.warn(
-          'Dashboard partner background fill failed',
-          partnerKey,
-          partnerError,
-        );
+      const seedHint = partnerResults?.[partnerKey];
+      let result = partnerFilled.result;
+      // If API returned a full extract, keep it. Seed hints only merge when
+      // the extract is somehow empty.
+      if (!result && seedHint) {
+        result = seedHint;
       }
-    }),
-  );
+
+      const summary = partnerFilled.document_summary || documentSummary;
+
+      await withTimeout(
+        stashAndPersist({
+          file_id,
+          fileName,
+          sectionId: partnerMeta.id,
+          sectionKey: partnerKey,
+          subsection: partnerMeta.defaultSubsection || null,
+          result,
+          detectedFields: factsFromFill({
+            result,
+            section: partnerKey,
+          }),
+          documentSummary: summary,
+          onFilled: () => notifySectionFilled(partnerMeta.id),
+        }),
+        30000,
+        `Partner persist ${partnerKey}`,
+      );
+
+      routing?.queueRoutedSectionsSilently(
+        {
+          code: 'section_mismatch',
+          message: 'Partner section filled',
+          requested_section: sectionKey,
+          suggested_section: partnerKey,
+          suggested_section_id: partnerMeta.id,
+          suggested_section_label: partnerMeta.label,
+          suggested_subsection: partnerMeta.defaultSubsection,
+          document_summary: summary,
+          file_id,
+          mime_type,
+          additional_sections: [],
+        },
+        {
+          currentSectionId: 'dashboard',
+          navigateIntent: 'review',
+        },
+      );
+    } catch (partnerError) {
+      console.warn(
+        'Dashboard partner background fill failed',
+        partnerKey,
+        partnerError,
+      );
+    }
+  }
+
+  patchJob(jobId, {
+    activeFillSectionId: undefined,
+  });
 }
 
 export type DashboardAiJobStatus =
@@ -274,6 +301,9 @@ export type DashboardAiJob = {
   targetSectionLabel?: string;
   documentSummary?: string;
   error?: string;
+  /** How the file bytes were read before field matching. */
+  readSource?: 'system' | 'gemini' | 'cache';
+  extractMethod?: string;
   /** Section currently being filled (primary or partner). */
   activeFillSectionId?: string;
   /** When the file was queued / uploaded. */
@@ -305,21 +335,21 @@ const ACTIVE_STATUSES: DashboardAiJobStatus[] = [
 function statusLabel(status: DashboardAiJobStatus) {
   switch (status) {
     case 'queued':
-      return 'Waiting…';
+      return 'In queue…';
     case 'starting':
-      return 'Starting…';
+      return 'Preparing secure upload…';
     case 'uploading':
-      return 'Uploading…';
+      return 'Uploading securely…';
     case 'reading':
-      return 'Reading document…';
+      return 'Reading your document…';
     case 'almost':
-      return 'Almost done…';
+      return 'Finishing the read…';
     case 'routing':
-      return 'Finding the right section…';
+      return 'Matching vault sections…';
     case 'filling':
-      return 'Auto-filling matched sections…';
+      return 'Filling matched fields…';
     case 'done':
-      return 'Filled automatically';
+      return 'Ready to review';
     case 'error':
       return 'Needs attention';
     default:
@@ -378,6 +408,8 @@ export function useDashboardAiBatchRunner() {
       additionalSections?: any[];
       alreadyExtracted?: boolean;
       extractedResult?: unknown;
+      readSource?: 'system' | 'gemini' | 'cache';
+      extractMethod?: string;
     }) => {
       const {
         jobId,
@@ -392,6 +424,8 @@ export function useDashboardAiBatchRunner() {
         additionalSections,
         alreadyExtracted,
         extractedResult,
+        readSource,
+        extractMethod,
       } = args;
 
       const notifySectionFilled = (filledSectionId: string) => {
@@ -407,28 +441,38 @@ export function useDashboardAiBatchRunner() {
         });
       };
 
-      // Already filling in background — only guide user to review, never re-run autofill.
-      routing?.queueRoutedSectionsSilently(
-        {
-          code: 'section_mismatch',
-          message: 'Dashboard routed document',
-          requested_section: sectionKey,
-          suggested_section: sectionKey,
-          suggested_section_id: sectionId,
-          suggested_section_label: sectionLabel,
-          suggested_subsection: subsection,
-          document_summary: documentSummary,
-          file_id,
-          mime_type,
-          additional_sections: additionalSections,
-        },
-        {
-          currentSectionId: 'dashboard',
-          navigateIntent: 'review',
-        },
-      );
+      const queueReviewForFilledSections = (opts?: {
+        documentSummary?: string;
+        additionalSections?: any[];
+      }) => {
+        // Only after a successful fill — never queue "New data" on classify alone.
+        routing?.queueRoutedSectionsSilently(
+          {
+            code: 'section_mismatch',
+            message: 'Dashboard routed document',
+            requested_section: sectionKey,
+            suggested_section: sectionKey,
+            suggested_section_id: sectionId,
+            suggested_section_label: sectionLabel,
+            suggested_subsection: subsection,
+            document_summary: opts?.documentSummary || documentSummary,
+            file_id,
+            mime_type,
+            additional_sections:
+              opts?.additionalSections || additionalSections || [],
+          },
+          {
+            currentSectionId: 'dashboard',
+            navigateIntent: 'review',
+          },
+        );
+      };
 
-      const markPrimaryDone = () => {
+      const markPrimaryDone = (
+        extra?: Partial<
+          Pick<DashboardAiJob, 'readSource' | 'extractMethod' | 'documentSummary'>
+        >,
+      ) => {
         patchJob(jobId, {
           status: 'done',
           progress: 100,
@@ -441,8 +485,35 @@ export function useDashboardAiBatchRunner() {
           targetSubsection: subsection,
           targetSectionLabel:
             sectionLabel || AI_SECTION_BY_ID[sectionId]?.label || 'Section',
+          documentSummary: extra?.documentSummary ?? documentSummary,
+          activeFillSectionId: undefined,
+          readSource: extra?.readSource ?? readSource,
+          extractMethod: extra?.extractMethod ?? extractMethod,
+        });
+      };
+
+      const markPrimaryFailed = (error: unknown) => {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Could not fill this document. Please try again.';
+        // Drop any premature "New data" badges for this upload.
+        routing?.clearAllPendingForFile(file_id);
+        patchJob(jobId, {
+          status: 'error',
+          progress: 100,
+          message: statusLabel('error'),
+          file_id,
+          mime_type,
+          fileName,
+          targetSectionId: sectionId,
+          targetSectionKey: sectionKey,
+          targetSubsection: subsection,
+          targetSectionLabel:
+            sectionLabel || AI_SECTION_BY_ID[sectionId]?.label || 'Section',
           documentSummary,
           activeFillSectionId: undefined,
+          error: message,
         });
       };
 
@@ -500,8 +571,11 @@ export function useDashboardAiBatchRunner() {
           );
         } catch (persistError) {
           console.warn('Dashboard primary persist failed', persistError);
+          markPrimaryFailed(persistError);
+          return;
         }
 
+        queueReviewForFilledSections({ documentSummary, additionalSections });
         markPrimaryDone();
         runPartnersInBackground({ documentSummary, additionalSections });
         return;
@@ -517,6 +591,7 @@ export function useDashboardAiBatchRunner() {
       });
 
       try {
+        await ensureFreshSession();
         const filled = await withTimeout(
           autofillSectionFromDocument({
             section: sectionKey,
@@ -552,28 +627,29 @@ export function useDashboardAiBatchRunner() {
           'Primary persist',
         );
 
-        if (filled.additional_sections?.length) {
-          routing?.queueRoutedSectionsSilently(
-            {
-              code: 'section_mismatch',
-              message: 'Additional sections found',
-              requested_section: sectionKey,
-              suggested_section: sectionKey,
-              suggested_section_id: sectionId,
-              suggested_section_label: sectionLabel,
-              document_summary: filled.document_summary,
-              file_id,
-              mime_type,
-              additional_sections: filled.additional_sections,
-            },
-            {
-              currentSectionId: 'dashboard',
-              navigateIntent: 'review',
-            },
-          );
-        }
+        queueReviewForFilledSections({
+          documentSummary: filled.document_summary || documentSummary,
+          additionalSections:
+            filled.additional_sections || additionalSections || [],
+        });
 
-        markPrimaryDone();
+        const filledRead =
+          filled.read_source === 'system' ||
+          filled.read_source === 'gemini' ||
+          filled.read_source === 'cache'
+            ? filled.read_source
+            : filled.from_cache
+              ? 'cache'
+              : readSource;
+
+        markPrimaryDone({
+          documentSummary: filled.document_summary || documentSummary,
+          readSource: filledRead,
+          extractMethod:
+            typeof filled.extract_method === 'string'
+              ? filled.extract_method
+              : extractMethod,
+        });
         runPartnersInBackground({
           documentSummary: filled.document_summary || documentSummary,
           additionalSections:
@@ -583,12 +659,12 @@ export function useDashboardAiBatchRunner() {
           ).partner_results,
         });
       } catch (fillError) {
-        if (!(fillError instanceof AiDocumentMismatchError)) {
-          console.warn('Dashboard autofill warm failed', fillError);
+        if (fillError instanceof AiDocumentMismatchError) {
+          // Re-route handled by caller / classify path — treat as recoverable.
+          throw fillError;
         }
-        // Still mark done so the UI never hangs at 95% "Reading".
-        markPrimaryDone();
-        runPartnersInBackground({ documentSummary, additionalSections });
+        console.warn('Dashboard autofill failed', fillError);
+        markPrimaryFailed(fillError);
       }
     },
     [patchJob, routing],
@@ -600,6 +676,9 @@ export function useDashboardAiBatchRunner() {
     let watchdog: number | undefined;
 
     try {
+      // Access cookies expire during long Gemini batches — refresh first.
+      await ensureFreshSession();
+
       patchJob(job.id, {
         status: 'starting',
         progress: 8,
@@ -621,12 +700,30 @@ export function useDashboardAiBatchRunner() {
         source: 'overview',
       });
 
+      const reuseMessage =
+        uploaded.unchanged || uploaded.extract_reuse
+          ? 'Reusing a prior read of this file…'
+          : uploaded.needs_vision === false
+            ? 'Our system is reading the text…'
+            : 'Virtual Assistant is reading the document…';
+
+      const uploadReadSource: DashboardAiJob['readSource'] =
+        uploaded.unchanged || uploaded.extract_reuse
+          ? 'cache'
+          : uploaded.needs_vision === false
+            ? 'system'
+            : uploaded.needs_vision === true
+              ? 'gemini'
+              : undefined;
+
       patchJob(job.id, {
         status: 'reading',
         progress: 45,
-        message: statusLabel('reading'),
+        message: reuseMessage,
         file_id: uploaded.file_id,
         mime_type: uploaded.mime_type,
+        readSource: uploadReadSource,
+        extractMethod: uploaded.extract_method,
       });
 
       almostTimersRef.current[job.id] = window.setTimeout(() => {
@@ -670,6 +767,7 @@ export function useDashboardAiBatchRunner() {
       }, 180000);
 
       try {
+        await ensureFreshSession();
         // Classify first — never extract into Vital unless the doc is actually Vital.
         const classified = await withTimeout(
           autofillSectionFromDocument({
@@ -746,6 +844,11 @@ export function useDashboardAiBatchRunner() {
           documentSummary: classified.document_summary,
           additionalSections: classified.additional_sections,
           alreadyExtracted: false,
+          readSource:
+            classified.extract_reuse || classified.from_cache
+              ? 'cache'
+              : uploadReadSource,
+          extractMethod: uploaded.extract_method,
         });
       } catch (error) {
         clearAlmostTimer(job.id);
@@ -800,6 +903,8 @@ export function useDashboardAiBatchRunner() {
             documentSummary: error.detail.document_summary,
             additionalSections: error.detail.additional_sections,
             alreadyExtracted: false,
+            readSource: uploadReadSource,
+            extractMethod: uploaded.extract_method,
           });
           return;
         }
@@ -809,6 +914,9 @@ export function useDashboardAiBatchRunner() {
       }
     } catch (error: any) {
       clearAlmostTimer(job.id);
+      if (job.file_id) {
+        routing?.clearAllPendingForFile(job.file_id);
+      }
       patchJob(job.id, {
         status: 'error',
         progress: 100,

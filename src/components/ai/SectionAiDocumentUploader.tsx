@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   Loader2,
+  Pin,
   Sparkles,
   UploadCloud,
 } from 'lucide-react';
@@ -25,7 +26,11 @@ import {
   isAiAutofillDoneForSection,
 } from '@/utils/aiAutofillDoneSections';
 import { useAiActiveSectionId } from '@/contexts/AiActiveSectionContext';
-import { upsertAiUploadHistory } from '@/utils/aiUploadHistory';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import {
+  listAiUploadHistory,
+  upsertAiUploadHistory,
+} from '@/utils/aiUploadHistory';
 import { getAiSectionLabel } from '@/utils/aiSectionRegistry';
 
 export type SectionAiUploaderTone = {
@@ -55,6 +60,8 @@ type SectionAiDocumentUploaderProps = {
   sectionId?: string;
   /** Force "Auto fill done" (overview already filled this section). */
   autofillDone?: boolean;
+  /** Force overview pin even if session flag not set yet. */
+  showOverviewPin?: boolean;
   onUpload: (
     file: File,
   ) => void | Promise<void | UploadedAIFile | { file_id?: string }>;
@@ -77,6 +84,7 @@ export function SectionAiDocumentUploader({
   tone,
   sectionId,
   autofillDone: autofillDoneProp,
+  showOverviewPin: showOverviewPinProp,
   onUpload,
   onAutofill,
 }: SectionAiDocumentUploaderProps) {
@@ -84,6 +92,7 @@ export function SectionAiDocumentUploader({
   const [isDragging, setIsDragging] = useState(false);
   const [doneTick, setDoneTick] = useState(0);
   const activeSectionId = useAiActiveSectionId();
+  const aiRouting = useOptionalAiDocumentRouting();
   const resolvedSectionId = sectionId || activeSectionId || undefined;
   const resolvedMimeType = uploadedFile?.mime_type || uploadedMimeType;
   const hasUploadedFile = Boolean(resolvedMimeType || uploadedFile?.file_id);
@@ -96,14 +105,33 @@ export function SectionAiDocumentUploader({
     autofillDoneProp ??
     (resolvedSectionId ? isAiAutofillDoneForSection(resolvedSectionId) : false);
 
+  const overviewPin = useMemo(() => {
+    if (showOverviewPinProp) return true;
+    if (autofillDone) return true;
+    if (
+      resolvedSectionId &&
+      aiRouting?.shouldShowOverviewPin?.(resolvedSectionId)
+    ) {
+      return true;
+    }
+    if (!resolvedSectionId) return false;
+    return listAiUploadHistory({ sectionId: resolvedSectionId }).some(
+      item => item.source === 'overview' && item.status === 'done',
+    );
+  }, [showOverviewPinProp, autofillDone, resolvedSectionId, aiRouting, doneTick]);
+
+  // Overview-linked: pin only — do not pulse as "ready to read again".
+  const activeHighlight = highlightUpload && !autofillDone && !overviewPin;
+
   useEffect(() => {
     const onDone = () => setDoneTick(value => value + 1);
     window.addEventListener('orderly-ai-autofill-done', onDone);
-    return () => window.removeEventListener('orderly-ai-autofill-done', onDone);
+    window.addEventListener('orderly-ai-upload-history', onDone);
+    return () => {
+      window.removeEventListener('orderly-ai-autofill-done', onDone);
+      window.removeEventListener('orderly-ai-upload-history', onDone);
+    };
   }, []);
-
-  // Keep lint happy — doneTick forces re-read of session map.
-  void doneTick;
 
   const processFile = useCallback(
     async (file: File | null | undefined) => {
@@ -211,49 +239,70 @@ export function SectionAiDocumentUploader({
 
   return (
     <div
-      data-ai-upload-zone={highlightUpload && !autofillDone ? 'highlight' : undefined}
+      data-ai-upload-zone={
+        activeHighlight ? 'highlight' : overviewPin ? 'pinned' : undefined
+      }
       data-ai-autofill-done={autofillDone ? 'true' : undefined}
       className={cn(
         'relative rounded-2xl border border-dashed',
-        'border-slate-300 bg-gradient-to-br from-slate-50 via-white to-indigo-50/50',
+        'border-[#7688a1] bg-[#e7eef7]/40',
         'overflow-visible p-3 pb-16 shadow-sm transition-all duration-200 sm:p-4 sm:pb-16',
-        'hover:border-indigo-300 hover:shadow-md',
+        'hover:border-[#2B5A8C] hover:shadow-md',
         compact ? 'space-y-2.5' : 'space-y-3',
-        highlightUpload &&
-          !autofillDone &&
-          'border-indigo-400 bg-indigo-50/40 ring-2 ring-indigo-300 ring-offset-2 animate-pulse',
-        autofillDone && 'border-emerald-300 bg-emerald-50/40',
+        activeHighlight &&
+          'border-[#2B5A8C] bg-[#e7eef7] ring-2 ring-[#2B5A8C]/30 ring-offset-2 animate-pulse',
+        overviewPin &&
+          'border-[#2B5A8C]/50 bg-[#e7eef7]/70 ring-1 ring-[#2B5A8C]/20',
+        autofillDone && 'border-[#2c7a63] bg-[#e7f2ee]',
         tone?.wrapper,
       )}
     >
+      {overviewPin ? (
+        <div
+          className="absolute -right-2 -top-2 z-10 flex items-center gap-1 rounded-full border border-[#2B5A8C]/30 bg-white px-2 py-1 text-[11px] font-semibold text-[#2B5A8C] shadow-sm"
+          title="Document was read on Overview and pinned to this section"
+        >
+          <Pin className="h-3.5 w-3.5 fill-[#2B5A8C]/20" />
+          Overview
+        </div>
+      ) : null}
       <div
         className={cn(
-          'pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-indigo-100/70 blur-2xl',
+          'pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-[#e7eef7] blur-2xl',
           tone?.glowOne,
         )}
       />
       <div
         className={cn(
-          'pointer-events-none absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-blue-100/70 blur-2xl',
+          'pointer-events-none absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-[#e7eef7]/80 blur-2xl',
           tone?.glowTwo,
         )}
       />
 
       <div className="relative space-y-3">
         {autofillDone && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm leading-snug text-emerald-900">
-            <p className="font-semibold">Auto fill done</p>
-            <p className="mt-0.5 text-xs text-emerald-800/90">
-              This section was already filled from your uploaded document
-              {doneRecord?.fileName ? ` (${doneRecord.fileName})` : ''}. Do not
-              run Auto-fill again for that file — upload a new document only if
-              you want to update fields.
+          <div className="rounded-xl border border-[#2c7a63]/30 bg-[#e7f2ee] px-3 py-2 text-sm leading-snug text-[#213D59]">
+            <p className="font-semibold text-[#2c7a63]">Pinned from Overview</p>
+            <p className="mt-0.5 text-xs text-[#33506e]">
+              This section was filled from your overview upload
+              {doneRecord?.fileName ? ` (${doneRecord.fileName})` : ''}. The
+              document was only read there — upload a new file here only if you
+              want to update fields.
             </p>
           </div>
         )}
 
-        {highlightUpload && !autofillDone && (
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm leading-snug text-indigo-800">
+        {overviewPin && !autofillDone && (
+          <div className="rounded-xl border border-[#2B5A8C]/30 bg-[#e7eef7] px-3 py-2 text-sm leading-snug text-[#213D59]">
+            <p className="font-semibold text-[#2B5A8C]">Linked from Overview</p>
+            <p className="mt-0.5 text-xs text-[#33506e]">
+              {pendingHint || AI_PENDING_ROUTED_HINT}
+            </p>
+          </div>
+        )}
+
+        {activeHighlight && !overviewPin && (
+          <div className="rounded-xl border border-[#2B5A8C]/30 bg-[#e7eef7] px-3 py-2 text-sm leading-snug text-[#213D59]">
             {pendingHint || AI_PENDING_ROUTED_HINT}
           </div>
         )}
@@ -288,9 +337,9 @@ export function SectionAiDocumentUploader({
             'group flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-dashed p-3 transition touch-manipulation active:scale-[0.99]',
             'sm:flex-col sm:items-center sm:gap-2 sm:p-5 sm:text-center',
             hasUploadedFile || autofillDone
-              ? 'border-emerald-200 bg-emerald-50/50'
-              : 'border-slate-200 bg-white/90 hover:border-indigo-300 hover:bg-indigo-50/40',
-            isDragging && 'border-indigo-400 bg-indigo-50/80 ring-2 ring-indigo-200',
+              ? 'border-[#2c7a63]/40 bg-[#e7f2ee]/60'
+              : 'border-[#7688a1] bg-white hover:border-[#2B5A8C] hover:bg-[#e7eef7]/50',
+            isDragging && 'border-[#2B5A8C] bg-[#e7eef7] ring-2 ring-[#2B5A8C]/25',
             isBusy && 'pointer-events-none opacity-60',
             tone?.uploadBox,
           )}
@@ -316,13 +365,13 @@ export function SectionAiDocumentUploader({
           >
             {isUploading ? (
               <Loader2
-                className={cn('h-5 w-5 animate-spin text-indigo-600', tone?.icon)}
+                className={cn('h-5 w-5 animate-spin text-[#2B5A8C]', tone?.icon)}
               />
             ) : hasUploadedFile || autofillDone ? (
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              <CheckCircle2 className="h-5 w-5 text-[#2c7a63]" />
             ) : (
               <UploadCloud
-                className={cn('h-5 w-5 text-indigo-600', tone?.icon)}
+                className={cn('h-5 w-5 text-[#2B5A8C]', tone?.icon)}
               />
             )}
           </div>
@@ -330,19 +379,28 @@ export function SectionAiDocumentUploader({
           <div className="min-w-0 flex-1 text-left sm:flex-none sm:text-center">
             {autofillDone && !hasUploadedFile ? (
               <>
-                <p className="text-[15px] font-semibold text-emerald-800">
-                  Auto fill done
+                <p className="text-[15px] font-semibold text-[#2c7a63]">
+                  Pinned from Overview
                 </p>
-                <p className="text-xs text-slate-500">
-                  Tap to upload a new document if you need updates
+                <p className="text-xs text-[#5a6b80]">
+                  Already filled — tap only to upload a new document
+                </p>
+              </>
+            ) : overviewPin && !hasUploadedFile ? (
+              <>
+                <p className="text-[15px] font-semibold text-[#2B5A8C]">
+                  Linked from Overview
+                </p>
+                <p className="text-xs text-[#5a6b80]">
+                  Document was read on Overview — no re-read here
                 </p>
               </>
             ) : hasUploadedFile ? (
               <>
-                <p className="text-[15px] font-semibold text-emerald-800">
+                <p className="text-[15px] font-semibold text-[#2c7a63]">
                   {getReadableAiDocumentType(resolvedMimeType)} ready
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[#5a6b80]">
                   {isReading
                     ? 'Reading document…'
                     : autofillDone
@@ -352,13 +410,13 @@ export function SectionAiDocumentUploader({
               </>
             ) : (
               <>
-                <p className="text-[15px] font-semibold text-slate-900 sm:text-sm">
+                <p className="text-[15px] font-semibold text-[#213D59] sm:text-sm">
                   <span className="sm:hidden">Tap to choose document</span>
                   <span className="hidden sm:inline">
                     {uploadLabel || 'Drop document here'}
                   </span>
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[#5a6b80]">
                   PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB
                 </p>
               </>
@@ -366,14 +424,14 @@ export function SectionAiDocumentUploader({
           </div>
         </div>
 
-        {hasUploadedFile && !autofillDone && (
+        {hasUploadedFile && !autofillDone && !overviewPin && (
           <Button
             type="button"
             size="sm"
             data-ai-autofill-trigger
             onClick={() => void onAutofill()}
             disabled={isBusy}
-            className={cn(AI_MOBILE_ACTION_BUTTON, 'bg-indigo-600 hover:bg-indigo-700')}
+            className={cn(AI_MOBILE_ACTION_BUTTON, 'bg-[#2B5A8C] hover:bg-[#3d6f9e]')}
           >
             {isReading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -391,7 +449,7 @@ export function SectionAiDocumentUploader({
             disabled
             className={cn(
               AI_MOBILE_ACTION_BUTTON,
-              'bg-emerald-600 text-white opacity-100',
+              'bg-[#2c7a63] text-white opacity-100',
             )}
           >
             <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -400,14 +458,14 @@ export function SectionAiDocumentUploader({
         )}
 
         {isUploading && (
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2 text-xs text-[#5a6b80]">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Uploading document…
           </div>
         )}
 
         {!isUploading && isReading && !hasUploadedFile && (
-          <div className="flex items-center gap-2 text-xs text-indigo-600">
+          <div className="flex items-center gap-2 text-xs text-[#2B5A8C]">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Running AI autofill…
           </div>

@@ -17,6 +17,7 @@ export function getSafeErrorMessage(err: unknown, fallback: string): string {
 
   if (
     parsed.status === 400 ||
+    parsed.status === 403 ||
     parsed.status === 409 ||
     parsed.status === 422
   ) {

@@ -98,10 +98,10 @@ function RepairPaymentInner({ message, onResolved }: Props) {
       <div className="flex items-start gap-3">
         <Shield className="mt-0.5 h-5 w-5 shrink-0 text-[#b98a3e]" />
         <div>
-          <h2 className="text-lg font-semibold text-[#132b26]">
+          <h2 className="text-lg font-semibold text-[#213D59]">
             Vault access paused
           </h2>
-          <p className="mt-1 text-[15px] text-[rgba(19,43,38,0.7)]">
+          <p className="mt-1 text-[15px] text-[rgba(33, 61, 89,0.7)]">
             {message ||
               'Update your payment method or activate a plan to restore full access. Other vault features stay locked until billing is fixed.'}
           </p>
@@ -143,7 +143,7 @@ function RepairPaymentInner({ message, onResolved }: Props) {
             style: {
               base: {
                 fontSize: '16px',
-                color: '#132b26',
+                color: '#213D59',
                 '::placeholder': { color: '#94a3b8' },
               },
             },

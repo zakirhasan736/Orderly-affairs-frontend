@@ -60,7 +60,7 @@ export function AiUploadedAttachmentList({
             <p className="mt-0.5 text-xs text-slate-500">
               {getReadableAiDocumentType(file.mime_type)}
               {uploadedLabel ? ` · Uploaded ${uploadedLabel}` : ''}
-              <span className="ml-1.5 inline-flex items-center gap-0.5 font-medium text-[#2e7d6e]">
+              <span className="ml-1.5 inline-flex items-center gap-0.5 font-medium text-[#2B5A8C]">
                 <Eye className="h-3 w-3" />
                 View
               </span>

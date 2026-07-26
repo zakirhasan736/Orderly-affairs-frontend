@@ -93,7 +93,7 @@ export function DatePicker({
     'border-2 border-[#E0E0E0] dark:border-[#404040]',
     'rounded-[10px]',
     'h-11 min-h-11 px-3',
-    'text-sm font-normal text-[#132b26] dark:text-white',
+    'text-sm font-normal text-[#213D59] dark:text-white',
     'shadow-[0_2px_4px_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_4px_rgba(0,0,0,0.2),inset_0_1px_2px_rgba(255,255,255,0.05)]',
     'transition-all duration-200 ease-in-out',
     'hover:bg-white hover:border-[#B0B0B0] hover:shadow-[0_2px_6px_rgba(0,0,0,0.08),inset_0_1px_2px_rgba(0,0,0,0.03)]',
@@ -109,7 +109,7 @@ export function DatePicker({
 
   const iconClasses = cn(
     'h-4 w-4 calendar-icon',
-    'text-[#132b26] dark:text-accent-blue',
+    'text-[#213D59] dark:text-accent-blue',
     variant !== 'no-icon' && 'mr-2',
   );
 

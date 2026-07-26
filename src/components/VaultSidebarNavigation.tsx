@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
-import { isAiAutofillDoneForSection } from '@/utils/aiAutofillDoneSections';
+import { isAiSectionReviewed } from '@/utils/aiSectionReviewState';
+import { peekDashboardAiPatch } from '@/utils/aiDashboardPatchCache';
 import { useOptionalHelpAssistant } from '@/components/help/HelpAssistantContext';
 import {
   getDynamicTopicsForSubsection,
@@ -140,7 +141,7 @@ function ReorderableNavItem({
         'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-45',
         isDropOver &&
-          'bg-[#2e7d6e]/25 ring-2 ring-[#2e7d6e] ring-offset-1 ring-offset-[#132b26]',
+          'bg-[#2B5A8C]/25 ring-2 ring-[#2B5A8C] ring-offset-1 ring-offset-[#00305C]',
         className,
       )}
     >
@@ -224,9 +225,22 @@ export function VaultSidebarNavigation({
 }: VaultSidebarNavigationProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [aiBadgeTick, setAiBadgeTick] = useState(0);
   const activeDragRef = useRef<DragPayload | null>(null);
   const aiRouting = useOptionalAiDocumentRouting();
   const help = useOptionalHelpAssistant();
+
+  React.useEffect(() => {
+    const bump = () => setAiBadgeTick(value => value + 1);
+    window.addEventListener('orderly-ai-patch-stashed', bump);
+    window.addEventListener('orderly-ai-section-reviewed', bump);
+    window.addEventListener('orderly-ai-autofill-done', bump);
+    return () => {
+      window.removeEventListener('orderly-ai-patch-stashed', bump);
+      window.removeEventListener('orderly-ai-section-reviewed', bump);
+      window.removeEventListener('orderly-ai-autofill-done', bump);
+    };
+  }, []);
 
   const handleDragStart = (payload: DragPayload) => {
     activeDragRef.current = payload;
@@ -280,7 +294,7 @@ export function VaultSidebarNavigation({
   return (
     <aside
       className={cn(
-        'sidebar-navigation fixed inset-y-0 left-0 z-[70] w-[88vw] max-w-[330px] transform border-r border-black/20 bg-[#132b26] text-white shadow-2xl transition-transform duration-300 ease-out md:sticky md:top-0 md:z-20 md:h-screen md:w-[272px] md:max-w-none md:translate-x-0 md:shadow-none',
+        'sidebar-navigation fixed inset-y-0 left-0 z-[70] w-[88vw] max-w-[330px] transform border-r border-black/20 bg-[#00305C] text-white shadow-2xl transition-transform duration-300 ease-out md:sticky md:top-0 md:z-20 md:h-screen md:w-[272px] md:max-w-none md:translate-x-0 md:shadow-none',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full',
       )}
     >
@@ -326,7 +340,7 @@ export function VaultSidebarNavigation({
             </div>
             <div className="h-1 overflow-hidden rounded-full bg-white/15">
               <div
-                className="h-full rounded-full bg-[#2e7d6e] transition-all"
+                className="h-full rounded-full bg-[#2B5A8C] transition-all"
                 style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
               />
             </div>
@@ -340,7 +354,7 @@ export function VaultSidebarNavigation({
             className={cn(
               'owner-dashboard-item mb-2 flex w-full items-center gap-3 rounded-full px-3.5 py-2.5 text-left transition',
               activeSection === 'dashboard'
-                ? 'bg-[#2e7d6e] text-white shadow-lg shadow-black/25'
+                ? 'bg-[#2B5A8C] text-white shadow-lg shadow-black/25'
                 : 'text-white/85 hover:bg-white/10 hover:text-white',
             )}
           >
@@ -364,11 +378,26 @@ export function VaultSidebarNavigation({
               const isComplete = getSectionCompletionStatus(section.id);
               const pendingAiUploads =
                 aiRouting?.getPendingUploadsForSection(section.id) ?? [];
-              const hasAiReady = pendingAiUploads.some(
-                upload =>
-                  upload.highlightUpload &&
-                  !isAiAutofillDoneForSection(section.id),
+              void aiBadgeTick;
+              const stash = peekDashboardAiPatch(section.id);
+              const reviewed = isAiSectionReviewed(
+                section.id,
+                stash?.file_id,
               );
+              // Only show when there is real fill data (stash) or a pending
+              // upload still waiting — never from a failed / empty classify.
+              const hasAiReady =
+                !reviewed &&
+                (Boolean(stash) ||
+                  pendingAiUploads.some(
+                    upload =>
+                      upload.highlightUpload &&
+                      Boolean(
+                        upload.documentSummary ||
+                          (upload.extractedFields &&
+                            upload.extractedFields.length > 0),
+                      ),
+                  ));
 
               return (
                 <div key={`main-section-${section.id}`} className="space-y-1">
@@ -379,7 +408,7 @@ export function VaultSidebarNavigation({
                     className={cn(
                       `section-${section.id}-nav flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-left transition`,
                       isSelected
-                        ? 'bg-[#2e7d6e] text-white shadow-lg shadow-black/25'
+                        ? 'bg-[#2B5A8C] text-white shadow-lg shadow-black/25'
                         : 'text-white/80 hover:bg-white/10 hover:text-white',
                       disabledSections[section.id] && 'opacity-55',
                     )}
@@ -522,7 +551,7 @@ export function VaultSidebarNavigation({
                                       className={cn(
                                         'px-1 py-0.5 text-xs',
                                         activeTopicId === topic.id
-                                          ? 'bg-[#2e7d6e]/40 font-semibold text-white'
+                                          ? 'bg-[#2B5A8C]/40 font-semibold text-white'
                                           : 'text-white/50 hover:bg-white/10 hover:text-white/85',
                                       )}
                                     >
@@ -563,7 +592,7 @@ export function VaultSidebarNavigation({
                 );
                 onCloseSidebar();
               }}
-              className="inline-flex h-10 w-auto items-center justify-center gap-2 rounded-xl border border-white/20 bg-[#2e7d6e] px-4 text-[12px] font-semibold text-white transition hover:bg-[#26685c]"
+              className="inline-flex h-11 w-auto items-center justify-center gap-2 rounded-xl border border-white/20 bg-[#2B5A8C] px-4 text-[12px] font-semibold text-white transition hover:bg-[#3d6f9e]"
             >
               <Headphones className="h-3.5 w-3.5" />
               Contact Support

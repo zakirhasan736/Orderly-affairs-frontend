@@ -3,13 +3,6 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
-import {
-  CardNumberElement,
-  CardExpiryElement,
-  CardCvcElement,
-  useStripe,
-  useElements,
-} from '@stripe/react-stripe-js';
 
 import {
   Mail,
@@ -52,7 +45,9 @@ import {
   AuthModeToggle,
   AuthFieldLabel,
   PasswordStrengthBars,
+  type CheckoutOrderSummary,
 } from '@/components/auth/AuthPortalShell';
+import { StartTrialCheckout } from '@/components/auth/StartTrialCheckout';
 import { cn } from '@common/ui/utils';
 import { isValidE164PhoneNumber } from '@/utils/phoneCountries';
 import { getOtpSessionId } from '@/utils/otpSession';
@@ -68,12 +63,6 @@ import {
 } from '@/components/RateLimitBanner';
 import { Button } from '@/components/common/ui/button';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
-import {
-  useCreateCustomerMutation,
-  useConfirmCardMutation,
-  useSetupIntentMutation,
-  useStartSubscriptionMutation,
-} from '@/services/billingApi';
 
 type MFAMethod = 'authenticator' | 'email' | 'sms';
 
@@ -165,24 +154,25 @@ const completeOwnerAuth = async (
     }),
   );
 
-  // Portal-domain cookie so middleware won't bounce /dashboard → /
-  await markPortalSession();
-
   const billingOnly =
     Boolean(options?.billingOnly) || Boolean(session.billing_only);
+
+  const needsBilling =
+    Boolean(options?.requiresBilling) || Boolean(session.requires_billing);
+
+  // Incomplete signup/checkout must stay on plan/payment — do not mark portal
+  // session yet or middleware/reload will bounce them into /dashboard.
+  if (needsBilling && !billingOnly) {
+    options?.onNeedsBilling?.();
+    return 'billing';
+  }
+
+  await markPortalSession();
 
   if (billingOnly) {
     options?.onBillingOnly?.();
     goToDashboard(router);
     return 'billing_lock';
-  }
-
-  const needsBilling =
-    Boolean(options?.requiresBilling) || Boolean(session.requires_billing);
-
-  if (needsBilling) {
-    options?.onNeedsBilling?.();
-    return 'billing';
   }
 
   goToDashboard(router);
@@ -255,401 +245,124 @@ function AuthStatusBanner({
   );
 }
 
-function formatTrialEndDate(days = 14) {
-  const end = new Date();
-  end.setDate(end.getDate() + days);
-  return end.toLocaleDateString('en-US', {
+function addDays(base: Date, days: number) {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function addYears(base: Date, years: number) {
+  const d = new Date(base);
+  d.setFullYear(d.getFullYear() + years);
+  return d;
+}
+
+/** Keep in sync with marketing copy (“14-day trial”). */
+const TRIAL_DAYS = 14;
+
+function formatLongDate(date: Date) {
+  return date.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
   });
 }
 
-function formatTrialEndShort(days = 14) {
-  const end = new Date();
-  end.setDate(end.getDate() + days);
-  return end.toLocaleDateString('en-US', {
+function formatShortDate(date: Date) {
+  return date.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
   });
 }
 
-const PLAN_PRICES = {
-  yearly: { label: 'Yearly plan', price: '$94.95', note: 'Billed once a year · save about 20%' },
-  monthly: { label: 'Monthly plan', price: '$9.95', note: 'Billed month to month · flexible' },
-} as const;
+function formatTrialEndDate(days = TRIAL_DAYS) {
+  return formatLongDate(addDays(new Date(), days));
+}
 
-const STRIPE_ELEMENT_STYLE = {
-  base: {
-    fontSize: '15px',
-    lineHeight: '24px',
-    color: '#132b26',
-    fontFamily: "'Instrument Sans', ui-sans-serif, system-ui, sans-serif",
-    '::placeholder': {
-      color: '#a5b1ad',
-    },
-  },
-  invalid: {
-    color: '#b4483f',
-  },
-} as const;
+function formatTrialEndShort(days = TRIAL_DAYS) {
+  return formatShortDate(addDays(new Date(), days));
+}
 
-function PaymentForm({
-  isTrial,
-  trialMode,
-  selectedPlan,
-  router,
-  onBack,
-  onSwitchToCardless,
-}: {
-  isTrial: boolean;
-  trialMode: 'cardless' | 'card_on_file';
-  selectedPlan: 'monthly' | 'yearly';
-  router: ReturnType<typeof useRouter>;
-  onBack: () => void;
-  onSwitchToCardless: () => void;
-}) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [createCustomer] = useCreateCustomerMutation();
-  const [setupIntent] = useSetupIntentMutation();
-  const [confirmCard] = useConfirmCardMutation();
-  const [startSubscription] = useStartSubscriptionMutation();
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [cardReady, setCardReady] = useState({
-    number: false,
-    expiry: false,
-    cvc: false,
-  });
-  const [focusedField, setFocusedField] = useState<
-    'number' | 'expiry' | 'cvc' | null
-  >(null);
-
-  const needsCardNow = !isTrial || trialMode === 'card_on_file';
-  const stripeReady = Boolean(stripe && elements);
-  const cardFieldsReady =
-    cardReady.number && cardReady.expiry && cardReady.cvc;
-  const canPay = !needsCardNow || (stripeReady && cardFieldsReady);
-
-  const plan = PLAN_PRICES[selectedPlan];
-  const trialEndShort = formatTrialEndShort();
-  const trialEndFull = formatTrialEndDate();
-  const dueToday = isTrial ? '$0.00' : plan.price;
-
-  const handleSubmit = async () => {
-    setError(null);
-    setLoading(true);
-
-    try {
-      await createCustomer().unwrap();
-
-      if (needsCardNow) {
-        if (!stripe || !elements) {
-          throw new Error('Secure card form is still loading. Please wait a moment.');
-        }
-
-        const { client_secret } = await setupIntent().unwrap();
-
-        const card = elements.getElement(CardNumberElement);
-        if (!card) {
-          throw new Error('Card element not found');
-        }
-
-        const result = await stripe.confirmCardSetup(client_secret, {
-          payment_method: { card },
-        });
-
-        if (result.error) {
-          throw new Error(result.error.message);
-        }
-
-        if (!result.setupIntent?.payment_method) {
-          throw new Error('Payment method not created');
-        }
-
-        await confirmCard({
-          payment_method_id: result.setupIntent.payment_method as string,
-        }).unwrap();
-      }
-
-      await startSubscription({
-        plan: selectedPlan,
-        is_trial: isTrial,
-        ...(isTrial ? { trial_mode: trialMode } : {}),
-      }).unwrap();
-
-      goToDashboard(router);
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Payment failed. Please try again.'));
-    } finally {
-      setLoading(false);
-    }
+/** Shared billing dates for left order panel + checkout notes. */
+function getCheckoutBillingDates(days = TRIAL_DAYS) {
+  const today = new Date();
+  const trialEnd = addDays(today, days);
+  const yearlyRenewalFromToday = addYears(today, 1);
+  const yearlyRenewalAfterTrial = addYears(trialEnd, 1);
+  return {
+    today,
+    trialEnd,
+    trialEndShort: formatShortDate(trialEnd),
+    trialEndFull: formatLongDate(trialEnd),
+    yearlyRenewalFromTodayFull: formatLongDate(yearlyRenewalFromToday),
+    yearlyRenewalAfterTrialFull: formatLongDate(yearlyRenewalAfterTrial),
   };
+}
 
-  const title = isTrial ? 'Start your trial' : 'Secure checkout';
-  const subtitle = isTrial
-    ? trialMode === 'cardless'
-      ? 'No card needed today. You can add payment anytime in settings.'
-      : 'Add a card now and access continues without a gap when the trial ends.'
-    : `You’re subscribing to the ${selectedPlan} plan.`;
+const PLAN_PRICES = {
+  yearly: {
+    label: 'Yearly plan',
+    price: '$94.95',
+    note: 'Billed once a year · save about 20%',
+  },
+  monthly: {
+    label: 'Monthly plan',
+    price: '$9.95',
+    note: 'Pay monthly · 1-year minimum commitment',
+  },
+} as const;
 
-  const ctaLabel = loading
-    ? 'Please wait…'
-    : needsCardNow && !canPay
-      ? 'Loading card form…'
-      : isTrial
-        ? trialMode === 'cardless'
-          ? 'Start cardless trial'
-          : 'Start your trial'
-        : 'Subscribe now';
+function buildCheckoutOrderSummary(options: {
+  selectedPlan: 'monthly' | 'yearly';
+  isTrial: boolean;
+  trialMode?: 'cardless' | 'card_on_file';
+}): CheckoutOrderSummary {
+  const plan = PLAN_PRICES[options.selectedPlan];
+  const dates = getCheckoutBillingDates();
+  const dueToday = options.isTrial ? '$0.00' : plan.price;
+  const isYearly = options.selectedPlan === 'yearly';
 
-  const mobilePlanCard = (
-    <div className="rounded-[16px] border border-[#e4e6e1] bg-white p-4 lg:hidden">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="m-0 font-[family-name:var(--font-family-serif)] text-[20px] text-[#132b26]">
-          {plan.label}
-        </p>
-        <p className="m-0 font-[family-name:var(--font-family-serif)] text-[20px] text-[#132b26]">
-          {plan.price}
-        </p>
-      </div>
-      <div className="my-3.5 h-px bg-[#ebece7]" />
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="m-0 text-[13.5px] text-[#6e7c77]">Due today</p>
-        <p className="m-0 text-[14px] font-semibold text-[#132b26]">{dueToday}</p>
-      </div>
-      {isTrial ? (
-        <p className="mt-2 mb-0 text-[12px] leading-snug text-[#8b9995]">
-          Trial runs to {trialEndShort}. First charge {trialEndFull}.
-        </p>
-      ) : (
-        <p className="mt-2 mb-0 text-[12px] leading-snug text-[#8b9995]">
-          {plan.note}
-        </p>
-      )}
-    </div>
-  );
+  let dueNote: string;
+  let footerNote: string;
 
-  return (
-    <div className="space-y-4 text-left lg:space-y-5">
-      <div className="hidden space-y-0 lg:block">
-        <button
-          type="button"
-          onClick={onBack}
-          className="mb-4 flex items-center gap-1.5 text-[13px] font-medium text-[#6e7c77] transition hover:text-[#132b26]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Change plan
-        </button>
-        <p className="auth-step-kicker">Step 3 of 3</p>
-        <h2 className="auth-serif-title mt-3 mb-1 text-[28px]">{title}</h2>
-        <p className="mb-0 text-[13.5px] leading-snug text-[#6e7c77]">
-          {subtitle}
-        </p>
-      </div>
+  if (options.isTrial) {
+    if (isYearly) {
+      dueNote = `Your ${TRIAL_DAYS}-day trial runs to ${dates.trialEndShort}. First charge of ${plan.price} on ${dates.trialEndFull}, then renews yearly.`;
+      footerNote =
+        options.trialMode === 'cardless'
+          ? `No card today. Add payment any time in settings. Cancel before ${dates.trialEndShort} and you won’t be charged.`
+          : `Card fields are provided by Stripe — we never see or store your card number. Cancel any time before ${dates.trialEndShort} and you won’t be charged.`;
+    } else {
+      dueNote = `Your ${TRIAL_DAYS}-day trial runs to ${dates.trialEndShort}. First charge of ${plan.price} on ${dates.trialEndFull}, then ${plan.price}/month (1-year minimum).`;
+      footerNote =
+        options.trialMode === 'cardless'
+          ? `No card today. Add payment any time in settings. Cancel before ${dates.trialEndShort} and you won’t be charged.`
+          : `Card fields are provided by Stripe — we never see or store your card number. Cancel any time before ${dates.trialEndShort} and you won’t be charged.`;
+    }
+  } else if (isYearly) {
+    dueNote = `Charged today. Next yearly renewal on ${dates.yearlyRenewalFromTodayFull}.`;
+    footerNote =
+      'Card fields are provided by Stripe — we never see or store your card number. Cancel any time from settings.';
+  } else {
+    dueNote = `Charged today. Then ${plan.price} each month · 1-year minimum commitment.`;
+    footerNote =
+      'Card fields are provided by Stripe — we never see or store your card number. Cancel any time from settings.';
+  }
 
-      {mobilePlanCard}
-
-      {error ? (
-        <p className="text-[13px] text-red-600">{error}</p>
-      ) : null}
-
-      {needsCardNow ? (
-        <div className="rounded-[16px] border border-[#e4e6e1] bg-white p-4 sm:p-5">
-          <div className="mb-3.5 flex items-center justify-between gap-3">
-            <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
-              Card details
-            </p>
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#e8f1ee] px-2.5 py-1 text-[11px] font-medium text-[#1f5c52]">
-              <svg
-                width="11"
-                height="11"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                aria-hidden
-              >
-                <rect x="3" y="11" width="18" height="11" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              <span className="lg:hidden">Stripe</span>
-              <span className="hidden lg:inline">Secured by Stripe</span>
-            </span>
-          </div>
-
-          <div className="space-y-2.5">
-            <div
-              className={cn(
-                'auth-stripe-field',
-                focusedField === 'number' && 'auth-stripe-field--focused',
-              )}
-            >
-              {!stripeReady ? (
-                <p className="m-0 text-[13.5px] text-[#8b9995]">
-                  Loading secure card form…
-                </p>
-              ) : (
-                <CardNumberElement
-                  options={{
-                    showIcon: true,
-                    style: STRIPE_ELEMENT_STYLE,
-                  }}
-                  onReady={() =>
-                    setCardReady(prev => ({ ...prev, number: true }))
-                  }
-                  onFocus={() => setFocusedField('number')}
-                  onBlur={() => setFocusedField(null)}
-                />
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5">
-              <div
-                className={cn(
-                  'auth-stripe-field auth-stripe-field--muted',
-                  focusedField === 'expiry' && 'auth-stripe-field--focused',
-                )}
-              >
-                {stripeReady ? (
-                  <CardExpiryElement
-                    options={{ style: STRIPE_ELEMENT_STYLE }}
-                    onReady={() =>
-                      setCardReady(prev => ({ ...prev, expiry: true }))
-                    }
-                    onFocus={() => setFocusedField('expiry')}
-                    onBlur={() => setFocusedField(null)}
-                  />
-                ) : null}
-              </div>
-              <div
-                className={cn(
-                  'auth-stripe-field auth-stripe-field--muted',
-                  focusedField === 'cvc' && 'auth-stripe-field--focused',
-                )}
-              >
-                {stripeReady ? (
-                  <CardCvcElement
-                    options={{ style: STRIPE_ELEMENT_STYLE }}
-                    onReady={() =>
-                      setCardReady(prev => ({ ...prev, cvc: true }))
-                    }
-                    onFocus={() => setFocusedField('cvc')}
-                    onBlur={() => setFocusedField(null)}
-                  />
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          <p className="mt-2.5 mb-0 text-[12px] text-[#8b9995]">
-            Card fields are provided by Stripe. Do not refresh while they load.
-          </p>
-
-          {isTrial && trialMode === 'card_on_file' ? (
-            <div className="mt-4 flex items-start gap-2.5 rounded-[12px] bg-[#f4f8f7] px-3.5 py-3">
-              <span
-                className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#2e7d6e] text-white"
-                aria-hidden
-              >
-                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M2.5 6.2 4.8 8.5 9.5 3.5"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-              <p className="m-0 text-[12.5px] leading-snug text-[#3c4a46]">
-                Nothing is charged today. We authorise $0 to check the card is
-                valid, then bill {plan.price} on {trialEndFull}.
-              </p>
-            </div>
-          ) : null}
-        </div>
-      ) : (
-        <div className="rounded-[16px] border border-[#e4e6e1] bg-white p-4 sm:p-5">
-          <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
-            Cardless trial
-          </p>
-          <p className="mt-1.5 mb-0 text-[12.5px] leading-snug text-[#5c6b66]">
-            No card needed today. When the trial ends without a card on file,
-            vault access pauses until you add payment — nothing is deleted.
-          </p>
-        </div>
-      )}
-
-      {isTrial && trialMode === 'card_on_file' ? (
-        <div className="rounded-[14px] border border-[#e4d7c8] bg-[#f7f1ea] px-4 py-3.5 lg:hidden">
-          <p className="m-0 text-[13px] leading-snug text-[#7a5a3c]">
-            Cardless instead? Access pauses after the trial until you add
-            payment — nothing is deleted.
-          </p>
-        </div>
-      ) : null}
-
-      {isTrial && trialMode === 'cardless' ? (
-        <div className="rounded-[14px] border border-[#e4d7c8] bg-[#f7f1ea] px-4 py-3.5 lg:hidden">
-          <p className="m-0 text-[13px] leading-snug text-[#7a5a3c]">
-            Want continuous access? Go back and choose card on file — nothing is
-            charged until {trialEndFull}.
-          </p>
-        </div>
-      ) : null}
-
-      <Button
-        data-cy="checkout-submit"
-        className="btn-primary w-full"
-        disabled={loading || !canPay}
-        onClick={() => void handleSubmit()}
-      >
-        {ctaLabel}
-      </Button>
-
-      {isTrial && trialMode === 'card_on_file' ? (
-        <button
-          type="button"
-          className="auth-link mx-auto block text-center text-[13px]"
-          onClick={onSwitchToCardless}
-        >
-          Or go back and start without a card
-        </button>
-      ) : null}
-
-      {isTrial && trialMode === 'cardless' ? (
-        <button
-          type="button"
-          className="auth-link mx-auto block text-center text-[13px]"
-          onClick={onBack}
-        >
-          Or go back and add a card
-        </button>
-      ) : null}
-
-      {isTrial && trialMode === 'card_on_file' ? (
-        <div className="hidden rounded-[14px] border border-[#e4d7c8] bg-[#f7f1ea] px-4 py-3.5 lg:block">
-          <p className="m-0 text-[13.5px] font-semibold text-[#7a5a3c]">
-            If you choose the cardless trial instead
-          </p>
-          <p className="mt-1.5 mb-0 text-[12.5px] leading-snug text-[#8a6b4d]">
-            No card needed today. You can add payment anytime in settings. When
-            the trial ends without a card on file, vault access pauses until you
-            add payment — nothing is deleted.
-          </p>
-        </div>
-      ) : null}
-    </div>
-  );
+  return {
+    planLabel: plan.label,
+    planPrice: plan.price,
+    planNote: plan.note,
+    dueToday,
+    dueNote,
+    footerNote,
+  };
 }
 
 export default function LoginPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-const [resumePendingSignup] = useResumePendingSignupMutation();
+  const [resumePendingSignup] = useResumePendingSignupMutation();
 
   // 🔗 API hooks
   const [login] = useLoginMutation();
@@ -740,9 +453,30 @@ const [resumePendingSignup] = useResumePendingSignupMutation();
   };
 
   useEffect(() => {
-    void hasValidOwnerSession().then(valid => {
-      if (valid) goToDashboard(router);
-    });
+    let cancelled = false;
+    void (async () => {
+      const session = await fetchSession();
+      if (cancelled) return;
+      if (!session.authenticated || session.role !== 'owner') return;
+
+      // Still needs plan / trial / payment — keep them in checkout, never dashboard.
+      // Also honor ?resume=checkout when AuthWatcher bounced them back from /dashboard.
+      const resumeCheckout =
+        typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('resume') ===
+          'checkout';
+
+      if (session.requires_billing || resumeCheckout) {
+        setIsNewUser(true);
+        setStep('plan_selection');
+        return;
+      }
+
+      goToDashboard(router);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   // OTP UX
@@ -1949,22 +1683,30 @@ const mobileSubtitle =
     : undefined;
 
 const checkoutOrderSummary = (() => {
-  if (step !== 'payment') return null;
-  const plan = PLAN_PRICES[selectedPlan];
-  const trialEndFull = formatTrialEndDate();
-  const dueToday = isTrial ? '$0.00' : plan.price;
-  return {
-    planLabel: plan.label,
-    planPrice: plan.price,
-    planNote: plan.note,
-    dueToday,
-    dueNote: isTrial
-      ? `Your 14-day trial runs to ${formatTrialEndShort()}. First charge on ${trialEndFull}.`
-      : 'Charged today. Cancel any time from settings.',
-    footerNote: isTrial
-      ? `Card fields are provided by Stripe — we never see or store your card number. Cancel any time before ${formatTrialEndShort()} and you won't be charged.`
-      : 'Card fields are provided by Stripe — we never see or store your card number.',
-  };
+  if (step !== 'payment' && step !== 'plan_selection') return null;
+  // Plan step: preview selected plan with trial-first due ($0) until they pick pay vs trial.
+  if (step === 'plan_selection') {
+    const plan = PLAN_PRICES[selectedPlan];
+    const dates = getCheckoutBillingDates();
+    const isYearly = selectedPlan === 'yearly';
+    return {
+      planLabel: plan.label,
+      planPrice: plan.price,
+      planNote: plan.note,
+      dueToday: '$0.00',
+      dueNote: isYearly
+        ? `Trial or pay today. On trial, first charge of ${plan.price} is ${dates.trialEndFull}, then renews yearly.`
+        : `Trial or pay today. On trial, first charge of ${plan.price} is ${dates.trialEndFull}, then ${plan.price}/month.`,
+      footerNote: isYearly
+        ? `Yearly saves about 20%. After the first charge, your next renewal is ${dates.yearlyRenewalAfterTrialFull}.`
+        : 'Monthly billing has a 1-year minimum commitment. Cancel any time from settings after that.',
+    } satisfies CheckoutOrderSummary;
+  }
+  return buildCheckoutOrderSummary({
+    selectedPlan,
+    isTrial,
+    trialMode,
+  });
 })();
 
 const signupAsideSteps = (() => {
@@ -2043,6 +1785,7 @@ const backButtonLabel =
   const isPasswordResetFlow =
     step === 'forgot_password' || step === 'reset_password';
   const isPaymentStep = step === 'payment';
+  const isPlanStep = step === 'plan_selection';
 
   return (
     <AuthPortalShell
@@ -2059,16 +1802,20 @@ const backButtonLabel =
           ? 'reset'
           : isPaymentStep
             ? 'checkout'
-            : 'brand'
+            : isPlanStep
+              ? 'plan'
+              : 'brand'
       }
       onMobileBack={handleBack}
     >
       <AuthCard
-        flush={step === 'payment'}
+        flush={step === 'payment' || step === 'plan_selection'}
         flushOnMobile={
-          step === 'credentials' ||
-          step === 'reset_password' ||
-          step === 'plan_selection'
+          step === 'credentials' || step === 'reset_password'
+        }
+        wide={isPlanStep || isPaymentStep}
+        className={
+          isPlanStep ? 'lg:px-[52px] lg:py-[44px]' : undefined
         }
       >
             {error &&
@@ -2110,6 +1857,10 @@ const backButtonLabel =
                 animate="animate"
                 exit="exit"
                 transition={{ duration: 0.35 }}
+                className={cn(
+                  step === 'plan_selection' &&
+                    'flex min-h-0 flex-1 flex-col lg:block lg:flex-none',
+                )}
               >
                 {/* STEP 1: Credentials */}
                 {step === 'credentials' && (
@@ -2357,7 +2108,7 @@ const backButtonLabel =
                                 onChange={e =>
                                   setKeepSignedIn(e.target.checked)
                                 }
-                                className="h-[17px] w-[17px] rounded-[5px] border-[1.5px] border-[#cfd8d4] accent-[#2e7d6e]"
+                                className="h-[17px] w-[17px] rounded-[5px] border-[1.5px] border-[#cfd8d4] accent-[#2B5A8C]"
                               />
                               Keep me signed in
                             </label>
@@ -2370,7 +2121,7 @@ const backButtonLabel =
                               disabled={isAuthBusy}
                             >
                               {isAuthLoading('forgot_password') && (
-                                <span className="mr-2 h-3 w-3 border-2 border-[#2e7d6e] border-t-transparent rounded-full animate-spin"></span>
+                                <span className="mr-2 h-3 w-3 border-2 border-[#2B5A8C] border-t-transparent rounded-full animate-spin"></span>
                               )}
                               Forgot password?
                             </Button>
@@ -2385,7 +2136,7 @@ const backButtonLabel =
                           type="checkbox"
                           checked={agreeToTerms}
                           onChange={e => setAgreeToTerms(e.target.checked)}
-                          className="mt-0.5 h-[18px] w-[18px] shrink-0 rounded-[5px] border-[1.5px] border-[#2e7d6e] accent-[#2e7d6e]"
+                          className="mt-0.5 h-[18px] w-[18px] shrink-0 rounded-[5px] border-[1.5px] border-[#2B5A8C] accent-[#2B5A8C]"
                         />
                         <span>
                           I agree to the terms and understand this kit is not
@@ -2417,7 +2168,7 @@ const backButtonLabel =
                       <>
                         <button
                           type="button"
-                          className="inline-flex min-h-[52px] w-full items-center justify-center rounded-[26px] border border-[#e4e6e1] bg-white text-[14px] font-medium text-[#132b26] lg:hidden"
+                          className="inline-flex min-h-[52px] w-full items-center justify-center rounded-[26px] border border-[#e4e6e1] bg-white text-[14px] font-medium text-[#213D59] lg:hidden"
                           onClick={() =>
                             toast.message('Face ID coming soon', {
                               description:
@@ -2435,7 +2186,7 @@ const backButtonLabel =
                         </div>
                         <button
                           type="button"
-                          className="hidden min-h-12 w-full items-center justify-center rounded-3xl border border-[#e4e6e1] bg-white text-[14px] font-medium text-[#132b26] transition hover:bg-[#f7f6f2] lg:inline-flex"
+                          className="hidden min-h-12 w-full items-center justify-center rounded-3xl border border-[#e4e6e1] bg-white text-[14px] font-medium text-[#213D59] transition hover:bg-[#f5f8fc] lg:inline-flex"
                           onClick={() =>
                             toast.message('Passkeys coming soon', {
                               description:
@@ -2521,7 +2272,7 @@ const backButtonLabel =
                             className={cn(
                               'flex cursor-pointer items-center gap-3.5 rounded-[13px] p-4 transition',
                               selected
-                                ? 'border-[1.5px] border-[#2e7d6e] bg-[#f4f8f7]'
+                                ? 'border-[1.5px] border-[#2B5A8C] bg-[#f4f8f7]'
                                 : 'border border-[#e4e6e1] bg-white',
                               !available && 'cursor-not-allowed opacity-50',
                             )}
@@ -2543,13 +2294,13 @@ const backButtonLabel =
                               className={cn(
                                 'h-[18px] w-[18px] shrink-0 rounded-full',
                                 selected
-                                  ? 'bg-[#2e7d6e] shadow-[inset_0_0_0_3px_#fff]'
+                                  ? 'bg-[#2B5A8C] shadow-[inset_0_0_0_3px_#fff]'
                                   : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
                               )}
                               aria-hidden
                             />
                             <div className="min-w-0 flex-1">
-                              <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
+                              <p className="m-0 text-[14.5px] font-semibold text-[#213D59]">
                                 {meta.title}
                               </p>
                               <p className="mt-[3px] mb-0 text-[12.5px] text-[#5c6b66]">
@@ -2560,7 +2311,7 @@ const backButtonLabel =
                               className={cn(
                                 'shrink-0 rounded-[5px] px-2 py-1 text-[11px] font-medium',
                                 selected || method === 'authenticator'
-                                  ? 'bg-[#e8f1ee] text-[#1f5c52]'
+                                  ? 'bg-[#e7eef7] text-[#1f5c52]'
                                   : 'bg-[#f2f1ec] text-[#5c6b66]',
                               )}
                             >
@@ -2642,7 +2393,7 @@ const backButtonLabel =
                           alt="QR"
                           width={192}
                           height={192}
-                          className="mx-auto rounded-xl border border-[rgba(19,43,38,0.1)]"
+                          className="mx-auto rounded-xl border border-[rgba(33, 61, 89,0.1)]"
                         />
                         <form onSubmit={handleVerifyMfa} className="space-y-4">
                           <SixDigitOtpInput
@@ -2940,7 +2691,7 @@ const backButtonLabel =
                     >
                       ← Back to sign in
                     </button>
-                    <h1 className="mt-5 mb-0 text-[21px] font-semibold text-[#132b26]">
+                    <h1 className="mt-5 mb-0 text-[21px] font-semibold text-[#213D59]">
                       Forgot your password?
                     </h1>
                     <p className="mt-2 mb-[22px] text-[14px] leading-[1.6] text-[#6e7c77]">
@@ -2965,7 +2716,7 @@ const backButtonLabel =
                       />
                     </div>
 
-                    <div className="mt-3.5 rounded-[14px] border border-[#f2f1ec] bg-[#f7f6f2] p-2">
+                    <div className="mt-3.5 rounded-[14px] border border-[#f2f1ec] bg-[#f5f8fc] p-2">
                       <div className="min-h-[62px] rounded-[10px] border border-[#e4e6e1] bg-white px-3 py-2">
                         <TurnstileCaptcha
                           gateMode
@@ -2976,13 +2727,13 @@ const backButtonLabel =
                         />
                         {securityReady ? (
                           <div className="mt-1 flex items-center gap-2.5">
-                            <span className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] border-[#2e7d6e]">
+                            <span className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] border-[#2B5A8C]">
                               <svg
                                 width="10"
                                 height="10"
                                 viewBox="0 0 24 24"
                                 fill="none"
-                                stroke="#2e7d6e"
+                                stroke="#2B5A8C"
                                 strokeWidth="3"
                                 aria-hidden
                               >
@@ -3039,7 +2790,7 @@ const backButtonLabel =
                       <p className="auth-step-kicker hidden lg:block">
                         Check your inbox
                       </p>
-                      <h2 className="m-0 text-[15.5px] font-semibold text-[#132b26] lg:mt-3 lg:text-[21px]">
+                      <h2 className="m-0 text-[15.5px] font-semibold text-[#213D59] lg:mt-3 lg:text-[21px]">
                         <span className="lg:hidden">
                           Enter the code we emailed
                         </span>
@@ -3188,193 +2939,268 @@ const backButtonLabel =
                 {step === 'plan_selection' && (
                   <div
                     data-cy="checkout-plan-selection"
-                    className="space-y-5 text-left"
+                    className="flex min-h-0 flex-1 flex-col text-left text-[#213D59] lg:block lg:flex-none"
                   >
-                    <div className="hidden space-y-0 lg:block">
-                      <p className="auth-step-kicker">Step 3 of 3</p>
-                      <h2 className="auth-serif-title mt-3 mb-1 text-[28px]">
-                        Choose your plan
-                      </h2>
-                      <p className="mb-0 text-[13.5px] leading-snug text-[#6e7c77]">
-                        Start paid now, or begin a 14-day trial with no charge.
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                      {(
-                        [
-                          {
-                            id: 'yearly' as const,
-                            title: 'Yearly',
-                            price: '$94.95 / year',
-                            description: 'Best value — save about 20%.',
-                            badge: 'Save 20%',
-                          },
-                          {
-                            id: 'monthly' as const,
-                            title: 'Monthly',
-                            price: '$9.95 / month',
-                            description: 'Flexible month-to-month access.',
-                            badge: 'Flexible',
-                          },
-                        ] as const
-                      ).map(plan => {
-                        const selected = selectedPlan === plan.id;
-                        return (
-                          <label
-                            key={plan.id}
-                            data-cy={`checkout-plan-${plan.id}`}
-                            className={cn(
-                              'flex cursor-pointer flex-col gap-2 rounded-[14px] bg-white p-4 transition',
-                              selected
-                                ? 'border-[1.5px] border-[#2e7d6e]'
-                                : 'border border-[#e4e6e1]',
-                            )}
-                          >
-                            <input
-                              type="radio"
-                              name="billingPlan"
-                              value={plan.id}
-                              checked={selected}
-                              onChange={() => setSelectedPlan(plan.id)}
-                              className="sr-only"
-                            />
-                            <div className="flex items-center gap-2.5">
-                              <span
-                                className={cn(
-                                  'h-[18px] w-[18px] shrink-0 rounded-full',
-                                  selected
-                                    ? 'bg-[#2e7d6e] shadow-[inset_0_0_0_3px_#fff]'
-                                    : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
-                                )}
-                                aria-hidden
-                              />
-                              <p className="m-0 flex-1 text-[14.5px] font-semibold text-[#132b26]">
-                                {plan.title}
-                              </p>
-                              <span
-                                className={cn(
-                                  'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                                  selected
-                                    ? 'bg-[#e8f1ee] text-[#1f5c52]'
-                                    : 'bg-[#f2f1ec] text-[#5c6b66]',
-                                )}
-                              >
-                                {plan.badge}
-                              </span>
-                            </div>
-                            <p className="m-0 font-[family-name:var(--font-family-serif)] text-[22px] leading-none text-[#132b26]">
-                              {plan.price}
-                            </p>
-                            <p className="m-0 text-[12.5px] leading-snug text-[#5c6b66]">
-                              {plan.description}
-                            </p>
-                          </label>
-                        );
-                      })}
-                    </div>
-
-                    <Button
-                      data-cy="checkout-continue-payment"
-                      className="w-full btn-primary"
-                      onClick={() => {
-                        setError('');
-                        setIsTrial(false);
-                        setStep('payment');
-                      }}
-                    >
-                      Continue to payment
-                    </Button>
-
-                    <div className="space-y-3 border-t border-[#e4e6e1] pt-5">
-                      <div>
-                        <p className="m-0 text-[14.5px] font-semibold text-[#132b26]">
-                          Or start the trial{' '}
-                          <span className="font-normal text-[#6e7c77]">
-                            14 days free. Pick how you want to handle the card.
-                          </span>
+                    <div className="min-h-0 flex-1 space-y-[11px] overflow-y-auto overscroll-contain px-4 pb-3 pt-4 lg:space-y-0 lg:overflow-visible lg:px-0 lg:pb-0 lg:pt-0">
+                      <div className="hidden lg:block">
+                        <p className="m-0 font-[family-name:var(--font-family-mono)] text-[11px] font-medium tracking-[0.14em] uppercase text-[#5a6b80]">
+                          Step 3 of 3
+                        </p>
+                        <h2 className="mt-3.5 mb-0 font-[family-name:var(--font-family-display)] text-[34px] font-normal leading-[1.2] text-[#213D59]">
+                          Choose your plan
+                        </h2>
+                        <p className="mt-3 mb-0 max-w-[52ch] text-[16.5px] leading-snug text-[#5a6b80] text-pretty">
+                          Start paid now, or begin a 14-day trial with no charge.
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <button
-                          type="button"
-                          data-cy="checkout-trial-cardless"
-                          className={cn(
-                            'flex min-h-[108px] cursor-pointer flex-col gap-2 rounded-[14px] bg-white p-3.5 text-left transition sm:min-h-0 sm:p-4',
-                            trialMode === 'cardless'
-                              ? 'border-[1.5px] border-[#132b26]'
-                              : 'border border-[#e4e6e1]',
-                          )}
-                          onClick={() => setTrialMode('cardless')}
-                        >
-                          <span
+                      <div className="grid grid-cols-1 gap-[11px] lg:mt-7 lg:grid-cols-2 lg:gap-3.5">
+                        {(
+                          [
+                            {
+                              id: 'yearly' as const,
+                              title: 'Yearly',
+                              amount: '$94.95',
+                              period: '/ year',
+                              description: 'Best value — save about 20%.',
+                              badge: 'Save 20%',
+                            },
+                            {
+                              id: 'monthly' as const,
+                              title: 'Monthly',
+                              amount: '$9.95',
+                              period: '/ month',
+                              description:
+                                'Pay the monthly rate · minimum 1 year commitment.',
+                              badge: '1-year min',
+                            },
+                          ] as const
+                        ).map(plan => {
+                          const selected = selectedPlan === plan.id;
+                          return (
+                            <label
+                              key={plan.id}
+                              data-cy={`checkout-plan-${plan.id}`}
+                              className={cn(
+                                'flex cursor-pointer flex-col rounded-2xl p-4 transition lg:px-6 lg:py-[22px]',
+                                selected
+                                  ? 'border-[1.5px] border-[#2B5A8C] bg-[#f7f9fc]'
+                                  : 'border border-[#7688a1] bg-white',
+                              )}
+                            >
+                              <input
+                                type="radio"
+                                name="billingPlan"
+                                value={plan.id}
+                                checked={selected}
+                                onChange={() => setSelectedPlan(plan.id)}
+                                className="sr-only"
+                              />
+                              <div className="flex items-center gap-[11px] lg:gap-3">
+                                <span
+                                  className={cn(
+                                    'h-[19px] w-[19px] shrink-0 rounded-full lg:h-5 lg:w-5',
+                                    selected
+                                      ? 'bg-[#2B5A8C] shadow-[inset_0_0_0_3.5px_#fff]'
+                                      : 'border-[1.5px] border-[#7688a1] bg-transparent',
+                                  )}
+                                  aria-hidden
+                                />
+                                <p className="m-0 flex-1 text-[16.5px] font-semibold text-[#213D59] lg:text-[17px]">
+                                  {plan.title}
+                                </p>
+                                <span
+                                  className={cn(
+                                    'shrink-0 rounded-md px-[7px] py-[3px] text-[11px] font-medium lg:rounded-md lg:px-[9px] lg:py-1 lg:text-xs',
+                                    selected
+                                      ? 'bg-[#e7eef7] text-[#2B5A8C]'
+                                      : 'bg-[#e7eef7] text-[#5a6b80]',
+                                  )}
+                                >
+                                  {plan.badge}
+                                </span>
+                              </div>
+                              <p className="mt-3 mb-0 font-[family-name:var(--font-family-display)] text-[23px] font-normal leading-none text-[#213D59] lg:mt-4 lg:text-[26px]">
+                                {plan.amount}{' '}
+                                <span className="font-[family-name:var(--font-family)] text-sm text-[#5a6b80] lg:text-[15px]">
+                                  {plan.period}
+                                </span>
+                              </p>
+                              <p className="mt-1.5 mb-0 text-[13.5px] leading-snug text-[#5a6b80] lg:mt-2 lg:text-[14.5px] lg:leading-normal">
+                                {plan.description}
+                              </p>
+                            </label>
+                          );
+                        })}
+                      </div>
+
+                      <Button
+                        data-cy="checkout-continue-payment"
+                        className="btn-primary mt-5 hidden h-[52px] w-full rounded-[26px] text-[15.5px] font-medium lg:mt-5 lg:inline-flex"
+                        onClick={() => {
+                          setError('');
+                          setIsTrial(false);
+                          setStep('payment');
+                        }}
+                      >
+                        Continue to payment
+                      </Button>
+
+                      <div className="border-t border-[#7688a1] pt-3.5 lg:mt-[30px] lg:pt-[26px]">
+                        <div className="lg:flex lg:items-baseline lg:gap-2.5">
+                          <h3 className="m-0 text-[15.5px] font-semibold text-[#213D59] lg:text-lg">
+                            Or start the trial
+                          </h3>
+                          <p className="mt-1.5 mb-3 text-[13.5px] text-[#5a6b80] lg:mt-0 lg:mb-0 lg:text-[14.5px]">
+                            14 days free. Pick how you want to handle the card.
+                          </p>
+                        </div>
+
+                        <div className="mt-0 grid grid-cols-2 gap-2 lg:mt-4 lg:gap-3">
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={trialMode === 'cardless'}
+                            data-cy="checkout-trial-cardless"
                             className={cn(
-                              'h-[18px] w-[18px] shrink-0 rounded-full',
+                              'cursor-pointer rounded-[13px] bg-white p-[13px] text-left transition lg:rounded-[14px] lg:px-5 lg:py-[18px]',
                               trialMode === 'cardless'
-                                ? 'bg-[#132b26] shadow-[inset_0_0_0_3px_#fff]'
-                                : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
+                                ? 'border-[1.5px] border-[#213D59]'
+                                : 'border border-[#7688a1]',
                             )}
-                            aria-hidden
-                          />
-                          <div className="min-w-0">
-                            <p className="m-0 text-[13.5px] font-semibold text-[#132b26] sm:text-[14.5px]">
-                              <span className="sm:hidden">Cardless</span>
-                              <span className="hidden sm:inline">
-                                Cardless trial
-                              </span>
-                            </p>
-                            <p className="mt-1 mb-0 text-[12px] leading-snug text-[#5c6b66] sm:text-[12.5px]">
-                              <span className="sm:hidden">
+                            onClick={() => setTrialMode('cardless')}
+                          >
+                            <div className="flex items-center gap-2 lg:gap-[11px]">
+                              <span
+                                className={cn(
+                                  'h-[18px] w-[18px] shrink-0 rounded-full',
+                                  trialMode === 'cardless'
+                                    ? 'bg-[#213D59] shadow-[inset_0_0_0_3px_#fff]'
+                                    : 'border-[1.5px] border-[#7688a1] bg-transparent',
+                                )}
+                                aria-hidden
+                              />
+                              <p className="m-0 text-[14.5px] font-semibold text-[#213D59] lg:text-base">
+                                <span className="lg:hidden">Cardless</span>
+                                <span className="hidden lg:inline">
+                                  Cardless trial
+                                </span>
+                              </p>
+                            </div>
+                            <p className="mt-1.5 mb-0 text-[12.5px] leading-snug text-[#5a6b80] lg:mt-[11px] lg:text-sm lg:leading-[1.55]">
+                              <span className="lg:hidden">
                                 Access pauses after the trial.
                               </span>
-                              <span className="hidden sm:inline">
+                              <span className="hidden lg:inline">
                                 No card now. Access pauses after the trial until
                                 you add payment.
                               </span>
                             </p>
-                          </div>
-                        </button>
+                          </button>
 
-                        <button
-                          type="button"
-                          className={cn(
-                            'flex min-h-[108px] cursor-pointer flex-col gap-2 rounded-[14px] bg-white p-3.5 text-left transition sm:min-h-0 sm:p-4',
-                            trialMode === 'card_on_file'
-                              ? 'border-[1.5px] border-[#132b26]'
-                              : 'border border-[#e4e6e1]',
-                          )}
-                          onClick={() => setTrialMode('card_on_file')}
-                        >
-                          <span
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={trialMode === 'card_on_file'}
+                            data-cy="checkout-trial-card-on-file"
                             className={cn(
-                              'h-[18px] w-[18px] shrink-0 rounded-full',
+                              'cursor-pointer rounded-[13px] bg-white p-[13px] text-left transition lg:rounded-[14px] lg:px-5 lg:py-[18px]',
                               trialMode === 'card_on_file'
-                                ? 'bg-[#132b26] shadow-[inset_0_0_0_3px_#fff]'
-                                : 'border-[1.5px] border-[#cfd8d4] bg-transparent',
+                                ? 'border-[1.5px] border-[#213D59]'
+                                : 'border border-[#7688a1]',
                             )}
-                            aria-hidden
-                          />
-                          <div className="min-w-0">
-                            <p className="m-0 text-[13.5px] font-semibold text-[#132b26] sm:text-[14.5px]">
-                              Card on file
-                            </p>
-                            <p className="mt-1 mb-0 text-[12px] leading-snug text-[#5c6b66] sm:text-[12.5px]">
-                              <span className="sm:hidden">
+                            onClick={() => setTrialMode('card_on_file')}
+                          >
+                            <div className="flex items-center gap-2 lg:gap-[11px]">
+                              <span
+                                className={cn(
+                                  'h-[18px] w-[18px] shrink-0 rounded-full',
+                                  trialMode === 'card_on_file'
+                                    ? 'bg-[#213D59] shadow-[inset_0_0_0_3px_#fff]'
+                                    : 'border-[1.5px] border-[#7688a1] bg-transparent',
+                                )}
+                                aria-hidden
+                              />
+                              <p className="m-0 text-[14.5px] font-semibold text-[#213D59] lg:text-base">
+                                Card on file
+                              </p>
+                            </div>
+                            <p className="mt-1.5 mb-0 text-[12.5px] leading-snug text-[#5a6b80] lg:mt-[11px] lg:text-sm lg:leading-[1.55]">
+                              <span className="lg:hidden">
                                 Charged on day 15.
                               </span>
-                              <span className="hidden sm:inline">
+                              <span className="hidden lg:inline">
                                 Add a card today; nothing is charged until day
                                 15, and it continues without a gap.
                               </span>
                             </p>
-                          </div>
-                        </button>
-                      </div>
+                          </button>
+                        </div>
 
+                        {trialMode === 'cardless' ? (
+                          <div
+                            className="mt-3.5 rounded-2xl border border-[#9a7326] bg-[#fff3dd] px-4 py-3.5 lg:mt-4 lg:px-[22px] lg:py-5"
+                            role="note"
+                          >
+                            <p className="m-0 text-[14px] font-semibold text-[#7a5a1c] lg:text-[15.5px]">
+                              Important: cardless trial
+                            </p>
+                            <p className="mt-1.5 mb-0 text-[13px] leading-relaxed text-[#6d4d15] lg:mt-2 lg:text-[14.5px] lg:leading-[1.6]">
+                              No card needed today. When the trial ends without
+                              a card on file, vault access pauses until you add
+                              payment — nothing is deleted.
+                            </p>
+                          </div>
+                        ) : null}
+
+                        <Button
+                          data-cy="checkout-continue-trial"
+                          variant="outline"
+                          className="mt-3.5 hidden h-[50px] w-full rounded-[25px] border-[#213D59] bg-white text-[15px] font-medium text-[#213D59] hover:bg-[#f7f9fc] lg:mt-3.5 lg:inline-flex"
+                          onClick={() => {
+                            setError('');
+                            setIsTrial(true);
+                            setStep('payment');
+                          }}
+                        >
+                          {trialMode === 'cardless'
+                            ? 'Start cardless trial'
+                            : 'Start trial with card'}
+                        </Button>
+
+                        <p className="mt-3.5 mb-0 hidden text-[13.5px] leading-relaxed text-[#5a6b80] lg:block">
+                          You picked a{' '}
+                          <b className="font-semibold text-[#33506e]">
+                            {trialMode === 'cardless'
+                              ? 'cardless trial'
+                              : 'card-on-file trial'}
+                          </b>{' '}
+                          on the{' '}
+                          <b className="font-semibold text-[#33506e]">
+                            {selectedPlan === 'yearly' ? 'Yearly' : 'Monthly'}
+                          </b>{' '}
+                          plan. You can switch plans or add a card any time in
+                          settings.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 space-y-[9px] bg-[#f5f8fc] px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-1 lg:hidden">
                       <Button
-                        data-cy="checkout-continue-trial"
-                        className="w-full btn-secondary"
+                        data-cy="checkout-continue-payment-mobile"
+                        className="btn-primary h-[52px] w-full rounded-[26px] text-[15.5px] font-medium"
+                        onClick={() => {
+                          setError('');
+                          setIsTrial(false);
+                          setStep('payment');
+                        }}
+                      >
+                        Continue to payment
+                      </Button>
+                      <Button
+                        data-cy="checkout-continue-trial-mobile"
+                        variant="outline"
+                        className="h-[50px] w-full rounded-[25px] border-[#213D59] bg-white text-[14.5px] font-medium text-[#213D59] hover:bg-white"
                         onClick={() => {
                           setError('');
                           setIsTrial(true);
@@ -3385,21 +3211,6 @@ const backButtonLabel =
                           ? 'Start cardless trial'
                           : 'Start trial with card'}
                       </Button>
-
-                      <p className="mb-0 text-center text-[12px] leading-snug text-[#8b9995]">
-                        You picked a{' '}
-                        <span className="font-medium text-[#5c6b66]">
-                          {trialMode === 'cardless'
-                            ? 'cardless trial'
-                            : 'card-on-file trial'}
-                        </span>{' '}
-                        on the{' '}
-                        <span className="font-medium text-[#5c6b66]">
-                          {selectedPlan === 'yearly' ? 'Yearly' : 'Monthly'}
-                        </span>{' '}
-                        plan. You can switch plans or add a card any time in
-                        settings.
-                      </p>
                     </div>
                   </div>
                 )}
@@ -3409,19 +3220,19 @@ const backButtonLabel =
             </AnimatePresence>
 
             {step === 'payment' ? (
-              <div className="relative z-10">
+              <div className="relative z-10 flex min-h-0 flex-1 flex-col lg:flex-none">
                 <Elements
                   stripe={stripePromise}
                   options={{
                     fonts: [
                       {
                         cssSrc:
-                          'https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap',
+                          'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap',
                       },
                     ],
                   }}
                 >
-                  <PaymentForm
+                  <StartTrialCheckout
                     isTrial={isTrial}
                     trialMode={trialMode}
                     selectedPlan={selectedPlan}
@@ -3436,8 +3247,8 @@ const backButtonLabel =
               </div>
             ) : null}
       </AuthCard>
-      {step !== 'payment' ? (
-        <p className="mt-6 px-1 text-center text-[11px] leading-relaxed text-[rgba(19,43,38,0.45)] lg:hidden">
+      {step !== 'payment' && step !== 'plan_selection' ? (
+        <p className="mt-6 px-1 text-center text-[11px] leading-relaxed text-[rgba(33, 61, 89,0.45)] lg:hidden">
           Encrypted at rest · You choose who opens it
         </p>
       ) : null}

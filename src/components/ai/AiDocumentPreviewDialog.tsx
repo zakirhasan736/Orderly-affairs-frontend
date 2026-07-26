@@ -19,6 +19,8 @@ type AiDocumentPreviewDialogProps = {
   fileId?: string | null;
   fileName?: string | null;
   mimeType?: string | null;
+  /** Called when the server returns 404 (file already deleted). */
+  onNotFound?: (fileId: string) => void;
 };
 
 export function AiDocumentPreviewDialog({
@@ -27,6 +29,7 @@ export function AiDocumentPreviewDialog({
   fileId,
   fileName,
   mimeType,
+  onNotFound,
 }: AiDocumentPreviewDialogProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -73,9 +76,15 @@ export function AiDocumentPreviewDialog({
         }
       } catch (err) {
         if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : 'Could not open document.',
-          );
+          const message =
+            err instanceof Error ? err.message : 'Could not open document.';
+          setError(message);
+          if (
+            fileId &&
+            /not found|deleted/i.test(message)
+          ) {
+            onNotFound?.(fileId);
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -108,7 +117,7 @@ export function AiDocumentPreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[92dvh] w-[min(100vw-1.5rem,44rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="shrink-0 border-b border-slate-100 px-4 py-3.5 pr-12 text-left sm:px-5">
-          <DialogTitle className="truncate text-[15px] font-semibold text-[#132b26]">
+          <DialogTitle className="truncate text-[15px] font-semibold text-[#213D59]">
             {title}
           </DialogTitle>
           <DialogDescription className="text-[12px] text-slate-500">
@@ -116,7 +125,7 @@ export function AiDocumentPreviewDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-auto bg-[#f7f6f2] p-3 sm:p-4">
+        <div className="min-h-0 flex-1 overflow-auto bg-[#f5f8fc] p-3 sm:p-4">
           {loading ? (
             <div className="flex min-h-[240px] flex-col items-center justify-center gap-2 text-slate-500">
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -173,7 +182,7 @@ export function AiDocumentPreviewDialog({
               <a
                 href={objectUrl}
                 download={title}
-                className="text-sm font-medium text-[#2e7d6e] underline-offset-2 hover:underline"
+                className="text-sm font-medium text-[#2B5A8C] underline-offset-2 hover:underline"
               >
                 Download file
               </a>

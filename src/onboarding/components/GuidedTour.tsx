@@ -73,7 +73,7 @@ export const GuidedTour = ({
       particleCount: 100,
       spread: 70,
       origin: { y: 0.7 },
-      colors: ['#132b26', '#2e7d6e', '#f7f6f2', '#e8f1ee'],
+      colors: ['#213D59', '#2B5A8C', '#f5f8fc', '#e7eef7'],
     });
     stopTour();
   }, [stopTour, updateStatus]);
@@ -119,7 +119,7 @@ export const GuidedTour = ({
           transition={{ duration: 0.28, ease: 'easeOut' }}
           className={cn(
             'absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-[1001] w-[calc(100%-2rem)] max-w-md -translate-x-1/2',
-            'rounded-[14px] bg-[#132b26] px-5 py-[18px] text-white shadow-[0_18px_40px_rgba(19,43,38,0.35)]',
+            'rounded-[14px] bg-[#213D59] px-5 py-[18px] text-white shadow-[0_18px_40px_rgba(33, 61, 89,0.35)]',
           )}
         >
           <p className="m-0 text-[11.5px] font-medium text-white/55">
@@ -151,7 +151,7 @@ export const GuidedTour = ({
             <button
               type="button"
               onClick={() => void next()}
-              className="h-[38px] rounded-[19px] border-0 bg-white px-4 text-[12.5px] font-medium text-[#132b26] transition hover:bg-[#f7f6f2]"
+              className="h-[38px] rounded-[19px] border-0 bg-white px-4 text-[12.5px] font-medium text-[#213D59] transition hover:bg-[#f5f8fc]"
             >
               {index === total - 1 ? 'Finish' : 'Next'}
             </button>

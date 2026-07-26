@@ -32,6 +32,7 @@ import {
 } from '@/services/billingApi';
 import {
   type MFAMethod,
+  useDeleteAccountMutation,
   useDisableMfaMethodMutation,
   useGenerateMfaMutation,
   useGetMeQuery,
@@ -41,11 +42,14 @@ import {
   useVerifyEmailCodeMutation,
   useVerifySmsOtpMutation,
 } from '@/services/authApi';
+import { clearAiUploadHistory } from '@/utils/aiUploadHistory';
+import { useLogout } from '@/libs/logoutHandler';
 import { StripePaymentForm } from './StripePaymentForm';
 import { PhoneNumberInput } from './PhoneNumberInput';
 import { TurnstileCaptcha } from './TurnstileCaptcha';
 import { isValidE164PhoneNumber } from '@/utils/phoneCountries';
 import { getOtpSessionId } from '@/utils/otpSession';
+import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 interface InvoiceLine {
   description: string;
   amount: number;
@@ -106,7 +110,8 @@ const mfaOptions: Array<{
   },
 ];
 
-const getErrorMessage = (_err: unknown, fallback: string) => fallback;
+const getErrorMessage = (err: unknown, fallback: string) =>
+  getSafeErrorMessage(err, fallback);
 
 /* ---------------- Component ---------------- */
 const VaultSettings = () => {
@@ -133,6 +138,9 @@ const VaultSettings = () => {
   const [startSmsMfa] = useStartSmsMfaMutation();
   const [verifySmsOtp] = useVerifySmsOtpMutation();
   const [disableMfaMethod] = useDisableMfaMethodMutation();
+  const [deleteAccount, { isLoading: isDeletingAccount }] =
+    useDeleteAccountMutation();
+  const logout = useLogout();
 
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>(
@@ -155,6 +163,9 @@ const VaultSettings = () => {
   const [emailAttempts, setEmailAttempts] = useState(0);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [authCode, setAuthCode] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [showDeletePanel, setShowDeletePanel] = useState(false);
   const autoEmailVerifyKey = useRef('');
   const autoAuthenticatorVerifyKey = useRef('');
   const autoSmsVerifyKey = useRef('');
@@ -177,6 +188,29 @@ const resumeSubscription = async () => {
 const openBillingPortal = async () => {
   const { url } = await openPortal().unwrap();
   window.location.href = url;
+};
+
+const handleDeleteAccount = async () => {
+  if (!deletePassword.trim()) {
+    toast.error('Enter your password to delete the account');
+    return;
+  }
+  if (deleteConfirm.trim().toUpperCase() !== 'DELETE') {
+    toast.error('Type DELETE to confirm');
+    return;
+  }
+
+  try {
+    await deleteAccount({
+      password: deletePassword,
+      confirm: deleteConfirm.trim().toUpperCase(),
+    }).unwrap();
+    clearAiUploadHistory();
+    toast.success('Account and all media deleted');
+    await logout();
+  } catch (err: unknown) {
+    toast.error(getErrorMessage(err, 'Could not delete account'));
+  }
 };
 
 const MAX_EMAIL_ATTEMPTS = 5;
@@ -657,7 +691,7 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
                 emailAttempts >= MAX_EMAIL_ATTEMPTS
               }
               onClick={verifyEmailMfa}
-              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#132b26] px-5 text-sm font-semibold text-white disabled:opacity-60"
+              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#213D59] px-5 text-sm font-semibold text-white disabled:opacity-60"
             >
               Verify Email
             </button>
@@ -711,7 +745,7 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
               type="button"
               disabled={busy || authCode.length !== 6}
               onClick={verifyAuthenticatorMfa}
-              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#132b26] px-5 text-sm font-semibold text-white disabled:opacity-60"
+              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#213D59] px-5 text-sm font-semibold text-white disabled:opacity-60"
             >
               Verify Authenticator
             </button>
@@ -736,7 +770,7 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
                   type="button"
                   disabled={busy}
                   onClick={beginSmsMfa}
-                  className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#132b26] px-5 text-sm font-semibold text-white disabled:opacity-60"
+                  className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#213D59] px-5 text-sm font-semibold text-white disabled:opacity-60"
                 >
                   {busy ? 'Sending...' : 'Send SMS Code'}
                 </button>
@@ -765,7 +799,7 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
                   type="button"
                   disabled={busy || smsCode.length !== 6}
                   onClick={verifySmsMfa}
-                  className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#132b26] px-5 text-sm font-semibold text-white disabled:opacity-60"
+                  className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#213D59] px-5 text-sm font-semibold text-white disabled:opacity-60"
                 >
                   Verify SMS
                 </button>
@@ -783,7 +817,7 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
               type="button"
               disabled={busy || !emailCaptchaToken}
               onClick={beginEmailMfa}
-              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#132b26] px-5 text-sm font-semibold text-white disabled:opacity-60"
+              className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#213D59] px-5 text-sm font-semibold text-white disabled:opacity-60"
             >
               {busy ? 'Sending...' : 'Send Email Code'}
             </button>
@@ -797,7 +831,7 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
             type="button"
             disabled={busy}
             onClick={beginAuthenticatorMfa}
-            className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#132b26] px-5 text-sm font-semibold text-white disabled:opacity-60"
+            className="inline-flex h-11 w-auto items-center justify-center rounded-xl bg-[#213D59] px-5 text-sm font-semibold text-white disabled:opacity-60"
           >
             {busy ? 'Starting...' : 'Set Up QR Code'}
           </button>
@@ -814,7 +848,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
     <div className="vault-settings-section w-full space-y-4 pb-24 sm:space-y-5 sm:pb-28">
       {/* OWNER MFA SETTINGS */}
       <section className="w-full overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[28px]">
-        <div className="relative overflow-hidden bg-[linear-gradient(135deg,#132b26_0%,#1a3d36_55%,#2563eb_100%)] px-4 py-5 text-white sm:px-6 sm:py-6 md:px-8">
+        <div className="relative overflow-hidden bg-[#00305C] px-4 py-5 text-white sm:px-6 sm:py-6 md:px-8">
           <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-sky-300/20 blur-2xl" />
           <div className="relative flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -828,7 +862,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                 Link authenticator, email, or SMS. Use any method at login.
               </p>
             </div>
-            <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ring-1 ring-white/20 backdrop-blur-sm">
+            <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ring-1 ring-white/20">
               <ShieldCheck className="h-3.5 w-3.5" />
               {activeMfaCount} linked
             </div>
@@ -850,7 +884,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                       'flex w-full min-h-[76px] items-center gap-3 rounded-[22px] border px-3.5 py-3.5 text-left transition active:scale-[0.99]',
                       active
                         ? 'border-emerald-200/90 bg-[linear-gradient(90deg,#ffffff_0%,#ecfdf5_100%)] shadow-sm'
-                        : 'border-slate-200 bg-[#f7f6f2] shadow-sm',
+                        : 'border-slate-200 bg-[#f5f8fc] shadow-sm',
                     )}
                   >
                     <div
@@ -858,14 +892,14 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                         'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl',
                         active
                           ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'bg-white text-[#132b26] ring-1 ring-slate-200',
+                          : 'bg-white text-[#213D59] ring-1 ring-slate-200',
                       )}
                     >
                       {option.icon}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-[15px] font-semibold text-[#132b26]">
+                        <span className="truncate text-[15px] font-semibold text-[#213D59]">
                           {option.title}
                         </span>
                         <span
@@ -914,13 +948,13 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                             'flex h-11 w-11 items-center justify-center rounded-2xl',
                             active
                               ? 'bg-emerald-600 text-white'
-                              : 'bg-white text-[#132b26] ring-1 ring-slate-200',
+                              : 'bg-white text-[#213D59] ring-1 ring-slate-200',
                           )}
                         >
                           {option.icon}
                         </div>
                         <div>
-                          <h3 className="font-semibold text-[#132b26]">
+                          <h3 className="font-semibold text-[#213D59]">
                             {option.title}
                           </h3>
                           <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -958,12 +992,12 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
 
       {/* PLAN CARD */}
       <section className="w-full overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px]">
-        <div className="flex flex-col gap-4 border-b border-slate-100 bg-[linear-gradient(180deg,#fbfdff_0%,#ffffff_100%)] px-4 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-6 sm:py-6 md:px-8">
+        <div className="flex flex-col gap-4 border-b border-[#dbe3ed] bg-white px-4 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-6 sm:py-6 md:px-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
               Billing
             </p>
-            <h2 className="mt-1 text-[18px] font-bold tracking-tight text-[#132b26] sm:text-xl">
+            <h2 className="mt-1 text-[18px] font-bold tracking-tight text-[#213D59] sm:text-xl">
               {isTrial ? 'Free Trial Phase' : 'Subscription Active'}
             </h2>
             <p className="mt-1.5 text-[12px] font-medium text-slate-500">
@@ -1040,7 +1074,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                 'inline-flex h-11 w-auto items-center justify-center whitespace-nowrap rounded-xl px-5 text-xs font-bold uppercase',
                 disableActions
                   ? 'cursor-not-allowed bg-slate-300 text-slate-600'
-                  : 'bg-[#132b26] text-white hover:bg-[#0e1f1c]',
+                  : 'bg-[#213D59] text-white hover:bg-[#00305C]',
               )}
             >
               {!billing.has_payment_method
@@ -1071,7 +1105,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
             <button
               type="button"
               onClick={openBillingPortal}
-              className="inline-flex h-11 w-auto items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-5 text-xs font-bold uppercase text-[#132b26] hover:bg-slate-50"
+              className="inline-flex h-11 w-auto items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-5 text-xs font-bold uppercase text-[#213D59] hover:bg-slate-50"
             >
               Manage Billing
             </button>
@@ -1082,7 +1116,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
       {/* INVOICES */}
       <section className="w-full overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px]">
         <div className="border-b border-slate-100 px-4 py-4 sm:px-6 md:px-8">
-          <h2 className="text-[17px] font-bold tracking-tight text-[#132b26]">
+          <h2 className="text-[17px] font-bold tracking-tight text-[#213D59]">
             Invoices
           </h2>
           <p className="mt-1 text-[12px] text-slate-500">
@@ -1097,7 +1131,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
             invoices?.map((inv: Invoice) => (
               <div
                 key={inv.id}
-                className="rounded-2xl border border-slate-200 bg-[#f7f6f2] p-3.5"
+                className="rounded-2xl border border-slate-200 bg-[#f5f8fc] p-3.5"
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="truncate font-mono text-[11px] text-slate-500">
@@ -1116,7 +1150,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                 </div>
                 <div className="mt-2 flex items-end justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold text-[#132b26]">
+                    <p className="text-sm font-semibold text-[#213D59]">
                       ${inv.amount_due.toFixed(2)}
                     </p>
                     <p className="text-[11px] text-slate-500">
@@ -1128,7 +1162,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                       href={inv.pdf}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex h-9 w-auto items-center rounded-lg bg-[#132b26] px-3 text-[11px] font-bold text-white"
+                      className="inline-flex h-9 w-auto items-center rounded-lg bg-[#213D59] px-3 text-[11px] font-bold text-white"
                     >
                       PDF
                     </a>
@@ -1183,7 +1217,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                     <td className="p-4 text-slate-700">
                       {formatDate(inv.created)}
                     </td>
-                    <td className="p-4 font-semibold text-[#132b26]">
+                    <td className="p-4 font-semibold text-[#213D59]">
                       ${inv.amount_due.toFixed(2)}
                     </td>
                     <td className="p-4 capitalize">
@@ -1204,7 +1238,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                           href={inv.pdf}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex h-9 w-auto items-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-[#132b26] hover:bg-slate-50"
+                          className="inline-flex h-9 w-auto items-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-[#213D59] hover:bg-slate-50"
                         >
                           PDF
                         </a>
@@ -1230,6 +1264,72 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
         </div>
       </section>
 
+      <section className="rounded-3xl border border-rose-200 bg-rose-50/40 p-6 sm:p-8">
+        <h2 className="text-lg font-bold text-rose-900">Danger zone</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-rose-800/80">
+          Permanently delete your account, Next-of-Kin users, vault data, and
+          all Cloudinary media (documents, images, audio, and video messages).
+          This cannot be undone.
+        </p>
+
+        {!showDeletePanel ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-5 border-rose-300 text-rose-800 hover:bg-rose-100"
+            onClick={() => setShowDeletePanel(true)}
+          >
+            Delete my account
+          </Button>
+        ) : (
+          <div className="mt-5 max-w-md space-y-3">
+            <label className="block text-sm font-medium text-rose-900">
+              Password
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={deletePassword}
+                onChange={event => setDeletePassword(event.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm text-[#213D59] outline-none focus:border-rose-400"
+                placeholder="Your account password"
+              />
+            </label>
+            <label className="block text-sm font-medium text-rose-900">
+              Type DELETE to confirm
+              <input
+                type="text"
+                value={deleteConfirm}
+                onChange={event => setDeleteConfirm(event.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm text-[#213D59] outline-none focus:border-rose-400"
+                placeholder="DELETE"
+              />
+            </label>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button
+                type="button"
+                disabled={isDeletingAccount}
+                className="bg-rose-700 text-white hover:bg-rose-800"
+                onClick={() => void handleDeleteAccount()}
+              >
+                {isDeletingAccount ? 'Deleting…' : 'Delete forever'}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={isDeletingAccount}
+                onClick={() => {
+                  setShowDeletePanel(false);
+                  setDeletePassword('');
+                  setDeleteConfirm('');
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* MFA SETUP — mobile bottom sheet */}
       {isMobile && (
         <MobileBottomSheet
@@ -1238,7 +1338,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
           className="max-h-[92dvh]"
           labelledBy="vault-mfa-sheet-title"
         >
-          <div className="flex h-full min-h-0 flex-col bg-[#f7f6f2]">
+          <div className="flex h-full min-h-0 flex-col bg-[#f5f8fc]">
             <MobileSheetHandle />
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200/80 bg-white px-4 pb-4 pt-1">
               <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -1247,7 +1347,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                     'mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl',
                     mfaSheetMethod && mfaMethods[mfaSheetMethod]
                       ? 'bg-emerald-600 text-white'
-                      : 'bg-[#132b26] text-white',
+                      : 'bg-[#213D59] text-white',
                   )}
                 >
                   {mfaSheetOption?.icon}
@@ -1255,7 +1355,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                 <div className="min-w-0">
                   <h3
                     id="vault-mfa-sheet-title"
-                    className="text-[17px] font-bold tracking-tight text-[#132b26]"
+                    className="text-[17px] font-bold tracking-tight text-[#213D59]"
                   >
                     {mfaSheetOption?.title || 'MFA Method'}
                   </h3>

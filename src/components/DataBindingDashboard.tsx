@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getMessages } from '@/libs/api/lettersOfNaxtKinMessage';
 
 import { Button } from '@common/ui/button';
@@ -29,7 +29,15 @@ import { MessageCard } from './MessageCard';
 import { OverviewAiUploadCard } from './ai/OverviewAiUploadCard';
 import { OverviewTaskBoard } from './ai/OverviewTaskBoard';
 import { AiUploadSupportedSectionsHint } from './ai/AiUploadSupportedSectionsHint';
-import { useDashboardAiBatchRunner } from '@/hooks/useDashboardAiBatchRunner';
+import { AiDetectedInformationPanel } from './ai/AiDetectedInformationPanel';
+import { useDashboardAiBatch } from '@/contexts/DashboardAiBatchContext';
+import { AiOverviewReadMatchDialog } from './ai/AiOverviewReadMatchDialog';
+import type { OverviewDocumentReview } from './ai/AiOverviewReadMatchDialog';
+import {
+  listDashboardAiPatches,
+} from '@/utils/aiDashboardPatchCache';
+import { getAiSectionLabel, AI_SECTION_BY_KEY } from '@/utils/aiSectionRegistry';
+import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
   buildExpiryReminderMailto,
   collectOverviewExpiryAlerts,
@@ -92,7 +100,155 @@ export function DataBindingDashboard({
   const [mobileHubTab, setMobileHubTab] = useState<MobileHubTab>('people');
   const [messages, setMessages] = useState<ApiMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const batch = useDashboardAiBatchRunner();
+  const batch = useDashboardAiBatch();
+  const routing = useOptionalAiDocumentRouting();
+  const [overviewReviewOpen, setOverviewReviewOpen] = useState(false);
+  const [stashTick, setStashTick] = useState(0);
+  const batchReviewShownRef = useRef(false);
+  const prevWorkingRef = useRef(false);
+
+  useEffect(() => {
+    const onStash = () => setStashTick(value => value + 1);
+    window.addEventListener('orderly-ai-patch-stashed', onStash);
+    return () => window.removeEventListener('orderly-ai-patch-stashed', onStash);
+  }, []);
+
+  const docsWorkingCount = useMemo(
+    () =>
+      batch.jobs.filter(
+        job => job.status !== 'done' && job.status !== 'error',
+      ).length,
+    [batch.jobs],
+  );
+
+  const doneJobs = useMemo(
+    () => batch.jobs.filter(job => job.status === 'done'),
+    [batch.jobs],
+  );
+
+  useEffect(() => {
+    for (const job of batch.jobs) {
+      if (job.status !== 'error' || !job.file_id) continue;
+      routing?.clearAllPendingForFile(job.file_id);
+    }
+  }, [batch.jobs, routing]);
+
+  // Open review popup only after the whole upload batch finishes (all 100%).
+  useEffect(() => {
+    const working = docsWorkingCount > 0;
+    const finishedBatch =
+      prevWorkingRef.current && !working && doneJobs.length > 0;
+    prevWorkingRef.current = working;
+
+    if (!finishedBatch || batchReviewShownRef.current) return;
+
+    batchReviewShownRef.current = true;
+    const timer = window.setTimeout(() => {
+      setOverviewReviewOpen(true);
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [docsWorkingCount, doneJobs.length]);
+
+  // Allow another popup when the user queues a new batch later.
+  useEffect(() => {
+    if (docsWorkingCount > 0) {
+      batchReviewShownRef.current = false;
+    }
+  }, [docsWorkingCount]);
+
+  const overviewDocuments = useMemo((): OverviewDocumentReview[] => {
+    void stashTick;
+    return doneJobs.map(job => {
+      const fileId = job.file_id;
+      const facts = fileId
+        ? listDashboardAiPatches()
+            .filter(entry => entry.file_id === fileId)
+            .flatMap(entry => entry.detectedFields || [])
+        : [];
+
+      const byId = new Map<
+        string,
+        {
+          sectionId: string;
+          sectionLabel?: string;
+          summary?: string;
+          factCount?: number;
+        }
+      >();
+
+      const add = (
+        sectionId: string | undefined,
+        meta?: { label?: string; summary?: string; factCount?: number },
+      ) => {
+        if (!sectionId) return;
+        const existing = byId.get(sectionId);
+        byId.set(sectionId, {
+          sectionId,
+          sectionLabel:
+            meta?.label ||
+            existing?.sectionLabel ||
+            getAiSectionLabel(sectionId),
+          summary: meta?.summary || existing?.summary,
+          factCount: Math.max(meta?.factCount || 0, existing?.factCount || 0),
+        });
+      };
+
+      if (job.targetSectionId) {
+        add(job.targetSectionId, {
+          label: job.targetSectionLabel,
+          summary: job.documentSummary,
+        });
+      }
+
+      listDashboardAiPatches()
+        .filter(entry => !fileId || entry.file_id === fileId)
+        .forEach(entry => {
+          add(entry.section_id, {
+            label: getAiSectionLabel(entry.section_id),
+            summary: entry.document_summary,
+            factCount: entry.detectedFields?.length,
+          });
+        });
+
+      (routing?.pendingUploads || [])
+        .filter(upload => !fileId || upload.file_id === fileId)
+        .forEach(upload => {
+          add(upload.targetSectionId, {
+            summary: upload.documentSummary,
+            factCount: upload.extractedFields?.length,
+          });
+        });
+
+      const partnerKey = job.targetSectionKey;
+      if (partnerKey) {
+        const forced =
+          partnerKey === 'vehicles'
+            ? ['insurance_policies']
+            : partnerKey === 'insurance_policies'
+              ? ['vehicles']
+              : [];
+        forced.forEach(key => {
+          const meta = AI_SECTION_BY_KEY[key];
+          if (meta) add(meta.id, { label: meta.label });
+        });
+      }
+
+      return {
+        id: job.id,
+        fileName: job.fileName,
+        documentSummary: job.documentSummary,
+        facts,
+        matchedSections: Array.from(byId.values()),
+        readSource: job.readSource,
+        extractMethod: job.extractMethod,
+      };
+    });
+  }, [doneJobs, routing?.pendingUploads, stashTick]);
+
+  // Avoid Radix presence thrash: only open when we have docs to show.
+  const overviewDialogOpen =
+    overviewReviewOpen && overviewDocuments.length > 0;
 
   const expiryAlerts = useMemo(
     () => collectOverviewExpiryAlerts(formDataProp),
@@ -111,14 +267,6 @@ export function DataBindingDashboard({
 
   const docsFilledCount = useMemo(
     () => batch.jobs.filter(job => job.status === 'done').length,
-    [batch.jobs],
-  );
-
-  const docsWorkingCount = useMemo(
-    () =>
-      batch.jobs.filter(
-        job => job.status !== 'done' && job.status !== 'error',
-      ).length,
     [batch.jobs],
   );
 
@@ -362,6 +510,17 @@ export function DataBindingDashboard({
             <AiUploadSupportedSectionsHint />
           </div>
 
+          <AiDetectedInformationPanel
+            onNavigateToSection={onNavigateToSection}
+          />
+
+          <AiOverviewReadMatchDialog
+            open={overviewDialogOpen}
+            onOpenChange={setOverviewReviewOpen}
+            documents={overviewDocuments}
+            onOpenSection={onNavigateToSection}
+          />
+
           {/* 3) Continue where you left off slider (+ desktop grids) */}
           <div className="overview-task-board">
             <OverviewTaskBoard
@@ -418,7 +577,7 @@ export function DataBindingDashboard({
                   className={cn(
                     'rounded-xl px-3 py-2.5 text-[12px] font-semibold transition',
                     mobileHubTab === 'people'
-                      ? 'bg-[#132b26] text-white shadow-sm'
+                      ? 'bg-[#213D59] text-white shadow-sm'
                       : 'text-slate-500',
                   )}
                 >
@@ -430,7 +589,7 @@ export function DataBindingDashboard({
                   className={cn(
                     'rounded-xl px-3 py-2.5 text-[12px] font-semibold transition',
                     mobileHubTab === 'activity'
-                      ? 'bg-[#132b26] text-white shadow-sm'
+                      ? 'bg-[#213D59] text-white shadow-sm'
                       : 'text-slate-500',
                   )}
                 >
@@ -478,7 +637,7 @@ export function DataBindingDashboard({
                         )}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-medium text-[#132b26]">
+                        <span className="block truncate text-[13px] font-medium text-[#213D59]">
                           {item.label}
                         </span>
                       </span>
@@ -506,19 +665,19 @@ export function DataBindingDashboard({
                   <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
                     <TabsTrigger
                       value="access"
-                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#132b26]"
+                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
                     >
                       Access ({accessPeople.length})
                     </TabsTrigger>
                     <TabsTrigger
                       value="nok-letters"
-                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#132b26]"
+                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
                     >
                       Letter ({nokLetter ? 1 : 0})
                     </TabsTrigger>
                     <TabsTrigger
                       value="messages"
-                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#132b26]"
+                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
                     >
                       Messages ({pendingMessages.length})
                     </TabsTrigger>
@@ -552,7 +711,7 @@ export function DataBindingDashboard({
                                     {String(name).charAt(0)}
                                   </span>
                                 }
-                                iconClassName="bg-[#132b26] text-white"
+                                iconClassName="bg-[#213D59] text-white"
                                 title={name}
                                 subtitle={relationship}
                                 onClick={() => onNavigateToSection('2')}
@@ -608,7 +767,7 @@ export function DataBindingDashboard({
                     />
                     {loadingMessages ? (
                       <div className="flex items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 py-10 text-sm text-slate-500">
-                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#132b26] border-t-transparent" />
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#213D59] border-t-transparent" />
                         Loading…
                       </div>
                     ) : pendingMessages.length > 0 ? (
@@ -672,7 +831,7 @@ export function DataBindingDashboard({
         <div className="border-b border-slate-100 px-5 py-4">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
-              <h2 className="text-lg font-semibold text-[#132b26]">
+              <h2 className="text-lg font-semibold text-[#213D59]">
                 People & messages
               </h2>
               <p className="mt-0.5 text-sm text-slate-500">
@@ -690,21 +849,21 @@ export function DataBindingDashboard({
             <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
               <TabsTrigger
                 value="access"
-                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#132b26]"
+                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
               >
                 <Users className="mr-1.5 h-4 w-4" />
                 Access ({accessPeople.length})
               </TabsTrigger>
               <TabsTrigger
                 value="nok-letters"
-                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#132b26]"
+                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
               >
                 <FileText className="mr-1.5 h-4 w-4" />
                 Letter ({nokLetter ? 1 : 0})
               </TabsTrigger>
               <TabsTrigger
                 value="messages"
-                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#132b26]"
+                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
               >
                 <MessageSquare className="mr-1.5 h-4 w-4" />
                 Messages ({pendingMessages.length})
@@ -741,11 +900,11 @@ export function DataBindingDashboard({
 
                 <aside className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-5 shadow-sm">
                   <div className="mx-auto mb-4 flex h-28 w-28 items-center justify-center rounded-full bg-white shadow-inner ring-1 ring-emerald-100">
-                    <div className="relative flex h-16 w-12 items-end justify-center rounded-md bg-[#132b26]">
+                    <div className="relative flex h-16 w-12 items-end justify-center rounded-md bg-[#213D59]">
                       <span className="mb-2 h-5 w-5 rounded-full border-2 border-emerald-400 bg-emerald-500 shadow" />
                     </div>
                   </div>
-                  <h3 className="text-center text-base font-semibold text-[#132b26]">
+                  <h3 className="text-center text-base font-semibold text-[#213D59]">
                     Your information is secure
                   </h3>
                   <p className="mt-2 text-center text-sm leading-relaxed text-slate-500">
@@ -755,7 +914,7 @@ export function DataBindingDashboard({
                   <Button
                     type="button"
                     onClick={() => onNavigateToSection('2')}
-                    className="mt-4 h-11 w-full rounded-xl bg-[#132b26] text-white hover:bg-[#0e1f1c]"
+                    className="mt-4 h-11 w-full rounded-xl bg-[#213D59] text-white hover:bg-[#00305C]"
                   >
                     Manage Access
                   </Button>
@@ -793,7 +952,7 @@ export function DataBindingDashboard({
               />
               {loadingMessages ? (
                 <div className="mt-4 flex items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 py-12 text-sm text-slate-500">
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#132b26] border-t-transparent" />
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#213D59] border-t-transparent" />
                   Loading messages…
                 </div>
               ) : pendingMessages.length > 0 ? (
@@ -885,7 +1044,7 @@ function OverviewStatCard({
       >
         {icon}
       </span>
-      <span className="mt-2.5 text-[20px] font-bold leading-none tracking-tight text-[#132b26] sm:mt-3 sm:text-[24px]">
+      <span className="mt-2.5 text-[20px] font-bold leading-none tracking-tight text-[#213D59] sm:mt-3 sm:text-[24px]">
         {value}
       </span>
       <span className="mt-1 truncate text-[10px] font-semibold text-slate-700 sm:text-[11px]">
@@ -920,12 +1079,12 @@ function QuickAction({
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-1 py-3 text-[#132b26] shadow-sm active:scale-[0.98]"
+      className="flex flex-col items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-1 py-3 text-[#213D59] shadow-sm active:scale-[0.98]"
     >
       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-sky-600">
         {icon}
       </span>
-      <span className="text-center text-[10px] font-semibold leading-tight text-[#132b26]">
+      <span className="text-center text-[10px] font-semibold leading-tight text-[#213D59]">
         {label}
       </span>
     </button>
@@ -943,7 +1102,7 @@ function ListPanelHeader({
 }) {
   return (
     <div className="flex items-center justify-between gap-2 px-0.5">
-      <h2 className="text-[15px] font-semibold text-[#132b26]">{title}</h2>
+      <h2 className="text-[15px] font-semibold text-[#213D59]">{title}</h2>
       <button
         type="button"
         onClick={onAction}
@@ -989,7 +1148,7 @@ function OverviewListRow({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14px] font-semibold text-[#132b26]">
+        <span className="block truncate text-[14px] font-semibold text-[#213D59]">
           {title}
         </span>
         <span className="mt-0.5 block truncate text-[12px] text-slate-500">
@@ -1070,8 +1229,8 @@ function OverviewAlertRow({
             className={cn(
               'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold transition',
               alert.emailDue
-                ? 'bg-[#132b26] text-white hover:bg-[#0e1f1c]'
-                : 'border border-slate-200 bg-slate-50 text-[#132b26] hover:bg-white',
+                ? 'bg-[#213D59] text-white hover:bg-[#00305C]'
+                : 'border border-slate-200 bg-slate-50 text-[#213D59] hover:bg-white',
             )}
           >
             <Mail className="h-3.5 w-3.5" />
@@ -1160,7 +1319,7 @@ function EmptyBlock({
       <Button
         type="button"
         onClick={onClick}
-        className="mt-4 rounded-xl bg-[#132b26] text-white hover:bg-[#0e1f1c]"
+        className="mt-4 rounded-xl bg-[#213D59] text-white hover:bg-[#00305C]"
       >
         {action}
       </Button>
