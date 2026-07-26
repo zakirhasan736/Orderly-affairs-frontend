@@ -52,6 +52,7 @@ import {
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
+import { namedItemsAreDuplicates } from '@/utils/aiItemDedup';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -260,6 +261,9 @@ export default function Section10EducationAccomplishments({
     setItems: updateEducation,
     setAiNotice,
     describeFields: ['institution', 'school', 'degree'],
+    isDuplicate: (a, b) =>
+      namedItemsAreDuplicates(a, b, ['institution', 'school', 'degree', 'name']),
+    conflictMode: 'ask',
     onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 

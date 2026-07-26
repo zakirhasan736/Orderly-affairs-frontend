@@ -43,6 +43,7 @@ import {
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
+import { namedItemsAreDuplicates } from '@/utils/aiItemDedup';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -258,6 +259,13 @@ const createEmptyCharity = () => createEmptyItemFromFields(SECTION_9A.fields);
     setItems: updateCharities,
     setAiNotice,
     describeFields: ['charity_name', 'organization_name', 'name'],
+    isDuplicate: (a, b) =>
+      namedItemsAreDuplicates(a, b, [
+        'charity_name',
+        'organization_name',
+        'name',
+      ]),
+    conflictMode: 'ask',
     onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 

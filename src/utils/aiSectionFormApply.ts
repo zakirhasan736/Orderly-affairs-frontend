@@ -8,9 +8,10 @@ import {
 } from '@/utils/aiPatchNormalizer';
 import { AI_SECTION_BY_ID } from '@/utils/aiSectionRegistry';
 import {
-  insurancePoliciesAreDuplicates,
-  vehiclesAreDuplicates,
   upsertAutofillItems,
+  duplicateMatcherForSection,
+  namedItemsAreDuplicates,
+  type AutofillConflictMode,
 } from '@/utils/aiItemDedup';
 import { applySemanticConceptsToPatch, applySemanticConceptsToItem } from '@/utils/aiSemanticFieldMatch';
 import {
@@ -21,7 +22,7 @@ import { getSectionFieldDefinitions } from '@/utils/aiSectionFieldCatalog';
 import type { FieldDefinition } from '@/types/formTypes';
 
 const UPLOADISH_KEY =
-  /(location|document|upload|copy|scan|photo|image|file|attorney|home|marker|portal|contact_info|will_|trust_|poa|dnr|obituary|policy_contact|policy_documents)/i;
+  /(location|document|upload|copy|scan|photo|image|file|attorney|home|marker|portal|contact_info|contact_details|account_info|tax_documents|will_|trust_|poa|dnr|obituary|policy_contact|policy_documents)/i;
 
 function isUploadShape(value: unknown) {
   return (
@@ -153,46 +154,45 @@ function isSubsectionKey(key: string) {
 }
 
 /**
- * Same-topic cards: merge instead of replace for multi-item sections.
- * Vehicles/insurance use dedicated duplicate detectors; others append new cards
- * when the subsection is an array.
+ * Same-topic cards: merge instead of appending duplicates.
+ * Vehicles/insurance use dedicated detectors; other sections use soft name match.
  */
 function mergeArraySubsection(
   sectionId: string,
   key: string,
   currentItems: Record<string, unknown>[],
   incomingItems: Record<string, unknown>[],
+  conflictMode: AutofillConflictMode = 'overwrite',
 ) {
-  if (sectionId === '7' && key === '7A') {
-    return upsertAutofillItems(
-      currentItems,
-      incomingItems,
-      insurancePoliciesAreDuplicates,
-    ).items;
-  }
-  if (sectionId === '5' && key === '5A') {
-    return upsertAutofillItems(
-      currentItems,
-      incomingItems,
-      vehiclesAreDuplicates,
-    ).items;
-  }
+  const matcher =
+    duplicateMatcherForSection(sectionId, key) ||
+    ((a, b) => namedItemsAreDuplicates(a, b));
 
-  // Generic: if current empty, take incoming; else append non-empty cards.
-  if (!currentItems.length) return incomingItems;
-  return [...currentItems, ...incomingItems];
+  return upsertAutofillItems(
+    currentItems,
+    incomingItems,
+    matcher,
+    conflictMode,
+  ).items;
 }
 
 /**
  * Apply a temp-stored AI extraction result onto section form data.
  * Matches subsection buckets and field names, coercing upload + dropdown fields.
+ *
+ * conflictMode:
+ * - overwrite (default for background): update matching cards with new non-empty values
+ * - ask: prompt when existing non-empty fields would change
+ * - keep: only fill empty fields on matches
  */
 export function applyAiResultToSectionForm(
   sectionId: string,
   currentData: unknown,
   result: unknown,
   subsection?: string | null,
+  options?: { conflictMode?: AutofillConflictMode },
 ): Record<string, unknown> | null {
+  const conflictMode = options?.conflictMode ?? 'overwrite';
   const fields = getSectionFieldDefinitions(sectionId, subsection);
   const patch = applySemanticConceptsToPatch(
     unwrapAiAutofillPatch(result),
@@ -235,6 +235,7 @@ export function applyAiResultToSectionForm(
         key,
         currentItems,
         incomingItems,
+        conflictMode,
       );
       changed = true;
       return;
@@ -258,9 +259,6 @@ export function applyAiResultToSectionForm(
   if (defaultSub && !patch[defaultSub]) {
     const extracted = extractSubsectionPatch(patch, defaultSub);
     if (aiPatchHasValues(extracted)) {
-      if (Array.isArray(next[defaultSub]) || extracted['__array']) {
-        // uncommon
-      }
       const existingRaw = next[defaultSub];
       if (Array.isArray(existingRaw)) {
         const incomingItems = [mergeObjectFields({}, extracted, fields)];
@@ -269,6 +267,7 @@ export function applyAiResultToSectionForm(
           defaultSub,
           existingRaw as Record<string, unknown>[],
           incomingItems,
+          conflictMode,
         );
       } else {
         const existing =

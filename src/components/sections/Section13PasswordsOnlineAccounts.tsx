@@ -50,6 +50,7 @@ import {
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
+import { namedItemsAreDuplicates } from '@/utils/aiItemDedup';
 import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
 
 /* ------------------------------------------------------------------ */
@@ -471,6 +472,14 @@ export default function Section13PasswordsOnlineAccounts({
     setItems: updateAccounts,
     setAiNotice,
     describeFields: ['account_name', 'website', 'platform'],
+    isDuplicate: (a, b) =>
+      namedItemsAreDuplicates(a, b, [
+        'platform',
+        'website',
+        'account_name',
+        'username',
+      ]),
+    conflictMode: 'ask',
     onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 

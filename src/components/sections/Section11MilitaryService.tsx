@@ -50,6 +50,7 @@ import {
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
+import { namedItemsAreDuplicates } from '@/utils/aiItemDedup';
 import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
 
 /* ------------------------------------------------------------------ */
@@ -322,6 +323,9 @@ export default function Section11MilitaryService({
     setItems: updateServicePeriods,
     setAiNotice,
     describeFields: ['branch', 'service_branch', 'rank'],
+    isDuplicate: (a, b) =>
+      namedItemsAreDuplicates(a, b, ['branch', 'service_branch', 'rank']),
+    conflictMode: 'ask',
     onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 

@@ -250,6 +250,7 @@ export default function Section5Vehicles({
     setAiNotice,
     describeFields: ['make', 'model', 'year', 'vin'],
     isDuplicate: vehiclesAreDuplicates,
+    conflictMode: 'ask',
     onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 

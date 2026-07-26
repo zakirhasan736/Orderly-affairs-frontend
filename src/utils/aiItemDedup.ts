@@ -263,17 +263,151 @@ export function mergeAutofillItemFields<T extends Record<string, unknown>>(
   return next as T;
 }
 
+/** Fill only empty fields — keep any existing values the user already entered. */
+export function mergeAutofillItemFieldsEmptyOnly<T extends Record<string, unknown>>(
+  existing: T,
+  incoming: T,
+): T {
+  const next: Record<string, unknown> = { ...existing };
+
+  for (const [key, value] of Object.entries(incoming)) {
+    if (key === '__rowId' || key === 'reminder_recipients') continue;
+    if (isEmptyValue(value)) continue;
+    if (!isEmptyValue(next[key])) continue;
+
+    if (isUploadShape(value)) {
+      next[key] = {
+        text: typeof value.text === 'string' ? value.text : '',
+        files: Array.isArray(value.files) ? value.files : [],
+      };
+      continue;
+    }
+
+    next[key] = value;
+  }
+
+  const existingRowId = (existing as Record<string, unknown>).__rowId;
+  if (existingRowId) next.__rowId = existingRowId;
+
+  return next as T;
+}
+
+/** True when incoming would replace a non-empty existing field with a different value. */
+export function itemWouldOverwriteExisting(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): boolean {
+  for (const [key, value] of Object.entries(incoming)) {
+    if (key === '__rowId' || key === 'reminder_recipients') continue;
+    if (isEmptyValue(value)) continue;
+    const current = existing[key];
+    if (isEmptyValue(current)) continue;
+
+    if (isUploadShape(value) || isUploadShape(current)) {
+      const a = getUploadText(current);
+      const b = getUploadText(value);
+      if (a && b && a !== b) return true;
+      continue;
+    }
+
+    const a = normalizeComparable(current);
+    const b = normalizeComparable(value);
+    if (a && b && a !== b) return true;
+  }
+  return false;
+}
+
+const IDENTITY_FIELD_GROUPS: string[][] = [
+  ['charity_name', 'organization_name'],
+  ['group_name', 'organization_name', 'name'],
+  ['institution', 'school', 'college'],
+  ['platform', 'website', 'service_name', 'account_name'],
+  ['bank_name', 'institution_name', 'account_name'],
+  ['provider_name', 'doctor_name', 'clinic_name'],
+  ['employer', 'business_name', 'company_name'],
+  ['creditor', 'card_name', 'lender'],
+  ['document_name', 'title'],
+  ['pet_name'],
+  ['branch', 'service_branch'],
+  ['make', 'model', 'year'],
+  ['full_name', 'name', 'title'],
+];
+
+/**
+ * Soft identity match for multi-card sections (charities, memberships, etc.).
+ * Same document re-upload should update the card, not create another form.
+ */
+export function namedItemsAreDuplicates(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+  preferredKeys?: string[],
+): boolean {
+  const groups = preferredKeys?.length
+    ? [preferredKeys]
+    : IDENTITY_FIELD_GROUPS;
+
+  for (const keys of groups) {
+    for (const key of keys) {
+      const a = getUploadText(existing[key]) || normalizeComparable(existing[key]);
+      const b = getUploadText(incoming[key]) || normalizeComparable(incoming[key]);
+      if (!a || !b) continue;
+      if (a === b || a.includes(b) || b.includes(a)) return true;
+    }
+  }
+  return false;
+}
+
+export function duplicateMatcherForSection(
+  sectionId: string,
+  subsectionKey?: string,
+): ((existing: Record<string, unknown>, incoming: Record<string, unknown>) => boolean) | null {
+  if (sectionId === '5' && (!subsectionKey || subsectionKey === '5A')) {
+    return vehiclesAreDuplicates;
+  }
+  if (sectionId === '7' && (!subsectionKey || subsectionKey === '7A')) {
+    return insurancePoliciesAreDuplicates;
+  }
+
+  const preferred: Record<string, string[]> = {
+    '8': ['organization_name', 'group_name', 'name'],
+    '9': ['charity_name', 'organization_name', 'name'],
+    '10': ['institution', 'school', 'degree', 'name'],
+    '11': ['branch', 'service_branch', 'rank'],
+    '12': ['bank_name', 'institution_name', 'account_name', 'account_number'],
+    '13': ['platform', 'website', 'account_name', 'username'],
+    '14': ['institution', 'account_name', 'account_number', 'brokerage'],
+    '15': ['provider_name', 'doctor_name', 'clinic_name', 'name'],
+    '16': ['creditor', 'card_name', 'lender', 'account_name'],
+    '17': ['name', 'full_name', 'pet_name', 'title'],
+    '18': ['employer', 'business_name', 'company_name', 'name'],
+    '19': ['item_name', 'property_name', 'name', 'title', 'description'],
+    '20': ['document_name', 'title', 'name'],
+  };
+
+  const keys = preferred[sectionId];
+  if (!keys) {
+    return (existing, incoming) => namedItemsAreDuplicates(existing, incoming);
+  }
+  return (existing, incoming) =>
+    namedItemsAreDuplicates(existing, incoming, keys);
+}
+
+export type AutofillConflictMode = 'overwrite' | 'keep' | 'ask';
+
 /**
  * Update matching items in place; append only when no same-topic match exists.
+ * `ask` prompts once when incoming would change existing non-empty values.
  */
 export function upsertAutofillItems<T extends Record<string, unknown>>(
   currentItems: T[],
   incomingItems: T[],
   isDuplicate: (existing: T, incoming: T) => boolean,
+  conflictMode: AutofillConflictMode = 'overwrite',
 ): { items: T[]; added: number; updated: number } {
   const items = [...currentItems];
   let added = 0;
   let updated = 0;
+  let overwriteDecision: boolean | null = null;
 
   for (const incoming of incomingItems) {
     const hasData = Object.entries(incoming).some(
@@ -283,7 +417,28 @@ export function upsertAutofillItems<T extends Record<string, unknown>>(
 
     const matchIndex = items.findIndex(existing => isDuplicate(existing, incoming));
     if (matchIndex >= 0) {
-      items[matchIndex] = mergeAutofillItemFields(items[matchIndex], incoming);
+      const existing = items[matchIndex];
+      let mode: 'overwrite' | 'keep' = conflictMode === 'keep' ? 'keep' : 'overwrite';
+
+      if (
+        conflictMode === 'ask' &&
+        itemWouldOverwriteExisting(existing, incoming)
+      ) {
+        if (overwriteDecision === null) {
+          overwriteDecision =
+            typeof window !== 'undefined'
+              ? window.confirm(
+                  'This document matches information you already saved. Overwrite existing fields with the new values?\n\nChoose Cancel to keep your current values and only fill empty fields.',
+                )
+              : true;
+        }
+        mode = overwriteDecision ? 'overwrite' : 'keep';
+      }
+
+      items[matchIndex] =
+        mode === 'keep'
+          ? mergeAutofillItemFieldsEmptyOnly(existing, incoming)
+          : mergeAutofillItemFields(existing, incoming);
       updated += 1;
     } else {
       items.push(incoming);

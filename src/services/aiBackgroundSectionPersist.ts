@@ -165,6 +165,8 @@ export async function persistAiResultToSectionBackground(args: {
       current,
       result,
       subsection,
+      // Overview batch: update matching cards, never spawn duplicates, no popup spam.
+      { conflictMode: 'overwrite' },
     );
 
     if (!merged) {

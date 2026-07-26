@@ -334,6 +334,7 @@ export default function Section7InsurancePolicies({
       'provider',
     ],
     isDuplicate: insurancePoliciesAreDuplicates,
+    conflictMode: 'ask',
     onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 

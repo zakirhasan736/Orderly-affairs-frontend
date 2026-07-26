@@ -47,8 +47,9 @@ export function MultiItemAutofillDialog<T>({
             <div className="space-y-3 text-left">
               <p>
                 This document appears to list multiple {itemLabel.toLowerCase()}
-                s. Would you like to create a separate card for each one and
-                auto-fill them?
+                s. Matching cards will be updated (you’ll be asked before
+                overwriting existing values). New entries can be added as
+                separate cards.
               </p>
               <ul className="max-h-48 space-y-1 overflow-y-auto rounded-xl border bg-muted/30 p-3 text-sm text-foreground">
                 {items.map((item, index) => (
@@ -68,7 +69,7 @@ export function MultiItemAutofillDialog<T>({
               : `the first ${itemLabel.toLowerCase()}`}
           </AlertDialogCancel>
           <AlertDialogAction onClick={onAddAll}>
-            Add all {count} {itemLabel.toLowerCase()}
+            Apply all {count} {itemLabel.toLowerCase()}
             {count === 1 ? '' : 's'}
           </AlertDialogAction>
         </AlertDialogFooter>

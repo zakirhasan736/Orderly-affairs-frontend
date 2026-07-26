@@ -1206,11 +1206,11 @@ function OverviewAlertRow({
   }
 
   return (
-    <div className="hidden flex-col gap-2 sm:flex">
+    <div className="hidden sm:grid sm:grid-cols-2 xl:grid-cols-3 gap-2">
       {alerts.map(alert => (
         <div
           key={alert.id}
-          className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2 shadow-sm"
+          className="flex min-w-0 flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm sm:flex-row sm:items-center"
         >
           <button
             type="button"
@@ -1227,7 +1227,7 @@ function OverviewAlertRow({
             type="button"
             onClick={() => startEmail(alert)}
             className={cn(
-              'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold transition',
+              'inline-flex h-8 w-full shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-semibold transition sm:w-auto',
               alert.emailDue
                 ? 'bg-[#213D59] text-white hover:bg-[#00305C]'
                 : 'border border-slate-200 bg-slate-50 text-[#213D59] hover:bg-white',

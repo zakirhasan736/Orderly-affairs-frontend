@@ -148,6 +148,7 @@ export function applyItemsToIndexedList<T extends Record<string, unknown>>({
   createEmpty,
   preserveRowId = true,
   isDuplicate,
+  conflictMode = 'overwrite',
 }: {
   currentItems: T[];
   extractedItems: T[];
@@ -155,6 +156,7 @@ export function applyItemsToIndexedList<T extends Record<string, unknown>>({
   createEmpty: () => T;
   preserveRowId?: boolean;
   isDuplicate?: (existing: T, incoming: T) => boolean;
+  conflictMode?: import('@/utils/aiItemDedup').AutofillConflictMode;
 }): { items: T[]; added: number; updated: number; skipped: number } {
   if (extractedItems.length === 0) {
     return { items: currentItems, added: 0, updated: 0, skipped: 0 };
@@ -195,7 +197,12 @@ export function applyItemsToIndexedList<T extends Record<string, unknown>>({
 
     if (remaining.length > 0) {
       if (isDuplicate) {
-        const upserted = upsertAutofillItems(next, remaining, isDuplicate);
+        const upserted = upsertAutofillItems(
+          next,
+          remaining,
+          isDuplicate,
+          conflictMode,
+        );
         next = upserted.items;
         added += upserted.added;
         updated += upserted.updated;
@@ -213,6 +220,7 @@ export function applyItemsToIndexedList<T extends Record<string, unknown>>({
       currentItems,
       extractedItems,
       isDuplicate,
+      conflictMode,
     );
     return {
       items: upserted.items,

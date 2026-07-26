@@ -24,6 +24,7 @@ import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
+import { namedItemsAreDuplicates } from '@/utils/aiItemDedup';
 import { extractAutofillArrayFromPatch } from '@/utils/aiMultiItemAutofill';
 import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
 import {
@@ -415,6 +416,15 @@ export default function Section19AssetsValuables({
     setItems: next => updateSubsection('19A', next),
     setAiNotice,
     describeFields: ['item_type', 'item_description', 'estimated_value'],
+    isDuplicate: (a, b) =>
+      namedItemsAreDuplicates(a, b, [
+        'item_name',
+        'item_description',
+        'item_type',
+        'name',
+        'title',
+      ]),
+    conflictMode: 'ask',
     onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 
@@ -425,6 +435,14 @@ export default function Section19AssetsValuables({
     setItems: next => updateSubsection('19B', next),
     setAiNotice,
     describeFields: ['property_address', 'property_type', 'estimated_value'],
+    isDuplicate: (a, b) =>
+      namedItemsAreDuplicates(a, b, [
+        'property_address',
+        'property_name',
+        'property_type',
+        'name',
+      ]),
+    conflictMode: 'ask',
     onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 

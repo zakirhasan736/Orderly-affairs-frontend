@@ -26,6 +26,7 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
   setAiNotice,
   describeFields,
   isDuplicate,
+  conflictMode = 'ask',
   onFlowComplete,
 }: {
   itemLabel: string;
@@ -35,6 +36,8 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
   setAiNotice: (message: string) => void;
   describeFields?: string[];
   isDuplicate?: (existing: T, incoming: T) => boolean;
+  /** ask = overwrite confirm when matching cards already have values */
+  conflictMode?: import('@/utils/aiItemDedup').AutofillConflictMode;
   /** Called when multi-item dialog closes (apply, skip, or dismiss) */
   onFlowComplete?: () => void;
 }) {
@@ -63,12 +66,21 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
         createEmpty,
         preserveRowId,
         isDuplicate,
+        conflictMode,
       });
 
       setItems(nextItems);
       return { added, updated };
     },
-    [createEmpty, getCurrentItems, isDuplicate, normalizeItems, preserveRowId, setItems],
+    [
+      conflictMode,
+      createEmpty,
+      getCurrentItems,
+      isDuplicate,
+      normalizeItems,
+      preserveRowId,
+      setItems,
+    ],
   );
 
   const closePrompt = useCallback(() => {

@@ -43,6 +43,7 @@ import {
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
+import { namedItemsAreDuplicates } from '@/utils/aiItemDedup';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -225,6 +226,13 @@ export default function Section8CommunityMembership({
     setItems: updateGroups,
     setAiNotice,
     describeFields: ['organization_name', 'group_name', 'name'],
+    isDuplicate: (a, b) =>
+      namedItemsAreDuplicates(a, b, [
+        'organization_name',
+        'group_name',
+        'name',
+      ]),
+    conflictMode: 'ask',
     onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
 
