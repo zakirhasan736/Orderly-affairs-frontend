@@ -70,7 +70,6 @@ import {
   type DashboardNotice,
 } from '@/utils/dashboardNotifications';
 import { useGetStatusQuery } from '@/services/billingApi';
-import { fetchMySupportThread } from '@/libs/api/supportChat';
 
 import { fetchSession, nokLogout as apiNokLogout, ownerLogout as apiOwnerLogout, secureFetch } from '@/libs/secureFetch';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
@@ -211,7 +210,7 @@ export default function DashboardPage() {
     skip: appMode !== 'owner',
   });
   const [pendingMessageCount, setPendingMessageCount] = useState(0);
-  const [supportUnread, setSupportUnread] = useState(0);
+  const [supportUnread] = useState(0);
 
   // backed next kin handler
   const [nextkinLogin] = useNextkinLoginMutation();
@@ -1841,12 +1840,7 @@ export default function DashboardPage() {
       } catch {
         /* ignore */
       }
-      try {
-        const { thread } = await fetchMySupportThread();
-        if (!cancelled) setSupportUnread(Number(thread?.unread || 0));
-      } catch {
-        /* ignore when no support thread */
-      }
+      // Live support polling disabled while contact-support UI is hidden.
     };
     void load();
     const id = window.setInterval(() => void load(), 45000);

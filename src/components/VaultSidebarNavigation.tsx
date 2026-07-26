@@ -6,7 +6,6 @@ import {
   CheckCircle,
   Circle,
   GripVertical,
-  Headphones,
   Home,
   X,
 } from 'lucide-react';
@@ -14,7 +13,6 @@ import { cn } from '@common/ui/utils';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import { isAiSectionReviewed } from '@/utils/aiSectionReviewState';
 import { peekDashboardAiPatch } from '@/utils/aiDashboardPatchCache';
-import { useOptionalHelpAssistant } from '@/components/help/HelpAssistantContext';
 import {
   getDynamicTopicsForSubsection,
   subsectionHasDynamicTopics,
@@ -141,7 +139,7 @@ function ReorderableNavItem({
         'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-45',
         isDropOver &&
-          'bg-[#2B5A8C]/25 ring-2 ring-[#2B5A8C] ring-offset-1 ring-offset-[#00305C]',
+          'bg-[#2B5A8C]/25 ring-2 ring-[#2B5A8C] ring-offset-1 ring-offset-[#213D59]',
         className,
       )}
     >
@@ -221,14 +219,13 @@ export function VaultSidebarNavigation({
   goToTopic,
   onReorderSubsection,
   onReorderTopic,
-  onOpenHelp,
+  onOpenHelp: _onOpenHelp,
 }: VaultSidebarNavigationProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [aiBadgeTick, setAiBadgeTick] = useState(0);
   const activeDragRef = useRef<DragPayload | null>(null);
   const aiRouting = useOptionalAiDocumentRouting();
-  const help = useOptionalHelpAssistant();
 
   React.useEffect(() => {
     const bump = () => setAiBadgeTick(value => value + 1);
@@ -294,7 +291,7 @@ export function VaultSidebarNavigation({
   return (
     <aside
       className={cn(
-        'sidebar-navigation fixed inset-y-0 left-0 z-[70] w-[88vw] max-w-[330px] transform border-r border-black/20 bg-[#00305C] text-white shadow-2xl transition-transform duration-300 ease-out md:sticky md:top-0 md:z-20 md:h-screen md:w-[272px] md:max-w-none md:translate-x-0 md:shadow-none',
+        'sidebar-navigation fixed inset-y-0 left-0 z-[70] w-[88vw] max-w-[330px] transform border-r border-black/20 bg-[#213D59] text-white shadow-2xl transition-transform duration-300 ease-out md:sticky md:top-0 md:z-20 md:h-screen md:w-[272px] md:max-w-none md:translate-x-0 md:shadow-none',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full',
       )}
     >
@@ -577,27 +574,9 @@ export function VaultSidebarNavigation({
 
         <div className="border-t border-white/10 p-4">
           <p className="text-[12px] leading-snug text-white/70">
-            Need help? Our support team is here to guide you.
+            Keep filling your vault — AI document fill is available from Overview
+            and each section upload zone.
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                help?.openHelp({ mode: 'chat' });
-                onOpenHelp?.();
-                window.dispatchEvent(
-                  new CustomEvent('orderly-open-help', {
-                    detail: { mode: 'chat' },
-                  }),
-                );
-                onCloseSidebar();
-              }}
-              className="inline-flex h-11 w-auto items-center justify-center gap-2 rounded-xl border border-white/20 bg-[#2B5A8C] px-4 text-[12px] font-semibold text-white transition hover:bg-[#3d6f9e]"
-            >
-              <Headphones className="h-3.5 w-3.5" />
-              Contact Support
-            </button>
-          </div>
         </div>
       </div>
     </aside>

@@ -39,14 +39,10 @@ import {
 import { getAiSectionLabel, AI_SECTION_BY_KEY } from '@/utils/aiSectionRegistry';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
-  buildExpiryReminderMailto,
   collectOverviewExpiryAlerts,
-  markExpiryEmailPromptShown,
-  wasExpiryEmailPromptShown,
   type OverviewExpiryAlert,
 } from '@/utils/overviewExpiryAlerts';
 import { cn } from '@common/ui/utils';
-import { toast } from 'sonner';
 
 interface DataBindingDashboardProps {
   formData: any;
@@ -94,7 +90,7 @@ export function DataBindingDashboard({
   progress = 0,
   completedSectionIds = [],
   lastUpdatedBySection = {},
-  ownerEmail = null,
+  ownerEmail: _ownerEmail = null,
 }: DataBindingDashboardProps) {
   const [activeTab, setActiveTab] = useState<PeopleTab>('access');
   const [mobileHubTab, setMobileHubTab] = useState<MobileHubTab>('people');
@@ -429,7 +425,6 @@ export function DataBindingDashboard({
         <>
           <OverviewAlertRow
             alerts={expiryAlerts}
-            ownerEmail={ownerEmail}
             onOpenSection={onNavigateToSection}
           />
 
@@ -1162,40 +1157,14 @@ function OverviewListRow({
 
 function OverviewAlertRow({
   alerts,
-  ownerEmail,
   onOpenSection,
 }: {
   alerts: OverviewExpiryAlert[];
-  ownerEmail?: string | null;
   onOpenSection: (sectionId: string) => void;
 }) {
-  useEffect(() => {
-    const due = alerts.filter(
-      alert =>
-        alert.emailDue &&
-        !wasExpiryEmailPromptShown(alert.id, alert.daysUntil),
-    );
-    if (!due.length) return;
-
-    const top = due[0];
-    markExpiryEmailPromptShown(top.id, top.daysUntil);
-    window.setTimeout(() => {
-      window.location.href = buildExpiryReminderMailto(top, ownerEmail);
-      toast.message('Email reminder opened', {
-        description: top.text,
-      });
-    }, 600);
-  }, [alerts, ownerEmail]);
-
-  const startEmail = (alert: OverviewExpiryAlert) => {
-    markExpiryEmailPromptShown(alert.id, alert.daysUntil);
-    window.location.href = buildExpiryReminderMailto(alert, ownerEmail);
-    toast.message('Email reminder opened');
-  };
-
   if (!alerts.length) {
     return (
-      <div className="hidden flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm sm:flex">
+      <div className="hidden flex-wrap items-center gap-2 sm:flex">
         <AlertPill
           tone="ok"
           icon={<CheckCircle2 className="h-3.5 w-3.5" />}
@@ -1206,37 +1175,20 @@ function OverviewAlertRow({
   }
 
   return (
-    <div className="hidden sm:grid sm:grid-cols-2 xl:grid-cols-3 gap-2">
+    <div className="hidden flex-wrap items-center gap-2 sm:flex">
       {alerts.map(alert => (
-        <div
+        <button
           key={alert.id}
-          className="flex min-w-0 flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm sm:flex-row sm:items-center"
+          type="button"
+          onClick={() => onOpenSection(alert.sectionId)}
+          className="max-w-full text-left transition hover:opacity-90"
         >
-          <button
-            type="button"
-            onClick={() => onOpenSection(alert.sectionId)}
-            className="min-w-0 flex-1 text-left"
-          >
-            <AlertPill
-              tone={alert.tone === 'critical' ? 'critical' : 'warn'}
-              icon={<AlarmClock className="h-3.5 w-3.5" />}
-              text={alert.text}
-            />
-          </button>
-          <button
-            type="button"
-            onClick={() => startEmail(alert)}
-            className={cn(
-              'inline-flex h-8 w-full shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-semibold transition sm:w-auto',
-              alert.emailDue
-                ? 'bg-[#213D59] text-white hover:bg-[#00305C]'
-                : 'border border-slate-200 bg-slate-50 text-[#213D59] hover:bg-white',
-            )}
-          >
-            <Mail className="h-3.5 w-3.5" />
-            {alert.emailDue ? 'Email now' : 'Email'}
-          </button>
-        </div>
+          <AlertPill
+            tone={alert.tone === 'critical' ? 'critical' : 'warn'}
+            icon={<AlarmClock className="h-3.5 w-3.5" />}
+            text={alert.text}
+          />
+        </button>
       ))}
     </div>
   );
@@ -1253,13 +1205,13 @@ function AlertPill({
 }) {
   const classes =
     tone === 'ok'
-      ? 'inline-flex w-full max-w-full items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800'
+      ? 'inline-flex max-w-full items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800'
       : tone === 'critical'
-        ? 'inline-flex w-full max-w-full items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-900'
-        : 'inline-flex w-full max-w-full items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900';
+        ? 'inline-flex max-w-full items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-900'
+        : 'inline-flex max-w-full items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900';
 
   return (
-    <div className={classes}>
+    <span className={classes}>
       <span
         className={cn(
           'shrink-0',
@@ -1267,13 +1219,13 @@ function AlertPill({
             ? 'text-emerald-600'
             : tone === 'critical'
               ? 'text-rose-600'
-              : 'text-rose-500',
+              : 'text-amber-600',
         )}
       >
         {icon}
       </span>
-      <span className="min-w-0 break-words">{text}</span>
-    </div>
+      <span className="min-w-0 truncate">{text}</span>
+    </span>
   );
 }
 
