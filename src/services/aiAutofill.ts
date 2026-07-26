@@ -66,7 +66,8 @@ export async function autofillSectionFromDocument(payload: {
       const unavailableMessage =
         typeof json?.detail === 'string'
           ? json.detail
-          : 'Uploaded document expired or is no longer available. Please upload again.';
+          : json?.detail?.message ||
+            'Uploaded document expired or is no longer available. Please upload again.';
       throw new AiDocumentUnavailableError(unavailableMessage);
     }
 
