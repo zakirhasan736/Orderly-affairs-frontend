@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { cn } from '@common/ui/utils';
-import { Eye, EyeOff, Lock, Mail, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, ArrowLeft } from 'lucide-react';
+import { InlineNotice } from '@/components/common/ui/inline-notice';
 import { BRAND_LOGO } from '@/constants/brand';
 
 interface NextOfKinLoginPageProps {
@@ -206,27 +206,20 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
             </div>
 
             {error ? (
-              <div
-                className={cn(
-                  'mt-5 flex items-start gap-2.5 rounded-xl border px-3.5 py-[13px] text-[13px] leading-[1.5]',
-                  isLocked
-                    ? 'border-[#f0c9c5] bg-[#fdf4f3] text-[#b4483f]'
-                    : 'border-[#e8d9b5] bg-[#fdf8ee] text-[#8a6420]',
-                )}
-              >
-                <AlertTriangle className="mt-px h-[15px] w-[15px] shrink-0" strokeWidth={1.9} />
-                <span>{error}</span>
-              </div>
+              <InlineNotice
+                className="mt-5"
+                variant={isLocked ? 'danger' : 'warning'}
+                title={error}
+              />
             ) : null}
 
             {!error && failedAttempts > 0 && attemptsLeft > 0 ? (
-              <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-[#e8d9b5] bg-[#fdf8ee] px-3.5 py-[13px] text-[13px] leading-[1.5] text-[#8a6420]">
-                <AlertTriangle className="mt-px h-[15px] w-[15px] shrink-0" strokeWidth={1.9} />
-                <span>
-                  {attemptsLeft} attempt{attemptsLeft !== 1 ? 's' : ''} remaining
-                  before lockout.
-                </span>
-              </div>
+              <InlineNotice
+                className="mt-5"
+                variant="warning"
+                title={`${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before lockout`}
+                description={`After ${maxAttempts} failed sign-ins we lock the account for 15 minutes and email you.`}
+              />
             ) : null}
 
             <label className="mt-[18px] flex flex-col gap-[7px]">

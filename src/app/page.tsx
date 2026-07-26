@@ -10,7 +10,6 @@ import {
   EyeOff,
   Smartphone,
   MessageSquare,
-  AlertCircle,
   ArrowLeft,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -62,7 +61,7 @@ import {
   rateLimitedButtonLabel,
 } from '@/components/RateLimitBanner';
 import { Button } from '@/components/common/ui/button';
-import { Alert, AlertDescription } from '@/components/common/ui/alert';
+import { InlineNotice } from '@/components/common/ui/inline-notice';
 
 type MFAMethod = 'authenticator' | 'email' | 'sms';
 
@@ -1824,10 +1823,11 @@ const backButtonLabel =
               step !== 'plan_selection' &&
               step !== 'forgot_password' &&
               step !== 'reset_password' && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
+              <InlineNotice
+                variant="danger"
+                className="mb-4"
+                title={error}
+              />
             )}
             <RateLimitBanner seconds={rateLimitSeconds} />
             {step !== 'credentials' &&
@@ -2574,9 +2574,13 @@ const backButtonLabel =
                         ) : null}
 
                         {attempts > 0 && attempts < MAX_ATTEMPTS && (
-                          <p className="text-xs text-[#6e7c77]">
-                            Failed attempts: {attempts} / {MAX_ATTEMPTS}
-                          </p>
+                          <InlineNotice
+                            variant="warning"
+                            title={`${MAX_ATTEMPTS - attempts} attempt${
+                              MAX_ATTEMPTS - attempts !== 1 ? 's' : ''
+                            } remaining before lockout`}
+                            description={`After ${MAX_ATTEMPTS} failed sign-ins we lock the account for 15 minutes and email you.`}
+                          />
                         )}
                       </>
                     )}
@@ -2674,9 +2678,13 @@ const backButtonLabel =
                     ) : null}
 
                     {attempts > 0 && attempts < MAX_ATTEMPTS && (
-                      <p className="text-xs text-[#6e7c77]">
-                        Failed attempts: {attempts} / {MAX_ATTEMPTS}
-                      </p>
+                      <InlineNotice
+                        variant="warning"
+                        title={`${MAX_ATTEMPTS - attempts} attempt${
+                          MAX_ATTEMPTS - attempts !== 1 ? 's' : ''
+                        } remaining before lockout`}
+                        description={`After ${MAX_ATTEMPTS} failed sign-ins we lock the account for 15 minutes and email you.`}
+                      />
                     )}
                   </div>
                 )}

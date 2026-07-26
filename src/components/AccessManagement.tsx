@@ -16,6 +16,8 @@ import { Label } from '@common/ui/label';
 import { Textarea } from '@common/ui/textarea';
 import { Badge } from '@common/ui/badge';
 import { BrandDangerConfirm } from '@/components/BrandDangerConfirm';
+import { BrandSuccessScreen } from '@/components/BrandSuccessScreen';
+import { InlineNotice } from '@/components/common/ui/inline-notice';
 import {
   Sheet,
   SheetContent,
@@ -26,7 +28,6 @@ import {
 } from '@common/ui/sheet';
 import { cn } from '@common/ui/utils';
 import {
-  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -1247,6 +1248,9 @@ export const AccessManagement = forwardRef<
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [cancelPendingInvite, setCancelPendingInvite] = useState(false);
   const [revokeAllOpen, setRevokeAllOpen] = useState(false);
+  const [inviteSuccessName, setInviteSuccessName] = useState<string | null>(
+    null,
+  );
 
   const [createNextKin] = useCreateNextKinMutation();
   const [updateNextKin] = useUpdateNextKinMutation();
@@ -1552,9 +1556,7 @@ export const AccessManagement = forwardRef<
           });
         }
         if (result.password_email_sent) {
-          toast.success(
-            `Updated ${draft.full_name}. New login details were emailed.`,
-          );
+          setInviteSuccessName(draft.full_name || 'them');
         } else {
           toast.success(`Updated ${draft.full_name}`);
         }
@@ -1570,7 +1572,7 @@ export const AccessManagement = forwardRef<
           has_master_password: true,
         };
         setAuthorizedPeople(prev => [...prev, saved]);
-        toast.success(`Added ${draft.full_name}`);
+        setInviteSuccessName(draft.full_name || 'them');
       }
       refetch();
       closeWizard();
@@ -2575,25 +2577,22 @@ export const AccessManagement = forwardRef<
 
       {needsDesignation && !embedded && (
         <div
-          role="alert"
           className={cn(
-            'flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 text-amber-950',
-            isMobile
-              ? 'items-center p-3'
-              : 'flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between',
+            'flex gap-3',
+            !isMobile &&
+              'flex-col sm:flex-row sm:items-center sm:justify-between',
           )}
         >
-          <div className="flex min-w-0 flex-1 gap-2.5">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-            <div className="min-w-0">
-              <h4 className="text-sm font-semibold">Add at least one person</h4>
-              {!isMobile && (
-                <p className="mt-1 text-sm leading-6">
-                  Please add at least one trusted person who can access your kit.
-                </p>
-              )}
-            </div>
-          </div>
+          <InlineNotice
+            className="min-w-0 flex-1"
+            variant="warning"
+            title="Add at least one person"
+            description={
+              isMobile
+                ? undefined
+                : 'Please add at least one trusted person who can access your kit.'
+            }
+          />
           {!isMobile && (
             <Button
               variant="secondary"
@@ -3051,6 +3050,19 @@ export const AccessManagement = forwardRef<
           </Button>
         </div>
       )}
+
+      <BrandSuccessScreen
+        open={Boolean(inviteSuccessName)}
+        variant="confirm"
+        title={`Invitation sent to ${inviteSuccessName}`}
+        description="They'll get a temporary password. Nothing opens until you approve them."
+        secondaryAction={{
+          label: 'Back to People & roles',
+          onClick: () => setInviteSuccessName(null),
+          variant: 'outline',
+        }}
+        onClose={() => setInviteSuccessName(null)}
+      />
     </div>
   );
 });

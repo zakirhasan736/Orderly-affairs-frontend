@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import { AiPendingUploadBanner } from '@/components/ai/AiPendingUploadBanner';
+import { InlineNotice } from '@/components/common/ui/inline-notice';
 import { getAiSectionLabel } from '@/utils/aiSectionRegistry';
 import { wasAiSectionRecentlyFilled } from '@/utils/aiSectionFillGuard';
 import {
@@ -108,15 +109,18 @@ export function AiPendingUploadSectionBanner({ activeSectionId }: Props) {
 
   if (sectionAlreadyFilled) {
     return (
-      <div className="rounded-2xl border border-[#2c7a63]/30 bg-[#e7f2ee] px-4 py-3 text-sm text-[#213D59]">
-        <p className="font-semibold text-[#2c7a63]">Pinned from Overview</p>
-        <p className="mt-1 text-xs text-[#33506e]">
-          Fields were filled from your overview upload
-          {doneRecord?.fileName ? ` (${doneRecord.fileName})` : ''}. The
-          document was only read there — the section drop zone shows a pin, not
-          another read.
-        </p>
-      </div>
+      <InlineNotice
+        variant="info"
+        title="Pinned from Overview"
+        description={
+          <>
+            Fields were filled from your overview upload
+            {doneRecord?.fileName ? ` (${doneRecord.fileName})` : ''}. The
+            document was only read there — the section drop zone shows a pin, not
+            another read.
+          </>
+        }
+      />
     );
   }
 

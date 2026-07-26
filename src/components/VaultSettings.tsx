@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@common/ui/button';
+import { InlineNotice } from '@/components/common/ui/inline-notice';
 import { cn } from '@common/ui/utils';
 import {
   MobileBottomSheet,
@@ -1264,13 +1265,14 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
         </div>
       </section>
 
-      <section className="rounded-3xl border border-rose-200 bg-rose-50/40 p-6 sm:p-8">
-        <h2 className="text-lg font-bold text-rose-900">Danger zone</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-rose-800/80">
-          Permanently delete your account, Next-of-Kin users, vault data, and
-          all Cloudinary media (documents, images, audio, and video messages).
-          This cannot be undone.
-        </p>
+      <section className="rounded-3xl border border-[#a2453c]/35 bg-[#fbeceb]/40 p-6 sm:p-8">
+        <h2 className="text-lg font-bold text-[#8e372f]">Danger zone</h2>
+        <InlineNotice
+          className="mt-4 max-w-2xl"
+          variant="danger"
+          title="This deletes everything, permanently"
+          description="Your sections, attachments, letters, and everyone's access. It cannot be undone."
+        />
 
         {!showDeletePanel ? (
           <Button

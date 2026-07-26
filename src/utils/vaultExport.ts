@@ -382,32 +382,43 @@ export async function buildVaultPdf(rows: VaultExportRow[], exportDate: string) 
   return doc;
 }
 
+export type VaultExportResult = {
+  filename: string;
+  format: VaultExportFormat;
+  fieldCount: number;
+};
+
 export async function exportVaultData(
   payload: VaultExportPayload,
   format: VaultExportFormat,
-) {
+): Promise<VaultExportResult> {
   const exportDate = new Date().toLocaleString();
   const rows = buildVaultExportRows(payload);
   const stamp = new Date().toISOString().slice(0, 10);
+  const fieldCount = rows.length;
 
   if (format === 'csv') {
+    const filename = `orderly-affairs-export-${stamp}.csv`;
     downloadBlob(
       buildVaultCsv(rows, exportDate),
-      `orderly-affairs-export-${stamp}.csv`,
+      filename,
       'text/csv;charset=utf-8',
     );
-    return;
+    return { filename, format, fieldCount };
   }
 
   if (format === 'txt') {
+    const filename = `orderly-affairs-export-${stamp}.txt`;
     downloadBlob(
       buildVaultTxt(rows, exportDate),
-      `orderly-affairs-export-${stamp}.txt`,
+      filename,
       'text/plain;charset=utf-8',
     );
-    return;
+    return { filename, format, fieldCount };
   }
 
+  const filename = `orderly-affairs-export-${stamp}.pdf`;
   const doc = await buildVaultPdf(rows, exportDate);
-  doc.save(`orderly-affairs-export-${stamp}.pdf`);
+  doc.save(filename);
+  return { filename, format, fieldCount };
 }

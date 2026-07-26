@@ -55,6 +55,8 @@ import {
 } from '@/utils/sectionLastUpdated';
 import { fetchSectionsUpdatedAt } from '@/services/sectionMeta';
 import { VaultExportMenu } from '@/components/VaultExportMenu';
+import { BrandSuccessScreen } from '@/components/BrandSuccessScreen';
+import { exportVaultData } from '@/utils/vaultExport';
 import {
   DashboardTopBar,
   MobileTopBar,
@@ -278,6 +280,8 @@ export default function DashboardPage() {
   const [autoSaving, setAutoSaving] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [kitReadyOpen, setKitReadyOpen] = useState(false);
+  const kitReadyShownRef = useRef(false);
   const [sectionMatchReview, setSectionMatchReview] =
     useState<StashedAiPatch | null>(null);
   const [sectionMatchApplying, setSectionMatchApplying] = useState(false);
@@ -1623,6 +1627,70 @@ export default function DashboardPage() {
     getSectionCompletionStatus(s.id),
   ).length;
 
+  const primaryNextKin = useMemo(() => {
+    if (!Array.isArray(myNextKin) || myNextKin.length === 0) return null;
+    return (
+      myNextKin.find(
+        person =>
+          person.full_access ||
+          person.access_level === 'Full Kit Access' ||
+          person.authorized_sections === 'all',
+      ) || myNextKin[0]
+    );
+  }, [myNextKin]);
+
+  const kitReadyDescription = useMemo(() => {
+    const sectionPart =
+      allSections.length > 0
+        ? `All ${allSections.length} shared sections are complete`
+        : 'Your shared sections are complete';
+    const accessName =
+      primaryNextKin?.full_name || primaryNextKin?.email || null;
+    const accessPart = accessName
+      ? `${accessName} has ${
+          primaryNextKin?.full_access ||
+          primaryNextKin?.access_level === 'Full Kit Access'
+            ? 'full access'
+            : 'access'
+        }`
+      : 'trusted people are set';
+    const letterSealed = Boolean(primaryNextKin?.nok_letter_received);
+    const letterPart = letterSealed
+      ? 'and your letter is sealed'
+      : 'and you can seal your letter when ready';
+
+    return `${sectionPart}, ${accessPart}, ${letterPart}. We'll remind you every 6 months to check it's still true.`;
+  }, [allSections.length, primaryNextKin]);
+
+  useEffect(() => {
+    if (appMode !== 'owner') return;
+    if (!allSections.length) return;
+    if (completedSectionsCount < allSections.length) return;
+    if (kitReadyShownRef.current) return;
+
+    try {
+      if (window.localStorage.getItem('oa-kit-ready-celebrated') === '1') {
+        kitReadyShownRef.current = true;
+        return;
+      }
+    } catch {
+      // ignore storage failures
+    }
+
+    kitReadyShownRef.current = true;
+    setKitReadyOpen(true);
+  }, [appMode, allSections.length, completedSectionsCount]);
+
+  const dismissKitReady = useCallback((persist = true) => {
+    setKitReadyOpen(false);
+    if (!persist) return;
+    try {
+      window.localStorage.setItem('oa-kit-ready-celebrated', '1');
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const completedSectionIds = useMemo(
     () =>
       allSections
@@ -2571,6 +2639,31 @@ export default function DashboardPage() {
                 ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 250);
           }}
+        />
+
+        <BrandSuccessScreen
+          open={kitReadyOpen}
+          variant="celebration"
+          title="Your kit is ready for your family"
+          description={kitReadyDescription}
+          secondaryAction={{
+            label: 'Download a copy',
+            variant: 'outline',
+            onClick: () => {
+              void exportVaultData(exportPayload, 'pdf')
+                .then(() => dismissKitReady(true))
+                .catch(() => toast.error('Export failed. Please try again.'));
+            },
+          }}
+          primaryAction={{
+            label: 'Back to overview',
+            variant: 'primary',
+            onClick: () => {
+              dismissKitReady(true);
+              goToDashboard();
+            },
+          }}
+          onClose={() => dismissKitReady(true)}
         />
       </div>
       </HelpAssistantProvider>

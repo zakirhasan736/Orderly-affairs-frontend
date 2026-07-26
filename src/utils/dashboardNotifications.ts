@@ -130,10 +130,7 @@ export function buildExpiryNotices(
   return alerts.map((alert: OverviewExpiryAlert) => ({
     id: `expiry-${alert.id}`,
     category: 'reminder' as const,
-    title:
-      alert.tone === 'critical'
-        ? 'Urgent reminder'
-        : 'Expiry reminder',
+    title: alert.label || 'Expiry reminder',
     body: alert.text,
     tone: alert.tone === 'critical' ? 'critical' : 'warn',
     sectionId: alert.sectionId,
@@ -163,15 +160,15 @@ export function buildBillingNotices(billing: {
         sectionId: 'vault-settings',
         at: Date.now(),
       });
-    } else if (daysLeft <= 7) {
+    } else if (daysLeft <= 9) {
       items.push({
         id: `billing-trial-${daysLeft}`,
         category: 'billing',
         title: 'Trial ending soon',
         body:
           daysLeft === 0
-            ? 'Your free trial ends today. Add a payment method to stay unlocked.'
-            : `Your free trial ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.`,
+            ? 'Your free trial ends today — add a card to avoid a pause'
+            : `Your trial ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'} — add a card to avoid a pause`,
         tone: daysLeft <= 3 ? 'critical' : 'warn',
         sectionId: 'vault-settings',
         at: Date.now(),
@@ -246,7 +243,7 @@ export function buildEventNotices(opts: {
       id: 'event-nok-access',
       category: 'event',
       title: 'Access request',
-      body: `${opts.pendingNokName} requested kit access approval.`,
+      body: `${opts.pendingNokName} is waiting for you to approve their role`,
       tone: 'warn',
       sectionId: '2',
       at: Date.now(),

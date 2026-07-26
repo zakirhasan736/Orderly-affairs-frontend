@@ -150,6 +150,7 @@ export function DashboardTopBar({
           <NotificationBell
             notices={notices}
             onSelect={notice => onNoticeSelect?.(notice)}
+            onOpenSettings={onAccountInfo}
             buttonClassName="h-10 w-10 border border-slate-200 bg-white shadow-sm"
           />
 
@@ -274,6 +275,7 @@ export function MobileTopBar({
           <NotificationBell
             notices={notices}
             onSelect={notice => onNoticeSelect?.(notice)}
+            onOpenSettings={onAccountClick}
           />
           <button
             type="button"
