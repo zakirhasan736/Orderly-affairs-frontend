@@ -519,7 +519,7 @@ export function AiUploadHistoryPopup({
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] w-[min(96vw,42rem)] max-w-[42rem] overflow-hidden border-0 bg-[#f3f5f7] p-0 sm:rounded-3xl">
+        <DialogContent className="max-h-[90vh] w-[min(96vw,56rem)] max-w-[56rem] overflow-hidden border-0 bg-[#f3f5f7] p-0 sm:rounded-3xl">
           <DialogHeader className="space-y-1 border-b border-black/5 bg-white px-5 pb-4 pt-5 pr-12 text-left sm:px-6 sm:pt-6">
             <DialogTitle className="text-xl font-semibold tracking-tight text-[#213D59]">
               Uploaded documents
@@ -536,7 +536,7 @@ export function AiUploadHistoryPopup({
                 No documents uploaded yet.
               </p>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
                 {items.map(item => {
                   const progress =
                     item.status === 'done' || item.status === 'error'
@@ -558,7 +558,7 @@ export function AiUploadHistoryPopup({
                   return (
                     <div
                       key={item.id}
-                      className="group relative flex flex-col overflow-hidden rounded-[1.35rem] bg-[#e8ebef] p-2.5 shadow-sm transition hover:bg-[#e2e6eb] sm:p-3"
+                      className="group relative flex flex-col overflow-hidden rounded-2xl bg-[#e8ebef] p-2 shadow-sm transition hover:bg-[#e2e6eb] sm:rounded-[1.35rem] sm:p-2.5"
                     >
                       <button
                         type="button"
@@ -572,7 +572,7 @@ export function AiUploadHistoryPopup({
                         />
 
                         {isLive || item.status === 'queued' ? (
-                          <div className="absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from-black/50 to-transparent px-2.5 pb-2 pt-8">
+                          <div className="absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from-black/50 to-transparent px-2 pb-2 pt-7">
                             <div className="mb-1.5 flex items-center justify-between gap-2">
                               <span className="text-[10px] font-semibold text-white">
                                 {statusLabel(item.status)}
@@ -591,7 +591,7 @@ export function AiUploadHistoryPopup({
                         ) : null}
 
                         {item.status === 'error' ? (
-                          <div className="absolute inset-x-2 bottom-2 rounded-lg bg-rose-600/90 px-2 py-1 text-[10px] font-semibold text-white">
+                          <div className="absolute inset-x-1.5 bottom-1.5 rounded-lg bg-rose-600/90 px-2 py-1 text-[10px] font-semibold text-white">
                             Failed
                           </div>
                         ) : null}
@@ -604,7 +604,7 @@ export function AiUploadHistoryPopup({
                           event.stopPropagation();
                           void handleDelete(item);
                         }}
-                        className="absolute right-3.5 top-3.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white opacity-0 shadow-sm backdrop-blur-sm transition hover:bg-rose-600 group-hover:opacity-100 disabled:opacity-50"
+                        className="absolute right-2.5 top-2.5 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-white opacity-100 shadow-sm backdrop-blur-sm transition hover:bg-rose-600 sm:h-8 sm:w-8 sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-50"
                         aria-label={`Delete ${item.fileName}`}
                         title="Delete upload"
                       >
@@ -614,17 +614,17 @@ export function AiUploadHistoryPopup({
                       <button
                         type="button"
                         onClick={() => openPreview(item)}
-                        className="mt-2.5 space-y-0.5 px-0.5 text-left"
+                        className="mt-2 space-y-0.5 px-0.5 text-left"
                         title={item.fileName}
                       >
-                        <p className="text-[11px] font-medium text-[#6b7785] sm:text-xs">
+                        <p className="text-[10px] font-medium text-[#6b7785] sm:text-[11px]">
                           {relative || 'just now'}
                         </p>
-                        <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-[#1a2b3d] sm:text-[14px]">
+                        <p className="line-clamp-2 text-[12px] font-semibold leading-snug text-[#1a2b3d] sm:text-[13px]">
                           {item.fileName}
                         </p>
                         <p
-                          className="truncate text-[11px] text-[#6b7785] sm:text-xs"
+                          className="truncate text-[10px] text-[#6b7785] sm:text-[11px]"
                           title={category}
                         >
                           {category}

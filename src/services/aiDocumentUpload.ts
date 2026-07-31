@@ -144,11 +144,20 @@ export async function fetchAiDocumentPreviewBlob(fileId: string): Promise<{
   }
 
   const blob = await res.blob();
-  const mimeType =
-    res.headers.get('content-type') || blob.type || 'application/octet-stream';
+  const headerMime = (res.headers.get('content-type') || '').split(';')[0].trim();
   const disposition = res.headers.get('content-disposition') || '';
   const match = /filename\*?=(?:UTF-8''|")?([^\";]+)/i.exec(disposition);
-  const fileName = match?.[1] ? decodeURIComponent(match[1].replace(/"/g, '')) : undefined;
+  const fileName = match?.[1]
+    ? decodeURIComponent(match[1].replace(/"/g, ''))
+    : undefined;
+
+  // Prefer a concrete type — browsers often leave blob.type empty for octet-stream.
+  const mimeType =
+    headerMime && headerMime !== 'application/octet-stream'
+      ? headerMime
+      : blob.type && blob.type !== 'application/octet-stream'
+        ? blob.type
+        : headerMime || blob.type || 'application/octet-stream';
 
   return { blob, mimeType, fileName };
 }

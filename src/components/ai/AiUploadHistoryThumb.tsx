@@ -4,27 +4,16 @@ import React, { useEffect, useState } from 'react';
 import { FileText, FileType2, ImageIcon, Loader2 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import { fetchAiDocumentPreviewBlob } from '@/services/aiDocumentUpload';
+import {
+  resolveAiPreviewKind,
+  resolveAiPreviewMime,
+} from '@/utils/aiPreviewKind';
 
 type AiUploadHistoryThumbProps = {
   fileId?: string;
   fileName: string;
   className?: string;
 };
-
-function guessKind(fileName: string, mimeType?: string) {
-  const lower = `${fileName} ${mimeType || ''}`.toLowerCase();
-  if (lower.includes('pdf') || lower.endsWith('.pdf')) return 'pdf';
-  if (
-    lower.includes('image/') ||
-    /\.(png|jpe?g|webp|gif|bmp)$/i.test(fileName)
-  ) {
-    return 'image';
-  }
-  if (lower.includes('text/') || /\.(txt|csv|md|log)$/i.test(fileName)) {
-    return 'text';
-  }
-  return 'file';
-}
 
 /**
  * Document thumbnail for overview history cards (preview image or type placeholder).
@@ -55,14 +44,26 @@ export function AiUploadHistoryThumb({
       setObjectUrl(null);
 
       try {
-        const { blob, mimeType: mime } = await fetchAiDocumentPreviewBlob(fileId);
+        const { blob, mimeType: fetchedMime, fileName: fetchedName } =
+          await fetchAiDocumentPreviewBlob(fileId);
         if (cancelled) return;
+
+        const mime = resolveAiPreviewMime({
+          contentType: fetchedMime,
+          blobType: blob.type,
+          fileName: fetchedName || fileName,
+        });
         setMimeType(mime);
-        if (mime.startsWith('image/')) {
+
+        const kind = resolveAiPreviewKind({
+          mime,
+          fileName: fetchedName || fileName,
+        });
+
+        if (kind === 'image') {
           createdUrl = URL.createObjectURL(blob);
           setObjectUrl(createdUrl);
         } else {
-          // Non-image: keep placeholder (PDF/text) — no object URL needed.
           setObjectUrl(null);
         }
       } catch {
@@ -78,9 +79,17 @@ export function AiUploadHistoryThumb({
       cancelled = true;
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [fileId]);
+  }, [fileId, fileName]);
 
-  const kind = guessKind(fileName, mimeType);
+  const kind = resolveAiPreviewKind({ mime: mimeType, fileName });
+  const kindLabel =
+    kind === 'pdf'
+      ? 'PDF'
+      : kind === 'text'
+        ? 'Text'
+        : kind === 'image'
+          ? 'Image'
+          : 'File';
 
   return (
     <div
@@ -108,7 +117,7 @@ export function AiUploadHistoryThumb({
             kind === 'pdf' && 'bg-gradient-to-b from-[#eef3f9] to-white',
             kind === 'text' && 'bg-gradient-to-b from-[#f7f5f0] to-white',
             kind === 'image' && 'bg-gradient-to-b from-[#eef8f4] to-white',
-            kind === 'file' && 'bg-gradient-to-b from-[#f4f6f8] to-white',
+            kind === 'other' && 'bg-gradient-to-b from-[#f4f6f8] to-white',
           )}
         >
           {kind === 'pdf' ? (
@@ -119,7 +128,7 @@ export function AiUploadHistoryThumb({
             <FileText className="h-10 w-10 text-[#213D59]/65" />
           )}
           <p className="max-w-full truncate text-[10px] font-semibold uppercase tracking-wide text-[#5a6b80]">
-            {kind === 'pdf' ? 'PDF' : kind === 'text' ? 'Text' : kind === 'image' ? 'Image' : 'File'}
+            {kindLabel}
           </p>
         </div>
       )}

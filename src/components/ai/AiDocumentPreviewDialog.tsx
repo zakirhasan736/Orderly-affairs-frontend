@@ -11,6 +11,7 @@ import {
 } from '@/components/common/ui/dialog';
 import { fetchAiDocumentPreviewBlob } from '@/services/aiDocumentUpload';
 import { getReadableAiDocumentType } from '@/utils/aiDocumentUploadUi';
+import { resolveAiPreviewKind, resolveAiPreviewMime } from '@/utils/aiPreviewKind';
 import { cn } from '@common/ui/utils';
 
 type AiDocumentPreviewDialogProps = {
@@ -41,10 +42,11 @@ export function AiDocumentPreviewDialog({
     if (!open || !fileId) {
       setError('');
       setTextContent(null);
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-        setObjectUrl(null);
-      }
+      setLoading(false);
+      setObjectUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
       return;
     }
 
@@ -55,34 +57,47 @@ export function AiDocumentPreviewDialog({
       setLoading(true);
       setError('');
       setTextContent(null);
+      setObjectUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+
       try {
         const { blob, mimeType: fetchedMime, fileName: fetchedName } =
           await fetchAiDocumentPreviewBlob(fileId);
         if (cancelled) return;
 
-        const mime = fetchedMime || mimeType || blob.type || '';
+        const titleHint = fileName || fetchedName || '';
+        const mime = resolveAiPreviewMime({
+          contentType: fetchedMime,
+          blobType: blob.type,
+          fileName: titleHint,
+          fallbackMime: mimeType,
+        });
         setResolvedMime(mime);
 
-        if (mime.startsWith('text/') || mime === 'application/json') {
+        const kind = resolveAiPreviewKind({ mime, fileName: titleHint });
+
+        if (kind === 'text') {
           const text = await blob.text();
           if (!cancelled) setTextContent(text);
-        } else {
-          createdUrl = URL.createObjectURL(blob);
-          setObjectUrl(createdUrl);
+          return;
         }
 
-        if (fetchedName && !fileName) {
-          // Title already passed from parent when available.
-        }
+        // Retype when server/browser left the blob as octet-stream so
+        // <img> / PDF iframe previews reliably.
+        const previewBlob =
+          mime && mime !== blob.type
+            ? new Blob([blob], { type: mime })
+            : blob;
+        createdUrl = URL.createObjectURL(previewBlob);
+        if (!cancelled) setObjectUrl(createdUrl);
       } catch (err) {
         if (!cancelled) {
           const message =
             err instanceof Error ? err.message : 'Could not open document.';
           setError(message);
-          if (
-            fileId &&
-            /not found|deleted/i.test(message)
-          ) {
+          if (fileId && /not found|deleted/i.test(message)) {
             onNotFound?.(fileId);
           }
         }
@@ -98,20 +113,16 @@ export function AiDocumentPreviewDialog({
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, fileId]);
-
-  useEffect(() => {
-    return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [objectUrl]);
+  }, [open, fileId, fileName, mimeType]);
 
   const title = fileName?.trim() || 'Uploaded document';
-  const typeLabel = getReadableAiDocumentType(resolvedMime || mimeType || undefined);
-  const isImage = (resolvedMime || '').startsWith('image/');
-  const isPdf =
-    (resolvedMime || '') === 'application/pdf' ||
-    title.toLowerCase().endsWith('.pdf');
+  const typeLabel = getReadableAiDocumentType(
+    resolvedMime || mimeType || undefined,
+  );
+  const kind = resolveAiPreviewKind({
+    mime: resolvedMime || mimeType,
+    fileName: title,
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -151,7 +162,7 @@ export function AiDocumentPreviewDialog({
             </pre>
           ) : null}
 
-          {!loading && !error && objectUrl && isImage ? (
+          {!loading && !error && objectUrl && kind === 'image' ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={objectUrl}
@@ -160,7 +171,7 @@ export function AiDocumentPreviewDialog({
             />
           ) : null}
 
-          {!loading && !error && objectUrl && isPdf ? (
+          {!loading && !error && objectUrl && kind === 'pdf' ? (
             <iframe
               title={title}
               src={objectUrl}
@@ -171,8 +182,7 @@ export function AiDocumentPreviewDialog({
           {!loading &&
           !error &&
           objectUrl &&
-          !isImage &&
-          !isPdf &&
+          kind === 'other' &&
           textContent == null ? (
             <div className="flex min-h-[200px] flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 text-center">
               <FileText className="h-8 w-8 text-slate-400" />
