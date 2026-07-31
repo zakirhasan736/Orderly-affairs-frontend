@@ -1078,6 +1078,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
             onFile={uploaded => handleDocumentUpload(uploaded, scope, onAutofill)}
             disabled={isAnyAIActionRunning}
             showSupportedHint
+            sectionId="1"
             className={[
               'group flex cursor-pointer flex-col items-center justify-center gap-2',
               'rounded-xl border border-slate-200 bg-white/80 px-4 py-3.5 text-center',

@@ -4,6 +4,7 @@ import React from 'react';
 import { UploadCloud } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import { AiUploadSupportedSectionsHint } from '@/components/ai/AiUploadSupportedSectionsHint';
+import { AiUploadHistoryPopup } from '@/components/ai/AiUploadHistoryPopup';
 import { useAiDocumentDropZone } from '@/hooks/useAiDocumentDropZone';
 import { AI_DOCUMENT_ACCEPT } from '@/utils/aiDocumentUploadUi';
 
@@ -15,6 +16,8 @@ type AiDocumentDropZoneInputProps = {
   uploadTitle?: string;
   uploadSubtitle?: string;
   showSupportedHint?: boolean;
+  /** When set, shows bottom-right Eye button for this section's attachments. */
+  sectionId?: string | null;
   children?: React.ReactNode;
 };
 
@@ -26,6 +29,7 @@ export function AiDocumentDropZoneInput({
   uploadTitle = 'Drop document here',
   uploadSubtitle = 'PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB',
   showSupportedHint = false,
+  sectionId = null,
   children,
 }: AiDocumentDropZoneInputProps) {
   const { isDragging, processFile, dropZoneProps } = useAiDocumentDropZone(
@@ -71,13 +75,27 @@ export function AiDocumentDropZoneInput({
     </label>
   );
 
+  const withAttachments =
+    sectionId != null && String(sectionId).trim() !== '' ? (
+      <div className="relative pb-14">
+        {dropZone}
+        <AiUploadHistoryPopup
+          absolute
+          sectionId={String(sectionId)}
+          variant="inline"
+        />
+      </div>
+    ) : (
+      dropZone
+    );
+
   if (!showSupportedHint) {
-    return dropZone;
+    return withAttachments;
   }
 
   return (
     <div className="space-y-1.5">
-      {dropZone}
+      {withAttachments}
       <AiUploadSupportedSectionsHint compact />
     </div>
   );

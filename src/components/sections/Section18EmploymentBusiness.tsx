@@ -957,6 +957,7 @@ export default function Section18EmploymentBusiness({
             onFile={uploaded => handleDocumentUpload(uploaded, scope, runAutofill)}
             disabled={isAnyAIActionRunning}
             showSupportedHint
+            sectionId="18"
             className={[
               'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-3.5 text-center transition',
               tone.uploadBox,

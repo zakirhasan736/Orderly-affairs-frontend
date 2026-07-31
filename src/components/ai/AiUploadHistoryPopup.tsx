@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, Eye, FileStack, FileText, Trash2 } from 'lucide-react';
+import { ChevronDown, Eye, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,8 +13,8 @@ import { cn } from '@common/ui/utils';
 import {
   formatUploadHistoryDay,
   formatUploadHistoryTime,
-  formatUploadHistoryWhen,
   formatUploadRelativeDays,
+  formatUploadRelativeShort,
   listAiUploadHistory,
   removeAiUploadHistoryItem,
   type AiUploadHistoryItem,
@@ -24,6 +24,7 @@ import { deleteAIDocument } from '@/services/aiDocumentUpload';
 import type { DashboardAiJob } from '@/hooks/useDashboardAiBatchRunner';
 import { toast } from 'sonner';
 import { AiDocumentPreviewDialog } from '@/components/ai/AiDocumentPreviewDialog';
+import { AiUploadHistoryThumb } from '@/components/ai/AiUploadHistoryThumb';
 
 function statusTone(status: string) {
   if (status === 'done') return 'text-emerald-700 bg-emerald-50';
@@ -220,8 +221,8 @@ function ProgressBar({
 }
 
 /**
- * Overview: FileStack button + dialog list (localStorage footprints).
- * Sections: inline bottom-right panel for that section only.
+ * Overview: Eye button + dialog list (localStorage footprints).
+ * Sections: Eye button bottom-right for that section's attachments.
  * Re-uploading the same topic replaces the previous card and refreshes timestamps.
  */
 export function AiUploadHistoryPopup({
@@ -239,7 +240,6 @@ export function AiUploadHistoryPopup({
     source,
   });
   const [open, setOpen] = useState(false);
-  const [expanded, setExpanded] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [preview, setPreview] = useState<{
     fileId: string;
@@ -306,43 +306,73 @@ export function AiUploadHistoryPopup({
   );
 
   if (variant === 'inline') {
-    if (count === 0) return null;
-
     return (
       <>
       <div
         className={cn(
-          absolute
-            ? 'absolute bottom-3 right-3 z-20 w-[min(100%-1.5rem,17.5rem)]'
-            : 'relative w-full max-w-sm',
+          absolute ? 'absolute bottom-3 right-3 z-20' : 'relative',
           className,
         )}
         onClick={event => event.stopPropagation()}
         onKeyDown={event => event.stopPropagation()}
       >
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-lg backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={() => setExpanded(value => !value)}
-            className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-left"
-          >
-            <div className="min-w-0">
-              <p className="truncate text-xs font-semibold text-[#213D59]">
-                Uploaded documents
-              </p>
-              <p className="text-[10px] text-slate-500">
-                {count} file{count === 1 ? '' : 's'} · tap a name to preview
-              </p>
-            </div>
-            {expanded ? (
-              <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
-            ) : (
-              <ChevronUp className="h-4 w-4 shrink-0 text-slate-400" />
-            )}
-          </button>
+        <button
+          type="button"
+          title={
+            count > 0
+              ? 'View section document attachments'
+              : 'No attachments yet — upload a document first'
+          }
+          aria-label="View section document attachments"
+          aria-expanded={open}
+          onClick={() => {
+            refreshHistory();
+            setOpen(value => !value);
+          }}
+          className={cn(
+            'relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#213D59] shadow-sm transition hover:border-[#213D59]/35 hover:bg-slate-50',
+            count > 0 && 'ring-1 ring-[#213D59]/10',
+            open && 'border-[#213D59]/40 bg-[#e7eef7]',
+          )}
+        >
+          <Eye className="h-5 w-5" />
+          {count > 0 ? (
+            <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#213D59] px-1 text-[10px] font-bold text-white">
+              {count > 99 ? '99+' : count}
+            </span>
+          ) : null}
+        </button>
 
-          {expanded ? (
+        {open ? (
+          <div className="absolute bottom-12 right-0 w-[min(calc(100vw-2rem),17.5rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-lg backdrop-blur-sm">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-[#213D59]">
+                  Section attachments
+                </p>
+                <p className="text-[10px] text-slate-500">
+                  {count === 0
+                    ? 'No files yet'
+                    : `${count} document${count === 1 ? '' : 's'} · tap Eye to preview`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                aria-label="Close attachments"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            </div>
+
             <div className="max-h-56 space-y-2 overflow-y-auto p-2 sm:max-h-64">
+              {items.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-6 text-center text-[11px] text-slate-500">
+                  Upload a document in this section to attach and preview it
+                  here.
+                </p>
+              ) : null}
               {items.map(item => {
                 const progress =
                   item.status === 'done' || item.status === 'error'
@@ -362,11 +392,11 @@ export function AiUploadHistoryPopup({
                       <button
                         type="button"
                         onClick={() => openPreview(item)}
-                        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm transition hover:text-[#2B5A8C]"
+                        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-[#2B5A8C] shadow-sm transition hover:bg-emerald-50"
                         title="View document"
                         aria-label={`View ${item.fileName}`}
                       >
-                        <FileText className="h-3.5 w-3.5" />
+                        <Eye className="h-3.5 w-3.5" />
                       </button>
                       <button
                         type="button"
@@ -453,15 +483,15 @@ export function AiUploadHistoryPopup({
                 );
               })}
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
       {previewDialog}
       </>
     );
   }
 
-  // Overview dashboard — stack button + dialog (previous UX).
+  // Overview dashboard — eye button + dialog.
   return (
     <>
       <button
@@ -480,7 +510,7 @@ export function AiUploadHistoryPopup({
           className,
         )}
       >
-        <FileStack className="h-5 w-5" />
+        <Eye className="h-5 w-5" />
         {count > 0 ? (
           <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#213D59] px-1 text-[10px] font-bold text-white">
             {count > 99 ? '99+' : count}
@@ -489,25 +519,24 @@ export function AiUploadHistoryPopup({
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] w-[min(96vw,56rem)] max-w-[56rem] overflow-hidden p-4 sm:p-6">
-          <DialogHeader className="pr-8 text-left">
-            <DialogTitle className="text-[#213D59]">
+        <DialogContent className="max-h-[90vh] w-[min(96vw,42rem)] max-w-[42rem] overflow-hidden border-0 bg-[#f3f5f7] p-0 sm:rounded-3xl">
+          <DialogHeader className="space-y-1 border-b border-black/5 bg-white px-5 pb-4 pt-5 pr-12 text-left sm:px-6 sm:pt-6">
+            <DialogTitle className="text-xl font-semibold tracking-tight text-[#213D59]">
               Uploaded documents
             </DialogTitle>
-            <DialogDescription>
-              Tap a document name to preview image, text, or PDF. Re-uploading
-              the same topic replaces the previous file and refreshes the update
-              time.
+            <DialogDescription className="text-[13px] text-[#5a6b80]">
+              Tap a card to preview. Re-uploading the same topic replaces the
+              previous file.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="max-h-[min(68vh,36rem)] overflow-y-auto pr-1">
+          <div className="max-h-[min(70vh,38rem)] overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
             {items.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+              <p className="rounded-2xl border border-dashed border-[#213D59]/15 bg-white px-4 py-12 text-center text-sm text-[#5a6b80]">
                 No documents uploaded yet.
               </p>
             ) : (
-              <div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {items.map(item => {
                   const progress =
                     item.status === 'done' || item.status === 'error'
@@ -517,112 +546,103 @@ export function AiUploadHistoryPopup({
                     item.status !== 'done' &&
                     item.status !== 'error' &&
                     item.status !== 'queued';
+                  const category =
+                    item.targetSectionLabel ||
+                    (item.sectionId && item.sectionId !== 'overview'
+                      ? `Section ${item.sectionId}`
+                      : 'Overview');
+                  const relative = formatUploadRelativeShort(
+                    item.updatedAt || item.createdAt,
+                  );
 
                   return (
                     <div
                       key={item.id}
-                      className="flex min-h-[9.5rem] flex-col rounded-xl border border-slate-200 bg-white p-2.5 sm:min-h-[10.5rem] sm:p-3"
+                      className="group relative flex flex-col overflow-hidden rounded-[1.35rem] bg-[#e8ebef] p-2.5 shadow-sm transition hover:bg-[#e2e6eb] sm:p-3"
                     >
-                      <div className="flex items-start gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openPreview(item)}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-500 transition hover:bg-emerald-50 hover:text-[#2B5A8C] sm:h-9 sm:w-9"
-                          title="View document"
-                          aria-label={`View ${item.fileName}`}
-                        >
-                          <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openPreview(item)}
-                          className="min-w-0 flex-1 text-left"
-                          title="Click to view document"
-                        >
-                          <p
-                            className="truncate text-[12px] font-semibold leading-snug text-slate-900 sm:text-sm"
-                            title={item.fileName}
-                          >
-                            {item.fileName}
-                          </p>
-                          <div className="mt-1 flex flex-wrap items-center gap-1">
-                            <span
-                              className={cn(
-                                'rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide sm:text-[10px]',
-                                statusTone(item.status),
-                              )}
-                            >
-                              {statusLabel(item.status)}
-                            </span>
-                            {isLive || item.status === 'queued' ? (
-                              <span className="text-[10px] font-semibold text-sky-700 sm:text-[11px]">
-                                {progress}%
-                              </span>
-                            ) : null}
-                            <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-[#2B5A8C] sm:text-[10px]">
-                              <Eye className="h-3 w-3" />
-                              View
-                            </span>
-                          </div>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={deletingId === item.id}
-                          onClick={event => {
-                            event.stopPropagation();
-                            void handleDelete(item);
-                          }}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-                          aria-label={`Delete ${item.fileName}`}
-                          title="Delete upload"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openPreview(item)}
+                        className="relative block w-full text-left"
+                        title={`Preview ${item.fileName}`}
+                      >
+                        <AiUploadHistoryThumb
+                          fileId={item.fileId}
+                          fileName={item.fileName}
+                        />
 
-                      {item.targetSectionLabel ? (
-                        <p
-                          className="mt-2 truncate text-[10px] text-slate-500 sm:text-xs"
-                          title={item.targetSectionLabel}
-                        >
-                          {item.targetSectionLabel}
+                        {isLive || item.status === 'queued' ? (
+                          <div className="absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from-black/50 to-transparent px-2.5 pb-2 pt-8">
+                            <div className="mb-1.5 flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-semibold text-white">
+                                {statusLabel(item.status)}
+                                {isLive || item.status === 'queued'
+                                  ? ` · ${progress}%`
+                                  : ''}
+                              </span>
+                            </div>
+                            <div className="h-1 overflow-hidden rounded-full bg-white/30">
+                              <div
+                                className="h-full rounded-full bg-white transition-all"
+                                style={{ width: `${Math.max(8, progress)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {item.status === 'error' ? (
+                          <div className="absolute inset-x-2 bottom-2 rounded-lg bg-rose-600/90 px-2 py-1 text-[10px] font-semibold text-white">
+                            Failed
+                          </div>
+                        ) : null}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={deletingId === item.id}
+                        onClick={event => {
+                          event.stopPropagation();
+                          void handleDelete(item);
+                        }}
+                        className="absolute right-3.5 top-3.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white opacity-0 shadow-sm backdrop-blur-sm transition hover:bg-rose-600 group-hover:opacity-100 disabled:opacity-50"
+                        aria-label={`Delete ${item.fileName}`}
+                        title="Delete upload"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openPreview(item)}
+                        className="mt-2.5 space-y-0.5 px-0.5 text-left"
+                        title={item.fileName}
+                      >
+                        <p className="text-[11px] font-medium text-[#6b7785] sm:text-xs">
+                          {relative || 'just now'}
                         </p>
-                      ) : (
-                        <div className="mt-2 h-3.5 sm:h-4" />
-                      )}
+                        <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-[#1a2b3d] sm:text-[14px]">
+                          {item.fileName}
+                        </p>
+                        <p
+                          className="truncate text-[11px] text-[#6b7785] sm:text-xs"
+                          title={category}
+                        >
+                          {category}
+                          {item.status === 'done' ? ' · Filled' : ''}
+                          {item.status === 'error' ? ' · Failed' : ''}
+                          {isLive ? ' · Reading' : ''}
+                          {item.status === 'queued' ? ' · Waiting' : ''}
+                        </p>
+                      </button>
 
                       {item.error ? (
                         <p
-                          className="mt-1 line-clamp-2 text-[10px] text-rose-600 sm:text-xs"
+                          className="mt-1 line-clamp-2 px-0.5 text-[10px] text-rose-600"
                           title={item.error}
                         >
                           {item.error}
                         </p>
                       ) : null}
-
-                      <div className="mt-auto space-y-0.5 pt-2 text-[9px] leading-snug text-slate-500 sm:text-[11px]">
-                        <p className="font-semibold text-[#2B5A8C]">
-                          {formatUploadRelativeDays(item.updatedAt)}
-                        </p>
-                        <p>
-                          Uploaded{' '}
-                          <span className="font-medium text-slate-700">
-                            {formatUploadHistoryWhen(item.createdAt)}
-                          </span>
-                        </p>
-                        <p>
-                          Updated{' '}
-                          <span className="font-medium text-slate-700">
-                            {formatUploadHistoryWhen(item.updatedAt)}
-                          </span>
-                        </p>
-                      </div>
-
-                      <ProgressBar
-                        status={item.status}
-                        progress={progress}
-                        isLive={isLive}
-                      />
                     </div>
                   );
                 })}

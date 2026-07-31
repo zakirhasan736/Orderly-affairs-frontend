@@ -1651,6 +1651,7 @@ export default function Section17FamilyTreasuredConnections({
         )}
             disabled={isAnyAIActionRunning}
             showSupportedHint
+            sectionId="17"
             className={[
               'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-3.5 text-center transition',
               tone.uploadBox,

@@ -1015,6 +1015,7 @@ export default function Section20LegalDocumentsRecords({
             onFile={uploaded => handleDocumentUpload(uploaded, scope, onAutofill)}
             disabled={isAnyAIActionRunning}
             showSupportedHint
+            sectionId="20"
             className={[
               'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-3.5 text-center transition',
               tone.uploadBox,
