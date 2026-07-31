@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Eye, Trash2 } from 'lucide-react';
+import { ChevronDown, Eye, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -26,18 +26,50 @@ import { toast } from 'sonner';
 import { AiDocumentPreviewDialog } from '@/components/ai/AiDocumentPreviewDialog';
 import { AiUploadHistoryThumb } from '@/components/ai/AiUploadHistoryThumb';
 
-function statusTone(status: string) {
-  if (status === 'done') return 'text-emerald-700 bg-emerald-50';
-  if (status === 'error') return 'text-rose-700 bg-rose-50';
-  if (status === 'queued') return 'text-amber-700 bg-amber-50';
-  return 'text-sky-700 bg-sky-50';
+/** Timeouts / blips — still treat as in progress in the UI. */
+function looksLikeTransientIssue(error?: string | null) {
+  const msg = String(error || '').toLowerCase();
+  if (!msg) return false;
+  return /timeout|timed out|took too long|network|temporarily|try again|aborted|fetch failed|gateway|502|503|504/.test(
+    msg,
+  );
 }
 
-function statusLabel(status: string) {
-  if (status === 'done') return 'Filled';
-  if (status === 'error') return 'Failed';
-  if (status === 'queued') return 'Waiting';
-  return 'Reading';
+/**
+ * What the user should see — prefer Processing over a harsh Failed when
+ * the job is still running or only hit a soft timeout.
+ */
+function displayStatus(item: {
+  status: string;
+  error?: string | null;
+}): 'done' | 'processing' | 'queued' | 'attention' {
+  if (item.status === 'done') return 'done';
+  if (item.status === 'queued') return 'queued';
+  if (item.status === 'error') {
+    return looksLikeTransientIssue(item.error) ? 'processing' : 'attention';
+  }
+  return 'processing';
+}
+
+function statusTone(status: ReturnType<typeof displayStatus>) {
+  if (status === 'done') return 'text-emerald-800 bg-emerald-50 ring-emerald-100';
+  if (status === 'attention') return 'text-amber-800 bg-amber-50 ring-amber-100';
+  if (status === 'queued') return 'text-slate-700 bg-slate-100 ring-slate-200';
+  return 'text-sky-800 bg-sky-50 ring-sky-100';
+}
+
+function statusLabel(status: ReturnType<typeof displayStatus>) {
+  if (status === 'done') return 'Complete';
+  if (status === 'attention') return 'Needs attention';
+  if (status === 'queued') return 'In queue';
+  return 'Processing';
+}
+
+function statusFootnote(status: ReturnType<typeof displayStatus>) {
+  if (status === 'done') return 'Complete';
+  if (status === 'attention') return 'Needs attention';
+  if (status === 'queued') return 'In queue';
+  return 'Processing';
 }
 
 function mergeHistoryWithJobs(
@@ -194,7 +226,7 @@ function ProgressBar({
   progress,
   isLive,
 }: {
-  status: string;
+  status: ReturnType<typeof displayStatus>;
   progress: number;
   isLive: boolean;
 }) {
@@ -205,10 +237,10 @@ function ProgressBar({
           'h-full rounded-full transition-all duration-500',
           status === 'done'
             ? 'bg-emerald-500'
-            : status === 'error'
-              ? 'bg-rose-400'
+            : status === 'attention'
+              ? 'bg-amber-400'
               : status === 'queued'
-                ? 'bg-amber-400'
+                ? 'bg-slate-400'
                 : 'bg-sky-500',
           isLive && 'animate-pulse',
         )}
@@ -246,6 +278,14 @@ export function AiUploadHistoryPopup({
     fileName: string;
   } | null>(null);
   const count = items.length;
+  const processingCount = useMemo(
+    () =>
+      items.filter(item => {
+        const status = displayStatus(item);
+        return status === 'processing' || status === 'queued';
+      }).length,
+    [items],
+  );
 
   const handleDelete = useCallback(
     async (item: AiUploadHistoryItem) => {
@@ -374,14 +414,13 @@ export function AiUploadHistoryPopup({
                 </p>
               ) : null}
               {items.map(item => {
+                const uiStatus = displayStatus(item);
                 const progress =
-                  item.status === 'done' || item.status === 'error'
+                  uiStatus === 'done' || uiStatus === 'attention'
                     ? 100
                     : Math.max(0, Math.min(99, item.progress || 0));
                 const isLive =
-                  item.status !== 'done' &&
-                  item.status !== 'error' &&
-                  item.status !== 'queued';
+                  uiStatus === 'processing' || uiStatus === 'queued';
 
                 return (
                   <div
@@ -413,11 +452,14 @@ export function AiUploadHistoryPopup({
                         <div className="mt-0.5 flex flex-wrap items-center gap-1">
                           <span
                             className={cn(
-                              'rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide',
-                              statusTone(item.status),
+                              'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-semibold tracking-wide ring-1 ring-inset',
+                              statusTone(uiStatus),
                             )}
                           >
-                            {statusLabel(item.status)}
+                            {uiStatus === 'processing' ? (
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                            ) : null}
+                            {statusLabel(uiStatus)}
                           </span>
                           <span className="text-[10px] font-semibold text-slate-600">
                             {progress}%
@@ -446,8 +488,8 @@ export function AiUploadHistoryPopup({
                       </p>
                     ) : null}
 
-                    {item.error ? (
-                      <p className="mt-1 line-clamp-2 text-[10px] text-rose-600">
+                    {uiStatus === 'attention' && item.error ? (
+                      <p className="mt-1 line-clamp-2 text-[10px] text-amber-700">
                         {item.error}
                       </p>
                     ) : null}
@@ -475,7 +517,7 @@ export function AiUploadHistoryPopup({
                     </div>
 
                     <ProgressBar
-                      status={item.status}
+                      status={uiStatus}
                       progress={progress}
                       isLive={isLive}
                     />
@@ -530,6 +572,30 @@ export function AiUploadHistoryPopup({
             </DialogDescription>
           </DialogHeader>
 
+          {processingCount > 0 ? (
+            <div className="mx-4 mt-4 flex gap-3 rounded-2xl border border-[#213D59]/12 bg-gradient-to-br from-[#eef3f9] to-white px-4 py-3.5 shadow-sm sm:mx-5">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#213D59] text-white shadow-sm">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <p className="text-[13px] font-semibold text-[#213D59]">
+                  AI is reading your uploads
+                </p>
+                <p className="text-[12.5px] leading-relaxed text-[#5a6b80]">
+                  Your documents are being read and processed by our AI. This
+                  can take a few minutes — feel free to keep browsing. Status
+                  will update to Complete when each section is filled.
+                </p>
+                <p className="inline-flex items-center gap-1.5 pt-0.5 text-[11px] font-medium text-sky-800">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {processingCount === 1
+                    ? '1 document processing'
+                    : `${processingCount} documents processing`}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           <div className="max-h-[min(70vh,38rem)] overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
             {items.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-[#213D59]/15 bg-white px-4 py-12 text-center text-sm text-[#5a6b80]">
@@ -538,14 +604,13 @@ export function AiUploadHistoryPopup({
             ) : (
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
                 {items.map(item => {
+                  const uiStatus = displayStatus(item);
                   const progress =
-                    item.status === 'done' || item.status === 'error'
+                    uiStatus === 'done' || uiStatus === 'attention'
                       ? 100
                       : Math.max(0, Math.min(99, item.progress || 0));
                   const isLive =
-                    item.status !== 'done' &&
-                    item.status !== 'error' &&
-                    item.status !== 'queued';
+                    uiStatus === 'processing' || uiStatus === 'queued';
                   const category =
                     item.targetSectionLabel ||
                     (item.sectionId && item.sectionId !== 'overview'
@@ -571,14 +636,13 @@ export function AiUploadHistoryPopup({
                           fileName={item.fileName}
                         />
 
-                        {isLive || item.status === 'queued' ? (
-                          <div className="absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from-black/50 to-transparent px-2 pb-2 pt-7">
+                        {isLive ? (
+                          <div className="absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from-black/55 to-transparent px-2 pb-2 pt-7">
                             <div className="mb-1.5 flex items-center justify-between gap-2">
-                              <span className="text-[10px] font-semibold text-white">
-                                {statusLabel(item.status)}
-                                {isLive || item.status === 'queued'
-                                  ? ` · ${progress}%`
-                                  : ''}
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-white">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                {statusLabel(uiStatus)}
+                                {` · ${progress}%`}
                               </span>
                             </div>
                             <div className="h-1 overflow-hidden rounded-full bg-white/30">
@@ -590,9 +654,15 @@ export function AiUploadHistoryPopup({
                           </div>
                         ) : null}
 
-                        {item.status === 'error' ? (
-                          <div className="absolute inset-x-1.5 bottom-1.5 rounded-lg bg-rose-600/90 px-2 py-1 text-[10px] font-semibold text-white">
-                            Failed
+                        {uiStatus === 'attention' ? (
+                          <div className="absolute inset-x-1.5 bottom-1.5 rounded-lg bg-amber-600/90 px-2 py-1 text-[10px] font-semibold text-white">
+                            Needs attention
+                          </div>
+                        ) : null}
+
+                        {uiStatus === 'done' ? (
+                          <div className="absolute left-2 top-2 rounded-full bg-emerald-600/90 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white shadow-sm">
+                            Complete
                           </div>
                         ) : null}
                       </button>
@@ -618,26 +688,35 @@ export function AiUploadHistoryPopup({
                         title={item.fileName}
                       >
                         <p className="text-[10px] font-medium text-[#6b7785] sm:text-[11px]">
-                          {relative || 'just now'}
+                          {relative || 'Just now'}
                         </p>
                         <p className="line-clamp-2 text-[12px] font-semibold leading-snug text-[#1a2b3d] sm:text-[13px]">
                           {item.fileName}
                         </p>
-                        <p
-                          className="truncate text-[10px] text-[#6b7785] sm:text-[11px]"
-                          title={category}
-                        >
-                          {category}
-                          {item.status === 'done' ? ' · Filled' : ''}
-                          {item.status === 'error' ? ' · Failed' : ''}
-                          {isLive ? ' · Reading' : ''}
-                          {item.status === 'queued' ? ' · Waiting' : ''}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset',
+                              statusTone(uiStatus),
+                            )}
+                          >
+                            {uiStatus === 'processing' ? (
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                            ) : null}
+                            {statusFootnote(uiStatus)}
+                          </span>
+                          <span
+                            className="truncate text-[10px] text-[#6b7785] sm:text-[11px]"
+                            title={category}
+                          >
+                            {category}
+                          </span>
+                        </div>
                       </button>
 
-                      {item.error ? (
+                      {uiStatus === 'attention' && item.error ? (
                         <p
-                          className="mt-1 line-clamp-2 px-0.5 text-[10px] text-rose-600"
+                          className="mt-1 line-clamp-2 px-0.5 text-[10px] text-amber-700"
                           title={item.error}
                         >
                           {item.error}

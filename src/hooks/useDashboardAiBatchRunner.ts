@@ -32,10 +32,10 @@ import {
 
 /** Always also fill related sections in background when one of the pair is targeted. */
 const FORCE_BACKGROUND_PARTNERS: Record<string, string[]> = {
-  // Auto insurance card / vehicle docs: Vehicles ↔ Insurance only.
-  // Never force Main Residence — that is for homeowners/renters policies.
+  // Vehicles docs always carry policy fields → fill Insurance.
+  // Insurance → Vehicles only when classifier/additional_sections marks auto
+  // (handled via additionalSections / partnerResults below — not forced here).
   vehicles: ['insurance_policies'],
-  insurance_policies: ['vehicles'],
   health_information: ['insurance_policies'],
   employment_business: ['banking_financial_accounts'],
   banking_financial_accounts: ['investment_accounts'],

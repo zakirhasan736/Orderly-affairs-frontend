@@ -121,7 +121,7 @@ export function vehiclesAreDuplicates(
   }
 
   // Soft match: thin insurance seed ↔ richer vehicle extract sharing a policy.
-  // Prevents overview multi-write from appending 2–3 partial vehicle rows.
+  // Never collapse two distinct cars that share one policy number.
   const existingPolicy = normalizePolicyNumber(
     existing.insurance_policy ?? existing.policy_number,
   );
@@ -135,16 +135,30 @@ export function vehiclesAreDuplicates(
     const incomingIdentity =
       Boolean(incomingVin || incomingPlate) ||
       Boolean(incomingYear && incomingMake && incomingModel);
+
+    // Distinct year/make/model on the same policy = different vehicles.
+    if (
+      existingIdentity &&
+      incomingIdentity &&
+      ((existingMake && incomingMake && existingMake !== incomingMake) ||
+        (existingModel && incomingModel && existingModel !== incomingModel) ||
+        (existingYear && incomingYear && existingYear !== incomingYear))
+    ) {
+      return false;
+    }
+
     // Same policy + at least one side lacks full identity → treat as one car.
     if (!existingIdentity || !incomingIdentity) {
       return true;
     }
-    // Both have identity but no conflicting VIN/plate and make matches.
+
+    // Both identified and YMM aligns (no conflicts above).
     if (
       existingMake &&
       incomingMake &&
       existingMake === incomingMake &&
-      (!existingYear || !incomingYear || existingYear === incomingYear)
+      (!existingYear || !incomingYear || existingYear === incomingYear) &&
+      (!existingModel || !incomingModel || existingModel === incomingModel)
     ) {
       return true;
     }
