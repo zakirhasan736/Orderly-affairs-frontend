@@ -314,7 +314,6 @@ export type DashboardAiJob = {
 
 const MAX_CONCURRENT = 1;
 const PROBE_SECTION_KEY = 'vital_information';
-const PROBE_SECTION_ID = '1';
 
 function catalogForSection(sectionKey: string, subsection?: string | null) {
   // Prefer full-section catalogs so multi-subsection sections (12A/12B, etc.)
@@ -783,27 +782,27 @@ export function useDashboardAiBatchRunner() {
 
         clearAlmostTimer(job.id);
 
+        // Overview probe uses vital_information only as an API placeholder —
+        // never treat it as the document's real section unless GPT says so.
         let bestKey =
-          classified.best_section ||
-          (classified.matches_requested_section ? PROBE_SECTION_KEY : null) ||
-          PROBE_SECTION_KEY;
+          classified.best_section && AI_SECTION_BY_KEY[classified.best_section]
+            ? classified.best_section
+            : null;
 
-        // Never dump non-vital docs into Vital just because the probe key was Vital.
-        if (
-          bestKey === PROBE_SECTION_KEY &&
-          classified.matches_requested_section === false
-        ) {
+        if (!bestKey) {
           const alt = classified.additional_sections?.find(
             (item: { section_key?: string }) =>
-              item?.section_key && item.section_key !== PROBE_SECTION_KEY,
+              item?.section_key &&
+              item.section_key !== PROBE_SECTION_KEY &&
+              Boolean(AI_SECTION_BY_KEY[item.section_key]),
           );
-          if (alt?.section_key) {
-            bestKey = alt.section_key;
-          } else {
-            throw new Error(
-              'Could not tell which section this document belongs to. Open the matching section and upload there.',
-            );
-          }
+          bestKey = alt?.section_key || null;
+        }
+
+        if (!bestKey) {
+          throw new Error(
+            'Could not tell which section this document belongs to. Open the matching section and upload there.',
+          );
         }
 
         const bestMeta =
@@ -812,13 +811,16 @@ export function useDashboardAiBatchRunner() {
             ? AI_SECTION_BY_ID[classified.best_section_id]
             : null);
 
-        const sectionId = bestMeta?.id || classified.best_section_id || PROBE_SECTION_ID;
+        // Never fall back to Vital Information (section 1) as a default.
+        const sectionId = bestMeta?.id || classified.best_section_id || null;
         const sectionKey = bestMeta?.key || bestKey;
         const subsection =
           classified.best_subsection || bestMeta?.defaultSubsection || undefined;
 
-        if (!sectionId || !sectionKey) {
-          throw new Error('Could not classify this document to a section.');
+        if (!sectionId || !sectionKey || !AI_SECTION_BY_KEY[sectionKey]) {
+          throw new Error(
+            'Could not tell which section this document belongs to. Open the matching section and upload there.',
+          );
         }
 
         patchJob(job.id, {
