@@ -11,6 +11,9 @@ import {
   upsertAutofillItems,
   duplicateMatcherForSection,
   namedItemsAreDuplicates,
+  collapseMilitaryServicePeriods,
+  collapseInsurancePolicies,
+  collapseItemsByMatcher,
   type AutofillConflictMode,
 } from '@/utils/aiItemDedup';
 import { applySemanticConceptsToPatch, applySemanticConceptsToItem } from '@/utils/aiSemanticFieldMatch';
@@ -168,9 +171,18 @@ function mergeArraySubsection(
     duplicateMatcherForSection(sectionId, key) ||
     ((a, b) => namedItemsAreDuplicates(a, b));
 
+  let collapsedIncoming = incomingItems;
+  if (sectionId === '11' && (!key || key === '11A')) {
+    collapsedIncoming = collapseMilitaryServicePeriods(incomingItems);
+  } else if (sectionId === '7' && (!key || key === '7A')) {
+    collapsedIncoming = collapseInsurancePolicies(incomingItems);
+  } else {
+    collapsedIncoming = collapseItemsByMatcher(incomingItems, matcher);
+  }
+
   return upsertAutofillItems(
     currentItems,
-    incomingItems,
+    collapsedIncoming,
     matcher,
     conflictMode,
   ).items;

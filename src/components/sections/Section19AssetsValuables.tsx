@@ -418,9 +418,9 @@ export default function Section19AssetsValuables({
     describeFields: ['item_type', 'item_description', 'estimated_value'],
     isDuplicate: (a, b) =>
       namedItemsAreDuplicates(a, b, [
-        'item_name',
         'item_description',
         'item_type',
+        'current_location',
         'name',
         'title',
       ]),

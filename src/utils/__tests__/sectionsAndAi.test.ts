@@ -286,7 +286,7 @@ describe('aiItemDedup', () => {
         { policy_company: 'Acme', policy_type: { value: 'Life' } },
       ),
     ).toBe(true);
-    // Same insurer + Vehicle but one already has a number → separate policies
+    // Same insurer + Vehicle with number on one side only → update same policy
     expect(
       insurancePoliciesAreDuplicates(
         {
@@ -296,7 +296,7 @@ describe('aiItemDedup', () => {
         },
         { insurance_company: 'State Farm Insurance', policy_type: 'Vehicle' },
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       insurancePoliciesAreDuplicates(
         { policy_company: 'State Farm', policy_type: 'Vehicle' },

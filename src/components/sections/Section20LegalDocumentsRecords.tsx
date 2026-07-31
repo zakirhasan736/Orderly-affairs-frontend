@@ -51,6 +51,10 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import {
+  applyExtractedArrayWithDedup,
+  buildUpsertAutofillNotice,
+} from '@/utils/aiItemDedup';
 
 /* ============================================================
    STATIC SUBSECTIONS — 20A, 20B
@@ -862,12 +866,24 @@ export default function Section20LegalDocumentsRecords({
         return;
       }
 
-      updateDocuments([...documents, ...extractedDocuments]);
+      const upserted = applyExtractedArrayWithDedup(
+        '20',
+        '20C',
+        documents,
+        extractedDocuments,
+        'overwrite',
+      );
+      updateDocuments(upserted.items);
 
       setAiNotice(
-        extractedDocuments.length === 1
-          ? 'AI added 1 important document. Please review the fields.'
-          : `AI added ${extractedDocuments.length} important documents. Please review the fields.`,
+        buildUpsertAutofillNotice(
+          upserted.added,
+          upserted.updated,
+          'Document',
+        ) ||
+          (extractedDocuments.length === 1
+            ? 'AI added 1 important document. Please review the fields.'
+            : `AI added ${extractedDocuments.length} important documents. Please review the fields.`),
       );
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');

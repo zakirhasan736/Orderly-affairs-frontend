@@ -156,10 +156,10 @@ export function vehiclesAreDuplicates(
 /**
  * Same insurance policy (renewal / re-upload) when:
  * - both have the same policy number, OR
+ * - same company + type and at most one side has a policy number (thin seed ↔ full extract), OR
  * - neither has a policy number AND company + type (+ other subtype) match
  *
- * Different policy numbers, or same company/type with a conflicting number,
- * are treated as separate policies (vehicle, bank/loan, home, etc.).
+ * Conflicting non-empty policy numbers are always separate policies.
  */
 export function insurancePoliciesAreDuplicates(
   existing: Record<string, unknown>,
@@ -170,12 +170,6 @@ export function insurancePoliciesAreDuplicates(
 
   if (existingPolicy && incomingPolicy) {
     return existingPolicy === incomingPolicy;
-  }
-
-  // One side has a number and the other doesn't (or numbers differ) → different policies.
-  // Do not collapse multiple Vehicle/State Farm cards into one.
-  if (existingPolicy || incomingPolicy) {
-    return false;
   }
 
   const existingCompany = getInsuranceCompany(existing);
@@ -189,25 +183,235 @@ export function insurancePoliciesAreDuplicates(
     incoming.policy_type_other ?? incoming.type_other,
   );
 
-  if (
-    !existingCompany ||
-    !incomingCompany ||
-    !existingType ||
-    !incomingType ||
-    !companiesMatch(existingCompany, incomingCompany) ||
-    existingType !== incomingType
-  ) {
+  const companyAndTypeMatch =
+    Boolean(existingCompany) &&
+    Boolean(incomingCompany) &&
+    Boolean(existingType) &&
+    Boolean(incomingType) &&
+    companiesMatch(existingCompany, incomingCompany) &&
+    existingType === incomingType &&
+    !(
+      existingType === 'other' &&
+      existingOther &&
+      incomingOther &&
+      existingOther !== incomingOther
+    );
+
+  // One side has a number, the other doesn't → same policy when company+type align
+  // (e.g. vehicle seed card without number + full declarations page).
+  if ((existingPolicy || incomingPolicy) && companyAndTypeMatch) {
+    return true;
+  }
+
+  if (existingPolicy || incomingPolicy) {
     return false;
   }
 
-  // "Other" subtypes must also match when both specify them.
-  if (existingType === 'other') {
-    if (existingOther && incomingOther && existingOther !== incomingOther) {
-      return false;
+  return companyAndTypeMatch;
+}
+
+/** Collapse near-duplicate extracted items into one card before apply. */
+export function collapseItemsByMatcher(
+  items: Record<string, unknown>[],
+  isDuplicate: (
+    existing: Record<string, unknown>,
+    incoming: Record<string, unknown>,
+  ) => boolean,
+): Record<string, unknown>[] {
+  if (!Array.isArray(items) || items.length <= 1) return items;
+
+  const merged: Record<string, unknown>[] = [];
+  for (const item of items) {
+    const matchIndex = merged.findIndex(existing =>
+      isDuplicate(existing, item),
+    );
+    if (matchIndex === -1) {
+      merged.push({ ...item });
+      continue;
     }
+    merged[matchIndex] = mergeAutofillItemFields(merged[matchIndex], item);
+  }
+  return merged;
+}
+
+/** Collapse near-duplicate insurance extracts into one card before apply. */
+export function collapseInsurancePolicies(
+  items: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  return collapseItemsByMatcher(items, insurancePoliciesAreDuplicates);
+}
+
+/**
+ * Soft identity match for accounts that share a number or institution+type.
+ */
+export function accountsAreDuplicates(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+  options: {
+    numberKeys: string[];
+    institutionKeys: string[];
+    typeKeys?: string[];
+  },
+): boolean {
+  const numberA = options.numberKeys
+    .map(key => normalizePolicyNumber(existing[key]))
+    .find(Boolean);
+  const numberB = options.numberKeys
+    .map(key => normalizePolicyNumber(incoming[key]))
+    .find(Boolean);
+
+  if (numberA && numberB) return numberA === numberB;
+
+  const institutionA = options.institutionKeys
+    .map(key => normalizeComparable(existing[key]) || getUploadText(existing[key]))
+    .find(Boolean);
+  const institutionB = options.institutionKeys
+    .map(key => normalizeComparable(incoming[key]) || getUploadText(incoming[key]))
+    .find(Boolean);
+
+  const typeKeys = options.typeKeys ?? [];
+  const typeA = typeKeys
+    .map(key => normalizeComparable(existing[key]))
+    .find(Boolean);
+  const typeB = typeKeys
+    .map(key => normalizeComparable(incoming[key]))
+    .find(Boolean);
+
+  const sameInstitution =
+    Boolean(institutionA) &&
+    Boolean(institutionB) &&
+    (institutionA === institutionB ||
+      institutionA!.includes(institutionB!) ||
+      institutionB!.includes(institutionA!));
+
+  const sameType =
+    !typeA ||
+    !typeB ||
+    typeA === typeB ||
+    typeA.includes(typeB) ||
+    typeB.includes(typeA);
+
+  if ((numberA || numberB) && sameInstitution && sameType) {
+    return true;
   }
 
-  return true;
+  if (numberA || numberB) {
+    return false;
+  }
+
+  return Boolean(sameInstitution && sameType && institutionA && institutionB);
+}
+
+export function bankAccountsAreDuplicates(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): boolean {
+  return accountsAreDuplicates(existing, incoming, {
+    numberKeys: ['account_number'],
+    institutionKeys: ['bank_name', 'institution_name', 'account_name'],
+    typeKeys: ['account_type'],
+  });
+}
+
+export function investmentAccountsAreDuplicates(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): boolean {
+  return accountsAreDuplicates(existing, incoming, {
+    numberKeys: ['account_number'],
+    institutionKeys: [
+      'financial_institution',
+      'institution',
+      'brokerage',
+      'account_name',
+    ],
+    typeKeys: ['account_type'],
+  });
+}
+
+export function onlineAccountsAreDuplicates(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): boolean {
+  const serviceA =
+    normalizeComparable(existing.service_name) ||
+    normalizeComparable(existing.platform) ||
+    normalizeComparable(existing.website) ||
+    normalizeComparable(existing.account_name);
+  const serviceB =
+    normalizeComparable(incoming.service_name) ||
+    normalizeComparable(incoming.platform) ||
+    normalizeComparable(incoming.website) ||
+    normalizeComparable(incoming.account_name);
+
+  if (!serviceA || !serviceB) {
+    return namedItemsAreDuplicates(existing, incoming, [
+      'service_name',
+      'platform',
+      'website',
+      'account_name',
+      'account_username',
+      'username',
+    ]);
+  }
+
+  const sameService =
+    serviceA === serviceB ||
+    serviceA.includes(serviceB) ||
+    serviceB.includes(serviceA);
+  if (!sameService) return false;
+
+  const userA =
+    normalizeComparable(existing.account_username) ||
+    normalizeComparable(existing.username) ||
+    normalizeComparable(existing.email_associated);
+  const userB =
+    normalizeComparable(incoming.account_username) ||
+    normalizeComparable(incoming.username) ||
+    normalizeComparable(incoming.email_associated);
+
+  if (!userA || !userB) return true;
+  return userA === userB || userA.includes(userB) || userB.includes(userA);
+}
+
+export function educationEntriesAreDuplicates(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): boolean {
+  const schoolA =
+    normalizeComparable(existing.institution_name) ||
+    normalizeComparable(existing.institution) ||
+    normalizeComparable(existing.school);
+  const schoolB =
+    normalizeComparable(incoming.institution_name) ||
+    normalizeComparable(incoming.institution) ||
+    normalizeComparable(incoming.school);
+
+  if (!schoolA || !schoolB) {
+    return namedItemsAreDuplicates(existing, incoming, [
+      'institution_name',
+      'degree_type',
+      'field_of_study',
+      'graduation_year',
+    ]);
+  }
+
+  const sameSchool =
+    schoolA === schoolB ||
+    schoolA.includes(schoolB) ||
+    schoolB.includes(schoolA);
+  if (!sameSchool) return false;
+
+  const degreeA =
+    normalizeComparable(existing.degree_type) ||
+    normalizeComparable(existing.degree);
+  const degreeB =
+    normalizeComparable(incoming.degree_type) ||
+    normalizeComparable(incoming.degree);
+  if (!degreeA || !degreeB) return true;
+  return (
+    degreeA === degreeB || degreeA.includes(degreeB) || degreeB.includes(degreeA)
+  );
 }
 
 /** Merge non-empty incoming fields into an existing card (never wipe with empties). */
@@ -320,17 +524,18 @@ export function itemWouldOverwriteExisting(
 const IDENTITY_FIELD_GROUPS: string[][] = [
   ['charity_name', 'organization_name'],
   ['group_name', 'organization_name', 'name'],
-  ['institution', 'school', 'college'],
-  ['platform', 'website', 'service_name', 'account_name'],
+  ['institution_name', 'institution', 'school', 'college'],
+  ['service_name', 'platform', 'website', 'account_name'],
   ['bank_name', 'institution_name', 'account_name'],
+  ['financial_institution', 'brokerage', 'institution'],
   ['provider_name', 'doctor_name', 'clinic_name'],
-  ['employer', 'business_name', 'company_name'],
-  ['creditor', 'card_name', 'lender'],
-  ['document_name', 'title'],
+  ['employer_name', 'employer', 'business_name', 'company_name'],
+  ['creditor_name', 'creditor', 'card_name', 'lender'],
+  ['document_type', 'document_name', 'title'],
   ['pet_name'],
-  ['branch', 'service_branch'],
+  ['branch_of_service', 'branch', 'service_branch'],
   ['make', 'model', 'year'],
-  ['full_name', 'name', 'title'],
+  ['item_description', 'item_name', 'property_address', 'full_name', 'name', 'title'],
 ];
 
 /**
@@ -357,6 +562,62 @@ export function namedItemsAreDuplicates(
   return false;
 }
 
+function getMilitaryBranch(item: Record<string, unknown>): string {
+  return (
+    normalizeComparable(item.branch_of_service) ||
+    normalizeComparable(item.branch) ||
+    normalizeComparable(item.service_branch) ||
+    normalizeComparable(item.branch_of_service_other)
+  );
+}
+
+function getMilitaryDates(item: Record<string, unknown>): string {
+  return normalizeComparable(item.service_dates);
+}
+
+/**
+ * Same branch + overlapping/missing dates = same service period (update in place).
+ * Same branch with clearly different date ranges = distinct periods (append).
+ */
+export function militaryServicePeriodsAreDuplicates(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): boolean {
+  const branchA = getMilitaryBranch(existing);
+  const branchB = getMilitaryBranch(incoming);
+  const datesA = getMilitaryDates(existing);
+  const datesB = getMilitaryDates(incoming);
+
+  if (branchA && branchB) {
+    const sameBranch =
+      branchA === branchB || branchA.includes(branchB) || branchB.includes(branchA);
+    if (!sameBranch) return false;
+    if (!datesA || !datesB) return true;
+    return (
+      datesA === datesB || datesA.includes(datesB) || datesB.includes(datesA)
+    );
+  }
+
+  if (datesA && datesB) {
+    return (
+      datesA === datesB || datesA.includes(datesB) || datesB.includes(datesA)
+    );
+  }
+
+  return namedItemsAreDuplicates(existing, incoming, [
+    'rank_achieved',
+    'rank',
+    'military_occupational_specialty',
+  ]);
+}
+
+/** Collapse DD-214 fragment splits into one card before autofill apply. */
+export function collapseMilitaryServicePeriods(
+  items: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  return collapseItemsByMatcher(items, militaryServicePeriodsAreDuplicates);
+}
+
 export function duplicateMatcherForSection(
   sectionId: string,
   subsectionKey?: string,
@@ -367,21 +628,88 @@ export function duplicateMatcherForSection(
   if (sectionId === '7' && (!subsectionKey || subsectionKey === '7A')) {
     return insurancePoliciesAreDuplicates;
   }
+  if (sectionId === '11' && (!subsectionKey || subsectionKey === '11A')) {
+    return militaryServicePeriodsAreDuplicates;
+  }
+  if (sectionId === '10' && (!subsectionKey || subsectionKey === '10A')) {
+    return educationEntriesAreDuplicates;
+  }
+  if (sectionId === '13' && (!subsectionKey || subsectionKey === '13A')) {
+    return onlineAccountsAreDuplicates;
+  }
+  if (sectionId === '14' && (!subsectionKey || subsectionKey === '14A')) {
+    return investmentAccountsAreDuplicates;
+  }
+  if (
+    sectionId === '12' &&
+    (!subsectionKey || subsectionKey === '12A' || subsectionKey === '12B')
+  ) {
+    if (subsectionKey === '12B') {
+      return (existing, incoming) =>
+        namedItemsAreDuplicates(existing, incoming, [
+          'service_name',
+          'username',
+          'account_email_phone',
+          'account_name',
+        ]);
+    }
+    return bankAccountsAreDuplicates;
+  }
+  if (sectionId === '16') {
+    if (subsectionKey === '16B') {
+      return (existing, incoming) =>
+        accountsAreDuplicates(existing, incoming, {
+          numberKeys: ['account_number'],
+          institutionKeys: ['creditor_name', 'creditor', 'lender'],
+          typeKeys: ['debt_type'],
+        });
+    }
+    return (existing, incoming) =>
+      accountsAreDuplicates(existing, incoming, {
+        numberKeys: ['card_number', 'account_number'],
+        institutionKeys: ['card_name', 'creditor_name', 'creditor'],
+        typeKeys: ['card_type', 'debt_type'],
+      });
+  }
 
   const preferred: Record<string, string[]> = {
     '8': ['organization_name', 'group_name', 'name'],
     '9': ['charity_name', 'organization_name', 'name'],
-    '10': ['institution', 'school', 'degree', 'name'],
-    '11': ['branch', 'service_branch', 'rank'],
-    '12': ['bank_name', 'institution_name', 'account_name', 'account_number'],
-    '13': ['platform', 'website', 'account_name', 'username'],
-    '14': ['institution', 'account_name', 'account_number', 'brokerage'],
     '15': ['provider_name', 'doctor_name', 'clinic_name', 'name'],
-    '16': ['creditor', 'card_name', 'lender', 'account_name'],
-    '17': ['name', 'full_name', 'pet_name', 'title'],
-    '18': ['employer', 'business_name', 'company_name', 'name'],
-    '19': ['item_name', 'property_name', 'name', 'title', 'description'],
-    '20': ['document_name', 'title', 'name'],
+    '17': [
+      'person_name',
+      'friend_name',
+      'pet_name',
+      'dependent_name',
+      'item_name',
+      'full_name',
+      'name',
+    ],
+    '18': [
+      'employer_name',
+      'employer',
+      'business_name',
+      'company_name',
+      'income_source',
+      'name',
+    ],
+    '19': [
+      'item_description',
+      'item_type',
+      'property_address',
+      'property_name',
+      'current_location',
+      'name',
+      'title',
+    ],
+    '20': [
+      'document_type',
+      'document_description',
+      'document_name',
+      'parties_involved',
+      'title',
+      'name',
+    ],
   };
 
   const keys = preferred[sectionId];
@@ -480,6 +808,29 @@ export function filterDuplicateAutofillItems<T extends Record<string, unknown>>(
   }
 
   return { unique, skipped };
+}
+
+/**
+ * Collapse same-topic incoming fragments, then upsert onto current cards.
+ * Same data → update; truly new entity → append.
+ */
+export function applyExtractedArrayWithDedup<T extends Record<string, unknown>>(
+  sectionId: string,
+  subsectionKey: string | undefined,
+  currentItems: T[],
+  incomingItems: T[],
+  conflictMode: AutofillConflictMode = 'overwrite',
+): { items: T[]; updated: number; added: number } {
+  const matcher =
+    duplicateMatcherForSection(sectionId, subsectionKey) ||
+    ((a, b) => namedItemsAreDuplicates(a, b));
+
+  const collapsed = collapseItemsByMatcher(
+    incomingItems as Record<string, unknown>[],
+    matcher,
+  ) as T[];
+
+  return upsertAutofillItems(currentItems, collapsed, matcher, conflictMode);
 }
 
 export function buildDuplicateSkippedNotice(

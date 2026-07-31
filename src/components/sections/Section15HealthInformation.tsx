@@ -62,6 +62,10 @@ import {
   VaultEncryptedBadge,
   VaultGroupCards,
 } from '@/utils/vaultGroupedFields';
+import {
+  applyExtractedArrayWithDedup,
+  buildUpsertAutofillNotice,
+} from '@/utils/aiItemDedup';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG — 15A                                                        */
@@ -710,12 +714,24 @@ export default function Section15HealthInformation({
         return;
       }
 
-      updateProviders([...providers, ...extractedProviders]);
+      const upserted = applyExtractedArrayWithDedup(
+        '15',
+        '15B',
+        providers,
+        extractedProviders,
+        'overwrite',
+      );
+      updateProviders(upserted.items);
 
       setAiNotice(
-        extractedProviders.length === 1
-          ? 'AI added 1 healthcare provider. Please review the fields.'
-          : `AI added ${extractedProviders.length} healthcare providers. Please review the fields.`,
+        buildUpsertAutofillNotice(
+          upserted.added,
+          upserted.updated,
+          SECTION_15B.itemLabel,
+        ) ||
+          (extractedProviders.length === 1
+            ? 'AI added 1 healthcare provider. Please review the fields.'
+            : `AI added ${extractedProviders.length} healthcare providers. Please review the fields.`),
       );
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');

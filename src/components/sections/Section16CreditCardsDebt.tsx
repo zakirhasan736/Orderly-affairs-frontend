@@ -57,6 +57,10 @@ import {
   VaultEncryptedBadge,
   VaultGroupCards,
 } from '@/utils/vaultGroupedFields';
+import {
+  applyExtractedArrayWithDedup,
+  buildUpsertAutofillNotice,
+} from '@/utils/aiItemDedup';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG — 16A CREDIT CARDS                                           */
@@ -667,12 +671,24 @@ export default function Section16CreditCardsDebt({
         return;
       }
 
-      updateSubsection(subsection, [...items, ...extractedItems]);
+      const upserted = applyExtractedArrayWithDedup(
+        '16',
+        subsection,
+        items,
+        extractedItems,
+        'overwrite',
+      );
+      updateSubsection(subsection, upserted.items);
 
       setAiNotice(
-        extractedItems.length === 1
-          ? `AI added 1 ${config.itemLabel.toLowerCase()}. Please review the fields.`
-          : `AI added ${extractedItems.length} ${config.itemLabel.toLowerCase()}s. Please review the fields.`,
+        buildUpsertAutofillNotice(
+          upserted.added,
+          upserted.updated,
+          config.itemLabel,
+        ) ||
+          (extractedItems.length === 1
+            ? `AI added 1 ${config.itemLabel.toLowerCase()}. Please review the fields.`
+            : `AI added ${extractedItems.length} ${config.itemLabel.toLowerCase()}s. Please review the fields.`),
       );
     } catch (err: any) {
       setAiError(err?.message || 'AI autofill failed');

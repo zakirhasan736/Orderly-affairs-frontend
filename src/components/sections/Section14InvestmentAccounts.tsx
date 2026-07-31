@@ -51,7 +51,7 @@ import {
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
-import { namedItemsAreDuplicates } from '@/utils/aiItemDedup';
+import { investmentAccountsAreDuplicates } from '@/utils/aiItemDedup';
 import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
 
 /* ------------------------------------------------------------------ */
@@ -320,14 +320,8 @@ export default function Section14InvestmentAccounts({
     getCurrentItems: () => accounts,
     setItems: updateAccounts,
     setAiNotice,
-    describeFields: ['institution', 'account_type', 'account_name'],
-    isDuplicate: (a, b) =>
-      namedItemsAreDuplicates(a, b, [
-        'institution',
-        'account_name',
-        'account_number',
-        'brokerage',
-      ]),
+    describeFields: ['financial_institution', 'account_type', 'account_number'],
+    isDuplicate: investmentAccountsAreDuplicates,
     conflictMode: 'ask',
     onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });

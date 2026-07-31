@@ -35,6 +35,9 @@ const DEFAULT_DESCRIBE_FIELDS = [
   'vin',
   'branch',
   'service_branch',
+  'branch_of_service',
+  'rank_achieved',
+  'service_dates',
 ];
 
 export function isEmptyAutofillValue(value: unknown): boolean {

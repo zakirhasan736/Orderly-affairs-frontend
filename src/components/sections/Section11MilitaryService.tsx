@@ -50,7 +50,7 @@ import {
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
-import { namedItemsAreDuplicates } from '@/utils/aiItemDedup';
+import { militaryServicePeriodsAreDuplicates, collapseMilitaryServicePeriods } from '@/utils/aiItemDedup';
 import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
 
 /* ------------------------------------------------------------------ */
@@ -322,9 +322,8 @@ export default function Section11MilitaryService({
     getCurrentItems: () => servicePeriods,
     setItems: updateServicePeriods,
     setAiNotice,
-    describeFields: ['branch', 'service_branch', 'rank'],
-    isDuplicate: (a, b) =>
-      namedItemsAreDuplicates(a, b, ['branch', 'service_branch', 'rank']),
+    describeFields: ['branch_of_service', 'rank_achieved', 'service_dates'],
+    isDuplicate: militaryServicePeriodsAreDuplicates,
     conflictMode: 'ask',
     onFlowComplete: () => releaseDeferredAiRoutingDialog(aiRouting),
   });
@@ -355,11 +354,12 @@ export default function Section11MilitaryService({
     const rawServicePeriods = patch?.['11A'];
 
     if (Array.isArray(rawServicePeriods)) {
-      return rawServicePeriods
+      const normalized = rawServicePeriods
         .map(item => normalizeServicePeriodPatch(item))
         .filter(item => {
           return Object.values(item).some(value => value !== '');
         });
+      return collapseMilitaryServicePeriods(normalized);
     }
 
     if (rawServicePeriods && typeof rawServicePeriods === 'object') {

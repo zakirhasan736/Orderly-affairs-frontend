@@ -45,7 +45,7 @@ import {
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
-import { insurancePoliciesAreDuplicates } from '@/utils/aiItemDedup';
+import { insurancePoliciesAreDuplicates, collapseInsurancePolicies } from '@/utils/aiItemDedup';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -421,9 +421,11 @@ export default function Section7InsurancePolicies({
     const rawPolicies = patch?.['7A'];
 
     if (Array.isArray(rawPolicies)) {
-      return rawPolicies
-        .map(policy => normalizePolicyPatch(policy))
-        .filter(policy => policyHasData(policy));
+      return collapseInsurancePolicies(
+        rawPolicies
+          .map(policy => normalizePolicyPatch(policy))
+          .filter(policy => policyHasData(policy)),
+      );
     }
 
     if (rawPolicies && typeof rawPolicies === 'object') {
