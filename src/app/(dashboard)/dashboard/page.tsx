@@ -1052,9 +1052,7 @@ export default function DashboardPage() {
     () => ({
       formData,
       instructionRead,
-      myNextKin: Array.isArray(myNextKin)
-        ? (myNextKin as Array<Record<string, unknown>>)
-        : null,
+      myNextKin: Array.isArray(myNextKin) ? myNextKin : null,
       dashboardNokLetter: dashboardNokLetter
         ? (dashboardNokLetter as unknown as Record<string, unknown>)
         : null,

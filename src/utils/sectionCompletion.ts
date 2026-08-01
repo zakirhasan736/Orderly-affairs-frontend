@@ -14,10 +14,23 @@ export type SectionProgress = {
   total: number;
 };
 
+/** Shape used for Access Management progress (NOK people list). */
+export type AccessPersonLike = {
+  full_name?: unknown;
+  email?: unknown;
+  relationship?: unknown;
+  immediate_access?: unknown;
+  nok_letter_received?: unknown;
+  password_card_generated?: unknown;
+  card_storage_location?: unknown;
+  key_bag_location?: unknown;
+  documents_bag_location?: unknown;
+};
+
 export type SectionProgressContext = {
   formData: Record<string, unknown>;
   instructionRead?: boolean;
-  myNextKin?: Array<Record<string, unknown>> | null;
+  myNextKin?: AccessPersonLike[] | null;
   /** Latest API letter for the selected / first NOK (may include metadata only). */
   dashboardNokLetter?: Record<string, unknown> | null;
   disabledSections?: Record<string, boolean>;
@@ -245,7 +258,7 @@ export function getNokLetterSectionProgress(
 }
 
 function getAccessManagementProgress(
-  people: Array<Record<string, unknown>> | null | undefined,
+  people: AccessPersonLike[] | null | undefined,
 ): SectionProgress {
   if (!Array.isArray(people) || people.length === 0) {
     return result(0, ACCESS_CORE_KEYS.length);
@@ -278,15 +291,15 @@ function getAccessManagementProgress(
 function getPersonalMessagesProgress(
   section4: Record<string, unknown> | undefined,
 ): SectionProgress {
+  let list: unknown[] = [];
   const letters = section4?.['4A'];
-  const list =
-    (letters &&
-      typeof letters === 'object' &&
-      Array.isArray((letters as Record<string, unknown>).letters_data) &&
-      ((letters as Record<string, unknown>).letters_data as unknown[])) ||
-    (Array.isArray(section4?.letters_data) &&
-      (section4?.letters_data as unknown[])) ||
-    [];
+  if (letters && typeof letters === 'object' && !Array.isArray(letters)) {
+    const nested = (letters as Record<string, unknown>).letters_data;
+    if (Array.isArray(nested)) list = nested;
+  }
+  if (list.length === 0 && Array.isArray(section4?.letters_data)) {
+    list = section4.letters_data as unknown[];
+  }
 
   if (list.length === 0) return result(0, 1);
 
