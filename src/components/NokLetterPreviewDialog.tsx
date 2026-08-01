@@ -29,7 +29,7 @@ function LetterPreviewBody({
   nokEmail?: string;
 }) {
   return (
-    <div className="mx-auto max-w-3xl rounded-2xl border bg-white px-5 py-7 shadow-xl sm:px-12 sm:py-12">
+    <div className="mx-auto max-w-[57.6rem] rounded-2xl border bg-white px-5 py-7 shadow-xl sm:px-12 sm:py-12">
       <div className="mb-8 border-b pb-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Orderly Affairs
@@ -56,12 +56,15 @@ export function NokLetterPreviewDialog({
   nokId,
   person,
   fallbackData,
+  ownerName,
 }: {
   open: boolean;
   onClose: () => void;
   nokId: string;
   person?: NextKinAccessResponse | null;
   fallbackData?: NokLetterData;
+  /** Kit owner's display name for the printed signature line. */
+  ownerName?: string | null;
 }) {
   const isMobile = useIsMobile();
   const { data: serverData, isFetching } = useGetNokLetterQuery(
@@ -74,8 +77,8 @@ export function NokLetterPreviewDialog({
       ...(fallbackData || {}),
       ...(serverData || {}),
     } as NokLetterData;
-    return buildNokLetterPreviewText(merged, person);
-  }, [serverData, fallbackData, person]);
+    return buildNokLetterPreviewText(merged, person, ownerName);
+  }, [serverData, fallbackData, person, ownerName]);
 
   const nokEmail =
     serverData?.nok_email || person?.email || fallbackData?.nok_email;
@@ -124,7 +127,7 @@ export function NokLetterPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={value => !value && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-hidden p-0">
+      <DialogContent className="max-h-[90vh] w-[calc(100vw-1.5rem)] max-w-[67.2rem] sm:max-w-[67.2rem] overflow-hidden p-0">
         <DialogHeader className="border-b px-6 py-4">
           <DialogTitle>Letter Preview</DialogTitle>
         </DialogHeader>

@@ -83,6 +83,8 @@ interface Props {
   };
   onChange?: (data: NonNullable<Props['data']>) => void;
   isActive?: boolean;
+  /** Kit owner's name for the letter signature line. */
+  ownerName?: string | null;
 }
 
 function MarkedNokLetterSync({ nokId }: { nokId: string }) {
@@ -439,6 +441,7 @@ export default function Section3NextOfKinLetter({
   data = {},
   onChange = () => {},
   isActive = false,
+  ownerName = null,
 }: Props) {
   const isMobile = useIsMobile();
   const [letterSheetOpen, setLetterSheetOpen] = useState(false);
@@ -622,6 +625,7 @@ export default function Section3NextOfKinLetter({
                 embeddedInSheet
                 onClose={() => setLetterSheetOpen(false)}
                 recipientName={getDisplayName(selectedPerson)}
+                ownerName={ownerName}
               />
             )}
           </div>
@@ -644,6 +648,7 @@ export default function Section3NextOfKinLetter({
                   embeddedInSheet
                   onClose={() => setLetterSheetOpen(false)}
                   recipientName={getDisplayName(selectedPerson)}
+                  ownerName={ownerName}
                 />
               )}
             </div>
@@ -657,6 +662,7 @@ export default function Section3NextOfKinLetter({
           onClose={() => setPreviewNokId(null)}
           nokId={previewNokId}
           person={previewPerson}
+          ownerName={ownerName}
           fallbackData={
             (data.next_of_kin_letters_by_nok?.[previewNokId] ||
               data.next_of_kin_letter_data) as any

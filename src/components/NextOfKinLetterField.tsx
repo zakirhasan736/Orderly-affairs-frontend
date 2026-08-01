@@ -43,6 +43,7 @@ import { DatePicker } from '@/components/DatePicker';
 import { toast } from 'sonner';
 import {
   applyNokLetterTemplateDefaults,
+  buildNokLetterPreviewText,
   NOK_LETTER_DEFAULTS,
 } from '@/utils/nokLetterPreview';
 
@@ -78,6 +79,8 @@ interface NextOfKinLetterFieldProps {
   embeddedInSheet?: boolean;
   onClose?: () => void;
   recipientName?: string;
+  /** Kit owner's name — used to autofill the printed signature. */
+  ownerName?: string | null;
 }
 
 const MIN_TOUCH = 'min-h-11';
@@ -96,7 +99,7 @@ function LetterPreviewBody({
   nokEmail?: string;
 }) {
   return (
-    <div className="mx-auto max-w-3xl rounded-2xl border bg-white px-5 py-7 shadow-xl sm:px-12 sm:py-12">
+    <div className="mx-auto max-w-[57.6rem] rounded-2xl border bg-white px-5 py-7 shadow-xl sm:px-12 sm:py-12">
       <div className="mb-8 border-b pb-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Orderly Affairs
@@ -465,20 +468,28 @@ function DeliveryTimingSelector({
 function mergeAccessManagementAutofill(
   letter: LetterData,
   person?: NextKinAccessResponse | null,
+  ownerName?: string | null,
 ): LetterData {
-  if (!person) return letter;
+  const next: LetterData = person
+    ? {
+        ...letter,
+        letter_to: person.full_name || letter.letter_to,
+        nok_email: person.email || letter.nok_email,
+        nok_phone: person.phone_number || letter.nok_phone,
+        password_card_location:
+          person.card_storage_location || letter.password_card_location,
+        key_bag_location: person.key_bag_location || letter.key_bag_location,
+        documents_bag_location:
+          person.documents_bag_location || letter.documents_bag_location,
+      }
+    : { ...letter };
 
-  return {
-    ...letter,
-    letter_to: person.full_name || letter.letter_to,
-    nok_email: person.email || letter.nok_email,
-    nok_phone: person.phone_number || letter.nok_phone,
-    password_card_location:
-      person.card_storage_location || letter.password_card_location,
-    key_bag_location: person.key_bag_location || letter.key_bag_location,
-    documents_bag_location:
-      person.documents_bag_location || letter.documents_bag_location,
-  };
+  if (!String(next.signer_name || '').trim()) {
+    const resolved = String(ownerName || '').trim();
+    if (resolved) next.signer_name = resolved;
+  }
+
+  return next;
 }
 
 function isValidEmail(value?: string) {
@@ -548,6 +559,7 @@ export function NextOfKinLetterField({
   embeddedInSheet = false,
   onClose,
   recipientName,
+  ownerName = null,
 }: NextOfKinLetterFieldProps) {
   const isMobile = useIsMobile();
   const [wizardStep, setWizardStep] = useState(0);
@@ -592,19 +604,19 @@ export function NextOfKinLetterField({
     if (!serverData) return;
 
     const merged = applyNokLetterTemplateDefaults(
-      mergeAccessManagementAutofill(serverData, selectedPerson),
+      mergeAccessManagementAutofill(serverData, selectedPerson, ownerName),
     );
     setLocalData(merged);
     onChange(merged);
     hydratedRef.current = true;
-  }, [serverData, selectedPerson]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [serverData, selectedPerson, ownerName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!selectedPerson || !hydratedRef.current) return;
+    if (!hydratedRef.current) return;
 
     setLocalData(prev => {
       const merged = applyNokLetterTemplateDefaults(
-        mergeAccessManagementAutofill(prev, selectedPerson),
+        mergeAccessManagementAutofill(prev, selectedPerson, ownerName),
       );
 
       if (JSON.stringify(prev) === JSON.stringify(merged)) {
@@ -614,14 +626,14 @@ export function NextOfKinLetterField({
       onChange(merged);
       return merged;
     });
-  }, [selectedPerson]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedPerson, ownerName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!data || hydratedRef.current) return;
 
     setLocalData(
       applyNokLetterTemplateDefaults(
-        mergeAccessManagementAutofill(data, selectedPerson),
+        mergeAccessManagementAutofill(data, selectedPerson, ownerName),
       ),
     );
   }, [data, selectedPerson]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -667,6 +679,7 @@ export function NextOfKinLetterField({
               localData.incomplete_kit_message || undefined,
             closing_message: localData.closing_message || undefined,
             letter_signature: localData.letter_signature || undefined,
+            signer_name: localData.signer_name || undefined,
           },
         }).unwrap();
       } catch {
@@ -699,53 +712,12 @@ export function NextOfKinLetterField({
       'will auto-populate from Access Management'
     }.`;
 
-  const generateLetterContent = () => {
-    const date = localData.letter_date
-      ? new Date(localData.letter_date).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })
-      : 'Upon Death';
-
-    return `${date}
-
-${localData.letter_greeting || DEFAULTS.letter_greeting} ${
-      localData.letter_to || '[Next of Kin Name]'
-    },
-
-${localData.letter_opening || DEFAULTS.letter_opening}
-
-${localData.kit_description || DEFAULTS.kit_description}
-
-You can access the kit online at: ${localData.access_url || DEFAULTS.access_url}
-
-${loginCredentialsText}
-
-${localData.accessible_sections || DEFAULTS.accessible_sections}
-
-In addition to the online kit, you'll find two important physical items:
-
-${localData.key_bag_info || DEFAULTS.key_bag_info} ${
-      localData.key_bag_location || '[Key Bag Location]'
-    }.
-
-${localData.documents_bag_info || DEFAULTS.documents_bag_info} ${
-      localData.documents_bag_location || '[Documents Bag Location]'
-    }.
-
-${localData.incomplete_kit_message || DEFAULTS.incomplete_kit_message}
-
-${localData.closing_message || DEFAULTS.closing_message}
-
-${localData.letter_signature || DEFAULTS.letter_signature}
-
-[Your signature]`;
-  };
+  const generateLetterContent = () =>
+    buildNokLetterPreviewText(localData, selectedPerson, ownerName);
 
   const letterPreview = useMemo(
     () => generateLetterContent(),
-    [JSON.stringify(localData)],
+    [JSON.stringify(localData), selectedPerson, ownerName],
   );
 
   const handlePrint = () => {
@@ -860,6 +832,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
         incomplete_kit_message: localData.incomplete_kit_message || undefined,
         closing_message: localData.closing_message || undefined,
         letter_signature: localData.letter_signature || undefined,
+        signer_name: localData.signer_name || undefined,
       },
     }).unwrap();
   };
@@ -1263,7 +1236,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
                 className="min-h-[150px] rounded-2xl"
               />
             </FieldBlock>
-            <FieldBlock label="Signature">
+            <FieldBlock label="Closing line">
               <Input
                 value={
                   localData.letter_signature || DEFAULTS.letter_signature
@@ -1271,8 +1244,23 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
                 onChange={e =>
                   handleFieldChange('letter_signature', e.target.value as any)
                 }
+                placeholder="With love,"
                 className="h-12 rounded-2xl"
               />
+            </FieldBlock>
+            <FieldBlock label="Your name (signature)">
+              <Input
+                value={String(localData.signer_name || ownerName || '').trim()}
+                onChange={e =>
+                  handleFieldChange('signer_name', e.target.value as any)
+                }
+                placeholder="Your full name as it should appear"
+                className="h-12 rounded-2xl"
+              />
+              <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
+                Auto-filled from your Vital Information name when available.
+                Edit if you want a different printed name under the closing.
+              </p>
             </FieldBlock>
 
             <div className="space-y-3">
@@ -1485,7 +1473,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
                 Preview
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[92svh] w-[calc(100vw-1rem)] max-w-4xl gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl">
+            <DialogContent className="max-h-[92svh] w-[calc(100vw-1rem)] max-w-[67.2rem] sm:max-w-[67.2rem] gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl">
               <DialogHeader className="border-b bg-muted/30 px-5 py-5 pr-14 sm:px-6">
                 <DialogTitle>Letter Preview</DialogTitle>
                 <DialogDescription>
@@ -1606,7 +1594,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
                   </Button>
                 </DialogTrigger>
 
-                <DialogContent className="max-h-[92svh] w-[calc(100vw-1rem)] max-w-4xl gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl">
+                <DialogContent className="max-h-[92svh] w-[calc(100vw-1rem)] max-w-[67.2rem] sm:max-w-[67.2rem] gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl">
                   <DialogHeader className="border-b bg-muted/30 px-5 py-5 pr-14 sm:px-6">
                     <DialogTitle className="flex items-center gap-3 text-xl">
                       <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -1850,7 +1838,7 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
       </MobileBottomSheet>
     ) : (
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-h-[92svh] w-[calc(100vw-2rem)] max-w-4xl gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl">
+        <DialogContent className="max-h-[92svh] w-[calc(100vw-2rem)] max-w-[67.2rem] sm:max-w-[67.2rem] gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl">
           <DialogHeader className="border-b bg-muted/30 px-5 py-5 pr-14 sm:px-6">
             <DialogTitle className="flex items-center gap-3 text-xl">
               <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">

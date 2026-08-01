@@ -80,7 +80,7 @@ export function AiDocumentPreviewDialog({
 
         if (kind === 'text') {
           const text = await blob.text();
-          if (!cancelled) setTextContent(text);
+          if (!cancelled) setTextContent(text || '(Empty text file)');
           return;
         }
 
@@ -88,7 +88,7 @@ export function AiDocumentPreviewDialog({
         // <img> / PDF iframe previews reliably.
         const previewBlob =
           mime && mime !== blob.type
-            ? new Blob([blob], { type: mime })
+            ? new Blob([await blob.arrayBuffer()], { type: mime })
             : blob;
         createdUrl = URL.createObjectURL(previewBlob);
         if (!cancelled) setObjectUrl(createdUrl);
@@ -172,11 +172,43 @@ export function AiDocumentPreviewDialog({
           ) : null}
 
           {!loading && !error && objectUrl && kind === 'pdf' ? (
-            <iframe
-              title={title}
-              src={objectUrl}
-              className="h-[min(70dvh,560px)] w-full rounded-xl border border-slate-200 bg-white"
-            />
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <object
+                data={`${objectUrl}#toolbar=1&navpanes=0`}
+                type="application/pdf"
+                className="h-[min(70dvh,560px)] w-full"
+                aria-label={title}
+              >
+                <iframe
+                  title={title}
+                  src={`${objectUrl}#toolbar=1&navpanes=0`}
+                  className="h-[min(70dvh,560px)] w-full border-0"
+                />
+              </object>
+              <div className="border-t border-slate-100 px-3 py-2 text-center">
+                <a
+                  href={objectUrl}
+                  download={title}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-medium text-[#2B5A8C] underline-offset-2 hover:underline"
+                >
+                  Open / download PDF
+                </a>
+              </div>
+            </div>
+          ) : null}
+
+          {!loading &&
+          !error &&
+          !textContent &&
+          !objectUrl ? (
+            <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-center">
+              <FileText className="h-8 w-8 text-slate-400" />
+              <p className="text-sm text-slate-600">
+                Nothing to preview for this file yet.
+              </p>
+            </div>
           ) : null}
 
           {!loading &&

@@ -7,6 +7,8 @@ export type AiUploadHistoryItem = {
   updatedAt: string;
   /** Backend AI document id (Mongo / disk). */
   fileId?: string;
+  /** MIME type from server (helps image / PDF / text preview). */
+  mimeType?: string;
   /** Primary section stamp ("5") or "overview". */
   sectionId?: string;
   /** All section ids this upload relates to (primary + partners). */

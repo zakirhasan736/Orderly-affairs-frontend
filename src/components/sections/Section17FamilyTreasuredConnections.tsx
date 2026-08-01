@@ -1,6 +1,5 @@
 'use client';
 
-import { AiUploadedAttachmentList } from '@/components/ai/AiUploadedAttachmentList';
 import React, {useEffect, useState, useRef } from 'react';
 import {
   Card,
@@ -1660,8 +1659,6 @@ export default function Section17FamilyTreasuredConnections({
             iconClassName={tone.icon}
           />
         </div>
-
-        <AiUploadedAttachmentList file={uploadedFile} />
 
         {isUploading && (
           <div className="relative flex items-center gap-2 text-xs text-slate-500">

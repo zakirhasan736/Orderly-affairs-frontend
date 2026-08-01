@@ -58,6 +58,10 @@ export default function NextKinLetterPage() {
         {'\n\n'}
 
         {letter.letter_signature}
+
+        {'\n\n'}
+
+        {letter.signer_name}
       </div>
     </div>
   );

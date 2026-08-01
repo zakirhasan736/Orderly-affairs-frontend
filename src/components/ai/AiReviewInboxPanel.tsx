@@ -1,7 +1,17 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, FileText, Inbox, Loader2, Paperclip, Bell, Search, X } from 'lucide-react';
+import {
+  CalendarClock,
+  Check,
+  FileText,
+  Loader2,
+  Mail,
+  MailOpen,
+  Search,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import { Button } from '@/components/common/ui/button';
 import { cn } from '@common/ui/utils';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
@@ -10,7 +20,10 @@ import { AiUploadHistoryThumb } from '@/components/ai/AiUploadHistoryThumb';
 import { AiDocumentPreviewDialog } from '@/components/ai/AiDocumentPreviewDialog';
 import {
   listDashboardAiPatches,
+  peekDashboardAiPatch,
+  stashDashboardAiPatch,
   takeDashboardAiPatch,
+  type DetectedAiFact,
   type StashedAiPatch,
 } from '@/utils/aiDashboardPatchCache';
 import {
@@ -24,6 +37,7 @@ import {
 import {
   formatUploadRelativeShort,
   listAiUploadHistory,
+  removeAiUploadHistoryItem,
   type AiUploadHistoryItem,
 } from '@/utils/aiUploadHistory';
 import { toast } from 'sonner';
@@ -31,14 +45,11 @@ import {
   AiInboxDocumentReviewDialog,
   type AiInboxReviewDocument,
 } from '@/components/ai/AiInboxDocumentReviewDialog';
-import { peekDashboardAiPatch, stashDashboardAiPatch } from '@/utils/aiDashboardPatchCache';
-import type { DetectedAiFact } from '@/utils/aiDashboardPatchCache';
 import {
   deleteAIDocument,
   listOwnerAiDocuments,
   type OwnerAiDocument,
 } from '@/services/aiDocumentUpload';
-import { removeAiUploadHistoryItem } from '@/utils/aiUploadHistory';
 import { clearAiUploadMeta } from '@/utils/aiDocumentUploadUi';
 import { buildAiUploadReviewSummary } from '@/utils/aiUploadReviewSummary';
 import { applyEditedFactsToStash } from '@/utils/aiReviewAcceptSave';
@@ -50,10 +61,40 @@ import { flattenDetectedFactsFromPatch } from '@/utils/aiSemanticFieldMatch';
 import { unwrapAiAutofillPatch } from '@/utils/aiPatchNormalizer';
 import type { OverviewExpiryAlert } from '@/utils/overviewExpiryAlerts';
 import { OVERVIEW_BROWSE_CATEGORIES } from '@/utils/overviewBrowseCategories';
-
-type InboxTab = 'inbox' | 'files' | 'reminders';
-
-const OPEN_INBOX_TAB_EVENT = 'orderly-open-ai-inbox-tab';
+import type { DashboardNotice } from '@/utils/dashboardNotifications';
+import {
+  dismissNotice,
+  filterVisibleNotices,
+  isNoticeRead,
+  markAllNoticesRead,
+  markNoticeRead,
+  markNoticeUnread,
+} from '@/utils/dashboardNotifications';
+import {
+  dismissFile,
+  dismissReminder,
+  fileAlertKey,
+  filterVisibleFiles,
+  filterVisibleReminders,
+  isAiReviewRead,
+  isFileRead,
+  isReminderRead,
+  markAiReviewRead,
+  markAiReviewUnread,
+  markAllAiReviewsRead,
+  markAllFilesRead,
+  markAllRemindersRead,
+  markFileRead,
+  markFileUnread,
+  markReminderRead,
+  markReminderUnread,
+} from '@/utils/vaultAlertState';
+import {
+  normalizeVaultActivityTab,
+  OPEN_VAULT_ACTIVITY_TAB_EVENT,
+  type VaultActivityTab,
+  type VaultActivityTabInput,
+} from '@/utils/vaultActivityTabs';
 
 function formatReminderDue(daysUntil: number): string {
   if (daysUntil < 0) {
@@ -63,25 +104,6 @@ function formatReminderDue(daysUntil: number): string {
   if (daysUntil === 0) return 'Due today';
   if (daysUntil === 1) return 'Due tomorrow';
   return `Due in ${daysUntil} days`;
-}
-
-function reminderToneClasses(tone: OverviewExpiryAlert['tone']) {
-  if (tone === 'critical') {
-    return {
-      badge: 'bg-rose-50 text-rose-800 ring-rose-100',
-      icon: 'bg-rose-100 text-rose-700',
-    };
-  }
-  if (tone === 'ok' || tone === 'info') {
-    return {
-      badge: 'bg-slate-100 text-slate-700 ring-slate-200',
-      icon: 'bg-slate-100 text-[#5a6b80]',
-    };
-  }
-  return {
-    badge: 'bg-amber-50 text-amber-900 ring-amber-100',
-    icon: 'bg-amber-100 text-amber-800',
-  };
 }
 
 function browseCategoryLabel(sectionId?: string | null): string | null {
@@ -103,7 +125,11 @@ function fileCategoryLine(item: AiUploadHistoryItem): string {
     item.targetSectionLabel ||
     (sectionId ? getAiSectionLabel(sectionId) : '') ||
     'Uploaded';
-  if (category && section && !section.toLowerCase().includes(category.toLowerCase())) {
+  if (
+    category &&
+    section &&
+    !section.toLowerCase().includes(category.toLowerCase())
+  ) {
     return `${category} · ${section}`;
   }
   return category || section;
@@ -129,9 +155,7 @@ function mergeInboxFiles(args: {
   const byKey = new Map<string, AiUploadHistoryItem>();
 
   const put = (item: AiUploadHistoryItem) => {
-    const key = item.fileId
-      ? `file:${item.fileId}`
-      : `id:${item.id}`;
+    const key = item.fileId ? `file:${item.fileId}` : `id:${item.id}`;
     const prev = byKey.get(key);
     if (!prev) {
       byKey.set(key, item);
@@ -144,12 +168,12 @@ function mergeInboxFiles(args: {
       ...item,
       fileName: item.fileName || prev.fileName,
       fileId: item.fileId || prev.fileId,
+      mimeType: item.mimeType || prev.mimeType,
       sectionId: item.sectionId || prev.sectionId,
       sectionIds: Array.from(
         new Set([...(prev.sectionIds || []), ...(item.sectionIds || [])]),
       ),
-      targetSectionLabel:
-        item.targetSectionLabel || prev.targetSectionLabel,
+      targetSectionLabel: item.targetSectionLabel || prev.targetSectionLabel,
       createdAt:
         prevTime && nextTime
           ? new Date(Math.min(prevTime, nextTime)).toISOString()
@@ -195,12 +219,13 @@ function mergeInboxFiles(args: {
         : undefined;
     put({
       id: `server:${fileId}`,
-      fileName:
-        doc.original_filename || doc.name || 'Uploaded document',
-      status: doc.status === 'ready' || !doc.status ? 'done' : String(doc.status),
+      fileName: doc.original_filename || doc.name || 'Uploaded document',
+      status:
+        doc.status === 'ready' || !doc.status ? 'done' : String(doc.status),
       createdAt: doc.created_at || doc.updated_at || new Date().toISOString(),
       updatedAt: doc.updated_at || doc.created_at || new Date().toISOString(),
       fileId,
+      mimeType: doc.mime_type || undefined,
       sectionId: section,
       sectionIds: section ? [section] : [],
       targetSectionLabel: section ? getAiSectionLabel(section) : undefined,
@@ -208,11 +233,13 @@ function mergeInboxFiles(args: {
     });
   }
 
-  return Array.from(byKey.values()).sort((a, b) => {
-    const aTime = Date.parse(a.updatedAt || a.createdAt) || 0;
-    const bTime = Date.parse(b.updatedAt || b.createdAt) || 0;
-    return bTime - aTime;
-  });
+  return Array.from(byKey.values())
+    .filter(item => Boolean(String(item.fileId || '').trim()))
+    .sort((a, b) => {
+      const aTime = Date.parse(a.updatedAt || a.createdAt) || 0;
+      const bTime = Date.parse(b.updatedAt || b.createdAt) || 0;
+      return bTime - aTime;
+    });
 }
 
 type InboxRow = {
@@ -227,11 +254,8 @@ type InboxRow = {
   progress?: number;
 };
 
-const BANNER_DISMISS_KEY = 'orderly_ai_review_inbox_banner_dismissed';
-
 function shortSectionLabel(sectionId: string) {
   const full = getAiSectionLabel(sectionId);
-  // Keep the line readable on mobile ("File to: Insurance • 7A").
   if (full.length <= 22) return full;
   const first = full.split(/[&•|,]/)[0]?.trim();
   return first && first.length <= 22 ? first : `${full.slice(0, 20)}…`;
@@ -239,11 +263,8 @@ function shortSectionLabel(sectionId: string) {
 
 function subsectionDisplay(sectionId: string, subsection?: string | null) {
   const code =
-    subsection ||
-    AI_SECTION_BY_ID[sectionId]?.defaultSubsection ||
-    '';
+    subsection || AI_SECTION_BY_ID[sectionId]?.defaultSubsection || '';
   if (!code) return 'Details';
-  // Prefer human labels for common codes.
   const map: Record<string, string> = {
     vital_info: 'Vital info',
     '5A': 'Current vehicles',
@@ -345,9 +366,7 @@ function buildInboxRows(args: {
       sectionId,
       sectionLabel:
         job.targetSectionLabel ||
-        (sectionId === 'overview'
-          ? 'Matching…'
-          : shortSectionLabel(sectionId)),
+        (sectionId === 'overview' ? 'Matching…' : shortSectionLabel(sectionId)),
       subsectionLabel:
         sectionId === 'overview'
           ? 'AI reading'
@@ -361,66 +380,91 @@ function buildInboxRows(args: {
   return rows.sort((a, b) => b.createdAt - a.createdAt);
 }
 
-function groupByDay(rows: InboxRow[]) {
-  const groups: { label: string; items: InboxRow[] }[] = [];
-  const byLabel = new Map<string, InboxRow[]>();
-
-  for (const row of rows) {
-    const label = dayGroupLabel(row.createdAt);
-    const list = byLabel.get(label) || [];
-    list.push(row);
-    byLabel.set(label, list);
-  }
-
-  for (const [label, items] of byLabel) {
-    groups.push({ label, items });
-  }
-  return groups;
-}
-
-function dayGroupLabel(ts: number) {
-  const date = new Date(ts);
-  const today = new Date();
-  const startToday = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  ).getTime();
-  const startYesterday = startToday - 86400000;
-  if (ts >= startToday) return 'Today';
-  if (ts >= startYesterday) return 'Yesterday';
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
+function AlertActions({
+  isRead,
+  onMarkRead,
+  onMarkUnread,
+  onDelete,
+  deleteLabel = 'Remove',
+}: {
+  isRead: boolean;
+  onMarkRead: () => void;
+  onMarkUnread: () => void;
+  onDelete: () => void;
+  deleteLabel?: string;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-0.5">
+      {isRead ? (
+        <button
+          type="button"
+          title="Mark unread"
+          aria-label="Mark unread"
+          onClick={event => {
+            event.stopPropagation();
+            onMarkUnread();
+          }}
+          className="rounded-md p-1.5 text-[#8a97a8] transition hover:bg-[#213D59]/8 hover:text-[#213D59]"
+        >
+          <Mail className="h-3.5 w-3.5" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          title="Mark read"
+          aria-label="Mark read"
+          onClick={event => {
+            event.stopPropagation();
+            onMarkRead();
+          }}
+          className="rounded-md p-1.5 text-[#8a97a8] transition hover:bg-[#213D59]/8 hover:text-[#213D59]"
+        >
+          <MailOpen className="h-3.5 w-3.5" />
+        </button>
+      )}
+      <button
+        type="button"
+        title={deleteLabel}
+        aria-label={deleteLabel}
+        onClick={event => {
+          event.stopPropagation();
+          onDelete();
+        }}
+        className="rounded-md p-1.5 text-[#8a97a8] transition hover:bg-rose-50 hover:text-rose-700"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
 }
 
 /**
- * Competitor-style review inbox: uploaded files land here for review/approval
- * (Accept saves to vault). Reminders tab surfaces passport / license / policy
- * expiry dates extracted into the vault.
+ * Vault activity center — alerts to review, uploaded docs, and due dates.
+ * Distinct from generic Inbox / Files / Reminders competitor layouts.
  */
 export function AiReviewInboxPanel({
   onNavigateToSection,
   ownerName,
   ownerEmail,
   reminders = [],
+  notices = [],
   className,
 }: {
   onNavigateToSection?: (sectionId: string) => void;
   ownerName?: string | null;
   ownerEmail?: string | null;
-  /** Expiry / renewal reminders (passport, license, policies, etc.). */
   reminders?: OverviewExpiryAlert[];
+  notices?: DashboardNotice[];
   className?: string;
 }) {
   const routing = useOptionalAiDocumentRouting();
   const batch = useDashboardAiBatch();
-  const [tab, setTab] = useState<InboxTab>('inbox');
+  const [tab, setTab] = useState<VaultActivityTab>('alerts');
   const [stashTick, setStashTick] = useState(0);
   const [reviewTick, setReviewTick] = useState(0);
-  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [alertTick, setAlertTick] = useState(0);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [deletingFileKey, setDeletingFileKey] = useState<string | null>(null);
   const [reviewDoc, setReviewDoc] = useState<AiInboxReviewDocument | null>(
     null,
   );
@@ -430,43 +474,34 @@ export function AiReviewInboxPanel({
   const [previewFile, setPreviewFile] = useState<{
     fileId: string;
     fileName: string;
+    mimeType?: string;
   } | null>(null);
-
-  useEffect(() => {
-    try {
-      setBannerDismissed(
-        sessionStorage.getItem(BANNER_DISMISS_KEY) === '1',
-      );
-    } catch {
-      // ignore
-    }
-  }, []);
 
   useEffect(() => {
     const onStash = () => setStashTick(value => value + 1);
     const onReviewed = () => setReviewTick(value => value + 1);
     const onHistory = () => setStashTick(value => value + 1);
+    const onAlerts = () => setAlertTick(value => value + 1);
     const onOpenTab = (event: Event) => {
-      const detail = (event as CustomEvent<{ tab?: InboxTab }>).detail;
-      if (
-        detail?.tab === 'inbox' ||
-        detail?.tab === 'files' ||
-        detail?.tab === 'reminders'
-      ) {
-        setTab(detail.tab);
-      }
+      const detail = (event as CustomEvent<{ tab?: VaultActivityTabInput }>)
+        .detail;
+      if (detail?.tab) setTab(normalizeVaultActivityTab(detail.tab));
     };
     window.addEventListener('orderly-ai-patch-stashed', onStash);
     window.addEventListener('orderly-ai-section-reviewed', onReviewed);
     window.addEventListener('orderly-ai-section-persisted', onStash);
     window.addEventListener('orderly-ai-upload-history', onHistory);
-    window.addEventListener(OPEN_INBOX_TAB_EVENT, onOpenTab);
+    window.addEventListener('orderly-notices-read-changed', onAlerts);
+    window.addEventListener('orderly-vault-alerts-changed', onAlerts);
+    window.addEventListener(OPEN_VAULT_ACTIVITY_TAB_EVENT, onOpenTab);
     return () => {
       window.removeEventListener('orderly-ai-patch-stashed', onStash);
       window.removeEventListener('orderly-ai-section-reviewed', onReviewed);
       window.removeEventListener('orderly-ai-section-persisted', onStash);
       window.removeEventListener('orderly-ai-upload-history', onHistory);
-      window.removeEventListener(OPEN_INBOX_TAB_EVENT, onOpenTab);
+      window.removeEventListener('orderly-notices-read-changed', onAlerts);
+      window.removeEventListener('orderly-vault-alerts-changed', onAlerts);
+      window.removeEventListener(OPEN_VAULT_ACTIVITY_TAB_EVENT, onOpenTab);
     };
   }, []);
 
@@ -485,7 +520,7 @@ export function AiReviewInboxPanel({
     return () => {
       cancelled = true;
     };
-  }, [stashTick, batch.jobs.length]);
+  }, [stashTick, batch.jobs.length, tab]);
 
   const patches = useMemo(
     () => listDashboardAiPatches(),
@@ -502,19 +537,27 @@ export function AiReviewInboxPanel({
     [patches, routing?.pendingUploads, batch.jobs, reviewTick],
   );
 
-  const readyCount = inboxRows.filter(row => row.status === 'ready').length;
-  const processingCount = inboxRows.filter(
-    row => row.status === 'processing' || row.status === 'queued',
-  ).length;
+  const visibleNotices = useMemo(() => {
+    void alertTick;
+    return filterVisibleNotices(notices, 50);
+  }, [notices, alertTick]);
+
+  const visibleReminders = useMemo(() => {
+    void alertTick;
+    return filterVisibleReminders(reminders);
+  }, [reminders, alertTick]);
 
   const historyFiles = useMemo(() => {
     void stashTick;
-    return mergeInboxFiles({
-      history: listAiUploadHistory(),
-      jobs: batch.jobs,
-      serverDocs,
-    });
-  }, [stashTick, batch.jobs, serverDocs]);
+    void alertTick;
+    return filterVisibleFiles(
+      mergeInboxFiles({
+        history: listAiUploadHistory(),
+        jobs: batch.jobs,
+        serverDocs,
+      }),
+    );
+  }, [stashTick, alertTick, batch.jobs, serverDocs]);
 
   const filteredFiles = useMemo(() => {
     const query = fileSearch.trim().toLowerCase();
@@ -533,83 +576,100 @@ export function AiReviewInboxPanel({
     });
   }, [historyFiles, fileSearch]);
 
-  const dismissBanner = () => {
-    setBannerDismissed(true);
-    try {
-      sessionStorage.setItem(BANNER_DISMISS_KEY, '1');
-    } catch {
-      // ignore
-    }
-  };
+  const unreadNoticeCount = useMemo(() => {
+    void alertTick;
+    return visibleNotices.filter(n => !isNoticeRead(n.id)).length;
+  }, [visibleNotices, alertTick]);
 
-  const openReviewDetail = useCallback((row: InboxRow) => {
-    if (row.status !== 'ready' || row.sectionId === 'overview') return;
+  const unreadReviewCount = useMemo(() => {
+    void alertTick;
+    return inboxRows.filter(
+      row =>
+        row.status === 'ready' && !isAiReviewRead(row.sectionId, row.fileId),
+    ).length;
+  }, [inboxRows, alertTick]);
 
-    const patch = peekDashboardAiPatch(row.sectionId);
-    const pending =
-      routing?.getPendingUploadsForSection(row.sectionId)?.[0] ||
-      routing?.pendingUploads?.find(
-        item =>
-          item.file_id === row.fileId &&
-          item.targetSectionId === row.sectionId,
-      );
+  const unreadDocCount = useMemo(() => {
+    void alertTick;
+    return historyFiles.filter(item => !isFileRead(fileAlertKey(item))).length;
+  }, [historyFiles, alertTick]);
 
-    const factsFromPending = (pending?.extractedFields || []).map(field => ({
-      label: field.field_label || field.field_path || 'Field',
-      value: String(field.value ?? ''),
-      field_key: field.field_path,
-    }));
+  const unreadDueCount = useMemo(() => {
+    void alertTick;
+    return visibleReminders.filter(item => !isReminderRead(item.id)).length;
+  }, [visibleReminders, alertTick]);
 
-    const factsFromPatch =
-      patch?.detectedFields && patch.detectedFields.length
-        ? patch.detectedFields
-        : flattenDetectedFactsFromPatch(
-            unwrapAiAutofillPatch(patch?.result) || patch?.patch || {},
-            patch?.section_key || AI_SECTION_BY_ID[row.sectionId]?.key,
-          );
+  const alertsBadge = unreadNoticeCount + unreadReviewCount;
+  const showEmptyAlerts =
+    inboxRows.length === 0 && visibleNotices.length === 0;
 
-    const facts = (factsFromPatch.length ? factsFromPatch : factsFromPending).filter(
-      fact => String(fact.label || '').trim(),
-    );
+  const openReviewDetail = useCallback(
+    (row: InboxRow) => {
+      if (row.status !== 'ready' || row.sectionId === 'overview') return;
+      markAiReviewRead(row.sectionId, row.fileId);
 
-    setReviewDoc({
-      id: row.id,
-      fileId: row.fileId || patch?.file_id || pending?.file_id,
-      fileName:
-        row.fileName ||
-        patch?.file_name ||
-        pending?.file_name ||
-        'Uploaded document',
-      sectionId: row.sectionId,
-      sectionLabel: row.sectionLabel,
-      subsectionLabel: row.subsectionLabel,
-      summary: buildAiUploadReviewSummary({
-        summary:
-          patch?.document_summary ||
-          pending?.documentSummary ||
-          undefined,
+      const patch = peekDashboardAiPatch(row.sectionId);
+      const pending =
+        routing?.getPendingUploadsForSection(row.sectionId)?.[0] ||
+        routing?.pendingUploads?.find(
+          item =>
+            item.file_id === row.fileId &&
+            item.targetSectionId === row.sectionId,
+        );
+
+      const factsFromPending = (pending?.extractedFields || []).map(field => ({
+        label: field.field_label || field.field_path || 'Field',
+        value: String(field.value ?? ''),
+        field_key: field.field_path,
+      }));
+
+      const factsFromPatch =
+        patch?.detectedFields && patch.detectedFields.length
+          ? patch.detectedFields
+          : flattenDetectedFactsFromPatch(
+              unwrapAiAutofillPatch(patch?.result) || patch?.patch || {},
+              patch?.section_key || AI_SECTION_BY_ID[row.sectionId]?.key,
+            );
+
+      const facts = (
+        factsFromPatch.length ? factsFromPatch : factsFromPending
+      ).filter(fact => String(fact.label || '').trim());
+
+      setReviewDoc({
+        id: row.id,
+        fileId: row.fileId || patch?.file_id || pending?.file_id,
         fileName:
           row.fileName ||
           patch?.file_name ||
           pending?.file_name ||
           'Uploaded document',
+        sectionId: row.sectionId,
         sectionLabel: row.sectionLabel,
+        subsectionLabel: row.subsectionLabel,
+        summary: buildAiUploadReviewSummary({
+          summary:
+            patch?.document_summary || pending?.documentSummary || undefined,
+          fileName:
+            row.fileName ||
+            patch?.file_name ||
+            pending?.file_name ||
+            'Uploaded document',
+          sectionLabel: row.sectionLabel,
+          facts,
+        }),
         facts,
-      }),
-      facts,
-    });
-  }, [routing]);
-
-  const handleReview = useCallback(
-    (row: InboxRow) => {
-      openReviewDetail(row);
+      });
     },
-    [openReviewDetail],
+    [routing],
   );
 
   const handleApprove = useCallback(
     async (row: InboxRow, editedFacts?: DetectedAiFact[]) => {
-      if (row.status !== 'ready' || !row.sectionId || row.sectionId === 'overview') {
+      if (
+        row.status !== 'ready' ||
+        !row.sectionId ||
+        row.sectionId === 'overview'
+      ) {
         return;
       }
       setApprovingId(row.id);
@@ -646,7 +706,6 @@ export function AiReviewInboxPanel({
             fileName: row.fileName,
           });
 
-          // Refresh stash as accepted (cleared below).
           stashDashboardAiPatch({
             ...nextStash,
             pending_accept: false,
@@ -664,10 +723,28 @@ export function AiReviewInboxPanel({
           routing?.clearAllPendingForFile(row.fileId);
         }
         setReviewTick(value => value + 1);
-        toast.success('Saved to your vault');
+        toast.success('Saved to your vault', {
+          description:
+            'Open the section to finish any blanks — use Fill empty fields.',
+        });
       } finally {
         setApprovingId(null);
       }
+    },
+    [routing],
+  );
+
+  const dismissAiReview = useCallback(
+    (row: InboxRow) => {
+      markAiSectionReviewed({
+        sectionId: row.sectionId,
+        fileId: row.fileId,
+      });
+      takeDashboardAiPatch(row.sectionId);
+      routing?.clearPendingForSection(row.sectionId);
+      if (row.fileId) routing?.clearAllPendingForFile(row.fileId);
+      setReviewTick(value => value + 1);
+      toast.message('Alert removed');
     },
     [routing],
   );
@@ -688,7 +765,7 @@ export function AiReviewInboxPanel({
       try {
         await deleteAIDocument(fileId);
       } catch {
-        // History/local clear still helps even if server delete fails.
+        // local clear still helps
       }
     }
     setReviewTick(value => value + 1);
@@ -696,346 +773,588 @@ export function AiReviewInboxPanel({
     toast.success('Upload removed');
   }, [reviewDoc, routing]);
 
-  const showEmptyInbox = inboxRows.length === 0;
-  const reminderCount = reminders.length;
+  const handleDeleteFile = useCallback(async (item: AiUploadHistoryItem) => {
+    const key = fileAlertKey(item);
+    const fileId = item.fileId;
+    if (
+      !window.confirm(
+        `Remove “${item.fileName}”? This deletes the upload from your vault activity.`,
+      )
+    ) {
+      return;
+    }
+    setDeletingFileKey(key);
+    try {
+      dismissFile(key);
+      if (fileId) {
+        clearAiUploadMeta(fileId);
+        removeAiUploadHistoryItem({ fileId });
+        try {
+          await deleteAIDocument(fileId);
+        } catch {
+          // keep local dismiss
+        }
+      } else {
+        removeAiUploadHistoryItem({ id: item.id });
+      }
+      setServerDocs(prev =>
+        prev.filter(doc => String(doc.file_id) !== String(fileId || '')),
+      );
+      setStashTick(v => v + 1);
+      toast.success('Document removed');
+    } finally {
+      setDeletingFileKey(null);
+    }
+  }, []);
+
+  const markAllCurrentRead = useCallback(() => {
+    if (tab === 'alerts') {
+      markAllNoticesRead(visibleNotices.map(n => n.id));
+      markAllAiReviewsRead(
+        inboxRows.map(row => ({
+          sectionId: row.sectionId,
+          fileId: row.fileId,
+        })),
+      );
+      toast.message('Alerts marked read');
+      return;
+    }
+    if (tab === 'docs') {
+      markAllFilesRead(historyFiles.map(fileAlertKey));
+      toast.message('Documents marked read');
+      return;
+    }
+    markAllRemindersRead(visibleReminders.map(r => r.id));
+    toast.message('Due dates marked read');
+  }, [tab, visibleNotices, inboxRows, historyFiles, visibleReminders]);
+
+  const tabs: {
+    id: VaultActivityTab;
+    label: string;
+    hint: string;
+    icon: React.ReactNode;
+    count: number;
+  }[] = [
+    {
+      id: 'alerts',
+      label: 'To review',
+      hint: 'Notices & AI fills',
+      icon: <Sparkles className="h-4 w-4" />,
+      count: alertsBadge,
+    },
+    {
+      id: 'docs',
+      label: 'Vault docs',
+      hint: 'Uploaded files',
+      icon: <FileText className="h-4 w-4" />,
+      count: unreadDocCount,
+    },
+    {
+      id: 'dues',
+      label: 'Due dates',
+      hint: 'Expiries & renewals',
+      icon: <CalendarClock className="h-4 w-4" />,
+      count: unreadDueCount,
+    },
+  ];
 
   return (
     <section
       id="ai-review-inbox"
       data-ai-review-inbox
       className={cn(
-        'overflow-hidden rounded-2xl border border-[#213D59]/12 bg-white shadow-sm',
+        'overflow-hidden rounded-xl border border-[#213D59]/15 bg-[#f4f6f8] shadow-sm',
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#e7eef7] text-[#213D59]">
-            <Inbox className="h-4.5 w-4.5 h-[18px] w-[18px]" />
-          </div>
+      <header className="border-b border-[#213D59]/12 bg-[#213D59] px-4 py-4 text-white sm:px-5">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="truncate text-[15px] font-semibold text-[#213D59]">
-              Review inbox
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
+              Vault activity
+            </p>
+            <h3 className="mt-1 truncate text-[17px] font-semibold tracking-tight">
+              What needs attention
             </h3>
-            <p className="truncate text-[12px] text-[#5a6b80]">
-            Confirm AI filled the right place — edit, then Accept to save
-          </p>
+            <p className="mt-0.5 text-[12px] text-white/70">
+              Review AI fills, documents, and upcoming dates — mark read or
+              clear what you&apos;re done with.
+            </p>
           </div>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5 px-4 pt-3 sm:px-5">
-        {(
-          [
-            { id: 'inbox' as const, label: 'Inbox', count: readyCount },
-            { id: 'files' as const, label: 'Files', count: historyFiles.length },
-            {
-              id: 'reminders' as const,
-              label: 'Reminders',
-              count: reminderCount,
-            },
-          ] as const
-        ).map(item => (
           <button
-            key={item.id}
             type="button"
-            onClick={() => setTab(item.id)}
-            className={cn(
-              'inline-flex min-h-10 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold transition',
-              tab === item.id
-                ? 'bg-[#213D59] text-white shadow-sm'
-                : 'bg-slate-100 text-[#5a6b80] hover:bg-slate-200/80',
-            )}
+            onClick={markAllCurrentRead}
+            className="shrink-0 rounded-md border border-white/20 bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-white/15"
           >
-            {item.label}
-            {item.count > 0 ? (
+            Mark all read
+          </button>
+        </div>
+
+        <nav
+          className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-white/15"
+          aria-label="Activity areas"
+        >
+          {tabs.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
+              className={cn(
+                'flex flex-col items-start gap-0.5 px-2.5 py-2.5 text-left transition sm:px-3',
+                tab === item.id
+                  ? 'bg-white text-[#213D59]'
+                  : 'bg-[#213D59]/40 text-white/80 hover:bg-[#213D59]/25 hover:text-white',
+              )}
+            >
+              <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold sm:text-[13px]">
+                {item.icon}
+                {item.label}
+                {item.count > 0 ? (
+                  <span
+                    className={cn(
+                      'inline-flex min-h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded px-1 text-[10px] font-bold',
+                      tab === item.id
+                        ? 'bg-[#213D59] text-white'
+                        : 'bg-white/20 text-white',
+                    )}
+                  >
+                    {item.count > 99 ? '99+' : item.count}
+                  </span>
+                ) : null}
+              </span>
               <span
                 className={cn(
-                  'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold',
-                  tab === item.id
-                    ? 'bg-white/20 text-white'
-                    : 'bg-[#2B5A8C] text-white',
+                  'hidden text-[10px] sm:block',
+                  tab === item.id ? 'text-[#5a6b80]' : 'text-white/50',
                 )}
               >
-                {item.count > 99 ? '99+' : item.count}
+                {item.hint}
               </span>
-            ) : null}
-          </button>
-        ))}
-      </div>
+            </button>
+          ))}
+        </nav>
+      </header>
 
-      {tab === 'inbox' ? (
-        <div className="px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
-          {!bannerDismissed && readyCount > 0 ? (
-            <div className="mb-3 flex items-start gap-3 rounded-2xl bg-[#2B5A8C] px-3.5 py-3 text-white sm:px-4">
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#213D59]/90">
-                <Paperclip className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[14px] font-semibold tracking-tight">
-                  New files to review
-                </p>
-                <p className="text-[12.5px] text-white/85">
-                  {readyCount === 1
-                    ? '1 file is ready — check the preview and fields, edit if needed, then Accept to save.'
-                    : `${readyCount} files are ready — check each preview and fields, edit if needed, then Accept to save.`}
-                  {processingCount > 0
-                    ? ` ${processingCount} still processing.`
-                    : ''}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={dismissBanner}
-                className="rounded-full p-1.5 text-white/80 transition hover:bg-white/10 hover:text-white"
-                aria-label="Dismiss banner"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          ) : null}
-
-          {showEmptyInbox ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-10 text-center">
-              <Inbox className="mx-auto h-8 w-8 text-slate-300" />
-              <p className="mt-3 text-sm font-medium text-[#213D59]">
-                Inbox is clear
+      {tab === 'alerts' ? (
+        <div className="max-h-[min(58dvh,28rem)] overflow-y-auto px-3 py-3 sm:px-4">
+          {showEmptyAlerts ? (
+            <div className="border border-dashed border-[#213D59]/20 bg-white px-4 py-12 text-center">
+              <Sparkles className="mx-auto h-7 w-7 text-[#213D59]/35" />
+              <p className="mt-3 text-sm font-semibold text-[#213D59]">
+                Nothing to review
               </p>
-              <p className="mx-auto mt-1 max-w-[28ch] text-[12.5px] leading-relaxed text-[#5a6b80]">
-                Upload a document above. When AI finishes reading it, it will
-                show up here for your review and approval.
+              <p className="mx-auto mt-1 max-w-[32ch] text-[12.5px] leading-relaxed text-[#5a6b80]">
+                Notices and AI document fills waiting for Accept will show here.
               </p>
             </div>
           ) : (
             <div className="space-y-4">
-              {groupByDay(inboxRows).map(group => (
-                <div key={group.label}>
-                  <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#6b7785]">
-                    {group.label}
+              {visibleNotices.length > 0 ? (
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6b7785]">
+                    Notices
                   </p>
-                  <ul className="space-y-2">
-                    {group.items.map(row => (
-                      <li
-                        key={row.id}
-                        className="flex gap-3 rounded-2xl border border-slate-200/90 bg-[#f7f8fa] p-2.5 sm:p-3"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleReview(row)}
-                          className="w-[4.25rem] shrink-0 overflow-hidden rounded-xl sm:w-[5rem]"
-                          title={row.fileName}
+                  <ul className="divide-y divide-[#213D59]/10 overflow-hidden border border-[#213D59]/12 bg-white">
+                    {visibleNotices.map(notice => {
+                      const read = isNoticeRead(notice.id);
+                      return (
+                        <li
+                          key={notice.id}
+                          className={cn(
+                            'flex items-stretch gap-0',
+                            !read && 'bg-[#eef3f8]',
+                          )}
                         >
-                          <AiUploadHistoryThumb
-                            fileId={row.fileId}
-                            fileName={row.fileName}
-                            className="!rounded-xl"
+                          <span
+                            aria-hidden
+                            className={cn(
+                              'w-1 shrink-0',
+                              read
+                                ? 'bg-transparent'
+                                : notice.tone === 'critical'
+                                  ? 'bg-rose-500'
+                                  : notice.tone === 'warn'
+                                    ? 'bg-amber-500'
+                                    : 'bg-[#2B5A8C]',
+                            )}
                           />
-                        </button>
-
-                        <div className="min-w-0 flex-1">
                           <button
                             type="button"
-                            onClick={() => handleReview(row)}
-                            className="w-full text-left"
+                            onClick={() => {
+                              markNoticeRead(notice.id);
+                              if (notice.category === 'reminder') {
+                                setTab('dues');
+                                return;
+                              }
+                              if (notice.sectionId) {
+                                onNavigateToSection?.(notice.sectionId);
+                              }
+                            }}
+                            className="min-w-0 flex-1 px-3 py-2.5 text-left"
                           >
-                            <p className="truncate text-[13.5px] font-semibold text-[#1a2b3d] sm:text-[14px]">
-                              {row.fileName}
+                            <p
+                              className={cn(
+                                'truncate text-[13px] text-[#1a2b3d]',
+                                !read && 'font-semibold',
+                              )}
+                            >
+                              {notice.title}
                             </p>
-                            <p className="mt-0.5 truncate text-[12px] text-[#5a6b80]">
-                              File to: {row.sectionLabel}
-                              {row.subsectionLabel
-                                ? ` · ${row.subsectionLabel}`
-                                : ''}
+                            <p className="mt-0.5 text-[12px] leading-snug text-[#5a6b80]">
+                              {notice.body}
                             </p>
                           </button>
-
-                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                            {row.status === 'ready' ? (
-                              <>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  className="h-8 rounded-lg bg-[#213D59] px-3 text-[12px] font-semibold text-white hover:bg-[#1a3149]"
-                                  onClick={() => handleReview(row)}
-                                >
-                                  Review
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={approvingId === row.id}
-                                  className="h-8 rounded-lg border-[#213D59]/20 px-3 text-[12px] font-semibold text-[#213D59]"
-                                  onClick={() => void handleApprove(row)}
-                                >
-                                  {approvingId === row.id ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <Check className="mr-1 h-3.5 w-3.5" />
-                                      Accept
-                                    </>
-                                  )}
-                                </Button>
-                              </>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-800 ring-1 ring-inset ring-sky-100">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                {row.status === 'queued'
-                                  ? 'In queue'
-                                  : `Processing${typeof row.progress === 'number' ? ` · ${row.progress}%` : ''}`}
-                              </span>
-                            )}
-                            <span className="text-[11px] text-[#8a97a8]">
-                              {formatUploadRelativeShort(
-                                new Date(row.createdAt).toISOString(),
-                              ) || 'Just now'}
-                            </span>
+                          <div className="flex items-center pr-1.5">
+                            <AlertActions
+                              isRead={read}
+                              onMarkRead={() => markNoticeRead(notice.id)}
+                              onMarkUnread={() => markNoticeUnread(notice.id)}
+                              onDelete={() => {
+                                dismissNotice(notice.id);
+                                toast.message('Notice removed');
+                              }}
+                            />
                           </div>
-                        </div>
-                      </li>
-                    ))}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
-              ))}
+              ) : null}
+
+              {inboxRows.length > 0 ? (
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6b7785]">
+                    AI fills awaiting Accept
+                  </p>
+                  <ul className="divide-y divide-[#213D59]/10 overflow-hidden border border-[#213D59]/12 bg-white">
+                    {inboxRows.map(row => {
+                      const read = isAiReviewRead(row.sectionId, row.fileId);
+                      return (
+                        <li
+                          key={row.id}
+                          className={cn(
+                            'flex items-stretch gap-0',
+                            !read && row.status === 'ready' && 'bg-[#eef3f8]',
+                          )}
+                        >
+                          <span
+                            aria-hidden
+                            className={cn(
+                              'w-1 shrink-0',
+                              read || row.status !== 'ready'
+                                ? 'bg-transparent'
+                                : 'bg-[#2B5A8C]',
+                            )}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => openReviewDetail(row)}
+                            className="w-[3.75rem] shrink-0 self-center p-2 sm:w-[4.25rem]"
+                            title={row.fileName}
+                          >
+                            <AiUploadHistoryThumb
+                              fileId={row.fileId}
+                              fileName={row.fileName}
+                              className="!rounded-md"
+                            />
+                          </button>
+                          <div className="min-w-0 flex-1 py-2.5 pr-1">
+                            <button
+                              type="button"
+                              onClick={() => openReviewDetail(row)}
+                              className="w-full text-left"
+                            >
+                              <p
+                                className={cn(
+                                  'truncate text-[13px] text-[#1a2b3d]',
+                                  !read && 'font-semibold',
+                                )}
+                              >
+                                {row.fileName}
+                              </p>
+                              <p className="mt-0.5 truncate text-[12px] text-[#5a6b80]">
+                                {row.sectionLabel}
+                                {row.subsectionLabel
+                                  ? ` · ${row.subsectionLabel}`
+                                  : ''}
+                              </p>
+                            </button>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              {row.status === 'ready' ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="h-7 rounded-md bg-[#213D59] px-2.5 text-[11px] font-semibold text-white hover:bg-[#1a3149]"
+                                    onClick={() => openReviewDetail(row)}
+                                  >
+                                    Review
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={approvingId === row.id}
+                                    className="h-7 rounded-md border-[#213D59]/20 px-2.5 text-[11px] font-semibold text-[#213D59]"
+                                    onClick={() => void handleApprove(row)}
+                                  >
+                                    {approvingId === row.id ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <>
+                                        <Check className="mr-1 h-3 w-3" />
+                                        Accept
+                                      </>
+                                    )}
+                                  </Button>
+                                </>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-sky-800">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  {row.status === 'queued'
+                                    ? 'In queue'
+                                    : `Processing${typeof row.progress === 'number' ? ` · ${row.progress}%` : ''}`}
+                                </span>
+                              )}
+                              <span className="text-[11px] text-[#8a97a8]">
+                                {formatUploadRelativeShort(
+                                  new Date(row.createdAt).toISOString(),
+                                ) || 'Just now'}
+                              </span>
+                            </div>
+                          </div>
+                          {row.status === 'ready' ? (
+                            <div className="flex items-center pr-1.5">
+                              <AlertActions
+                                isRead={read}
+                                onMarkRead={() =>
+                                  markAiReviewRead(row.sectionId, row.fileId)
+                                }
+                                onMarkUnread={() =>
+                                  markAiReviewUnread(row.sectionId, row.fileId)
+                                }
+                                onDelete={() => dismissAiReview(row)}
+                                deleteLabel="Remove alert"
+                              />
+                            </div>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           )}
         </div>
       ) : null}
 
-      {tab === 'files' ? (
-        <div className="px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
+      {tab === 'docs' ? (
+        <div className="max-h-[min(58dvh,28rem)] overflow-y-auto px-3 py-3 sm:px-4">
           <div className="relative mb-3">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a97a8]" />
             <input
               type="search"
               value={fileSearch}
               onChange={event => setFileSearch(event.target.value)}
-              placeholder="Search for files"
-              className="h-11 w-full rounded-full border border-slate-200 bg-[#f7f8fa] pl-10 pr-4 text-[13.5px] text-[#1a2b3d] outline-none ring-[#213D59]/20 placeholder:text-[#8a97a8] focus:border-[#213D59]/35 focus:bg-white focus:ring-2"
+              placeholder="Find a document…"
+              className="h-10 w-full border border-[#213D59]/15 bg-white pl-10 pr-3 text-[13px] text-[#1a2b3d] outline-none ring-[#213D59]/20 placeholder:text-[#8a97a8] focus:border-[#213D59]/40 focus:ring-2"
             />
           </div>
 
           {filesLoading && historyFiles.length === 0 ? (
-            <div className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-12 text-[13px] text-[#5a6b80]">
+            <div className="flex items-center justify-center gap-2 border border-dashed border-[#213D59]/20 bg-white px-4 py-12 text-[13px] text-[#5a6b80]">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading uploads…
+              Loading documents…
             </div>
           ) : filteredFiles.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-10 text-center">
-              <FileText className="mx-auto h-8 w-8 text-slate-300" />
-              <p className="mt-3 text-sm font-medium text-[#213D59]">
-                {fileSearch.trim() ? 'No matching files' : 'No uploads yet'}
+            <div className="border border-dashed border-[#213D59]/20 bg-white px-4 py-12 text-center">
+              <FileText className="mx-auto h-7 w-7 text-[#213D59]/35" />
+              <p className="mt-3 text-sm font-semibold text-[#213D59]">
+                {fileSearch.trim() ? 'No matching documents' : 'No uploads yet'}
               </p>
               <p className="mt-1 text-[12.5px] text-[#5a6b80]">
                 {fileSearch.trim()
                   ? 'Try a different name or category.'
-                  : 'Every document you upload will appear here.'}
+                  : 'Documents you upload for AI fill appear here.'}
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-3">
-              {filteredFiles.map((item: AiUploadHistoryItem) => {
+            <ul className="divide-y divide-[#213D59]/10 overflow-hidden border border-[#213D59]/12 bg-white">
+              {filteredFiles.map(item => {
+                const key = fileAlertKey(item);
+                const read = isFileRead(key);
                 const when =
-                  formatUploadRelativeShort(
-                    item.updatedAt || item.createdAt,
-                  ) || 'Just now';
-                const category = fileCategoryLine(item);
+                  formatUploadRelativeShort(item.updatedAt || item.createdAt) ||
+                  'Just now';
                 return (
-                  <button
+                  <li
                     key={item.id}
-                    type="button"
-                    onClick={() => {
-                      if (!item.fileId) {
-                        toast.message('Preview is not available yet for this file.');
-                        return;
-                      }
-                      setPreviewFile({
-                        fileId: item.fileId,
-                        fileName: item.fileName,
-                      });
-                    }}
-                    className="group overflow-hidden rounded-2xl border border-slate-200/90 bg-[#f7f8fa] text-left transition hover:border-[#213D59]/25 hover:bg-white"
+                    className={cn(
+                      'flex items-stretch gap-0',
+                      !read && 'bg-[#eef3f8]',
+                    )}
                   >
-                    <AiUploadHistoryThumb
-                      fileId={item.fileId}
-                      fileName={item.fileName}
-                      className="!rounded-none !rounded-t-2xl ring-0"
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'w-1 shrink-0',
+                        read ? 'bg-transparent' : 'bg-[#2B5A8C]',
+                      )}
                     />
-                    <div className="space-y-0.5 px-2.5 py-2 sm:px-3">
-                      <p className="truncate text-[11px] font-medium text-[#8a97a8]">
-                        {when}
-                      </p>
-                      <p className="truncate text-[12.5px] font-semibold text-[#1a2b3d]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        markFileRead(key);
+                        if (!item.fileId) {
+                          toast.message(
+                            'Preview is not available yet for this file.',
+                          );
+                          return;
+                        }
+                        setPreviewFile({
+                          fileId: item.fileId,
+                          fileName: item.fileName,
+                          mimeType: item.mimeType,
+                        });
+                      }}
+                      className="w-[3.75rem] shrink-0 self-center p-2 sm:w-[4.25rem]"
+                    >
+                      <AiUploadHistoryThumb
+                        fileId={item.fileId}
+                        fileName={item.fileName}
+                        mimeType={item.mimeType}
+                        className="!rounded-md"
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        markFileRead(key);
+                        if (!item.fileId) {
+                          toast.message(
+                            'Preview is not available yet for this file.',
+                          );
+                          return;
+                        }
+                        setPreviewFile({
+                          fileId: item.fileId,
+                          fileName: item.fileName,
+                          mimeType: item.mimeType,
+                        });
+                      }}
+                      className="min-w-0 flex-1 py-2.5 text-left"
+                    >
+                      <p className="text-[11px] text-[#8a97a8]">{when}</p>
+                      <p
+                        className={cn(
+                          'truncate text-[13px] text-[#1a2b3d]',
+                          !read && 'font-semibold',
+                        )}
+                      >
                         {item.fileName}
                       </p>
-                      <p className="truncate text-[11px] text-[#5a6b80]">
-                        {category}
+                      <p className="truncate text-[12px] text-[#5a6b80]">
+                        {fileCategoryLine(item)}
                       </p>
+                    </button>
+                    <div className="flex items-center pr-1.5">
+                      {deletingFileKey === key ? (
+                        <Loader2 className="mx-2 h-3.5 w-3.5 animate-spin text-[#8a97a8]" />
+                      ) : (
+                        <AlertActions
+                          isRead={read}
+                          onMarkRead={() => markFileRead(key)}
+                          onMarkUnread={() => markFileUnread(key)}
+                          onDelete={() => void handleDeleteFile(item)}
+                          deleteLabel="Delete document"
+                        />
+                      )}
                     </div>
-                  </button>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </div>
       ) : null}
 
-      {tab === 'reminders' ? (
-        <div className="px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
-          {reminderCount === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-10 text-center">
-              <Bell className="mx-auto h-8 w-8 text-slate-300" />
-              <p className="mt-3 text-sm font-medium text-[#213D59]">
-                No reminders found
+      {tab === 'dues' ? (
+        <div className="max-h-[min(58dvh,28rem)] overflow-y-auto px-3 py-3 sm:px-4">
+          {visibleReminders.length === 0 ? (
+            <div className="border border-dashed border-[#213D59]/20 bg-white px-4 py-12 text-center">
+              <CalendarClock className="mx-auto h-7 w-7 text-[#213D59]/35" />
+              <p className="mt-3 text-sm font-semibold text-[#213D59]">
+                No due dates right now
               </p>
               <p className="mx-auto mt-1 max-w-[36ch] text-[12.5px] leading-relaxed text-[#5a6b80]">
-                As you upload documents, AI extracts key dates — like passport
-                or driver&apos;s license expiry — and creates reminders. You can
-                also add expiry dates on any section page.
+                Passport, license, policy, and other expiry dates from your
+                vault will land here when they&apos;re coming up.
               </p>
             </div>
           ) : (
-            <ul className="space-y-2">
-              {reminders.map(alert => {
-                const tones = reminderToneClasses(alert.tone);
+            <ul className="divide-y divide-[#213D59]/10 overflow-hidden border border-[#213D59]/12 bg-white">
+              {visibleReminders.map(alert => {
+                const read = isReminderRead(alert.id);
                 return (
-                  <li key={alert.id}>
+                  <li
+                    key={alert.id}
+                    className={cn(
+                      'flex items-stretch gap-0',
+                      !read && 'bg-[#eef3f8]',
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'w-1 shrink-0',
+                        read
+                          ? 'bg-transparent'
+                          : alert.tone === 'critical'
+                            ? 'bg-rose-500'
+                            : 'bg-amber-500',
+                      )}
+                    />
                     <button
                       type="button"
-                      onClick={() => onNavigateToSection?.(alert.sectionId)}
-                      className="flex w-full items-start gap-3 rounded-2xl border border-slate-200/90 bg-[#f7f8fa] p-3 text-left transition hover:border-[#213D59]/25 hover:bg-white"
+                      onClick={() => {
+                        markReminderRead(alert.id);
+                        onNavigateToSection?.(alert.sectionId);
+                      }}
+                      className="min-w-0 flex-1 px-3 py-2.5 text-left"
                     >
-                      <div
-                        className={cn(
-                          'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
-                          tones.icon,
-                        )}
-                      >
-                        <Bell className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-[13.5px] font-semibold text-[#1a2b3d]">
-                            {alert.label}
-                          </p>
-                          <span
-                            className={cn(
-                              'inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ring-inset',
-                              tones.badge,
-                            )}
-                          >
-                            {formatReminderDue(alert.daysUntil)}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 text-[12.5px] leading-snug text-[#5a6b80]">
-                          {alert.text}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p
+                          className={cn(
+                            'truncate text-[13px] text-[#1a2b3d]',
+                            !read && 'font-semibold',
+                          )}
+                        >
+                          {alert.label}
                         </p>
-                        <p className="mt-1 truncate text-[11px] text-[#8a97a8]">
-                          {getAiSectionLabel(alert.sectionId)}
-                        </p>
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-[#6b7785]">
+                          {formatReminderDue(alert.daysUntil)}
+                        </span>
                       </div>
+                      <p className="mt-0.5 text-[12px] leading-snug text-[#5a6b80]">
+                        {alert.text}
+                      </p>
+                      <p className="mt-1 truncate text-[11px] text-[#8a97a8]">
+                        {getAiSectionLabel(alert.sectionId)}
+                      </p>
                     </button>
+                    <div className="flex items-center pr-1.5">
+                      <AlertActions
+                        isRead={read}
+                        onMarkRead={() => markReminderRead(alert.id)}
+                        onMarkUnread={() => markReminderUnread(alert.id)}
+                        onDelete={() => {
+                          dismissReminder(alert.id);
+                          toast.message('Due date cleared');
+                        }}
+                      />
+                    </div>
                   </li>
                 );
               })}
@@ -1088,6 +1407,11 @@ export function AiReviewInboxPanel({
         }}
         fileId={previewFile?.fileId}
         fileName={previewFile?.fileName}
+        mimeType={previewFile?.mimeType}
+        onNotFound={fileId => {
+          setServerDocs(prev => prev.filter(d => d.file_id !== fileId));
+          setPreviewFile(null);
+        }}
       />
     </section>
   );

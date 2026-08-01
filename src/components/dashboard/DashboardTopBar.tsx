@@ -13,11 +13,19 @@ import { BRAND_LOGO } from '@/constants/brand';
 function HeaderProgressRing({
   completed,
   total,
+  progressPercent,
 }: {
   completed: number;
   total: number;
+  /** Field-fill vault % (updates on fill and delete). */
+  progressPercent?: number;
 }) {
-  const pct = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+  const pct =
+    typeof progressPercent === 'number' && Number.isFinite(progressPercent)
+      ? Math.min(100, Math.max(0, Math.round(progressPercent)))
+      : total > 0
+        ? Math.min(100, Math.round((completed / total) * 100))
+        : 0;
   const radius = 18;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (pct / 100) * circumference;
@@ -64,6 +72,8 @@ type DashboardTopBarProps = {
   currentSectionLabel: string;
   completedSectionsCount: number;
   totalSectionsCount: number;
+  /** Field-fill vault % — recalculates when data is added or removed. */
+  progressPercent?: number;
   onRunTour: () => void;
   exportPayload: VaultExportPayload;
   currentUserEmail?: string | null;
@@ -71,6 +81,7 @@ type DashboardTopBarProps = {
   onLogout: () => void;
   notices?: DashboardNotice[];
   onNoticeSelect?: (notice: DashboardNotice) => void;
+  onOpenReviewInbox?: () => void;
   className?: string;
 };
 
@@ -78,6 +89,7 @@ export function DashboardTopBar({
   currentSectionLabel,
   completedSectionsCount,
   totalSectionsCount,
+  progressPercent,
   onRunTour,
   exportPayload,
   currentUserEmail,
@@ -85,6 +97,7 @@ export function DashboardTopBar({
   onLogout,
   notices = [],
   onNoticeSelect,
+  onOpenReviewInbox,
   className,
 }: DashboardTopBarProps) {
   return (
@@ -108,6 +121,7 @@ export function DashboardTopBar({
           <HeaderProgressRing
             completed={completedSectionsCount}
             total={totalSectionsCount}
+            progressPercent={progressPercent}
           />
 
           <button
@@ -151,6 +165,7 @@ export function DashboardTopBar({
             notices={notices}
             onSelect={notice => onNoticeSelect?.(notice)}
             onOpenSettings={onAccountInfo}
+            onOpenReviewInbox={onOpenReviewInbox}
             buttonClassName="h-10 w-10 border border-slate-200 bg-white shadow-sm"
           />
 
@@ -213,12 +228,15 @@ type MobileTopBarProps = {
   subtitle?: string;
   completedCount?: number;
   totalCount?: number;
+  /** Field-fill vault % (preferred over completed/total ratio). */
+  progressPercent?: number;
   onMenuClick: () => void;
   onLogoClick: () => void;
   onAccountClick: () => void;
   showProgress?: boolean;
   notices?: DashboardNotice[];
   onNoticeSelect?: (notice: DashboardNotice) => void;
+  onOpenReviewInbox?: () => void;
 };
 
 export function MobileTopBar({
@@ -226,17 +244,21 @@ export function MobileTopBar({
   subtitle,
   completedCount = 0,
   totalCount = 0,
+  progressPercent,
   onMenuClick,
   onLogoClick,
   onAccountClick,
   showProgress = false,
   notices = [],
   onNoticeSelect,
+  onOpenReviewInbox,
 }: MobileTopBarProps) {
   const pct =
-    totalCount > 0
-      ? Math.min(100, Math.round((completedCount / totalCount) * 100))
-      : 0;
+    typeof progressPercent === 'number' && Number.isFinite(progressPercent)
+      ? Math.min(100, Math.max(0, Math.round(progressPercent)))
+      : totalCount > 0
+        ? Math.min(100, Math.round((completedCount / totalCount) * 100))
+        : 0;
 
   return (
     <header className="sticky top-0 z-40 border-b border-[rgba(33, 61, 89,0.1)] bg-[var(--paper)] md:hidden">
@@ -276,6 +298,7 @@ export function MobileTopBar({
             notices={notices}
             onSelect={notice => onNoticeSelect?.(notice)}
             onOpenSettings={onAccountClick}
+            onOpenReviewInbox={onOpenReviewInbox}
           />
           <button
             type="button"

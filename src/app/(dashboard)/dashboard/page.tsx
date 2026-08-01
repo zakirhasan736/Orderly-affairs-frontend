@@ -19,15 +19,34 @@ import {
   applySubsectionOrder,
   loadSubsectionOrder,
   remapTopicIdAfterReorder,
+  remapTopicIdAfterDelete,
   reorderIds,
   reorderTopicInFormData,
+  removeTopicFromFormData,
   saveSubsectionOrder,
 } from '@/utils/vaultNavOrder';
 import { VaultSidebarNavigation } from '@/components/VaultSidebarNavigation';
+import {
+  getSectionProgress as computeSectionProgress,
+  type SectionProgress,
+} from '@/utils/sectionCompletion';
 import { AiDocumentRoutingProvider } from '@/contexts/AiDocumentRoutingContext';
 import { DashboardAiBatchProvider } from '@/contexts/DashboardAiBatchContext';
 import { HelpAssistantProvider } from '@/components/help/HelpAssistantContext';
 import { HelpAssistantHost } from '@/components/help/HelpAssistantHost';
+import { LeaveFeedbackWidget } from '@/components/feedback/LeaveFeedbackWidget';
+import { AiReviewInboxDialog } from '@/components/ai/AiReviewInboxDialog';
+import {
+  normalizeVaultActivityTab,
+  type VaultActivityTab,
+  type VaultActivityTabInput,
+} from '@/utils/vaultActivityTabs';
+import { VaultFillGapsProvider } from '@/components/vault/VaultFillGapsContext';
+import { ActiveSubsectionFillBar } from '@/components/vault/ActiveSubsectionFillBar';
+import {
+  collectOverviewExpiryAlerts,
+  OVERVIEW_REMINDER_HORIZON_DAYS,
+} from '@/utils/overviewExpiryAlerts';
 import { AiActiveSectionProvider } from '@/contexts/AiActiveSectionContext';
 import { AiPendingUploadSectionBanner } from '@/components/ai/AiPendingUploadSectionBanner';
 import { AiSectionFieldMatchDialog } from '@/components/ai/AiSectionFieldMatchDialog';
@@ -83,11 +102,16 @@ import {
   FileText,
   User,
   Home,
-  LayoutList,
+  LayoutGrid,
   MoreHorizontal,
   ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  MobileBottomSheet,
+  MobileSheetHandle,
+} from '@/components/MobileBottomSheet';
+import { OverviewBrowseGrid } from '@/components/ai/OverviewBrowseGrid';
 import { NextOfKinLoginPage } from '@/components/NextOfKinLoginPage';
 import { TurnstileCaptcha } from '@/components/TurnstileCaptcha';
 import { getOtpSessionId } from '@/utils/otpSession';
@@ -279,7 +303,11 @@ export default function DashboardPage() {
   const [autoSaving, setAutoSaving] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [browseOpen, setBrowseOpen] = useState(false);
   const [kitReadyOpen, setKitReadyOpen] = useState(false);
+  const [reviewInboxOpen, setReviewInboxOpen] = useState(false);
+  const [reviewInboxTab, setReviewInboxTab] =
+    useState<VaultActivityTab>('alerts');
   const kitReadyShownRef = useRef(false);
   const [sectionMatchReview, setSectionMatchReview] =
     useState<StashedAiPatch | null>(null);
@@ -1019,72 +1047,66 @@ export default function DashboardPage() {
     }
   }, [instructionRead]);
 
-  // Simplified section completion status function
-  const getSectionCompletionStatus = useCallback(
-    (sectionId: string) => {
-      if (disabledSections[sectionId]) return true;
-
-      if (sectionId === '0') {
-        return instructionRead;
-      }
-
-      if (sectionId === '2') {
-        return Array.isArray(myNextKin) && myNextKin.length > 0;
-      }
-
-      if (sectionId === '3') {
-        const lettersByNok = formData['3']?.next_of_kin_letters_by_nok;
-        if (
-          lettersByNok &&
-          Object.values(lettersByNok).some(
-            letter =>
-              letter &&
-              typeof letter === 'object' &&
-              Object.keys(letter as object).length > 0,
-          )
-        ) {
-          return true;
-        }
-
-        return Boolean(dashboardNokLetter && Object.keys(dashboardNokLetter).length > 0);
-      }
-
-      if (sectionId === '4') {
-        const letters = formData['4']?.['4A']?.letters_data;
-        if (Array.isArray(letters) && letters.length > 0) return true;
-        return false;
-      }
-
-      const sectionData = formData[sectionId];
-      if (!sectionData) return false;
-
-      return Object.keys(sectionData).length > 0;
-    },
-    [formData, disabledSections, myNextKin, instructionRead, dashboardNokLetter],
+  // Field-fill progress: checkmark only at 100%
+  const sectionProgressCtx = useMemo(
+    () => ({
+      formData,
+      instructionRead,
+      myNextKin: Array.isArray(myNextKin)
+        ? (myNextKin as Array<Record<string, unknown>>)
+        : null,
+      dashboardNokLetter: dashboardNokLetter
+        ? (dashboardNokLetter as unknown as Record<string, unknown>)
+        : null,
+      disabledSections,
+    }),
+    [formData, instructionRead, myNextKin, dashboardNokLetter, disabledSections],
   );
 
-  // Simplified progress calculation to avoid performance issues
+  // Recompute whenever form data / NOK list / letter / instructions change
+  // (fill and delete both flow through sectionProgressCtx → formData).
+  const sectionProgressMap = useMemo(() => {
+    const map: Record<string, SectionProgress> = {};
+    for (const section of allSections) {
+      map[section.id] = computeSectionProgress(section.id, sectionProgressCtx);
+    }
+    return map;
+  }, [allSections, sectionProgressCtx]);
+
+  const getSectionProgress = useCallback(
+    (sectionId: string): SectionProgress =>
+      sectionProgressMap[sectionId] ??
+      computeSectionProgress(sectionId, sectionProgressCtx),
+    [sectionProgressMap, sectionProgressCtx],
+  );
+
+  const getSectionCompletionStatus = useCallback(
+    (sectionId: string) => getSectionProgress(sectionId).complete,
+    [getSectionProgress],
+  );
+
+  // Average of per-section fill percents (disabled sections count as 100)
   const progress = useMemo(() => {
     if (!allSections.length) return 0;
 
     try {
-      const completed = allSections.filter(section =>
-        getSectionCompletionStatus(section.id),
-      ).length;
-      return Math.round((completed / allSections.length) * 100);
+      const sum = allSections.reduce(
+        (acc, section) =>
+          acc + (sectionProgressMap[section.id]?.percent ?? 0),
+        0,
+      );
+      return Math.round(sum / allSections.length);
     } catch (e) {
       console.error('Progress calculation error:', e);
       return 0;
     }
-  }, [
-    allSections.length,
-    formData,
-    disabledSections,
-    myNextKin,
-    instructionRead,
-    dashboardNokLetter,
-    getSectionCompletionStatus,
-  ]);
+  }, [allSections, sectionProgressMap]);
+
+  const completedSectionsCount = useMemo(
+    () =>
+      allSections.filter(s => sectionProgressMap[s.id]?.complete).length,
+    [allSections, sectionProgressMap],
+  );
 
   const currentSectionLabel = useMemo(() => {
     if (activeSection === 'dashboard') {
@@ -1419,6 +1441,12 @@ export default function DashboardPage() {
           <Section3NextKinLetter
             data={formData['3'] || {}}
             onChange={data => updateSectionData('3', data)}
+            ownerName={
+              (formData['1'] as { vital_info?: { full_legal_name?: string } })
+                ?.vital_info?.full_legal_name ||
+              currentUser?.full_name ||
+              null
+            }
           />
         );
       case '4':
@@ -1622,10 +1650,6 @@ export default function DashboardPage() {
     return null; // everything complete
   }, [allSections, getSectionCompletionStatus]);
 
-  const completedSectionsCount = allSections.filter(s =>
-    getSectionCompletionStatus(s.id),
-  ).length;
-
   const primaryNextKin = useMemo(() => {
     if (!Array.isArray(myNextKin) || myNextKin.length === 0) return null;
     return (
@@ -1789,16 +1813,55 @@ export default function DashboardPage() {
     });
   }, []);
 
+  const openReviewInbox = useCallback(
+    (tab: VaultActivityTabInput = 'alerts') => {
+      setReviewInboxTab(normalizeVaultActivityTab(tab));
+      setReviewInboxOpen(true);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const onOpenTab = (event: Event) => {
+      const detail = (event as CustomEvent<{ tab?: VaultActivityTabInput }>)
+        .detail;
+      if (detail?.tab) {
+        setReviewInboxTab(normalizeVaultActivityTab(detail.tab));
+      }
+      setReviewInboxOpen(true);
+    };
+    window.addEventListener('orderly-open-ai-inbox-tab', onOpenTab);
+    return () => {
+      window.removeEventListener('orderly-open-ai-inbox-tab', onOpenTab);
+    };
+  }, []);
+
+  const inboxReminders = useMemo(
+    () =>
+      collectOverviewExpiryAlerts(formData, {
+        limit: 40,
+        withinDays: OVERVIEW_REMINDER_HORIZON_DAYS,
+      }),
+    [formData],
+  );
+
   const handleNoticeSelect = useCallback(
     (notice: DashboardNotice) => {
-      if (!notice.sectionId) return;
+      if (notice.category === 'reminder') {
+        openReviewInbox('dues');
+        return;
+      }
+      if (!notice.sectionId) {
+        openReviewInbox('alerts');
+        return;
+      }
       if (notice.sectionId === 'dashboard') {
-        goToDashboard();
+        openReviewInbox('alerts');
         return;
       }
       goToSection(notice.sectionId);
     },
-    [goToDashboard, goToSection],
+    [goToSection, openReviewInbox],
   );
 
   const headerNotices = useMemo(() => {
@@ -1940,6 +2003,27 @@ export default function DashboardPage() {
     [formData, updateSectionData],
   );
 
+  const handleDeleteTopic = useCallback(
+    (sectionId: string, subsectionId: string, topicId: string) => {
+      const sectionData = formData[sectionId] as
+        | Record<string, unknown>
+        | undefined;
+      const next = removeTopicFromFormData(
+        sectionId,
+        subsectionId,
+        topicId,
+        sectionData,
+      );
+      if (!next) return;
+
+      updateSectionData(sectionId, next);
+      setActiveTopicId(prev =>
+        remapTopicIdAfterDelete(prev, subsectionId, topicId),
+      );
+    },
+    [formData, updateSectionData],
+  );
+
   return (
     <>
       <AiDocumentRoutingProvider
@@ -1955,6 +2039,12 @@ export default function DashboardPage() {
       >
       <DashboardAiBatchProvider>
       <HelpAssistantProvider>
+      <VaultFillGapsProvider
+        formData={formData}
+        updateSectionData={(sectionId, data) =>
+          updateSectionData(sectionId, data)
+        }
+      >
       <div className="min-h-screen bg-[#f6f8fb] text-slate-950 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
         <MobileTopBar
           title={
@@ -1969,12 +2059,14 @@ export default function DashboardPage() {
           }
           completedCount={completedSectionsCount}
           totalCount={allSections.length}
+          progressPercent={progress}
           showProgress={activeSection === 'dashboard'}
           onMenuClick={() => setSidebarOpen(true)}
           onLogoClick={goToDashboard}
           onAccountClick={() => setMobileMoreOpen(prev => !prev)}
           notices={headerNotices}
           onNoticeSelect={handleNoticeSelect}
+          onOpenReviewInbox={() => openReviewInbox('alerts')}
         />
 
         <div className="flex min-h-screen md:min-h-0">
@@ -1990,6 +2082,7 @@ export default function DashboardPage() {
             completedSectionsCount={completedSectionsCount}
             totalSectionsCount={allSections.length}
             getSectionCompletionStatus={getSectionCompletionStatus}
+            getSectionProgress={getSectionProgress}
             obituarySections={obituarySections}
             obituarySubsections={obituarySubsections}
             hasDoveTag={hasDoveTag}
@@ -2001,6 +2094,7 @@ export default function DashboardPage() {
             goToTopic={goToTopic}
             onReorderSubsection={handleReorderSubsection}
             onReorderTopic={handleReorderTopic}
+            onDeleteTopic={handleDeleteTopic}
             onOpenHelp={() => {
               window.dispatchEvent(
                 new CustomEvent('orderly-open-help', {
@@ -2029,6 +2123,7 @@ export default function DashboardPage() {
               }
               completedSectionsCount={completedSectionsCount}
               totalSectionsCount={allSections.length}
+              progressPercent={progress}
               onRunTour={async () => {
                 goToSection('dashboard');
                 await updateStatus({ manually_started: true });
@@ -2041,6 +2136,7 @@ export default function DashboardPage() {
               onLogout={handleOwnerLogout}
               notices={headerNotices}
               onNoticeSelect={handleNoticeSelect}
+              onOpenReviewInbox={() => openReviewInbox('alerts')}
             />
 
           {/* Main content */}
@@ -2058,12 +2154,14 @@ export default function DashboardPage() {
                       progress={progress}
                       completedCount={completedSectionsCount}
                       completedSectionIds={completedSectionIds}
+                      sectionProgressById={sectionProgressMap}
                       lastUpdatedBySection={sectionLastUpdatedMap}
                       totalCount={allSections.length}
                       ownerEmail={currentUser?.email}
                       ownerName={
                         currentUser?.full_name || currentUser?.email || 'You'
                       }
+                      notices={headerNotices}
                       onNavigateToSection={sectionId => goToSection(sectionId)}
                     />
                   ) : (
@@ -2075,6 +2173,7 @@ export default function DashboardPage() {
                       progress={progress}
                       completedCount={completedSectionsCount}
                       completedSectionIds={completedSectionIds}
+                      sectionProgressById={sectionProgressMap}
                       lastUpdatedBySection={sectionLastUpdatedMap}
                       totalCount={allSections.length}
                       isNextOfKin
@@ -2082,6 +2181,7 @@ export default function DashboardPage() {
                       ownerName={
                         currentUser?.full_name || currentUser?.email || 'You'
                       }
+                      notices={headerNotices}
                       onNavigateToSection={sectionId => goToSection(sectionId)}
                     />
                   )}
@@ -2378,28 +2478,33 @@ export default function DashboardPage() {
                         : ''
                     }`}
                   >
+                    <ActiveSubsectionFillBar
+                      sectionId={activeSection}
+                      subsectionId={activeSubsection}
+                      topicId={activeTopicId}
+                      sectionData={
+                        formData[activeSection] as
+                          | Record<string, unknown>
+                          | undefined
+                      }
+                    />
                     <AiActiveSectionProvider sectionId={activeSection}>
                       {renderSection()}
                     </AiActiveSectionProvider>
                   </div>
 
                   {activeSection === '4' && (
-                    <div className="flex flex-col gap-3 rounded-[24px] border border-rose-100 bg-rose-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <h3 className="text-sm font-semibold text-rose-700">
-                          Clear Personal Messages Data
-                        </h3>
-                        <p className="mt-1 text-sm text-rose-600/80">
-                          Clear all personal messages data to start fresh.
-                        </p>
-                      </div>
+                    <div className="mt-2 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                      <p className="min-w-0 text-[11px] leading-snug text-slate-400">
+                        Need a clean slate? Wipe every message in this section.
+                      </p>
                       <Button
                         onClick={() => clearSectionData('4', '4A')}
-                        variant="destructive"
+                        variant="ghost"
                         size="sm"
-                        className="rounded-2xl"
+                        className="h-7 shrink-0 rounded-lg px-2 text-[11px] font-medium text-slate-500 hover:bg-rose-50 hover:text-rose-700"
                       >
-                        Clear Messages
+                        Clear all
                       </Button>
                     </div>
                   )}
@@ -2520,11 +2625,16 @@ export default function DashboardPage() {
 
             <button
               type="button"
-              onClick={() => setSidebarOpen(true)}
-              className="flex flex-col items-center justify-center rounded-xl px-1 py-2 text-slate-400 transition active:scale-95"
+              onClick={() => {
+                setMobileMoreOpen(false);
+                setBrowseOpen(true);
+              }}
+              className={`flex flex-col items-center justify-center rounded-xl px-1 py-2 transition active:scale-95 ${
+                browseOpen ? 'text-[#213D59]' : 'text-slate-400'
+              }`}
             >
-              <LayoutList className="h-5 w-5" />
-              <span className="mt-1 text-[9px] font-semibold">Sections</span>
+              <LayoutGrid className="h-5 w-5" />
+              <span className="mt-1 text-[9px] font-semibold">Browse</span>
             </button>
 
             <button
@@ -2569,6 +2679,35 @@ export default function DashboardPage() {
             </button>
           </div>
         </nav>
+
+        <MobileBottomSheet
+          open={browseOpen}
+          onClose={() => setBrowseOpen(false)}
+          className="max-h-[88dvh]"
+          labelledBy="mobile-browse-title"
+        >
+          <div className="flex h-[min(88dvh,40rem)] min-h-0 flex-col">
+            <MobileSheetHandle />
+            <div className="flex shrink-0 items-center justify-between border-b px-4 pb-3 pt-1">
+              <h3
+                id="mobile-browse-title"
+                className="text-lg font-semibold text-[#213D59]"
+              >
+                Browse
+              </h3>
+            </div>
+            <div className="min-h-0 flex-1">
+              <OverviewBrowseGrid
+                variant="sheet"
+                onNavigateToSection={sectionId => {
+                  setBrowseOpen(false);
+                  goToSection(sectionId);
+                }}
+                completedSectionIds={completedSectionIds}
+              />
+            </div>
+          </div>
+        </MobileBottomSheet>
 
         {showWelcome && (
           <WelcomeModal
@@ -2641,6 +2780,21 @@ export default function DashboardPage() {
           }}
         />
 
+        <LeaveFeedbackWidget />
+
+        <AiReviewInboxDialog
+          open={reviewInboxOpen}
+          onOpenChange={setReviewInboxOpen}
+          initialTab={reviewInboxTab}
+          onNavigateToSection={sectionId => goToSection(sectionId)}
+          ownerName={
+            currentUser?.full_name || currentUser?.email || 'You'
+          }
+          ownerEmail={currentUser?.email}
+          reminders={inboxReminders}
+          notices={headerNotices}
+        />
+
         <BrandSuccessScreen
           open={kitReadyOpen}
           variant="celebration"
@@ -2666,6 +2820,7 @@ export default function DashboardPage() {
           onClose={() => dismissKitReady(true)}
         />
       </div>
+      </VaultFillGapsProvider>
       </HelpAssistantProvider>
       </DashboardAiBatchProvider>
       </AiDocumentRoutingProvider>

@@ -23,6 +23,8 @@ export type NOKLetter = {
   incomplete_kit_message?: string;
   closing_message?: string;
   letter_signature?: string;
+  /** Owner's printed name under the closing (replaces [Your signature]). */
+  signer_name?: string;
   delivery_trigger?: 'death' | 'date' | 'manual';
   delivery_status?: 'pending' | 'processing' | 'scheduled' | 'sent';
   scheduled_send_at?: string | null;

@@ -168,12 +168,14 @@ export function AiInboxDocumentReviewDialog({
 
         if (kind === 'text') {
           const text = await blob.text();
-          if (!cancelled) setTextContent(text);
+          if (!cancelled) setTextContent(text || '(Empty text file)');
           return;
         }
 
         const typed =
-          mime && mime !== blob.type ? new Blob([blob], { type: mime }) : blob;
+          mime && mime !== blob.type
+            ? new Blob([await blob.arrayBuffer()], { type: mime })
+            : blob;
         createdUrl = URL.createObjectURL(typed);
         if (!cancelled) setObjectUrl(createdUrl);
       } catch (err) {

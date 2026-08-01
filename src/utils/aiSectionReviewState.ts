@@ -66,4 +66,37 @@ export function clearAiSectionReviewed(sectionId: string) {
     if (key.startsWith(`${sectionId}:`)) set.delete(key);
   }
   writeSet(set);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('orderly-ai-section-reviewed', {
+        detail: { sectionId, cleared: true },
+      }),
+    );
+  }
+}
+
+/** Put a dismissed AI review back into the activity list. */
+export function unmarkAiSectionReviewed(args: {
+  sectionId: string;
+  fileId?: string | null;
+}) {
+  if (!args.sectionId) return;
+  const set = readSet();
+  set.delete(reviewKey(args.sectionId, args.fileId));
+  if (args.fileId) {
+    // Keep section-wide dismiss unless this was the only stamp.
+    // Prefer restoring the specific file entry.
+  } else {
+    set.delete(reviewKey(args.sectionId, null));
+  }
+  writeSet(set);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('orderly-ai-section-reviewed', {
+        detail: { ...args, unread: true },
+      }),
+    );
+  }
 }

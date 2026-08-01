@@ -56,6 +56,26 @@ describe('nokLetterPreview (Next of Kin letter)', () => {
     expect(text).toContain('Hall closet');
   });
 
+  it('shows owner name on the signature line', () => {
+    const text = buildNokLetterPreviewText(
+      { letter_greeting: 'Dear' },
+      person,
+      'Jordan Owner',
+    );
+    expect(text).toContain('Jordan Owner');
+    expect(text).not.toContain('[Your signature]');
+  });
+
+  it('prefers saved signer_name over ownerName', () => {
+    const text = buildNokLetterPreviewText(
+      { signer_name: 'Custom Signer' },
+      person,
+      'Jordan Owner',
+    );
+    expect(text).toContain('Custom Signer');
+    expect(text).not.toContain('Jordan Owner');
+  });
+
   it('detects delivered status only when sent', () => {
     expect(isNokLetterDelivered({ delivery_status: 'sent' })).toBe(true);
     expect(isNokLetterDelivered({ delivery_status: 'draft' })).toBe(false);

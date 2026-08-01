@@ -58,7 +58,23 @@ export const ownerTour: OwnerTourStep[] = [
     ensureSection: 'dashboard',
     title: 'All vault sections',
     description:
-      'Use the sidebar to open any of the 21 sections anytime. You do not have to finish in order — fill what you have documents for, then return here when you are ready for the next piece.',
+      'Open any of the 21 sections here anytime. Hover an added item (Pet #1, a policy card, etc.) and the grip becomes trash if you need to remove it. You do not have to finish in order.',
+  },
+  {
+    section: 'Progress',
+    selector: '[data-tour="tour-progress-explain"]',
+    ensureSection: 'dashboard',
+    title: 'What the % means',
+    description:
+      'This bar and the rings beside each section show field-fill progress — how many tracked fields have a value. 100% means the fields are filled, not that a document was uploaded.',
+  },
+  {
+    section: 'After upload',
+    selector: '[data-ai-overview-upload]',
+    ensureSection: 'dashboard',
+    title: 'Finish blanks after AI fills',
+    description:
+      'Path: upload a document → Accept the AI fill → open that section. Remaining blanks show a sticky “Fill empty fields” bar (and a sparkle on incomplete items). Use it to walk through only what’s still empty.',
   },
   {
     section: 'Home',

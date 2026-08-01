@@ -7,6 +7,8 @@ import {
   Circle,
   GripVertical,
   Home,
+  Sparkles,
+  Trash2,
   X,
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
@@ -17,8 +19,109 @@ import {
   getDynamicTopicsForSubsection,
   subsectionHasDynamicTopics,
 } from '@/utils/dynamicVaultTopics';
+import {
+  getSubsectionProgress,
+  getTopicItemProgress,
+} from '@/utils/sectionCompletion';
+import { VaultProgressPercentMark } from '@/components/vault/VaultFillProgressChip';
+import { useVaultFillGaps } from '@/components/vault/VaultFillGapsContext';
 import type { VaultSection } from '@/utils/vaultNavigation';
 import { BRAND_LOGO } from '@/constants/brand';
+
+function parseTopicProgressRef(topicId: string): {
+  itemIndex: number;
+  groupId?: string;
+} {
+  const parts = String(topicId || '').split(':');
+  if (parts.length >= 3) {
+    return {
+      groupId: parts[1],
+      itemIndex: Number(parts[2]) || 0,
+    };
+  }
+  if (parts.length === 2) {
+    return { itemIndex: Number(parts[1]) || 0 };
+  }
+  return { itemIndex: 0 };
+}
+
+function SectionProgressMark({
+  percent,
+  complete,
+  selected,
+}: {
+  percent: number;
+  complete: boolean;
+  selected: boolean;
+}) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const size = 28;
+  const stroke = 2.5;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - clamped / 100);
+
+  if (complete) {
+    return (
+      <span
+        className={cn(
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
+          selected ? 'bg-white/20' : 'bg-white/10',
+        )}
+      >
+        <CheckCircle className="h-3.5 w-3.5 text-emerald-300" />
+      </span>
+    );
+  }
+
+  if (clamped <= 0) {
+    return (
+      <span
+        className={cn(
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
+          selected ? 'bg-white/20' : 'bg-white/10',
+        )}
+      >
+        <Circle className="h-3.5 w-3.5 opacity-70" />
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        'relative flex h-7 w-7 shrink-0 items-center justify-center',
+        selected ? 'opacity-100' : 'opacity-95',
+      )}
+      title={`${clamped}% complete`}
+    >
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.18)"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="#6ee7b7"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[8px] font-semibold tabular-nums text-emerald-100">
+        {clamped}
+      </span>
+    </span>
+  );
+}
 
 type DragPayload =
   | { type: 'subsection'; sectionId: string; id: string }
@@ -49,6 +152,8 @@ function ReorderableNavItem({
   onDragLeave,
   onDrop,
   onNavigate,
+  onDelete,
+  deleteLabel,
   className,
   children,
 }: {
@@ -62,6 +167,9 @@ function ReorderableNavItem({
   onDragLeave: (id: string) => void;
   onDrop: (payload: DragPayload) => void;
   onNavigate: () => void;
+  /** Shown on hover for user-added topics (+ Add items). */
+  onDelete?: () => void;
+  deleteLabel?: string;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -135,7 +243,7 @@ function ReorderableNavItem({
       aria-label={label}
       title="Drag anywhere on this row to reorder, or click to open"
       className={cn(
-        'flex touch-none select-none items-center gap-1 rounded-xl transition',
+        'group/navrow flex touch-none select-none items-center gap-1 rounded-xl transition',
         'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-45',
         isDropOver &&
@@ -143,11 +251,41 @@ function ReorderableNavItem({
         className,
       )}
     >
-      <span
-        aria-hidden
-        className="pointer-events-none flex h-8 w-5 shrink-0 items-center justify-center text-white/25"
-      >
-        <GripVertical className="h-4 w-4" />
+      <span className="relative flex h-8 w-5 shrink-0 items-center justify-center">
+        <span
+          aria-hidden
+          className={cn(
+            'pointer-events-none text-white/25 transition',
+            onDelete && 'group-hover/navrow:opacity-0',
+          )}
+        >
+          <GripVertical className="h-4 w-4" />
+        </span>
+        {onDelete ? (
+          <button
+            type="button"
+            title={deleteLabel || 'Remove'}
+            aria-label={deleteLabel || 'Remove'}
+            onClick={event => {
+              event.preventDefault();
+              event.stopPropagation();
+              onDelete();
+            }}
+            onMouseDown={event => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            data-tour="tour-topic-delete"
+            className={cn(
+              'absolute inset-0 flex items-center justify-center rounded-md',
+              'text-rose-200/90 opacity-0 transition',
+              'hover:bg-rose-500/25 hover:text-rose-100',
+              'group-hover/navrow:opacity-100 focus-visible:opacity-100',
+            )}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
       </span>
 
       <span className="pointer-events-none flex min-w-0 flex-1 items-center gap-2 px-1 py-1">
@@ -169,6 +307,11 @@ export interface VaultSidebarNavigationProps {
   completedSectionsCount: number;
   totalSectionsCount: number;
   getSectionCompletionStatus: (sectionId: string) => boolean;
+  /** Optional: field-fill progress for smart ring / percentage. */
+  getSectionProgress?: (sectionId: string) => {
+    percent: number;
+    complete: boolean;
+  };
   obituarySections: Set<string>;
   obituarySubsections: Set<string>;
   hasDoveTag: (sectionId: string, subsectionId?: string) => boolean;
@@ -193,6 +336,12 @@ export interface VaultSidebarNavigationProps {
     fromTopicId: string,
     toTopicId: string,
   ) => void;
+  /** Remove a user-added topic/item (Pet #1, policy card, etc.). */
+  onDeleteTopic?: (
+    sectionId: string,
+    subsectionId: string,
+    topicId: string,
+  ) => void;
   onOpenHelp?: () => void;
 }
 
@@ -208,6 +357,7 @@ export function VaultSidebarNavigation({
   completedSectionsCount,
   totalSectionsCount,
   getSectionCompletionStatus,
+  getSectionProgress,
   obituarySections,
   obituarySubsections,
   hasDoveTag,
@@ -219,8 +369,10 @@ export function VaultSidebarNavigation({
   goToTopic,
   onReorderSubsection,
   onReorderTopic,
+  onDeleteTopic,
   onOpenHelp: _onOpenHelp,
 }: VaultSidebarNavigationProps) {
+  const fillGaps = useVaultFillGaps();
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [aiBadgeTick, setAiBadgeTick] = useState(0);
@@ -326,7 +478,7 @@ export function VaultSidebarNavigation({
             </button>
           </div>
 
-          <div className="mt-6">
+          <div className="mt-6" data-tour="tour-progress-explain">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
               Vault Navigation
             </p>
@@ -373,6 +525,9 @@ export function VaultSidebarNavigation({
               const isExpanded =
                 activeSection === section.id && !disabledSections[section.id];
               const isComplete = getSectionCompletionStatus(section.id);
+              const sectionPct =
+                getSectionProgress?.(section.id)?.percent ??
+                (isComplete ? 100 : 0);
               const pendingAiUploads =
                 aiRouting?.getPendingUploadsForSection(section.id) ?? [];
               void aiBadgeTick;
@@ -410,18 +565,11 @@ export function VaultSidebarNavigation({
                       disabledSections[section.id] && 'opacity-55',
                     )}
                   >
-                    <span
-                      className={cn(
-                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
-                        isSelected ? 'bg-white/20' : 'bg-white/10',
-                      )}
-                    >
-                      {isComplete ? (
-                        <CheckCircle className="h-3.5 w-3.5 text-emerald-300" />
-                      ) : (
-                        <Circle className="h-3.5 w-3.5 opacity-70" />
-                      )}
-                    </span>
+                    <SectionProgressMark
+                      percent={sectionPct}
+                      complete={isComplete}
+                      selected={isSelected}
+                    />
 
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] font-medium">
@@ -469,6 +617,14 @@ export function VaultSidebarNavigation({
                         const isSubsectionActive =
                           activeSubsection === subsection.id && !activeTopicId;
 
+                        const subsectionProgress = getSubsectionProgress(
+                          section.id,
+                          subsection.id,
+                          formData[section.id] as
+                            | Record<string, unknown>
+                            | undefined,
+                        );
+
                         const subsectionPayload: DragPayload = {
                           type: 'subsection',
                           sectionId: section.id,
@@ -514,6 +670,58 @@ export function VaultSidebarNavigation({
                                 )}
                                 {subsection.id}. {subsection.title}
                               </span>
+                              {subsectionProgress.total > 0 ? (
+                                <VaultProgressPercentMark
+                                  percent={subsectionProgress.percent}
+                                  complete={subsectionProgress.complete}
+                                />
+                              ) : null}
+                              {!subsectionProgress.complete &&
+                              subsectionProgress.total > 0 &&
+                              fillGaps ? (
+                                <button
+                                  type="button"
+                                  title="Fill empty fields"
+                                  aria-label={`Fill empty fields in ${subsection.title}`}
+                                  onClick={event => {
+                                    event.stopPropagation();
+                                    goToSubsection(section.id, subsection.id);
+                                    const sectionData = formData[section.id] as
+                                      | Record<string, unknown>
+                                      | undefined;
+                                    const bucket = sectionData?.[subsection.id];
+                                    let itemIndex: number | undefined;
+                                    if (Array.isArray(bucket)) {
+                                      for (let i = 0; i < bucket.length; i += 1) {
+                                        const p = getTopicItemProgress(
+                                          section.id,
+                                          subsection.id,
+                                          i,
+                                          sectionData,
+                                        );
+                                        if (!p.complete && p.total > 0) {
+                                          itemIndex = i;
+                                          break;
+                                        }
+                                      }
+                                    }
+                                    fillGaps.openFillGaps({
+                                      sectionId: section.id,
+                                      subsectionId: subsection.id,
+                                      itemIndex,
+                                      title:
+                                        typeof itemIndex === 'number'
+                                          ? `${subsection.id}. ${subsection.title} · Item ${itemIndex + 1}`
+                                          : `${subsection.id}. ${subsection.title}`,
+                                    });
+                                  }}
+                                  onMouseDown={event => event.stopPropagation()}
+                                  data-tour="tour-fill-empty-action"
+                                  className="pointer-events-auto rounded-md p-0.5 text-sky-200/90 transition hover:bg-white/15 hover:text-white"
+                                >
+                                  <Sparkles className="h-3 w-3" />
+                                </button>
+                              ) : null}
                             </ReorderableNavItem>
 
                             {dynamicTopics.length > 0 && (
@@ -525,6 +733,18 @@ export function VaultSidebarNavigation({
                                     subsectionId: subsection.id,
                                     id: topic.id,
                                   };
+                                  const topicRef = parseTopicProgressRef(
+                                    topic.id,
+                                  );
+                                  const topicProgress = getTopicItemProgress(
+                                    section.id,
+                                    subsection.id,
+                                    topicRef.itemIndex,
+                                    formData[section.id] as
+                                      | Record<string, unknown>
+                                      | undefined,
+                                    topicRef.groupId,
+                                  );
 
                                   return (
                                     <ReorderableNavItem
@@ -545,6 +765,22 @@ export function VaultSidebarNavigation({
                                           topic.id,
                                         )
                                       }
+                                      onDelete={
+                                        onDeleteTopic
+                                          ? () => {
+                                              const ok = window.confirm(
+                                                `Remove “${topic.label}”? This deletes this item from your vault.`,
+                                              );
+                                              if (!ok) return;
+                                              onDeleteTopic(
+                                                section.id,
+                                                subsection.id,
+                                                topic.id,
+                                              );
+                                            }
+                                          : undefined
+                                      }
+                                      deleteLabel={`Remove ${topic.label}`}
                                       className={cn(
                                         'px-1 py-0.5 text-xs',
                                         activeTopicId === topic.id
@@ -556,6 +792,43 @@ export function VaultSidebarNavigation({
                                       <span className="min-w-0 flex-1 truncate">
                                         {topic.label}
                                       </span>
+                                      {topicProgress.total > 0 ? (
+                                        <VaultProgressPercentMark
+                                          percent={topicProgress.percent}
+                                          complete={topicProgress.complete}
+                                        />
+                                      ) : null}
+                                      {!topicProgress.complete &&
+                                      topicProgress.total > 0 &&
+                                      fillGaps ? (
+                                        <button
+                                          type="button"
+                                          title="Fill empty fields"
+                                          aria-label={`Fill empty fields in ${topic.label}`}
+                                          onClick={event => {
+                                            event.stopPropagation();
+                                            goToTopic(
+                                              section.id,
+                                              subsection.id,
+                                              topic.id,
+                                            );
+                                            fillGaps.openFillGaps({
+                                              sectionId: section.id,
+                                              subsectionId: subsection.id,
+                                              itemIndex: topicRef.itemIndex,
+                                              groupId: topicRef.groupId,
+                                              title: topic.label,
+                                            });
+                                          }}
+                                          onMouseDown={event =>
+                                            event.stopPropagation()
+                                          }
+                                          data-tour="tour-fill-empty-action"
+                                          className="pointer-events-auto rounded-md p-0.5 text-sky-200/90 transition hover:bg-white/15 hover:text-white"
+                                        >
+                                          <Sparkles className="h-3 w-3" />
+                                        </button>
+                                      ) : null}
                                     </ReorderableNavItem>
                                   );
                                 })}
@@ -572,10 +845,9 @@ export function VaultSidebarNavigation({
           </div>
         </div>
 
-        <div className="border-t border-white/10 p-4">
-          <p className="text-[12px] leading-snug text-white/70">
-            Keep filling your vault — AI document fill is available from Overview
-            and each section upload zone.
+        <div className="border-t border-white/10 px-4 py-3">
+          <p className="text-[11px] leading-snug text-white/45">
+            Upload on Overview or any section · sparkle fills blanks
           </p>
         </div>
       </div>

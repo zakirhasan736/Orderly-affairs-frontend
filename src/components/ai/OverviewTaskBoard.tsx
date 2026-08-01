@@ -28,6 +28,8 @@ type CardVisualState =
 type OverviewTaskBoardProps = {
   jobs: DashboardAiJob[];
   completedSectionIds?: string[];
+  /** Live field-fill % by section id — drives Start / % / Done on cards. */
+  sectionProgressById?: Record<string, { percent: number; complete: boolean }>;
   lastUpdatedBySection?: Record<string, string>;
   onNavigateToSection: (sectionId: string) => void;
 };
@@ -57,16 +59,42 @@ function pickJobForSection(jobs: DashboardAiJob[], sectionId: string) {
   })[0];
 }
 
+function fillStateFromPercent(
+  percent: number,
+  opts?: { isNew?: boolean },
+): CardVisualState {
+  const clamped = Math.max(0, Math.min(100, Math.round(percent || 0)));
+  if (clamped >= 100) {
+    return {
+      kind: 'done',
+      label: opts?.isNew ? 'Filled' : 'Done',
+      progress: 100,
+      isNew: opts?.isNew,
+    };
+  }
+  if (clamped <= 0) {
+    return { kind: 'start', label: 'Start', progress: 0 };
+  }
+  return {
+    kind: 'partial',
+    label: `${clamped}%`,
+    progress: clamped,
+    isNew: opts?.isNew,
+  };
+}
+
 function resolveCardState(
   card: OverviewTaskCard,
   jobs: DashboardAiJob[],
-  completedSet: Set<string>,
   pendingReady: Set<string>,
-  recentlyUpdated: Set<string>,
+  sectionProgressById: Record<string, { percent: number; complete: boolean }>,
 ): CardVisualState {
+  const fill = sectionProgressById[card.sectionId];
+  const fillPercent = fill?.percent ?? 0;
   const job = pickJobForSection(jobs, card.sectionId);
   const isNew =
-    pendingReady.has(card.sectionId) || recentlyUpdated.has(card.sectionId);
+    pendingReady.has(card.sectionId) ||
+    (Boolean(job?.status === 'done') && fillPercent > 0);
 
   if (job) {
     const isActivelyFillingThis =
@@ -82,28 +110,6 @@ function resolveCardState(
       };
     }
 
-    if (
-      job.targetSectionId === card.sectionId &&
-      job.activeFillSectionId &&
-      job.activeFillSectionId !== card.sectionId &&
-      job.status !== 'error'
-    ) {
-      return {
-        kind: 'done',
-        label: 'Filled',
-        progress: 100,
-        isNew: true,
-      };
-    }
-
-    if (job.status === 'done') {
-      return {
-        kind: 'done',
-        label: isNew ? 'Filled' : 'Done',
-        progress: 100,
-        isNew,
-      };
-    }
     if (job.status === 'queued') {
       return { kind: 'waiting', label: 'Waiting', progress: 8 };
     }
@@ -111,9 +117,27 @@ function resolveCardState(
       return {
         kind: 'partial',
         label: 'Retry',
-        progress: Math.max(12, job.progress || 20),
+        progress: Math.max(12, Math.min(fillPercent || 20, 99)),
       };
     }
+
+    // Finished AI job: still reflect real section fill (empty → Start, not Done)
+    if (job.status === 'done') {
+      return fillStateFromPercent(fillPercent, {
+        isNew: fillPercent > 0,
+      });
+    }
+
+    if (
+      job.targetSectionId === card.sectionId &&
+      job.activeFillSectionId &&
+      job.activeFillSectionId !== card.sectionId
+    ) {
+      return fillStateFromPercent(fillPercent, {
+        isNew: fillPercent > 0,
+      });
+    }
+
     return {
       kind: 'active',
       label: `${Math.max(5, Math.min(99, job.progress || 5))}%`,
@@ -121,19 +145,11 @@ function resolveCardState(
     };
   }
 
-  if (pendingReady.has(card.sectionId)) {
-    return { kind: 'done', label: 'Filled', progress: 100, isNew: true };
+  if (pendingReady.has(card.sectionId) && fillPercent > 0) {
+    return fillStateFromPercent(fillPercent, { isNew: true });
   }
 
-  if (recentlyUpdated.has(card.sectionId)) {
-    return { kind: 'done', label: 'Filled', progress: 100, isNew: true };
-  }
-
-  if (completedSet.has(card.sectionId)) {
-    return { kind: 'done', label: 'Done', progress: 100 };
-  }
-
-  return { kind: 'start', label: 'Start', progress: 0 };
+  return fillStateFromPercent(fillPercent, { isNew });
 }
 
 function TagIcon({ tag }: { tag: OverviewTaskTag }) {
@@ -148,13 +164,11 @@ function ProgressLine({ state }: { state: CardVisualState }) {
   const barClass =
     state.kind === 'done'
       ? 'bg-[#2B5A8C]'
-      : state.kind === 'active'
+      : state.kind === 'active' || state.kind === 'partial'
         ? 'bg-[#2B5A8C]'
         : state.kind === 'waiting'
           ? 'bg-[#b98a3e]'
-          : state.kind === 'partial'
-            ? 'bg-[#b98a3e]'
-            : 'bg-[rgba(33, 61, 89,0.12)]';
+          : 'bg-[rgba(33, 61, 89,0.12)]';
 
   return (
     <div className="mt-auto flex items-center gap-2.5 pt-4">
@@ -165,15 +179,15 @@ function ProgressLine({ state }: { state: CardVisualState }) {
             barClass,
             state.kind === 'active' && 'animate-pulse',
           )}
-          style={{ width: `${state.progress}%` }}
+          style={{ width: `${Math.max(0, Math.min(100, state.progress))}%` }}
         />
       </div>
       <span
         className={cn(
-          'shrink-0 text-[11px] font-semibold',
+          'shrink-0 text-[11px] font-semibold tabular-nums',
           state.kind === 'done' || state.isNew
             ? 'text-[#2B5A8C]'
-            : state.kind === 'active'
+            : state.kind === 'active' || state.kind === 'partial'
               ? 'text-[#2B5A8C]'
               : state.kind === 'waiting'
                 ? 'text-[#b98a3e]'
@@ -309,7 +323,11 @@ function GridTaskCard({
             ? 'Needs you — queued while another file finishes.'
             : state.isNew
               ? 'Filled automatically — tap only if you want to review.'
-              : card.description}
+              : state.kind === 'partial'
+                ? `${state.progress}% complete — tap to continue.`
+                : state.kind === 'done'
+                  ? 'All fields filled for this section.'
+                  : card.description}
       </p>
       {lastUpdatedLabel ? (
         <p className="mt-2 text-xs font-medium text-[rgba(33, 61, 89,0.45)]">
@@ -323,16 +341,11 @@ function GridTaskCard({
 
 export function OverviewTaskBoard({
   jobs,
-  completedSectionIds = [],
+  sectionProgressById = {},
   lastUpdatedBySection = {},
   onNavigateToSection,
 }: OverviewTaskBoardProps) {
   const routing = useOptionalAiDocumentRouting();
-
-  const completedSet = useMemo(
-    () => new Set(completedSectionIds),
-    [completedSectionIds],
-  );
 
   const pendingReady = useMemo(() => {
     const set = new Set<string>();
@@ -341,16 +354,6 @@ export function OverviewTaskBoard({
     });
     return set;
   }, [routing?.pendingUploads]);
-
-  const recentlyUpdated = useMemo(() => {
-    const set = new Set<string>();
-    jobs.forEach(job => {
-      if (job.status === 'done' && job.targetSectionId) {
-        set.add(job.targetSectionId);
-      }
-    });
-    return set;
-  }, [jobs]);
 
   const allCards = useMemo(
     () => OVERVIEW_TASK_GROUPS.flatMap(group => group.cards),
@@ -383,13 +386,7 @@ export function OverviewTaskBoard({
   };
 
   const cardState = (card: OverviewTaskCard) =>
-    resolveCardState(
-      card,
-      jobs,
-      completedSet,
-      pendingReady,
-      recentlyUpdated,
-    );
+    resolveCardState(card, jobs, pendingReady, sectionProgressById);
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -432,17 +429,27 @@ export function OverviewTaskBoard({
               {group.title}
             </h2>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {group.cards.map(card => (
-                <GridTaskCard
-                  key={card.id}
-                  card={card}
-                  state={cardState(card)}
-                  lastUpdatedLabel={formatSectionLastUpdated(
-                    lastUpdatedBySection[card.sectionId],
-                  )}
-                  onOpen={() => openCard(card)}
-                />
-              ))}
+              {group.cards.map(card => {
+                const state = cardState(card);
+                const showUpdated =
+                  state.progress > 0 &&
+                  Boolean(lastUpdatedBySection[card.sectionId]);
+                return (
+                  <GridTaskCard
+                    key={card.id}
+                    card={card}
+                    state={state}
+                    lastUpdatedLabel={
+                      showUpdated
+                        ? formatSectionLastUpdated(
+                            lastUpdatedBySection[card.sectionId],
+                          )
+                        : undefined
+                    }
+                    onOpen={() => openCard(card)}
+                  />
+                );
+              })}
             </div>
           </section>
         ))}

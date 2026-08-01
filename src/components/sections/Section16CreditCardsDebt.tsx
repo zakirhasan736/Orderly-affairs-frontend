@@ -1,6 +1,5 @@
 'use client';
 
-import { AiUploadedAttachmentList } from '@/components/ai/AiUploadedAttachmentList';
 import React, { useRef, useState } from 'react';
 import {
   Card,
@@ -820,8 +819,6 @@ export default function Section16CreditCardsDebt({
             iconClassName={iconClass}
           />
         </div>
-
-        <AiUploadedAttachmentList file={uploadedFile} />
 
         {isUploading && (
           <div className="relative flex items-center gap-2 text-xs text-slate-500">

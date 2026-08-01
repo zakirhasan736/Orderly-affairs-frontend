@@ -5,7 +5,7 @@ export type NokLetterData = Partial<NOKLetter & NOKLetterIn>;
 
 export const NOK_LETTER_DEFAULTS = {
   letter_greeting: 'Dear',
-  access_url: 'https://orderly-affairs.com',
+  access_url: 'https://portal.orderly-affairs.com/next-kin',
   letter_opening:
     "I'm writing you this note as someone I trust deeply.\n\nAs my next of kin, the executor of my will, a close friend, my attorney, or someone who cares—I want you to know that I've prepared something to help guide you through what comes next.",
   kit_description:
@@ -68,9 +68,22 @@ export function mergeNokLetterAutofill(
   };
 }
 
+/** Printed name under the closing line (owner name / editable signer). */
+export function resolveNokLetterSignerName(
+  data: NokLetterData,
+  ownerName?: string | null,
+): string {
+  const fromLetter = String(data.signer_name || '').trim();
+  if (fromLetter) return fromLetter;
+  const fromOwner = String(ownerName || '').trim();
+  if (fromOwner) return fromOwner;
+  return '[Your name]';
+}
+
 export function buildNokLetterPreviewText(
   localData: NokLetterData,
   person?: NextKinAccessResponse | null,
+  ownerName?: string | null,
 ): string {
   const data = applyNokLetterTemplateDefaults(
     mergeNokLetterAutofill(localData, person),
@@ -93,6 +106,8 @@ export function buildNokLetterPreviewText(
         day: 'numeric',
       })
     : 'Upon Death';
+
+  const signer = resolveNokLetterSignerName(data, ownerName);
 
   return `${date}
 
@@ -126,7 +141,7 @@ ${data.closing_message || NOK_LETTER_DEFAULTS.closing_message}
 
 ${data.letter_signature || NOK_LETTER_DEFAULTS.letter_signature}
 
-[Your signature]`;
+${signer}`;
 }
 
 export function isNokLetterDelivered(

@@ -16,7 +16,6 @@ import {
   type UploadedAIFile,
 } from '@/utils/aiDocumentUploadUi';
 import { AiUploadSupportedSectionsHint } from '@/components/ai/AiUploadSupportedSectionsHint';
-import { AiUploadedAttachmentList } from '@/components/ai/AiUploadedAttachmentList';
 import { AiUploadHistoryPopup } from '@/components/ai/AiUploadHistoryPopup';
 import { AI_PENDING_ROUTED_HINT } from '@/utils/aiRoutingUi';
 import { AI_MOBILE_ACTION_BUTTON } from '@/utils/aiMobileUi';
@@ -458,6 +457,14 @@ export function SectionAiDocumentUploader({
           </Button>
         )}
 
+        {autofillDone && (
+          <p className="w-full text-[11px] leading-snug text-[#5a6b80]">
+            Next: scroll the form for remaining blanks, or tap{' '}
+            <span className="font-semibold text-[#213D59]">Fill empty fields</span>{' '}
+            at the top of this section.
+          </p>
+        )}
+
         {isUploading && (
           <div className="flex items-center gap-2 text-xs text-[#5a6b80]">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -471,8 +478,6 @@ export function SectionAiDocumentUploader({
             Running AI autofill…
           </div>
         )}
-
-        <AiUploadedAttachmentList file={uploadedFile} />
 
         <AiUploadSupportedSectionsHint />
       </div>

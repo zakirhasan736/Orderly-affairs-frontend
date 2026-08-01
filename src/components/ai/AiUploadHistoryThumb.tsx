@@ -12,6 +12,7 @@ import {
 type AiUploadHistoryThumbProps = {
   fileId?: string;
   fileName: string;
+  mimeType?: string;
   className?: string;
 };
 
@@ -21,10 +22,11 @@ type AiUploadHistoryThumbProps = {
 export function AiUploadHistoryThumb({
   fileId,
   fileName,
+  mimeType: mimeHint,
   className,
 }: AiUploadHistoryThumbProps) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
-  const [mimeType, setMimeType] = useState<string>('');
+  const [mimeType, setMimeType] = useState<string>(mimeHint || '');
   const [loading, setLoading] = useState(Boolean(fileId));
   const [failed, setFailed] = useState(false);
 
@@ -41,7 +43,10 @@ export function AiUploadHistoryThumb({
 
       setLoading(true);
       setFailed(false);
-      setObjectUrl(null);
+      setObjectUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
 
       try {
         const { blob, mimeType: fetchedMime, fileName: fetchedName } =
@@ -52,6 +57,7 @@ export function AiUploadHistoryThumb({
           contentType: fetchedMime,
           blobType: blob.type,
           fileName: fetchedName || fileName,
+          fallbackMime: mimeHint,
         });
         setMimeType(mime);
 
@@ -61,7 +67,11 @@ export function AiUploadHistoryThumb({
         });
 
         if (kind === 'image') {
-          createdUrl = URL.createObjectURL(blob);
+          const typed =
+            mime && mime !== blob.type
+              ? new Blob([blob], { type: mime })
+              : blob;
+          createdUrl = URL.createObjectURL(typed);
           setObjectUrl(createdUrl);
         } else {
           setObjectUrl(null);
@@ -79,9 +89,9 @@ export function AiUploadHistoryThumb({
       cancelled = true;
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [fileId, fileName]);
+  }, [fileId, fileName, mimeHint]);
 
-  const kind = resolveAiPreviewKind({ mime: mimeType, fileName });
+  const kind = resolveAiPreviewKind({ mime: mimeType || mimeHint, fileName });
   const kindLabel =
     kind === 'pdf'
       ? 'PDF'

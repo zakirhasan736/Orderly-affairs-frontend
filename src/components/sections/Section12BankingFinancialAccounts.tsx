@@ -1,6 +1,5 @@
 'use client';
 
-import { AiUploadedAttachmentList } from '@/components/ai/AiUploadedAttachmentList';
 import React, { useRef, useState } from 'react';
 import {
   Card,
@@ -57,6 +56,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { VaultFillProgressChip } from '@/components/vault/VaultFillProgressChip';
 import {
   applyExtractedArrayWithDedup,
   buildUpsertAutofillNotice,
@@ -919,8 +919,6 @@ export default function Section12BankingFinancialAccounts({
           />
         </div>
 
-        <AiUploadedAttachmentList file={uploadedFile} />
-
         {isUploading && (
           <div className="relative flex items-center gap-2 text-xs text-slate-500">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -953,7 +951,7 @@ export default function Section12BankingFinancialAccounts({
             ].join(' ')}
           >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex flex-wrap items-center gap-2">
                 <Icon
                   className={[
                     'h-5 w-5',
@@ -961,6 +959,13 @@ export default function Section12BankingFinancialAccounts({
                   ].join(' ')}
                 />
                 {subsection}. {config.title}
+                <VaultFillProgressChip
+                  sectionId="12"
+                  subsectionId={subsection}
+                  title={`${subsection}. ${config.title}`}
+                  sectionData={data as Record<string, unknown>}
+                  onApplySectionData={next => onChange(next)}
+                />
               </CardTitle>
 
               <Button
@@ -1026,7 +1031,18 @@ export default function Section12BankingFinancialAccounts({
                 >
                   <div className="flex flex-col gap-3 border-b bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <strong className="text-slate-900">{itemLabel}</strong>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <strong className="text-slate-900">{itemLabel}</strong>
+                        <VaultFillProgressChip
+                          compact
+                          sectionId="12"
+                          subsectionId={subsection}
+                          itemIndex={index}
+                          title={itemLabel}
+                          sectionData={data as Record<string, unknown>}
+                          onApplySectionData={next => onChange(next)}
+                        />
+                      </div>
 
                       <p className="text-sm text-slate-500">
                         {isBank

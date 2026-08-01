@@ -74,6 +74,8 @@ type NotificationBellProps = {
   notices: DashboardNotice[];
   onSelect: (notice: DashboardNotice) => void;
   onOpenSettings?: () => void;
+  /** Prefer opening the overview Review inbox instead of the local panel. */
+  onOpenReviewInbox?: () => void;
   className?: string;
   buttonClassName?: string;
   align?: 'left' | 'right';
@@ -83,6 +85,7 @@ export function NotificationBell({
   notices,
   onSelect,
   onOpenSettings,
+  onOpenReviewInbox,
   className,
   buttonClassName,
   align = 'right',
@@ -515,6 +518,11 @@ export function NotificationBell({
         type="button"
         onClick={event => {
           event.stopPropagation();
+          if (onOpenReviewInbox) {
+            setOpen(false);
+            onOpenReviewInbox();
+            return;
+          }
           setOpen(prev => !prev);
         }}
         className={cn(

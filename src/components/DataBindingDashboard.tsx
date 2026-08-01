@@ -30,7 +30,6 @@ import { OverviewAiUploadCard } from './ai/OverviewAiUploadCard';
 import { OverviewTaskBoard } from './ai/OverviewTaskBoard';
 import { OverviewBrowseGrid } from './ai/OverviewBrowseGrid';
 import { AiUploadSupportedSectionsHint } from './ai/AiUploadSupportedSectionsHint';
-import { AiReviewInboxPanel } from './ai/AiReviewInboxPanel';
 import { useDashboardAiBatch } from '@/contexts/DashboardAiBatchContext';
 import { AiOverviewReadMatchDialog } from './ai/AiOverviewReadMatchDialog';
 import type { OverviewDocumentReview } from './ai/AiOverviewReadMatchDialog';
@@ -41,10 +40,10 @@ import { getAiSectionLabel, AI_SECTION_BY_KEY } from '@/utils/aiSectionRegistry'
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
   collectOverviewExpiryAlerts,
-  OVERVIEW_REMINDER_HORIZON_DAYS,
   OVERVIEW_URGENT_WITHIN_DAYS,
   type OverviewExpiryAlert,
 } from '@/utils/overviewExpiryAlerts';
+import type { DashboardNotice } from '@/utils/dashboardNotifications';
 import { cn } from '@common/ui/utils';
 
 interface DataBindingDashboardProps {
@@ -58,10 +57,12 @@ interface DataBindingDashboardProps {
   completedCount?: number;
   totalCount?: number;
   completedSectionIds?: string[];
+  sectionProgressById?: Record<string, { percent: number; complete: boolean }>;
   lastUpdatedBySection?: Record<string, string>;
   afterHero?: React.ReactNode;
   ownerEmail?: string | null;
   ownerName?: string | null;
+  notices?: DashboardNotice[];
 }
 
 interface ApiMessage {
@@ -93,10 +94,15 @@ export function DataBindingDashboard({
   totalCount = 0,
   progress = 0,
   completedSectionIds = [],
+  sectionProgressById = {},
   lastUpdatedBySection = {},
   ownerEmail: _ownerEmail = null,
-  ownerName = null,
+  ownerName: _ownerName = null,
+  notices: _notices = [],
 }: DataBindingDashboardProps) {
+  void _ownerEmail;
+  void _ownerName;
+  void _notices;
   const [activeTab, setActiveTab] = useState<PeopleTab>('access');
   const [mobileHubTab, setMobileHubTab] = useState<MobileHubTab>('people');
   const [messages, setMessages] = useState<ApiMessage[]>([]);
@@ -260,18 +266,19 @@ export function DataBindingDashboard({
     [formDataProp],
   );
 
-  const inboxReminders = useMemo(
-    () =>
-      collectOverviewExpiryAlerts(formDataProp, {
-        limit: 40,
-        withinDays: OVERVIEW_REMINDER_HORIZON_DAYS,
+  const openReviewInbox = (
+    tab: 'alerts' | 'docs' | 'dues' | 'inbox' | 'files' | 'reminders' = 'alerts',
+  ) => {
+    window.dispatchEvent(
+      new CustomEvent('orderly-open-ai-inbox-tab', {
+        detail: { tab },
       }),
-    [formDataProp],
-  );
+    );
+  };
 
   const vaultPct = useMemo(() => {
-    if (typeof progress === 'number' && progress > 0) {
-      return Math.min(100, Math.round(progress));
+    if (typeof progress === 'number' && Number.isFinite(progress)) {
+      return Math.min(100, Math.max(0, Math.round(progress)));
     }
     if (totalCount > 0) {
       return Math.min(100, Math.round((completedCount / totalCount) * 100));
@@ -487,16 +494,7 @@ export function DataBindingDashboard({
                   : 'Nothing urgent'
               }
               action={expiryAlerts.length > 0 ? 'Review' : 'All clear'}
-              onClick={() => {
-                document
-                  .querySelector<HTMLElement>('[data-ai-review-inbox]')
-                  ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                window.dispatchEvent(
-                  new CustomEvent('orderly-open-ai-inbox-tab', {
-                    detail: { tab: 'reminders' },
-                  }),
-                );
-              }}
+              onClick={() => openReviewInbox('dues')}
             />
             <OverviewStatCard
               icon={<FolderOpen className="h-4 w-4" />}
@@ -509,11 +507,7 @@ export function DataBindingDashboard({
                   : 'AI document fill'
               }
               action="Review"
-              onClick={() => {
-                document
-                  .querySelector<HTMLElement>('[data-ai-review-inbox]')
-                  ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }}
+              onClick={() => openReviewInbox('docs')}
             />
           </div>
 
@@ -528,14 +522,8 @@ export function DataBindingDashboard({
             <AiUploadSupportedSectionsHint />
           </div>
 
-          <AiReviewInboxPanel
-            onNavigateToSection={onNavigateToSection}
-            ownerName={ownerName}
-            ownerEmail={_ownerEmail}
-            reminders={inboxReminders}
-          />
-
           <OverviewBrowseGrid
+            className="hidden md:block"
             onNavigateToSection={onNavigateToSection}
             completedSectionIds={completedSectionIds}
           />
@@ -551,7 +539,7 @@ export function DataBindingDashboard({
           <div className="overview-task-board">
             <OverviewTaskBoard
               jobs={batch.jobs}
-              completedSectionIds={completedSectionIds}
+              sectionProgressById={sectionProgressById}
               lastUpdatedBySection={lastUpdatedBySection}
               onNavigateToSection={onNavigateToSection}
             />

@@ -149,6 +149,73 @@ export function reorderTopicInFormData(
   return { ...sectionData, [config.dataKey]: reordered };
 }
 
+/** Remove a user-added topic/item (from + Add) out of section form data. */
+export function removeTopicFromFormData(
+  sectionId: string,
+  subsectionId: string,
+  topicId: string,
+  sectionData: Record<string, unknown> | undefined,
+): Record<string, unknown> | null {
+  if (!sectionData) return null;
+
+  const parsed = parseTopicId(topicId);
+  if (!parsed || parsed.subsectionId !== subsectionId) return null;
+  if (!Number.isFinite(parsed.index) || parsed.index < 0) return null;
+
+  if (parsed.kind === 'group') {
+    const raw = sectionData[parsed.groupKey];
+    if (!Array.isArray(raw) || parsed.index >= raw.length) return null;
+    const next = raw.filter((_, i) => i !== parsed.index);
+    return { ...sectionData, [parsed.groupKey]: next };
+  }
+
+  const config = SUBSECTION_TOPIC_CONFIG[sectionId]?.[subsectionId];
+  if (!config) return null;
+
+  const raw = sectionData[config.dataKey];
+  if (!Array.isArray(raw) || parsed.index >= raw.length) return null;
+  const next = raw.filter((_, i) => i !== parsed.index);
+  return { ...sectionData, [config.dataKey]: next };
+}
+
+/** After deleting topic at index, remap active topic id if needed. */
+export function remapTopicIdAfterDelete(
+  topicId: string | null | undefined,
+  subsectionId: string,
+  deletedTopicId: string,
+): string | null {
+  if (!topicId) return null;
+
+  const active = parseTopicId(topicId);
+  const deleted = parseTopicId(deletedTopicId);
+  if (!active || !deleted || active.subsectionId !== subsectionId) {
+    return topicId;
+  }
+
+  if (active.kind === 'group' && deleted.kind === 'group') {
+    if (active.groupKey !== deleted.groupKey) return topicId;
+    if (active.index === deleted.index) return null;
+    if (active.index > deleted.index) {
+      return buildGroupTopicId(
+        subsectionId,
+        active.groupKey,
+        active.index - 1,
+      );
+    }
+    return topicId;
+  }
+
+  if (active.kind === 'simple' && deleted.kind === 'simple') {
+    if (active.index === deleted.index) return null;
+    if (active.index > deleted.index) {
+      return buildSimpleTopicId(subsectionId, active.index - 1);
+    }
+    return topicId;
+  }
+
+  return topicId;
+}
+
 /** Map a topic id to its new id after an index-based reorder within the same list. */
 export function remapTopicIdAfterReorder(
   topicId: string,
