@@ -37,6 +37,14 @@ export const ownerTour: OwnerTourStep[] = [
       'Personal IDs and forms, employment & income papers, education records, insurance & vehicle docs, bank and investment statements, healthcare records, legal documents (will, POA, trusts), and assets / estate planning files all work well.',
   },
   {
+    section: 'Browse',
+    selector: '[data-tour="tour-vault-by-category"]',
+    ensureSection: 'dashboard',
+    title: 'Vault by category',
+    description:
+      'Browse the vault in short groups — Family, Finance, Property, Passwords, Insurance, Healthcare, Legal, Work, Identity, and Community. Tap a category to see its sections, then open any section to fill it. Same sections as the sidebar, just easier to scan.',
+  },
+  {
     section: 'Tasks',
     selector: '.overview-task-board',
     ensureSection: 'dashboard',

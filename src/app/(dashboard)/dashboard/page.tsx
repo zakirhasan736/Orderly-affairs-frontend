@@ -2623,6 +2623,7 @@ export default function DashboardPage() {
 
             <button
               type="button"
+              data-tour="tour-vault-by-category"
               onClick={() => {
                 setMobileMoreOpen(false);
                 setBrowseOpen(true);

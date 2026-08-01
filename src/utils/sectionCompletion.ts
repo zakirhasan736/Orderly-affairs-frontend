@@ -78,18 +78,6 @@ const NOK_LETTER_CONTENT_KEYS = [
   ...NOK_LETTER_MESSAGE_KEYS,
 ] as const;
 
-const ACCESS_CORE_KEYS = [
-  'full_name',
-  'email',
-  'relationship',
-] as const;
-
-const ACCESS_LOCATION_KEYS = [
-  'card_storage_location',
-  'key_bag_location',
-  'documents_bag_location',
-] as const;
-
 const SKIP_FIELD_TYPES = new Set([
   'Instructions',
   'Header',
@@ -257,40 +245,32 @@ export function getNokLetterSectionProgress(
   return { percent: 0, complete: false, filled: 0, total: 1 };
 }
 
-function getAccessManagementProgress(
+/**
+ * Access Management is binary: at least one trusted person → Done.
+ * No field-fill percentage in the sidebar (same pattern as NOK letter).
+ */
+export function hasAtLeastOneAccessPerson(
   people: AccessPersonLike[] | null | undefined,
-): SectionProgress {
-  if (!Array.isArray(people) || people.length === 0) {
-    return result(0, ACCESS_CORE_KEYS.length);
-  }
-
-  let filled = 0;
-  let total = 0;
-
-  for (const person of people) {
-    for (const key of ACCESS_CORE_KEYS) {
-      total += 1;
-      if (isMeaningfulFilled(person[key])) filled += 1;
-    }
-    // Location fields matter for Upon Death / password card flow
-    const needsLocations =
-      person.immediate_access !== true ||
-      person.nok_letter_received === true ||
-      person.password_card_generated === true;
-    if (needsLocations) {
-      for (const key of ACCESS_LOCATION_KEYS) {
-        total += 1;
-        if (isMeaningfulFilled(person[key])) filled += 1;
-      }
-    }
-  }
-
-  return result(filled, total);
+): boolean {
+  return Array.isArray(people) && people.length > 0;
 }
 
-function getPersonalMessagesProgress(
-  section4: Record<string, unknown> | undefined,
+export function getAccessManagementSectionProgress(
+  people: AccessPersonLike[] | null | undefined,
 ): SectionProgress {
+  if (hasAtLeastOneAccessPerson(people)) {
+    return { percent: 100, complete: true, filled: 1, total: 1 };
+  }
+  return { percent: 0, complete: false, filled: 0, total: 1 };
+}
+
+/**
+ * Personal Messages is binary: at least one message exists → Done.
+ * No field-fill percentage in the sidebar (same as Access Management / NOK letter).
+ */
+export function listPersonalMessages(
+  section4: Record<string, unknown> | undefined,
+): unknown[] {
   let list: unknown[] = [];
   const letters = section4?.['4A'];
   if (letters && typeof letters === 'object' && !Array.isArray(letters)) {
@@ -300,34 +280,48 @@ function getPersonalMessagesProgress(
   if (list.length === 0 && Array.isArray(section4?.letters_data)) {
     list = section4.letters_data as unknown[];
   }
+  return list;
+}
 
-  if (list.length === 0) return result(0, 1);
-
-  const requiredKeys = ['recipient_name', 'message_type', 'title'];
-  let filled = 0;
-  let total = 0;
-
-  for (const item of list) {
-    if (!item || typeof item !== 'object') continue;
-    const row = item as Record<string, unknown>;
-    for (const key of requiredKeys) {
-      total += 1;
-      if (isMeaningfulFilled(row[key])) filled += 1;
-    }
-    // Body / media
-    total += 1;
-    if (
-      isMeaningfulFilled(row.message_body) ||
-      isMeaningfulFilled(row.body) ||
-      isMeaningfulFilled(row.letter_body) ||
-      isMeaningfulFilled(row.attachment_url) ||
-      isMeaningfulFilled(row.media_url)
-    ) {
-      filled += 1;
-    }
+function isPresentPersonalMessage(item: unknown): boolean {
+  if (!item || typeof item !== 'object') return false;
+  const row = item as Record<string, unknown>;
+  if (row.id || row._id) return true;
+  if (isMeaningfulFilled(row.recipient_name) || isMeaningfulFilled(row.recipientName)) {
+    return true;
   }
+  if (isMeaningfulFilled(row.title)) return true;
+  if (
+    isMeaningfulFilled(row.message_body) ||
+    isMeaningfulFilled(row.body) ||
+    isMeaningfulFilled(row.letter_body) ||
+    isMeaningfulFilled(row.attachment_url) ||
+    isMeaningfulFilled(row.media_url)
+  ) {
+    return true;
+  }
+  return false;
+}
 
-  return result(filled, Math.max(total, 1));
+export function hasAtLeastOnePersonalMessage(
+  section4: Record<string, unknown> | undefined,
+): boolean {
+  return listPersonalMessages(section4).some(isPresentPersonalMessage);
+}
+
+export function getPersonalMessagesSectionProgress(
+  section4: Record<string, unknown> | undefined,
+): SectionProgress {
+  if (hasAtLeastOnePersonalMessage(section4)) {
+    return { percent: 100, complete: true, filled: 1, total: 1 };
+  }
+  return { percent: 0, complete: false, filled: 0, total: 1 };
+}
+
+function getPersonalMessagesProgress(
+  section4: Record<string, unknown> | undefined,
+): SectionProgress {
+  return getPersonalMessagesSectionProgress(section4);
 }
 
 function findSectionConfig(sectionId: string) {
@@ -544,7 +538,7 @@ export function getSectionProgress(
   }
 
   if (sectionId === '2') {
-    return getAccessManagementProgress(ctx.myNextKin);
+    return getAccessManagementSectionProgress(ctx.myNextKin);
   }
 
   if (sectionId === '3') {
@@ -575,6 +569,8 @@ export type IncompleteField = {
   key: string;
   label: string;
   field: FieldDefinition;
+  /** Current stored value when listing the full area. */
+  value?: unknown;
 };
 
 function findSubsectionConfig(
@@ -591,6 +587,11 @@ export function getSubsectionProgress(
   subsectionId: string,
   sectionData: Record<string, unknown> | undefined,
 ): SectionProgress {
+  // Access Management / NOK letter / Personal messages: section-level binary only.
+  if (sectionId === '2' || sectionId === '3' || sectionId === '4') {
+    return EMPTY;
+  }
+
   const subsection = findSubsectionConfig(sectionId, subsectionId);
   if (!subsection) return EMPTY;
   const data =
@@ -661,9 +662,9 @@ function resultFromFields(
 }
 
 /**
- * List empty countable fields for a subsection or a single topic item.
+ * All countable fields for a subsection or topic item (filled + empty).
  */
-export function listIncompleteFields(
+export function listAreaFields(
   sectionId: string,
   subsectionId: string,
   sectionData: Record<string, unknown> | undefined,
@@ -704,17 +705,31 @@ export function listIncompleteFields(
     row = resolveObjectBucket(data, subsectionId, sectionId) || {};
   }
 
-  const incomplete: IncompleteField[] = [];
+  const all: IncompleteField[] = [];
   for (const field of fields) {
     if (!shouldCountField(field, row)) continue;
-    if (isMeaningfulFilled(row[field.key])) continue;
-    incomplete.push({
+    all.push({
       key: field.key,
       label: field.label || field.key,
       field,
+      value: row[field.key],
     });
   }
-  return incomplete;
+  return all;
+}
+
+/**
+ * List empty countable fields for a subsection or a single topic item.
+ */
+export function listIncompleteFields(
+  sectionId: string,
+  subsectionId: string,
+  sectionData: Record<string, unknown> | undefined,
+  options?: { itemIndex?: number; groupId?: string },
+): IncompleteField[] {
+  return listAreaFields(sectionId, subsectionId, sectionData, options).filter(
+    item => !isMeaningfulFilled(item.value),
+  );
 }
 
 /**

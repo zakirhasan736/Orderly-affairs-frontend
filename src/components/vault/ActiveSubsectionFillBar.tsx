@@ -149,7 +149,7 @@ export function ActiveSubsectionFillBar({
           className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#213D59] px-3.5 py-2 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#00305C]"
         >
           <Sparkles className="h-3.5 w-3.5" />
-          Fill empty fields
+          Quick fill
         </button>
       ) : null}
     </div>

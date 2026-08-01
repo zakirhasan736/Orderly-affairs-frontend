@@ -289,8 +289,9 @@ export function OverviewBrowseGrid({
   return (
     <section
       data-overview-browse
+      data-tour="tour-vault-by-category"
       className={cn(
-        'overflow-hidden rounded-2xl border border-[#213D59]/12 bg-white shadow-sm',
+        'overview-vault-by-category overflow-hidden rounded-2xl border border-[#213D59]/12 bg-white shadow-sm',
         className,
       )}
     >

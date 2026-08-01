@@ -681,8 +681,8 @@ export function VaultSidebarNavigation({
                               fillGaps ? (
                                 <button
                                   type="button"
-                                  title="Fill empty fields"
-                                  aria-label={`Fill empty fields in ${subsection.title}`}
+                                  title="Quick fill"
+                                  aria-label={`Quick fill ${subsection.title}`}
                                   onClick={event => {
                                     event.stopPropagation();
                                     goToSubsection(section.id, subsection.id);
@@ -803,8 +803,8 @@ export function VaultSidebarNavigation({
                                       fillGaps ? (
                                         <button
                                           type="button"
-                                          title="Fill empty fields"
-                                          aria-label={`Fill empty fields in ${topic.label}`}
+                                          title="Quick fill"
+                                          aria-label={`Quick fill ${topic.label}`}
                                           onClick={event => {
                                             event.stopPropagation();
                                             goToTopic(

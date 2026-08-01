@@ -111,8 +111,8 @@ describe('sectionCompletion', () => {
     expect(progress.percent).toBe(0);
   });
 
-  it('requires all access fields for section 2 completion', () => {
-    const partial = getSectionProgress('2', {
+  it('marks section 2 complete when any access person exists', () => {
+    const progress = getSectionProgress('2', {
       formData: {},
       myNextKin: [
         {
@@ -123,25 +123,29 @@ describe('sectionCompletion', () => {
         },
       ],
     });
-    expect(partial.complete).toBe(false);
-    expect(partial.percent).toBeGreaterThan(0);
-    expect(partial.percent).toBeLessThan(100);
+    expect(progress.complete).toBe(true);
+    expect(progress.percent).toBe(100);
+  });
 
-    const full = getSectionProgress('2', {
-      formData: {},
-      myNextKin: [
-        {
-          full_name: 'Alex',
-          email: 'a@b.com',
-          relationship: 'Child',
-          immediate_access: false,
-          card_storage_location: 'safe',
-          key_bag_location: 'hook',
-          documents_bag_location: 'bag',
-        },
-      ],
+  it('marks section 4 incomplete with no personal messages', () => {
+    const progress = getSectionProgress('4', {
+      formData: { '4': { '4A': { letters_data: [] } } },
     });
-    expect(full.complete).toBe(true);
-    expect(full.percent).toBe(100);
+    expect(progress.complete).toBe(false);
+    expect(progress.percent).toBe(0);
+  });
+
+  it('marks section 4 complete when any personal message exists', () => {
+    const progress = getSectionProgress('4', {
+      formData: {
+        '4': {
+          '4A': {
+            letters_data: [{ recipient_name: 'Alex', title: 'Hello' }],
+          },
+        },
+      },
+    });
+    expect(progress.complete).toBe(true);
+    expect(progress.percent).toBe(100);
   });
 });
