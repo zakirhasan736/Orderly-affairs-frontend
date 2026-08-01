@@ -250,7 +250,7 @@ export function OverviewAiUploadCard({
         }}
       />
 
-      {/* Document inbox — flat lane, not a gradient hero */}
+      {/* Upload lane — AI fills sections; Review inbox is below for approval */}
       <div
         role="button"
         tabIndex={0}
@@ -297,10 +297,12 @@ export function OverviewAiUploadCard({
               <p className="text-[15px] font-semibold leading-snug text-[var(--ink)] sm:text-base">
                 {isWorking
                   ? liveTitle
-                  : 'Document inbox — drop files to fill matching sections'}
+                  : 'Upload documents — AI fills matching sections'}
               </p>
               <p className="mt-1 text-[12px] text-[var(--ink-muted)] sm:text-[13px]">
-                {summaryText}
+                {isWorking
+                  ? summaryText
+                  : 'After AI finishes, files appear in Review inbox so you can check and approve.'}
               </p>
             </div>
           </div>

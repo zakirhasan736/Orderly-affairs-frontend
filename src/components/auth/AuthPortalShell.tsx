@@ -142,7 +142,7 @@ function LoginBrandPanel() {
 
       <div className="mt-auto max-w-[34ch]">
         <h2 className="m-0 font-[family-name:var(--font-family-display)] text-[44px] font-normal leading-[1.12] text-white">
-          One place, so nobody has to guess.
+          A single, trusted place for your life's essentials
         </h2>
         <p
           className="mt-6 mb-0 text-[16.5px] leading-[1.7] text-pretty"
@@ -479,7 +479,7 @@ export function AuthPortalShell({
               )}
             >
               {mobileShowTagline
-                ? 'One place, so nobody has to guess.'
+                ? "A single, trusted place for your life's essentials"
                 : mobileTitle}
             </h1>
             {mobileSubtitle && !mobileShowTagline ? (

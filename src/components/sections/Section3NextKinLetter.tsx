@@ -48,31 +48,31 @@ const SECTION_3A = {
 
 const GUIDE_STEPS = [
   {
-    title: 'Mark in Access Management',
-    text: 'For Upon Death access trusted people, check Will Receive Next of Kin Letter in Section 2. They appear here when ready.',
-    icon: Users,
+    title: 'What this letter is',
+    text: "A personal note for the person who'll handle things when you're gone — it explains the kit, what's inside, and where to find what they need.",
+    icon: FileText,
   },
   {
-    title: 'Choose recipient',
-    text: 'Select the person below. Each marked person gets their own letter with their access details.',
-    icon: CheckCircle2,
+    title: 'Fill in the essentials',
+    text: "Recipient, relationship, and password card location — that card unlocks the portal only after you've passed. Add Key Bag and Documents Bag locations if you use them.",
+    icon: ShieldCheck,
   },
   {
-    title: 'Review & customize',
-    text: 'Edit the letter steps — login info, bag locations, and your personal message are auto-filled where possible.',
+    title: 'Choose how it\'s delivered',
+    text: 'Print & mail it yourself, send it now by email so they know it exists, or schedule a future send. They still cannot log in until the portal unlocks.',
+    icon: Mail,
+  },
+  {
+    title: 'Review & finish',
+    text: 'Preview the letter, then Export, Send now, or Schedule from the closing step.',
     icon: Sparkles,
-  },
-  {
-    title: 'Share the letter',
-    text: 'Preview, print, export as PDF, or open in your email app when you are ready.',
-    icon: Printer,
   },
 ];
 
 const HELPFUL_NOTES = [
   'Only Upon Death access trusted people with Will Receive Next of Kin Letter checked appear here.',
-  'Each person gets a separate letter with their own password card location.',
-  'Complete Section 2 Access Management before starting this letter.',
+  'Emailing the letter does not unlock the kit — the master password on the Password Card does that after your passing.',
+  'Complete Section 2 Access Management (card & bag locations) before finishing this letter.',
 ];
 
 interface Props {

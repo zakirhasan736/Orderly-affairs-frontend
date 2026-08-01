@@ -15,13 +15,39 @@ export const NOK_LETTER_DEFAULTS = {
   key_bag_info:
     '• The Key Bag: This contains important keys and a guide to what each is for. It may include house keys, PO box keys, or vehicle keys. It is located',
   documents_bag_info:
-    '• The Documents Bag: Please keep this safe. It contains original documents and space to store items such as death certificates. You may need to refer to it even after everything has been settled. It is located',
+    '• The Documents Bag: Please keep this safe. It contains originals of the essential documents that you may need to refer to it even after everything has been settled. It is located',
   incomplete_kit_message:
     "If any part of the kit is incomplete, please don't worry. Even the unfinished parts can still help you stay organized. I've done my best to make sure you won't be left searching through drawers or wondering where things are.",
   closing_message:
     "Above all, this kit is my way of caring for you—even when I can't be here in person.\n\nTake your time. Breathe. You've got this, and I'm grateful it's you.",
   letter_signature: 'With love,',
 };
+
+/** Prior default — upgrade saved letters that still have this wording. */
+const LEGACY_DOCUMENTS_BAG_INFO =
+  '• The Documents Bag: Please keep this safe. It contains original documents and space to store items such as death certificates. You may need to refer to it even after everything has been settled. It is located';
+
+function normalizeDocumentsBagInfo(value?: string | null): string | undefined {
+  if (value == null) return undefined;
+  const trimmed = String(value).trim();
+  if (!trimmed || trimmed === LEGACY_DOCUMENTS_BAG_INFO) {
+    return NOK_LETTER_DEFAULTS.documents_bag_info;
+  }
+  return trimmed;
+}
+
+/**
+ * Apply current template defaults where fields are empty or still on a
+ * superseded Documents Bag sentence.
+ */
+export function applyNokLetterTemplateDefaults(
+  letter: NokLetterData,
+): NokLetterData {
+  return {
+    ...letter,
+    documents_bag_info: normalizeDocumentsBagInfo(letter.documents_bag_info),
+  };
+}
 
 export function mergeNokLetterAutofill(
   letter: NokLetterData,
@@ -46,7 +72,9 @@ export function buildNokLetterPreviewText(
   localData: NokLetterData,
   person?: NextKinAccessResponse | null,
 ): string {
-  const data = mergeNokLetterAutofill(localData, person);
+  const data = applyNokLetterTemplateDefaults(
+    mergeNokLetterAutofill(localData, person),
+  );
   const loginCredentialsText =
     data.login_credentials_text ||
     `I have registered your email address (${

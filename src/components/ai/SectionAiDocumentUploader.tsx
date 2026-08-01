@@ -25,6 +25,7 @@ import {
   getAiAutofillDoneForSection,
   isAiAutofillDoneForSection,
 } from '@/utils/aiAutofillDoneSections';
+import { toAiUserFacingMessage } from '@/utils/aiUserFacingError';
 import { useAiActiveSectionId } from '@/contexts/AiActiveSectionContext';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
@@ -193,7 +194,7 @@ export function SectionAiDocumentUploader({
           sectionId: resolvedSectionId,
           sectionIds: resolvedSectionId ? [String(resolvedSectionId)] : undefined,
           source: 'section',
-          error: error?.message || 'Upload failed',
+          error: toAiUserFacingMessage(error?.message || 'Upload failed'),
           targetSectionLabel: resolvedSectionId
             ? getAiSectionLabel(resolvedSectionId)
             : undefined,

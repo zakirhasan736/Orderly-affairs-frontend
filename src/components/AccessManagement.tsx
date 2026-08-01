@@ -1251,6 +1251,7 @@ export const AccessManagement = forwardRef<
   const [inviteSuccessName, setInviteSuccessName] = useState<string | null>(
     null,
   );
+  const [inviteSuccessImmediate, setInviteSuccessImmediate] = useState(false);
 
   const [createNextKin] = useCreateNextKinMutation();
   const [updateNextKin] = useUpdateNextKinMutation();
@@ -1556,6 +1557,7 @@ export const AccessManagement = forwardRef<
           });
         }
         if (result.password_email_sent) {
+          setInviteSuccessImmediate(true);
           setInviteSuccessName(draft.full_name || 'them');
         } else {
           toast.success(`Updated ${draft.full_name}`);
@@ -1572,6 +1574,7 @@ export const AccessManagement = forwardRef<
           has_master_password: true,
         };
         setAuthorizedPeople(prev => [...prev, saved]);
+        setInviteSuccessImmediate(Boolean(draft.immediate_access));
         setInviteSuccessName(draft.full_name || 'them');
       }
       refetch();
@@ -1868,11 +1871,17 @@ export const AccessManagement = forwardRef<
                               patchDraft({ immediate_access: false })
                             }
                             title="Upon Death access"
-                            description="Access after they will receive a Next of Kin letter."
+                            description="No login email now. Password stays on the card until access is granted."
                             icon={Clock}
                             iconClassName="bg-blue-100 text-blue-700"
                           />
                         </div>
+                        {!draft.immediate_access && (
+                          <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-5 text-slate-700">
+                            Upon Death people are not emailed a password. Keep
+                            the password card safe for when access is needed.
+                          </p>
+                        )}
                         {!draft.immediate_access && (
                           <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-2xl border bg-background px-4 py-3">
                             <input
@@ -3054,14 +3063,28 @@ export const AccessManagement = forwardRef<
       <BrandSuccessScreen
         open={Boolean(inviteSuccessName)}
         variant="confirm"
-        title={`Invitation sent to ${inviteSuccessName}`}
-        description="They'll get a temporary password. Nothing opens until you approve them."
+        title={
+          inviteSuccessImmediate
+            ? `Invitation sent to ${inviteSuccessName}`
+            : `${inviteSuccessName} saved`
+        }
+        description={
+          inviteSuccessImmediate
+            ? "They'll get a temporary password by email so they can sign in."
+            : 'Upon Death notice sent — no password in the email. They will use the master password on the Password Card when access opens.'
+        }
         secondaryAction={{
           label: 'Back to People & roles',
-          onClick: () => setInviteSuccessName(null),
+          onClick: () => {
+            setInviteSuccessName(null);
+            setInviteSuccessImmediate(false);
+          },
           variant: 'outline',
         }}
-        onClose={() => setInviteSuccessName(null)}
+        onClose={() => {
+          setInviteSuccessName(null);
+          setInviteSuccessImmediate(false);
+        }}
       />
     </div>
   );

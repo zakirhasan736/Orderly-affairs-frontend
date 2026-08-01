@@ -2061,6 +2061,9 @@ export default function DashboardPage() {
                       lastUpdatedBySection={sectionLastUpdatedMap}
                       totalCount={allSections.length}
                       ownerEmail={currentUser?.email}
+                      ownerName={
+                        currentUser?.full_name || currentUser?.email || 'You'
+                      }
                       onNavigateToSection={sectionId => goToSection(sectionId)}
                     />
                   ) : (
@@ -2076,6 +2079,9 @@ export default function DashboardPage() {
                       totalCount={allSections.length}
                       isNextOfKin
                       ownerEmail={currentUser?.email}
+                      ownerName={
+                        currentUser?.full_name || currentUser?.email || 'You'
+                      }
                       onNavigateToSection={sectionId => goToSection(sectionId)}
                     />
                   )}

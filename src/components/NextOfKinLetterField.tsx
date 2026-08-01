@@ -41,6 +41,10 @@ import {
 } from 'lucide-react';
 import { DatePicker } from '@/components/DatePicker';
 import { toast } from 'sonner';
+import {
+  applyNokLetterTemplateDefaults,
+  NOK_LETTER_DEFAULTS,
+} from '@/utils/nokLetterPreview';
 
 import {
   MOBILE_SHEET_SCROLL_CLASS,
@@ -56,6 +60,7 @@ import {
   type NOKLetterIn,
   useGetNokLetterQuery,
   useSaveNokLetterMutation,
+  useSendNokLetterNowMutation,
 } from '@/services/nokLetterApi';
 import {
   type NextKinAccessResponse,
@@ -112,25 +117,7 @@ function LetterPreviewBody({
   );
 }
 
-const DEFAULTS = {
-  letter_greeting: 'Dear',
-  access_url: 'https://orderly-affairs.com',
-  letter_opening:
-    "I'm writing you this note as someone I trust deeply.\n\nAs my next of kin, the executor of my will, a close friend, my attorney, or someone who cares—I want you to know that I've prepared something to help guide you through what comes next.",
-  kit_description:
-    "I've subscribed to an Orderly Affairs Kit. Inside, you'll find everything you may need to manage my affairs if I'm no longer able to, or when I'm gone. It includes not only documents, but also instructions—gentle step-by-step guides to make this process less overwhelming.",
-  accessible_sections:
-    "Once you log in, you'll be able to manage the sections below on my behalf:\n\n(Autofill sections based on selection in the access management section)",
-  key_bag_info:
-    '• The Key Bag: This contains important keys and a guide to what each is for. It may include house keys, PO box keys, or vehicle keys. It is located',
-  documents_bag_info:
-    '• The Documents Bag: Please keep this safe. It contains original documents and space to store items such as death certificates. You may need to refer to it even after everything has been settled. It is located',
-  incomplete_kit_message:
-    "If any part of the kit is incomplete, please don't worry. Even the unfinished parts can still help you stay organized. I've done my best to make sure you won't be left searching through drawers or wondering where things are.",
-  closing_message:
-    "Above all, this kit is my way of caring for you—even when I can't be here in person.\n\nTake your time. Breathe. You've got this, and I'm grateful it's you.",
-  letter_signature: 'With love,',
-};
+const DEFAULTS = NOK_LETTER_DEFAULTS;
 
 const EDITOR_STEPS = [
   {
@@ -161,7 +148,7 @@ const EDITOR_STEPS = [
     id: 'closing',
     label: 'Closing',
     icon: Sparkles,
-    helper: 'Final words and signature',
+    helper: 'Final words, then export, send, or schedule',
   },
 ] as const;
 
@@ -360,16 +347,16 @@ function DeliveryTimingSelector({
         <LetterSelectableCard
           selected={isUponDeath}
           onSelect={onSetUponDeath}
-          title="Upon Death"
-          description="Default — delivers when verification occurs."
+          title="Hold for passing"
+          description="Keep the letter on file — portal access still waits until after you've passed."
           icon={Zap}
           iconClassName="bg-emerald-100 text-emerald-700"
         />
         <LetterSelectableCard
           selected={!isUponDeath}
           onSelect={onSetSpecificDate}
-          title="Specific Date"
-          description="Schedule letter for a future date."
+          title="Schedule email"
+          description="Pick a future date — Orderly Affairs emails it automatically then."
           icon={CalendarIcon}
           iconClassName="bg-amber-100 text-amber-700"
         />
@@ -584,8 +571,14 @@ export function NextOfKinLetterField({
   );
 
   const [saveLetter, { isLoading: isSaving }] = useSaveNokLetterMutation();
+  const [sendLetterNow, { isLoading: isSendingNow }] =
+    useSendNokLetterNowMutation();
 
   const [localData, setLocalData] = useState<LetterData>(data || {});
+  const [deliveryAction, setDeliveryAction] = useState<
+    'export' | 'send_now' | 'schedule'
+  >('send_now');
+  const [deliveryBusy, setDeliveryBusy] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(false);
   const hydratedRef = useRef(false);
@@ -598,7 +591,9 @@ export function NextOfKinLetterField({
   useEffect(() => {
     if (!serverData) return;
 
-    const merged = mergeAccessManagementAutofill(serverData, selectedPerson);
+    const merged = applyNokLetterTemplateDefaults(
+      mergeAccessManagementAutofill(serverData, selectedPerson),
+    );
     setLocalData(merged);
     onChange(merged);
     hydratedRef.current = true;
@@ -608,7 +603,9 @@ export function NextOfKinLetterField({
     if (!selectedPerson || !hydratedRef.current) return;
 
     setLocalData(prev => {
-      const merged = mergeAccessManagementAutofill(prev, selectedPerson);
+      const merged = applyNokLetterTemplateDefaults(
+        mergeAccessManagementAutofill(prev, selectedPerson),
+      );
 
       if (JSON.stringify(prev) === JSON.stringify(merged)) {
         return prev;
@@ -622,7 +619,11 @@ export function NextOfKinLetterField({
   useEffect(() => {
     if (!data || hydratedRef.current) return;
 
-    setLocalData(mergeAccessManagementAutofill(data, selectedPerson));
+    setLocalData(
+      applyNokLetterTemplateDefaults(
+        mergeAccessManagementAutofill(data, selectedPerson),
+      ),
+    );
   }, [data, selectedPerson]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -830,7 +831,114 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
     link.remove();
 
     URL.revokeObjectURL(url);
-    toast.success('Letter exported successfully!');
+    toast.success('Letter exported — print & mail it yourself if you prefer.');
+  };
+
+  const persistLetterNow = async () => {
+    if (!selectedNokId) {
+      toast.error('Select a next of kin recipient first.');
+      return null;
+    }
+    return saveLetter({
+      nokId: selectedNokId,
+      body: {
+        letter_date: localData.letter_date || null,
+        letter_to: localData.letter_to || undefined,
+        letter_greeting: localData.letter_greeting || undefined,
+        letter_opening: localData.letter_opening || undefined,
+        kit_description: localData.kit_description || undefined,
+        access_url: localData.access_url || undefined,
+        login_credentials_text: localData.login_credentials_text || undefined,
+        nok_email: localData.nok_email || undefined,
+        nok_phone: localData.nok_phone || undefined,
+        password_card_location: localData.password_card_location || undefined,
+        accessible_sections: localData.accessible_sections || undefined,
+        key_bag_info: localData.key_bag_info || undefined,
+        key_bag_location: localData.key_bag_location || undefined,
+        documents_bag_info: localData.documents_bag_info || undefined,
+        documents_bag_location: localData.documents_bag_location || undefined,
+        incomplete_kit_message: localData.incomplete_kit_message || undefined,
+        closing_message: localData.closing_message || undefined,
+        letter_signature: localData.letter_signature || undefined,
+      },
+    }).unwrap();
+  };
+
+  const handleSendNow = async () => {
+    if (!isValidEmail(localData.nok_email)) {
+      toast.error(
+        'Add a valid Next of Kin email in Access Management before sending.',
+      );
+      return;
+    }
+    setDeliveryBusy(true);
+    try {
+      await persistLetterNow();
+      const sent = await sendLetterNow({
+        nokId: selectedNokId,
+      }).unwrap();
+      setLocalData(prev => ({ ...prev, ...sent }));
+      onChange({ ...localData, ...sent });
+      toast.success(
+        'Letter emailed. They still cannot log in until the portal unlocks after your passing.',
+      );
+      onClose?.();
+    } catch (error: any) {
+      toast.error(
+        error?.data?.detail ||
+          error?.message ||
+          'Could not send the letter. Please try again.',
+      );
+    } finally {
+      setDeliveryBusy(false);
+    }
+  };
+
+  const handleSchedule = async () => {
+    if (!localData.letter_date) {
+      toast.error('Pick a future delivery date first.');
+      setDeliveryAction('schedule');
+      setWizardStep(0);
+      return;
+    }
+    const sendAt = Date.parse(localData.letter_date);
+    if (!Number.isFinite(sendAt) || sendAt <= Date.now()) {
+      toast.error('Choose a future date to schedule the email.');
+      setWizardStep(0);
+      return;
+    }
+    setDeliveryBusy(true);
+    try {
+      const saved = await persistLetterNow();
+      if (saved) {
+        setLocalData(prev => ({ ...prev, ...saved }));
+        onChange({ ...localData, ...saved });
+      }
+      toast.success(
+        `Letter scheduled for ${formatLetterDate(localData.letter_date)}.`,
+      );
+      onClose?.();
+    } catch (error: any) {
+      toast.error(
+        error?.data?.detail ||
+          error?.message ||
+          'Could not schedule the letter. Please try again.',
+      );
+    } finally {
+      setDeliveryBusy(false);
+    }
+  };
+
+  const handleDeliveryAction = async () => {
+    if (deliveryAction === 'export') {
+      handleExport();
+      return;
+    }
+    if (deliveryAction === 'send_now') {
+      await handleSendNow();
+      return;
+    }
+    await handleSchedule();
   };
 
   const handleEmail = () => {
@@ -878,8 +986,8 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
         return (
           <>
             {stepIntro(
-              'Recipient & Delivery',
-              'Confirm who receives this letter and when it delivers.',
+              'Recipient & delivery timing',
+              'Confirm who receives this letter. You can still email it now — portal login waits until after your passing.',
             )}
 
             <DeliveryTimingSelector
@@ -1126,8 +1234,8 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
         return (
           <>
             {stepIntro(
-              'Closing & Signature',
-              'Final words before saving the letter.',
+              'Closing & delivery',
+              'Finish your note, then choose how to share the letter.',
             )}
             <FieldBlock label="Incomplete Kit Message">
               <Textarea
@@ -1166,6 +1274,64 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
                 className="h-12 rounded-2xl"
               />
             </FieldBlock>
+
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">How should it be delivered?</Label>
+              <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+                They still cannot log in until the portal unlocks after your
+                passing — the password card is what opens it.
+              </p>
+              <div className="grid gap-2.5">
+                <LetterSelectableCard
+                  selected={deliveryAction === 'export'}
+                  onSelect={() => setDeliveryAction('export')}
+                  title="Print & mail it yourself"
+                  description="Download a copy to print and send physically."
+                  icon={Printer}
+                  iconClassName="bg-slate-100 text-slate-700"
+                />
+                <LetterSelectableCard
+                  selected={deliveryAction === 'send_now'}
+                  onSelect={() => setDeliveryAction('send_now')}
+                  title="Send it now"
+                  description="Email it through the portal right away so they know the letter exists."
+                  icon={Send}
+                  iconClassName="bg-emerald-100 text-emerald-700"
+                />
+                <LetterSelectableCard
+                  selected={deliveryAction === 'schedule'}
+                  onSelect={() => setDeliveryAction('schedule')}
+                  title="Schedule for later"
+                  description={
+                    localData.letter_date
+                      ? `Sends automatically on ${formatLetterDate(localData.letter_date)}.`
+                      : 'Pick a future date — Orderly Affairs emails it then.'
+                  }
+                  icon={CalendarIcon}
+                  iconClassName="bg-amber-100 text-amber-700"
+                />
+              </div>
+              {deliveryAction === 'schedule' && !localData.letter_date ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full rounded-2xl"
+                  onClick={() => setWizardStep(0)}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  Choose schedule date
+                </Button>
+              ) : null}
+              {localData.delivery_status === 'sent' ? (
+                <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-900">
+                  This letter was already emailed
+                  {localData.sent_at
+                    ? ` on ${formatLetterDate(localData.sent_at)}`
+                    : ''}
+                  .
+                </p>
+              ) : null}
+            </div>
           </>
         );
       default:
@@ -1252,15 +1418,34 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
       ) : (
         <Button
           type="button"
-          onClick={handleExport}
+          onClick={() => void handleDeliveryAction()}
+          disabled={deliveryBusy || isSaving || isSendingNow}
           className={cn(
             'rounded-2xl',
             MIN_TOUCH,
             compactSheet ? 'flex-[1.4]' : isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
           )}
         >
-          <Download className="mr-2 h-4 w-4" />
-          {compactSheet ? 'Export' : 'Export Letter'}
+          {deliveryBusy || isSendingNow ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : deliveryAction === 'export' ? (
+            <Download className="mr-2 h-4 w-4" />
+          ) : deliveryAction === 'schedule' ? (
+            <CalendarIcon className="mr-2 h-4 w-4" />
+          ) : (
+            <Send className="mr-2 h-4 w-4" />
+          )}
+          {deliveryAction === 'export'
+            ? compactSheet
+              ? 'Export'
+              : 'Export letter'
+            : deliveryAction === 'schedule'
+              ? compactSheet
+                ? 'Schedule'
+                : 'Schedule send'
+              : compactSheet
+                ? 'Send now'
+                : 'Send now'}
         </Button>
       )}
     </div>
@@ -1332,12 +1517,24 @@ ${localData.letter_signature || DEFAULTS.letter_signature}
         ) : (
           <Button
             type="button"
-            variant="outline"
-            onClick={handleExport}
-            className={cn('rounded-2xl', MIN_TOUCH)}
+            onClick={() => void handleDeliveryAction()}
+            disabled={deliveryBusy || isSaving || isSendingNow}
+            className={cn('rounded-2xl', MIN_TOUCH, 'w-full sm:w-auto')}
           >
-            <Download className="mr-2 h-4 w-4" />
-            Export
+            {deliveryBusy || isSendingNow ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : deliveryAction === 'export' ? (
+              <Download className="mr-2 h-4 w-4" />
+            ) : deliveryAction === 'schedule' ? (
+              <CalendarIcon className="mr-2 h-4 w-4" />
+            ) : (
+              <Send className="mr-2 h-4 w-4" />
+            )}
+            {deliveryAction === 'export'
+              ? 'Export'
+              : deliveryAction === 'schedule'
+                ? 'Schedule send'
+                : 'Send now'}
           </Button>
         )}
       </div>

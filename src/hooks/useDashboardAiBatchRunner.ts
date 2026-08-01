@@ -29,6 +29,7 @@ import {
   linkAiUploadHistorySections,
   upsertAiUploadHistory,
 } from '@/utils/aiUploadHistory';
+import { toAiUserFacingMessage } from '@/utils/aiUserFacingError';
 
 /** Always also fill related sections in background when one of the pair is targeted. */
 const FORCE_BACKGROUND_PARTNERS: Record<string, string[]> = {
@@ -70,12 +71,16 @@ async function stashAndPersist(args: {
   result: unknown;
   detectedFields?: DetectedFact[];
   documentSummary?: string;
+  /** When false, stash for inbox review and wait for Accept before vault save. */
+  persistNow?: boolean;
   onFilled?: (meta: {
     file_id: string;
     sectionId: string;
     fileName: string;
   }) => void;
 }) {
+  const persistNow = args.persistNow !== false;
+
   stashDashboardAiPatch({
     file_id: args.file_id,
     section_id: args.sectionId,
@@ -87,7 +92,24 @@ async function stashAndPersist(args: {
     document_summary: args.documentSummary,
     file_name: args.fileName,
     createdAt: Date.now(),
+    pending_accept: !persistNow,
   });
+
+  linkAiUploadHistorySections({
+    fileId: args.file_id,
+    fileName: args.fileName,
+    sectionIds: [args.sectionId],
+  });
+
+  // Overview review inbox: hold the vault write until the owner Accepts.
+  if (!persistNow) {
+    args.onFilled?.({
+      file_id: args.file_id,
+      sectionId: args.sectionId,
+      fileName: args.fileName,
+    });
+    return { sectionId: args.sectionId, sectionKey: args.sectionKey, ok: true };
+  }
 
   // Access token may expire during long Gemini reads — refresh before save.
   await ensureFreshSession();
@@ -106,11 +128,6 @@ async function stashAndPersist(args: {
       sectionId: args.sectionId,
       fileId: args.file_id,
       fileName: args.fileName,
-    });
-    linkAiUploadHistorySections({
-      fileId: args.file_id,
-      fileName: args.fileName,
-      sectionIds: [args.sectionId],
     });
     args.onFilled?.({
       file_id: args.file_id,
@@ -207,6 +224,7 @@ async function fillPartnerSectionsFast(args: {
           file_id,
           subsection: partnerMeta.defaultSubsection || null,
           use_routed_cache: true,
+          defer_persist: true,
           field_catalog: catalogForSection(partnerKey, null),
         }),
         60000,
@@ -236,6 +254,7 @@ async function fillPartnerSectionsFast(args: {
             section: partnerKey,
           }),
           documentSummary: summary,
+          persistNow: false,
           onFilled: () => notifySectionFilled(partnerMeta.id),
         }),
         30000,
@@ -493,10 +512,11 @@ export function useDashboardAiBatchRunner() {
       };
 
       const markPrimaryFailed = (error: unknown) => {
-        const message =
+        const message = toAiUserFacingMessage(
           error instanceof Error
             ? error.message
-            : 'Could not fill this document. Please try again.';
+            : 'We could not fill this document. Please try again.',
+        );
         // Drop any premature "New data" badges for this upload.
         routing?.clearAllPendingForFile(file_id);
         patchJob(jobId, {
@@ -564,6 +584,7 @@ export function useDashboardAiBatchRunner() {
                 sectionKey,
               ),
               documentSummary,
+              persistNow: false,
               onFilled: () => notifySectionFilled(sectionId),
             }),
             35000,
@@ -598,6 +619,7 @@ export function useDashboardAiBatchRunner() {
             file_id,
             subsection: subsection || null,
             use_routed_cache: true,
+            defer_persist: true,
             field_catalog: catalogForSection(sectionKey, null),
           }),
           90000,
@@ -607,7 +629,7 @@ export function useDashboardAiBatchRunner() {
         patchJob(jobId, {
           status: 'filling',
           progress: 94,
-          message: 'Saving filled fields…',
+          message: 'Ready for your review…',
           activeFillSectionId: sectionId,
         });
 
@@ -621,6 +643,7 @@ export function useDashboardAiBatchRunner() {
             result: filled.result,
             detectedFields: factsFromFill(filled),
             documentSummary: filled.document_summary || documentSummary,
+            persistNow: false,
             onFilled: () => notifySectionFilled(sectionId),
           }),
           35000,
@@ -756,7 +779,9 @@ export function useDashboardAiBatchRunner() {
                   message: statusLabel('error'),
                   error:
                     item.error ||
-                    'Document processing took too long. Please try uploading again.',
+                    toAiUserFacingMessage(
+                      'Document processing took too long. Please try uploading again.',
+                    ),
                   updatedAt: new Date().toISOString(),
                 }
               : item,
@@ -921,7 +946,9 @@ export function useDashboardAiBatchRunner() {
         status: 'error',
         progress: 100,
         message: statusLabel('error'),
-        error: error?.message || 'Could not process this document',
+        error: toAiUserFacingMessage(
+          error?.message || 'We could not process this document.',
+        ),
       });
     } finally {
       if (watchdog) window.clearTimeout(watchdog);

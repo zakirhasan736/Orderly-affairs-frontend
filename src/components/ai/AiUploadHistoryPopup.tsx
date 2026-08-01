@@ -26,11 +26,11 @@ import { toast } from 'sonner';
 import { AiDocumentPreviewDialog } from '@/components/ai/AiDocumentPreviewDialog';
 import { AiUploadHistoryThumb } from '@/components/ai/AiUploadHistoryThumb';
 
-/** Timeouts / blips — still treat as in progress in the UI. */
+/** Timeouts / blips / AI backlog — still treat as in progress in the UI. */
 function looksLikeTransientIssue(error?: string | null) {
   const msg = String(error || '').toLowerCase();
   if (!msg) return false;
-  return /timeout|timed out|took too long|network|temporarily|try again|aborted|fetch failed|gateway|502|503|504/.test(
+  return /timeout|timed out|took too long|network|temporarily|try again|aborted|fetch failed|gateway|502|503|504|busy|quota|finishing other|high demand|wait about a minute|second pass/.test(
     msg,
   );
 }

@@ -6,6 +6,10 @@ import {
   AiDocumentUnavailableError,
   isAiDocumentMismatchDetail,
 } from '@/utils/aiDocumentRouting';
+import {
+  AI_BUSY_USER_MESSAGE,
+  toAiUserFacingMessage,
+} from '@/utils/aiUserFacingError';
 
 export async function autofillSectionFromDocument(payload: {
   section: string;
@@ -13,6 +17,8 @@ export async function autofillSectionFromDocument(payload: {
   subsection?: string | null;
   use_routed_cache?: boolean;
   classify_only?: boolean;
+  /** Overview inbox: extract but wait for Accept before vault save. */
+  defer_persist?: boolean;
   field_catalog?: Array<{
     key: string;
     label: string;
@@ -30,6 +36,7 @@ export async function autofillSectionFromDocument(payload: {
       subsection: payload.subsection || null,
       use_routed_cache: payload.use_routed_cache ?? false,
       classify_only: payload.classify_only ?? false,
+      defer_persist: payload.defer_persist ?? false,
       field_catalog: payload.field_catalog || null,
     }),
   });
@@ -44,7 +51,9 @@ export async function autofillSectionFromDocument(payload: {
 
   if (!res.ok) {
     if (res.status === 401) {
-      throw new Error('Login expired or token invalid. Please log in again.');
+      throw new Error(
+        'Your session expired. Please sign in again, then retry the upload.',
+      );
     }
 
     if (res.status === 409 && isAiDocumentMismatchDetail(json?.detail)) {
@@ -55,11 +64,14 @@ export async function autofillSectionFromDocument(payload: {
       throw new AiDocumentMismatchError(json);
     }
 
-    if (res.status === 503) {
-      const busyMessage =
+    if (res.status === 503 || res.status === 429) {
+      const serverMessage =
         (typeof json?.detail === 'object' && json?.detail?.message) ||
-        'AI is temporarily busy. Please wait a moment and try Auto-fill again.';
-      throw new Error(busyMessage);
+        (typeof json?.detail === 'string' ? json.detail : '') ||
+        '';
+      throw new Error(
+        toAiUserFacingMessage(serverMessage || AI_BUSY_USER_MESSAGE),
+      );
     }
 
     if (res.status === 404 || res.status === 410) {
@@ -67,8 +79,10 @@ export async function autofillSectionFromDocument(payload: {
         typeof json?.detail === 'string'
           ? json.detail
           : json?.detail?.message ||
-            'Uploaded document expired or is no longer available. Please upload again.';
-      throw new AiDocumentUnavailableError(unavailableMessage);
+            'That upload expired or was removed. Please upload the document again.';
+      throw new AiDocumentUnavailableError(
+        toAiUserFacingMessage(unavailableMessage),
+      );
     }
 
     const detail =
@@ -76,7 +90,7 @@ export async function autofillSectionFromDocument(payload: {
         ? json.detail
         : json?.detail?.message || json?.message;
 
-    throw new Error(detail || 'AI autofill failed');
+    throw new Error(toAiUserFacingMessage(detail));
   }
 
   return json as {

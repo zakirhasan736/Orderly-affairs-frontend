@@ -243,12 +243,20 @@ function walk(
   path: string[],
   out: OverviewExpiryAlert[],
   today: Date,
+  withinDays: number,
 ) {
   if (value == null) return;
 
   if (Array.isArray(value)) {
     value.forEach((item, index) =>
-      walk(item, sectionId, [...path, String(index)], out, today),
+      walk(
+        item,
+        sectionId,
+        [...path, String(index)],
+        out,
+        today,
+        withinDays,
+      ),
     );
     return;
   }
@@ -259,14 +267,14 @@ function walk(
   Object.entries(record).forEach(([key, nested]) => {
     if (SKIP_EXACT_KEYS.has(key)) {
       if (nested && typeof nested === 'object') {
-        walk(nested, sectionId, [...path, key], out, today);
+        walk(nested, sectionId, [...path, key], out, today, withinDays);
       }
       return;
     }
 
     if (SKIP_KEY_RE.test(key) && !EXPIRY_KEY_RE.test(key)) {
       if (nested && typeof nested === 'object') {
-        walk(nested, sectionId, [...path, key], out, today);
+        walk(nested, sectionId, [...path, key], out, today, withinDays);
       }
       return;
     }
@@ -290,8 +298,8 @@ function walk(
           return;
         }
 
-        // Overview only lists items that are overdue or due very soon.
-        if (!isOverviewUrgentAlert(days)) return;
+        // Overdue always included; future dates only within the window.
+        if (days >= 0 && days > withinDays) return;
 
         out.push({
           id: `${sectionId}:${path.join('.')}.${key}:${iso}:${context || 'item'}`,
@@ -315,7 +323,7 @@ function walk(
     }
 
     if (nested && typeof nested === 'object') {
-      walk(nested, sectionId, [...path, key], out, today);
+      walk(nested, sectionId, [...path, key], out, today, withinDays);
     }
   });
 }
@@ -354,22 +362,30 @@ export function dedupeOverviewExpiryAlerts(
   return out;
 }
 
+/** Default horizon for overview strip / notifications (overdue + next 2 weeks). */
+export const OVERVIEW_REMINDER_HORIZON_DAYS = 365;
+
 export function collectOverviewExpiryAlerts(
   formData: Record<string, unknown> | null | undefined,
+  options?: { limit?: number; withinDays?: number },
 ): OverviewExpiryAlert[] {
   if (!formData || typeof formData !== 'object') return [];
 
   const today = new Date();
   const alerts: OverviewExpiryAlert[] = [];
+  const withinDays = options?.withinDays ?? OVERVIEW_URGENT_WITHIN_DAYS;
+  const limit = options?.limit ?? 4;
 
   Object.entries(formData).forEach(([sectionId, data]) => {
     if (!/^\d+$/.test(sectionId)) return;
-    walk(data, sectionId, [], alerts, today);
+    walk(data, sectionId, [], alerts, today, withinDays);
   });
 
-  return dedupeOverviewExpiryAlerts(
+  const list = dedupeOverviewExpiryAlerts(
     alerts.sort((a, b) => a.daysUntil - b.daysUntil),
-  ).slice(0, 4);
+  );
+
+  return list.slice(0, Math.max(1, limit));
 }
 
 export function buildExpiryReminderMailto(

@@ -24,6 +24,10 @@ export type StashedAiPatch = {
   document_summary?: string;
   file_name?: string;
   createdAt: number;
+  /**
+   * Overview inbox: stashed for review — not written to the vault until Accept.
+   */
+  pending_accept?: boolean;
 };
 
 function readMap(): Record<string, StashedAiPatch> {

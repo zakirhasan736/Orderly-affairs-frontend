@@ -28,8 +28,9 @@ import { NOKLetterCard } from './NOKLetterCard';
 import { MessageCard } from './MessageCard';
 import { OverviewAiUploadCard } from './ai/OverviewAiUploadCard';
 import { OverviewTaskBoard } from './ai/OverviewTaskBoard';
+import { OverviewBrowseGrid } from './ai/OverviewBrowseGrid';
 import { AiUploadSupportedSectionsHint } from './ai/AiUploadSupportedSectionsHint';
-import { AiDetectedInformationPanel } from './ai/AiDetectedInformationPanel';
+import { AiReviewInboxPanel } from './ai/AiReviewInboxPanel';
 import { useDashboardAiBatch } from '@/contexts/DashboardAiBatchContext';
 import { AiOverviewReadMatchDialog } from './ai/AiOverviewReadMatchDialog';
 import type { OverviewDocumentReview } from './ai/AiOverviewReadMatchDialog';
@@ -40,6 +41,8 @@ import { getAiSectionLabel, AI_SECTION_BY_KEY } from '@/utils/aiSectionRegistry'
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
   collectOverviewExpiryAlerts,
+  OVERVIEW_REMINDER_HORIZON_DAYS,
+  OVERVIEW_URGENT_WITHIN_DAYS,
   type OverviewExpiryAlert,
 } from '@/utils/overviewExpiryAlerts';
 import { cn } from '@common/ui/utils';
@@ -58,6 +61,7 @@ interface DataBindingDashboardProps {
   lastUpdatedBySection?: Record<string, string>;
   afterHero?: React.ReactNode;
   ownerEmail?: string | null;
+  ownerName?: string | null;
 }
 
 interface ApiMessage {
@@ -91,6 +95,7 @@ export function DataBindingDashboard({
   completedSectionIds = [],
   lastUpdatedBySection = {},
   ownerEmail: _ownerEmail = null,
+  ownerName = null,
 }: DataBindingDashboardProps) {
   const [activeTab, setActiveTab] = useState<PeopleTab>('access');
   const [mobileHubTab, setMobileHubTab] = useState<MobileHubTab>('people');
@@ -247,7 +252,20 @@ export function DataBindingDashboard({
     overviewReviewOpen && overviewDocuments.length > 0;
 
   const expiryAlerts = useMemo(
-    () => collectOverviewExpiryAlerts(formDataProp),
+    () =>
+      collectOverviewExpiryAlerts(formDataProp, {
+        limit: 4,
+        withinDays: OVERVIEW_URGENT_WITHIN_DAYS,
+      }),
+    [formDataProp],
+  );
+
+  const inboxReminders = useMemo(
+    () =>
+      collectOverviewExpiryAlerts(formDataProp, {
+        limit: 40,
+        withinDays: OVERVIEW_REMINDER_HORIZON_DAYS,
+      }),
     [formDataProp],
   );
 
@@ -470,9 +488,14 @@ export function DataBindingDashboard({
               }
               action={expiryAlerts.length > 0 ? 'Review' : 'All clear'}
               onClick={() => {
-                if (expiryAlerts[0]?.sectionId) {
-                  onNavigateToSection(expiryAlerts[0].sectionId);
-                }
+                document
+                  .querySelector<HTMLElement>('[data-ai-review-inbox]')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                window.dispatchEvent(
+                  new CustomEvent('orderly-open-ai-inbox-tab', {
+                    detail: { tab: 'reminders' },
+                  }),
+                );
               }}
             />
             <OverviewStatCard
@@ -485,10 +508,10 @@ export function DataBindingDashboard({
                   ? `${docsWorkingCount} in progress`
                   : 'AI document fill'
               }
-              action="Upload"
+              action="Review"
               onClick={() => {
                 document
-                  .querySelector<HTMLElement>('[data-ai-overview-upload]')
+                  .querySelector<HTMLElement>('[data-ai-review-inbox]')
                   ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }}
             />
@@ -505,8 +528,16 @@ export function DataBindingDashboard({
             <AiUploadSupportedSectionsHint />
           </div>
 
-          <AiDetectedInformationPanel
+          <AiReviewInboxPanel
             onNavigateToSection={onNavigateToSection}
+            ownerName={ownerName}
+            ownerEmail={_ownerEmail}
+            reminders={inboxReminders}
+          />
+
+          <OverviewBrowseGrid
+            onNavigateToSection={onNavigateToSection}
+            completedSectionIds={completedSectionIds}
           />
 
           <AiOverviewReadMatchDialog
@@ -516,7 +547,7 @@ export function DataBindingDashboard({
             onOpenSection={onNavigateToSection}
           />
 
-          {/* 3) Continue where you left off slider (+ desktop grids) */}
+          {/* Continue where you left off slider (+ desktop grids) */}
           <div className="overview-task-board">
             <OverviewTaskBoard
               jobs={batch.jobs}
