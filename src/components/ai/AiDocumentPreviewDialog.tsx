@@ -88,7 +88,7 @@ export function AiDocumentPreviewDialog({
         // <img> / PDF iframe previews reliably.
         const previewBlob =
           mime && mime !== blob.type
-            ? new Blob([await blob.arrayBuffer()], { type: mime })
+            ? new Blob([blob], { type: mime })
             : blob;
         createdUrl = URL.createObjectURL(previewBlob);
         if (!cancelled) setObjectUrl(createdUrl);
@@ -167,24 +167,20 @@ export function AiDocumentPreviewDialog({
             <img
               src={objectUrl}
               alt={title}
-              className="mx-auto max-h-[min(70dvh,560px)] w-auto max-w-full rounded-xl border border-slate-200 bg-white object-contain shadow-sm"
+              onError={() =>
+                setError('Could not display this image. Try downloading it.')
+              }
+              className="mx-auto max-h-[min(70dvh,560px)] min-h-[12rem] w-auto max-w-full rounded-xl border border-slate-200 bg-white object-contain shadow-sm"
             />
           ) : null}
 
           {!loading && !error && objectUrl && kind === 'pdf' ? (
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <object
-                data={`${objectUrl}#toolbar=1&navpanes=0`}
-                type="application/pdf"
-                className="h-[min(70dvh,560px)] w-full"
-                aria-label={title}
-              >
-                <iframe
-                  title={title}
-                  src={`${objectUrl}#toolbar=1&navpanes=0`}
-                  className="h-[min(70dvh,560px)] w-full border-0"
-                />
-              </object>
+              <iframe
+                title={title}
+                src={`${objectUrl}#toolbar=1&navpanes=0&view=FitH`}
+                className="h-[min(70dvh,560px)] w-full border-0 bg-white"
+              />
               <div className="border-t border-slate-100 px-3 py-2 text-center">
                 <a
                   href={objectUrl}

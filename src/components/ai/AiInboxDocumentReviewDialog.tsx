@@ -312,8 +312,8 @@ export function AiInboxDocumentReviewDialog({
             previewKind === 'pdf' ? (
               <iframe
                 title={document.fileName}
-                src={objectUrl}
-                className="h-[min(42dvh,360px)] w-full bg-white"
+                src={`${objectUrl}#toolbar=1&navpanes=0&view=FitH`}
+                className="h-[min(42dvh,360px)] w-full border-0 bg-white"
               />
             ) : null}
 
