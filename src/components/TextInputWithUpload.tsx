@@ -14,6 +14,22 @@ const ALLOWED_TYPES = [
   'application/pdf',
 ];
 
+type UploadFileEntry = {
+  public_id?: string;
+  url?: string;
+  name?: string;
+  version?: number;
+  scan_status?: string;
+};
+
+function asUploadFiles(value: unknown): UploadFileEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (item): item is UploadFileEntry =>
+      !!item && typeof item === 'object' && !Array.isArray(item),
+  );
+}
+
 export function TextInputWithUpload({
   label,
   value = {},
@@ -45,33 +61,33 @@ export function TextInputWithUpload({
   // AI often returns a plain string; form state expects { text, files }.
   const normalizedValue =
     typeof value === 'string' || typeof value === 'number'
-      ? { text: String(value), files: [] as unknown[], _deleted_files: [] as string[] }
+      ? { text: String(value), files: [] as UploadFileEntry[], _deleted_files: [] as string[] }
       : value && typeof value === 'object'
         ? {
             ...(value as Record<string, unknown>),
             text: unwrapText(
               (value as { text?: unknown }).text ?? value,
             ),
-            files: Array.isArray((value as { files?: unknown }).files)
-              ? (value as { files: unknown[] }).files
-              : [],
+            files: asUploadFiles((value as { files?: unknown }).files),
             _deleted_files: Array.isArray(
               (value as { _deleted_files?: unknown })._deleted_files,
             )
               ? ((value as { _deleted_files: string[] })._deleted_files)
               : [],
           }
-        : { text: '', files: [] as unknown[], _deleted_files: [] as string[] };
+        : { text: '', files: [] as UploadFileEntry[], _deleted_files: [] as string[] };
 
-  const files = normalizedValue.files || [];
-  const deleted = normalizedValue._deleted_files || [];
+  const files = asUploadFiles(normalizedValue.files);
+  const deleted = Array.isArray(normalizedValue._deleted_files)
+    ? normalizedValue._deleted_files
+    : [];
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange({
       ...normalizedValue,
       text: e.target.value,
-      files: normalizedValue.files || [],
-      _deleted_files: normalizedValue._deleted_files || [],
+      files,
+      _deleted_files: deleted,
     });
   };
 
@@ -95,6 +111,7 @@ export function TextInputWithUpload({
     }
 
     const uploaded = await uploadFile(file);
+    const previousPublicId = files[0]?.public_id;
 
     onChange({
       ...normalizedValue,
@@ -105,15 +122,14 @@ export function TextInputWithUpload({
           scan_status: 'pending',
         },
       ],
-      _deleted_files:
-        files.length && files[0].public_id ? [files[0].public_id] : [],
+      _deleted_files: previousPublicId ? [previousPublicId] : [],
     });
   }
 
-  function removeFile(file: any, index: number) {
+  function removeFile(file: UploadFileEntry, index: number) {
     onChange({
       ...normalizedValue,
-      files: files.filter((_: any, i: number) => i !== index),
+      files: files.filter((_, i) => i !== index),
       _deleted_files: file.public_id ? [...deleted, file.public_id] : deleted,
     });
   }
@@ -150,9 +166,9 @@ export function TextInputWithUpload({
         onChange={e => e.target.files && handleUpload(e.target.files[0])}
       />
 
-      {files.map((f: any, i: number) => (
+      {files.map((f, i) => (
         <div
-          key={f.public_id}
+          key={f.public_id || `${f.name || 'file'}-${i}`}
           className="flex justify-between items-center bg-muted p-2 rounded text-xs"
         >
           <a href={f.url} target="_blank" className="underline">

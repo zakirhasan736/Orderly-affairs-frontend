@@ -349,7 +349,8 @@ export async function persistPartnerStashesForFiles(args: {
   excludeSectionId?: string;
   onFileDone?: (fileId: string, sectionId: string) => void;
 }): Promise<FlushStashesResult> {
-  const fileSet = new Set(args.fileIds.filter(Boolean));
+  const { fileIds, excludeSectionId, onFileDone } = args;
+  const fileSet = new Set(fileIds.filter(Boolean));
   if (!fileSet.size) {
     return { ok: true, saved: 0, failed: 0, sectionIds: [] };
   }
@@ -361,7 +362,7 @@ export async function persistPartnerStashesForFiles(args: {
     .filter(
       item =>
         fileSet.has(item.file_id) &&
-        item.section_id !== args.excludeSectionId,
+        item.section_id !== excludeSectionId,
     )
     .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
