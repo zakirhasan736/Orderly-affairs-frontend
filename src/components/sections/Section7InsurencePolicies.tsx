@@ -221,7 +221,12 @@ export default function Section7InsurancePolicies({
     latestUploadRef,
   });
 
-  const policies: any[] = Array.isArray(data['7A']) ? data['7A'] : [];
+  // Coerce a legacy single-object save so one card still renders.
+  const policies: any[] = Array.isArray(data['7A'])
+    ? data['7A']
+    : data['7A'] && typeof data['7A'] === 'object'
+      ? [data['7A']]
+      : [];
   const show7A = !activeSubsection || activeSubsection === '7A';
 
   const reminderRecipientOptions = useMemo(() => {

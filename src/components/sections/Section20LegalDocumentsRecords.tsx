@@ -547,7 +547,11 @@ export default function Section20LegalDocumentsRecords({
     latestUploadRef,
   });
 
-  const documents: any[] = Array.isArray(data['20C']) ? data['20C'] : [];
+  const documents: any[] = Array.isArray(data['20C'])
+    ? data['20C']
+    : data['20C'] && typeof data['20C'] === 'object'
+      ? [data['20C']]
+      : [];
 
   useScrollToVaultTopic(activeTopicId, documents.length);
 

@@ -1,6 +1,7 @@
 /** Shared helpers for AI autofill when documents contain multiple repeatable entries. */
 
 import {
+  itemHasIncomingChanges,
   mergeAutofillItemFields,
   upsertAutofillItems,
 } from '@/utils/aiItemDedup';
@@ -160,9 +161,21 @@ export function applyItemsToIndexedList<T extends Record<string, unknown>>({
   preserveRowId?: boolean;
   isDuplicate?: (existing: T, incoming: T) => boolean;
   conflictMode?: import('@/utils/aiItemDedup').AutofillConflictMode;
-}): { items: T[]; added: number; updated: number; skipped: number } {
+}): {
+  items: T[];
+  added: number;
+  updated: number;
+  unchanged: number;
+  skipped: number;
+} {
   if (extractedItems.length === 0) {
-    return { items: currentItems, added: 0, updated: 0, skipped: 0 };
+    return {
+      items: currentItems,
+      added: 0,
+      updated: 0,
+      unchanged: 0,
+      skipped: 0,
+    };
   }
 
   const mergeAt = (base: T[], index: number, item: T): T[] => {
@@ -193,9 +206,28 @@ export function applyItemsToIndexedList<T extends Record<string, unknown>>({
   // (user chose this card). Remaining items upsert (update same topic / add new).
   if (typeof targetIndex === 'number') {
     const hadTarget = targetIndex < currentItems.length;
-    let next = mergeAt(currentItems, targetIndex, extractedItems[0]);
-    let added = hadTarget ? 0 : 1;
-    let updated = hadTarget ? 1 : 0;
+    const existingTarget = hadTarget
+      ? currentItems[targetIndex]
+      : createEmpty();
+    let next = currentItems;
+    let added = 0;
+    let updated = 0;
+    let unchanged = 0;
+
+    if (
+      hadTarget &&
+      !itemHasIncomingChanges(
+        existingTarget as Record<string, unknown>,
+        extractedItems[0] as Record<string, unknown>,
+      )
+    ) {
+      unchanged = 1;
+      next = [...currentItems];
+    } else {
+      next = mergeAt(currentItems, targetIndex, extractedItems[0]);
+      added = hadTarget ? 0 : 1;
+      updated = hadTarget ? 1 : 0;
+    }
     const remaining = extractedItems.slice(1);
 
     if (remaining.length > 0) {
@@ -209,13 +241,14 @@ export function applyItemsToIndexedList<T extends Record<string, unknown>>({
         next = upserted.items;
         added += upserted.added;
         updated += upserted.updated;
+        unchanged += upserted.unchanged;
       } else {
         next = [...next, ...remaining];
         added += remaining.length;
       }
     }
 
-    return { items: next, added, updated, skipped: 0 };
+    return { items: next, added, updated, unchanged, skipped: 0 };
   }
 
   if (isDuplicate) {
@@ -229,6 +262,7 @@ export function applyItemsToIndexedList<T extends Record<string, unknown>>({
       items: upserted.items,
       added: upserted.added,
       updated: upserted.updated,
+      unchanged: upserted.unchanged,
       skipped: 0,
     };
   }
@@ -237,6 +271,7 @@ export function applyItemsToIndexedList<T extends Record<string, unknown>>({
     items: [...currentItems, ...extractedItems],
     added: extractedItems.length,
     updated: 0,
+    unchanged: 0,
     skipped: 0,
   };
 }

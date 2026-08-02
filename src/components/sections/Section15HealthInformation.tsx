@@ -423,7 +423,11 @@ export default function Section15HealthInformation({
   });
 
   const section15A = data['15A'] || {};
-  const providers: any[] = Array.isArray(data['15B']) ? data['15B'] : [];
+  const providers: any[] = Array.isArray(data['15B'])
+    ? data['15B']
+    : data['15B'] && typeof data['15B'] === 'object'
+      ? [data['15B']]
+      : [];
 
   useScrollToVaultTopic(activeTopicId, providers.length);
 

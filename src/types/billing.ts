@@ -1,5 +1,11 @@
 // types/billing.ts
-export type PlanType = 'trial' | 'monthly' | 'yearly';
+export type BillingPlanId =
+  | 'monthly'
+  | 'yearly'
+  | 'essentials'
+  | 'advantage';
+
+export type PlanType = 'trial' | BillingPlanId;
 
 export interface BillingRecord {
   id: string;

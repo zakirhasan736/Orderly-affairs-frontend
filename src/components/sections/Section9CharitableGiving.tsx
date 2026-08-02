@@ -204,7 +204,11 @@ export default function Section9CharitableGiving({
     latestUploadRef,
   });
 
-  const charities: any[] = Array.isArray(data['9A']) ? data['9A'] : [];
+  const charities: any[] = Array.isArray(data['9A'])
+    ? data['9A']
+    : data['9A'] && typeof data['9A'] === 'object'
+      ? [data['9A']]
+      : [];
   const show9A = !activeSubsection || activeSubsection === '9A';
 
   useScrollToVaultTopic(activeTopicId, charities.length);

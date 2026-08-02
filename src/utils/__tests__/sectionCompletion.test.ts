@@ -16,12 +16,30 @@ describe('sectionCompletion', () => {
     expect(isMeaningfulFilled('Hall closet')).toBe(true);
   });
 
-  it('marks section 3 complete when at least one letter exists', () => {
+  it('marks section 3 incomplete for empty auto-created letter stubs', () => {
     const progress = getSectionProgress('3', {
       formData: {},
       dashboardNokLetter: {
         id: 'abc',
         owner_id: 'owner',
+        letter_to: 'Alex',
+        nok_email: 'a@b.com',
+        letter_opening: NOK_LETTER_DEFAULTS.letter_opening,
+        created_at: '2026-01-01',
+        updated_at: '2026-01-01',
+      },
+    });
+    expect(progress.complete).toBe(false);
+    expect(progress.percent).toBe(0);
+  });
+
+  it('marks section 3 complete when a letter has customized message content', () => {
+    const progress = getSectionProgress('3', {
+      formData: {},
+      dashboardNokLetter: {
+        id: 'abc',
+        owner_id: 'owner',
+        letter_opening: 'Hello friend, this is my personal note.',
         created_at: '2026-01-01',
         updated_at: '2026-01-01',
       },
@@ -37,12 +55,15 @@ describe('sectionCompletion', () => {
     expect(hasAtLeastOneNokLetter({}, null)).toBe(false);
   });
 
-  it('detects a letter under next_of_kin_letters_by_nok', () => {
+  it('detects a customized letter under next_of_kin_letters_by_nok', () => {
     expect(
       hasAtLeastOneNokLetter(
         {
           next_of_kin_letters_by_nok: {
-            nok1: { letter_to: 'Alex', nok_email: 'a@b.com' },
+            nok1: {
+              letter_to: 'Alex',
+              letter_opening: 'Custom opening for my next of kin.',
+            },
           },
         },
         null,

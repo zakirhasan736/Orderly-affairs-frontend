@@ -134,13 +134,37 @@ export async function fetchAiDocumentPreviewBlob(fileId: string): Promise<{
   );
 
   if (!res.ok) {
+    let detail = '';
+    try {
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const body = (await res.json()) as { detail?: unknown; message?: unknown };
+        if (typeof body.detail === 'string') detail = body.detail;
+        else if (typeof body.message === 'string') detail = body.message;
+      } else {
+        detail = (await res.text()).trim().slice(0, 180);
+      }
+    } catch {
+      // ignore parse errors — fall back to status text
+    }
+
     if (res.status === 410) {
-      throw new Error('This document has expired. Please upload it again.');
+      throw new Error(
+        detail || 'This document has expired. Please upload it again.',
+      );
     }
     if (res.status === 404) {
-      throw new Error('Document not found. It may have been deleted.');
+      throw new Error(
+        detail ||
+          'Document file not found on the server. It may have expired or been deleted — upload it again to preview.',
+      );
     }
-    throw new Error('Could not open document preview.');
+    if (res.status === 401) {
+      throw new Error('Sign in again to preview this document.');
+    }
+    throw new Error(
+      detail || `Could not open document preview (${res.status}).`,
+    );
   }
 
   const blob = await res.blob();

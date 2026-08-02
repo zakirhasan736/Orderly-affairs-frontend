@@ -21,17 +21,16 @@ import {
   useStartSubscriptionMutation,
 } from '@/services/billingApi';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
+import {
+  SUBSCRIPTION_PLANS,
+  type SubscriptionPlanId,
+} from '@/constants/subscriptionPlans';
 
 const PLAN_PRICES = {
   yearly: {
-    label: 'Yearly plan',
-    price: '$94.95',
-    note: 'Billed once a year · save about 20%',
-  },
-  monthly: {
-    label: 'Monthly plan',
-    price: '$9.95',
-    note: 'Pay monthly · 1-year minimum commitment',
+    label: SUBSCRIPTION_PLANS.yearly.label,
+    price: SUBSCRIPTION_PLANS.yearly.annualPrice,
+    note: SUBSCRIPTION_PLANS.yearly.note,
   },
 } as const;
 
@@ -89,7 +88,7 @@ function goToDashboard(router: ReturnType<typeof useRouter>) {
 type Props = {
   isTrial: boolean;
   trialMode: 'cardless' | 'card_on_file';
-  selectedPlan: 'monthly' | 'yearly';
+  selectedPlan: SubscriptionPlanId;
   router: ReturnType<typeof useRouter>;
   onBack: () => void;
   onSwitchToCardless: () => void;
@@ -128,32 +127,22 @@ export function StartTrialCheckout({
   const trialEndShort = formatTrialEndShort();
   const trialEndFull = formatTrialEndDate();
   const dueToday = isTrial ? '$0.00' : plan.price;
-  const isYearly = selectedPlan === 'yearly';
+  const planTitle = plan.label.replace(' plan', '');
 
   const title = isTrial ? 'Start your trial' : 'Secure checkout';
   const subtitle = isTrial
     ? needsCardNow
       ? 'Add a card now and access continues without a gap when the trial ends.'
       : 'No card needed today. You can add payment anytime in settings.'
-    : isYearly
-      ? 'You’re starting the yearly plan and saving about 20%.'
-      : 'You’re starting monthly billing at $9.95 — 1-year minimum commitment.';
+    : `You’re starting the ${planTitle} plan — billed annually.`;
 
   const authChargeNote = isTrial
-    ? isYearly
-      ? `Nothing is charged today. We authorise $0 to check the card is valid, then bill ${plan.price} on ${trialEndFull} (yearly).`
-      : `Nothing is charged today. We authorise $0 to check the card is valid, then bill ${plan.price} on ${trialEndFull}, then ${plan.price}/month.`
-    : isYearly
-      ? `You’ll be charged ${plan.price} today for one year of access.`
-      : `You’ll be charged ${plan.price} today, then ${plan.price} each month.`;
+    ? `Nothing is charged today. We authorise $0 to check the card is valid, then bill ${plan.price} on ${trialEndFull} (annual).`
+    : `You’ll be charged ${plan.price} today for one year of access.`;
 
   const mobileDueNote = isTrial
-    ? isYearly
-      ? `Trial runs to ${trialEndShort}. First charge ${plan.price} on ${trialEndFull}, then yearly.`
-      : `Trial runs to ${trialEndShort}. First charge ${plan.price} on ${trialEndFull}.`
-    : isYearly
-      ? `Billed once a year · save about 20%.`
-      : plan.note;
+    ? `Trial runs to ${trialEndShort}. First charge ${plan.price} on ${trialEndFull}, then yearly.`
+    : plan.note;
 
   const ctaLabel = loading
     ? 'Please wait…'

@@ -278,7 +278,11 @@ export default function Section11MilitaryService({
     latestUploadRef,
   });
 
-  const servicePeriods: any[] = Array.isArray(data['11A']) ? data['11A'] : [];
+  const servicePeriods: any[] = Array.isArray(data['11A'])
+    ? data['11A']
+    : data['11A'] && typeof data['11A'] === 'object'
+      ? [data['11A']]
+      : [];
   const show11A = !activeSubsection || activeSubsection === '11A';
 
   useScrollToVaultTopic(activeTopicId, servicePeriods.length);

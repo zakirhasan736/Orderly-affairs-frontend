@@ -38,6 +38,28 @@ function getUploadText(value: unknown): string {
   return normalizeComparable(value);
 }
 
+/** Display text from string or `{ text, files }` — preserves original casing. */
+function extractDisplayText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).trim();
+  }
+  if (Array.isArray(value)) {
+    return value.map(extractDisplayText).filter(Boolean).join(', ');
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if ('text' in record || 'files' in record) {
+      return extractDisplayText(record.text);
+    }
+    for (const key of ['label', 'name', 'value', 'title']) {
+      const nested = extractDisplayText(record[key]);
+      if (nested) return nested;
+    }
+  }
+  return '';
+}
+
 function normalizePolicyNumber(value: unknown): string {
   return getUploadText(value).replace(/[\s\-_.#]/g, '');
 }
@@ -70,6 +92,69 @@ function isUploadShape(value: unknown): value is { text?: string; files?: unknow
     !Array.isArray(value) &&
     ('text' in value || 'files' in value)
   );
+}
+
+const VEHICLE_MAKE_BRAND_RE =
+  /\b(toyota|honda|jeep|ford|chevrolet|chevy|bmw|mercedes|nissan|hyundai|kia|subaru|mazda|lexus|gmc|ram|dodge|volkswagen|vw|audi|tesla|chrysler|buick|cadillac|acura|infiniti|lincoln|volvo|porsche|mini|mitsubishi)\b/i;
+const DATE_LIKE_RE = /^\d{1,2}[./\-]\d{1,2}([./\-]\d{2,4})?$/;
+/** e.g. TO.01/08 — OCR date fragments mistaken for a vehicle title */
+const DATEISH_VEHICLE_TITLE_RE = /^[A-Za-z]{1,3}\.?\s*\d{1,2}[./\-]\d{1,2}/;
+
+/**
+ * Drop bogus vehicle cards (date snippets like "TO.01/08") so only real
+ * Toyota / Honda / Jeep extracts become inner subsections.
+ */
+export function isJunkVehicleCard(item: Record<string, unknown>): boolean {
+  const make = extractDisplayText(item.make);
+  const model = extractDisplayText(item.model);
+  const year = extractDisplayText(item.year);
+  const vin = extractDisplayText(item.vin).replace(/\s+/g, '');
+  const plate = extractDisplayText(item.license_plate);
+
+  if (vin && vin.length >= 11) return false;
+  if (VEHICLE_MAKE_BRAND_RE.test(make) || VEHICLE_MAKE_BRAND_RE.test(model)) {
+    return false;
+  }
+  if (
+    /^(19|20)\d{2}$/.test(year) &&
+    make.length >= 3 &&
+    !DATE_LIKE_RE.test(make) &&
+    !DATEISH_VEHICLE_TITLE_RE.test(make)
+  ) {
+    return false;
+  }
+  if (plate && plate.length >= 4 && make.length >= 3 && !DATE_LIKE_RE.test(make)) {
+    return false;
+  }
+
+  if (
+    DATEISH_VEHICLE_TITLE_RE.test(make) ||
+    DATEISH_VEHICLE_TITLE_RE.test(model) ||
+    DATEISH_VEHICLE_TITLE_RE.test(`${make} ${model}`.trim())
+  ) {
+    return true;
+  }
+
+  const bits = [make, model, year, plate].filter(Boolean);
+  if (!bits.length) return true;
+
+  if (
+    bits.every(
+      bit =>
+        DATE_LIKE_RE.test(bit) ||
+        DATEISH_VEHICLE_TITLE_RE.test(bit) ||
+        bit.length <= 2,
+    )
+  ) {
+    return true;
+  }
+
+  // Year field holding a day/month date with no real make → junk.
+  if (DATE_LIKE_RE.test(year) && (!make || make.length <= 2) && !model && !vin) {
+    return true;
+  }
+
+  return false;
 }
 
 export function vehiclesAreDuplicates(
@@ -136,20 +221,27 @@ export function vehiclesAreDuplicates(
       Boolean(incomingVin || incomingPlate) ||
       Boolean(incomingYear && incomingMake && incomingModel);
 
-    // Distinct year/make/model on the same policy = different vehicles.
+    // Any conflicting identity signal = different vehicles.
     if (
-      existingIdentity &&
-      incomingIdentity &&
-      ((existingMake && incomingMake && existingMake !== incomingMake) ||
-        (existingModel && incomingModel && existingModel !== incomingModel) ||
-        (existingYear && incomingYear && existingYear !== incomingYear))
+      (existingMake && incomingMake && existingMake !== incomingMake) ||
+      (existingModel && incomingModel && existingModel !== incomingModel) ||
+      (existingYear && incomingYear && existingYear !== incomingYear)
     ) {
       return false;
     }
 
-    // Same policy + at least one side lacks full identity → treat as one car.
-    if (!existingIdentity || !incomingIdentity) {
+    // Both thin seeds on the same policy → one placeholder card.
+    if (!existingIdentity && !incomingIdentity) {
       return true;
+    }
+
+    // Enrich a thin seed with a full extract (not the reverse — a full Toyota
+    // card must not absorb a thin Honda/Jeep seed that only shares a policy #).
+    if (!existingIdentity && incomingIdentity) {
+      return true;
+    }
+    if (existingIdentity && !incomingIdentity) {
+      return false;
     }
 
     // Both identified and YMM aligns (no conflicts above).
@@ -162,6 +254,133 @@ export function vehiclesAreDuplicates(
     ) {
       return true;
     }
+
+    return false;
+  }
+
+  return false;
+}
+
+function insuranceDetailScore(item: Record<string, unknown>): number {
+  const detailKeys = [
+    'policy_number',
+    'coverage_amount',
+    'premium_info',
+    'beneficiaries',
+    'policy_contact',
+    'notes',
+    'additional_notes',
+    'effective_date',
+    'expiration_date',
+    'renewal_date',
+    'policy_documents',
+    'policy_documents_life',
+    'policy_name',
+    'named_insured',
+    'insured_name',
+  ];
+  let score = 0;
+  for (const key of detailKeys) {
+    if (!isEmptyValue(item[key])) score += 1;
+  }
+  return score;
+}
+
+/** Thin partner seed (company+type only) vs a fuller declarations extract. */
+function isThinInsuranceCard(item: Record<string, unknown>): boolean {
+  return insuranceDetailScore(item) <= 1;
+}
+
+const VEHICLE_BRAND_RE =
+  /\b(toyota|honda|jeep|ford|chevrolet|chevy|bmw|mercedes|nissan|hyundai|kia|subaru|mazda|lexus|gmc|ram|dodge|volkswagen|vw|audi|tesla|chrysler|buick|cadillac|acura|infiniti|lincoln|volvo|porsche|mini|mitsubishi)\b/i;
+
+function getInsuranceDisplayName(item: Record<string, unknown>): string {
+  return normalizeComparable(
+    item.policy_name ??
+      item.named_insured ??
+      item.insured_name ??
+      item.policy_title ??
+      item.account_name,
+  );
+}
+
+function getInsuranceNotes(item: Record<string, unknown>): string {
+  return normalizeComparable(
+    item.notes ?? item.additional_notes ?? item.additional_note ?? item.comments,
+  );
+}
+
+/**
+ * Fingerprint for which vehicle a policy covers (Honda vs Toyota vs Jeep).
+ * Uses explicit make/model/VIN first, then brand words inside notes / names.
+ */
+function getInsuranceVehicleFingerprint(item: Record<string, unknown>): string {
+  const vin = getUploadText(
+    item.vin ?? item.vehicle_vin ?? item.insured_vin,
+  );
+  if (vin) return `vin:${vin}`;
+
+  const make = normalizeComparable(
+    item.make ?? item.vehicle_make ?? item.insured_vehicle_make,
+  );
+  const model = normalizeComparable(
+    item.model ?? item.vehicle_model ?? item.insured_vehicle_model,
+  );
+  const year = normalizeComparable(
+    item.year ?? item.vehicle_year ?? item.insured_vehicle_year,
+  );
+  if (make || model || year) {
+    return `ymm:${year}|${make}|${model}`;
+  }
+
+  const blob = [
+    getInsuranceNotes(item),
+    getInsuranceDisplayName(item),
+    normalizeComparable(item.vehicle_description),
+    normalizeComparable(item.description),
+    normalizeComparable(item.policy_type_other),
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const brand = blob.match(VEHICLE_BRAND_RE)?.[1];
+  if (brand) return `brand:${brand.toLowerCase()}`;
+  return '';
+}
+
+/**
+ * Honda / Jeep / Toyota vehicle policies must not collapse into one card when
+ * notes, display names, or insured vehicles differ — even if carrier + type match.
+ */
+function insuranceIdentityConflicts(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): boolean {
+  const vehicleA = getInsuranceVehicleFingerprint(existing);
+  const vehicleB = getInsuranceVehicleFingerprint(incoming);
+  if (vehicleA && vehicleB && vehicleA !== vehicleB) return true;
+
+  const nameA = getInsuranceDisplayName(existing);
+  const nameB = getInsuranceDisplayName(incoming);
+  if (
+    nameA &&
+    nameB &&
+    nameA !== nameB &&
+    !nameA.includes(nameB) &&
+    !nameB.includes(nameA)
+  ) {
+    return true;
+  }
+
+  const notesA = getInsuranceNotes(existing);
+  const notesB = getInsuranceNotes(incoming);
+  if (
+    notesA &&
+    notesB &&
+    notesA !== notesB &&
+    !notesA.includes(notesB) &&
+    !notesB.includes(notesA)
+  ) {
+    return true;
   }
 
   return false;
@@ -169,16 +388,21 @@ export function vehiclesAreDuplicates(
 
 /**
  * Same insurance policy (renewal / re-upload) when:
- * - both have the same policy number, OR
- * - same company + type and at most one side has a policy number (thin seed ↔ full extract), OR
- * - neither has a policy number AND company + type (+ other subtype) match
+ * - both have the same policy number (and no conflicting vehicle/notes/name), OR
+ * - thin seed ↔ fuller extract for the same company+type (non-conflicting identity)
  *
- * Conflicting non-empty policy numbers are always separate policies.
+ * Conflicting policy numbers, notes, names, or insured vehicles → separate cards.
+ * Three Vehicle policies (Honda / Jeep / Toyota) stay three cards.
  */
 export function insurancePoliciesAreDuplicates(
   existing: Record<string, unknown>,
   incoming: Record<string, unknown>,
 ): boolean {
+  // Different cars / notes / policy names → never the same card.
+  if (insuranceIdentityConflicts(existing, incoming)) {
+    return false;
+  }
+
   const existingPolicy = normalizePolicyNumber(existing.policy_number);
   const incomingPolicy = normalizePolicyNumber(incoming.policy_number);
 
@@ -211,17 +435,14 @@ export function insurancePoliciesAreDuplicates(
       existingOther !== incomingOther
     );
 
-  // One side has a number, the other doesn't → same policy when company+type align
-  // (e.g. vehicle seed card without number + full declarations page).
-  if ((existingPolicy || incomingPolicy) && companyAndTypeMatch) {
-    return true;
-  }
-
-  if (existingPolicy || incomingPolicy) {
+  if (!companyAndTypeMatch) {
+    // Numbers already handled; without company+type never soft-merge.
     return false;
   }
 
-  return companyAndTypeMatch;
+  // One-sided policy number or no numbers: only thin seed ↔ fuller extract.
+  // Two full Vehicle policies (Honda / Jeep / Toyota) with notes stay separate.
+  return isThinInsuranceCard(existing) || isThinInsuranceCard(incoming);
 }
 
 /** Collapse near-duplicate extracted items into one card before apply. */
@@ -446,25 +667,35 @@ export function mergeAutofillItemFields<T extends Record<string, unknown>>(
     if (isUploadShape(value) || isUploadShape(current)) {
       const incomingUpload = isUploadShape(value)
         ? value
-        : { text: String(value ?? ''), files: [] as unknown[] };
+        : { text: value, files: [] as unknown[] };
       const existingUpload = isUploadShape(current)
         ? current
-        : { text: '', files: [] as unknown[] };
+        : { text: current, files: [] as unknown[] };
 
       const incomingText =
-        typeof incomingUpload.text === 'string' ? incomingUpload.text.trim() : '';
+        extractDisplayText(incomingUpload.text) || extractDisplayText(value);
       const existingText =
-        typeof existingUpload.text === 'string' ? existingUpload.text.trim() : '';
+        extractDisplayText(existingUpload.text) || extractDisplayText(current);
       const incomingFiles = Array.isArray(incomingUpload.files)
         ? incomingUpload.files
         : [];
       const existingFiles = Array.isArray(existingUpload.files)
         ? existingUpload.files
         : [];
+      const mergedFiles =
+        incomingFiles.length > 0 ? incomingFiles : existingFiles;
+      const mergedText = incomingText || existingText;
+
+      // VIN / insurance_policy are plain TextInputs. Never re-wrap a text-only
+      // value as `{ text, files }` or the input shows "[object Object]".
+      if (mergedFiles.length === 0) {
+        next[key] = mergedText;
+        continue;
+      }
 
       next[key] = {
-        text: incomingText || existingText,
-        files: incomingFiles.length > 0 ? incomingFiles : existingFiles,
+        text: mergedText,
+        files: mergedFiles,
       };
       continue;
     }
@@ -494,10 +725,9 @@ export function mergeAutofillItemFieldsEmptyOnly<T extends Record<string, unknow
     if (!isEmptyValue(next[key])) continue;
 
     if (isUploadShape(value)) {
-      next[key] = {
-        text: typeof value.text === 'string' ? value.text : '',
-        files: Array.isArray(value.files) ? value.files : [],
-      };
+      const text = extractDisplayText(value);
+      const files = Array.isArray(value.files) ? value.files : [];
+      next[key] = files.length > 0 ? { text, files } : text;
       continue;
     }
 
@@ -531,6 +761,43 @@ export function itemWouldOverwriteExisting(
     const a = normalizeComparable(current);
     const b = normalizeComparable(value);
     if (a && b && a !== b) return true;
+  }
+  return false;
+}
+
+/**
+ * True when incoming has any new or different non-empty field vs existing.
+ * Same Toyota re-upload with identical fields → false (no fill needed).
+ * Even one changed field (VIN, color, etc.) → true (overwrite/merge).
+ */
+export function itemHasIncomingChanges(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): boolean {
+  for (const [key, value] of Object.entries(incoming)) {
+    if (key === '__rowId' || key === 'reminder_recipients') continue;
+    if (isEmptyValue(value)) continue;
+
+    const current = existing[key];
+    if (isEmptyValue(current)) return true;
+
+    if (isUploadShape(value) || isUploadShape(current)) {
+      const aText = getUploadText(current);
+      const bText = getUploadText(value);
+      if (aText !== bText) return true;
+      const aFiles = isUploadShape(current) && Array.isArray(current.files)
+        ? current.files.length
+        : 0;
+      const bFiles = isUploadShape(value) && Array.isArray(value.files)
+        ? value.files.length
+        : 0;
+      if (bFiles > aFiles) return true;
+      continue;
+    }
+
+    if (normalizeComparable(current) !== normalizeComparable(value)) {
+      return true;
+    }
   }
   return false;
 }
@@ -745,10 +1012,11 @@ export function upsertAutofillItems<T extends Record<string, unknown>>(
   incomingItems: T[],
   isDuplicate: (existing: T, incoming: T) => boolean,
   conflictMode: AutofillConflictMode = 'overwrite',
-): { items: T[]; added: number; updated: number } {
+): { items: T[]; added: number; updated: number; unchanged: number } {
   const items = [...currentItems];
   let added = 0;
   let updated = 0;
+  let unchanged = 0;
   let overwriteDecision: boolean | null = null;
 
   for (const incoming of incomingItems) {
@@ -760,6 +1028,14 @@ export function upsertAutofillItems<T extends Record<string, unknown>>(
     const matchIndex = items.findIndex(existing => isDuplicate(existing, incoming));
     if (matchIndex >= 0) {
       const existing = items[matchIndex];
+
+      // Same vehicle/policy already on file with identical data — do not
+      // count as a new fill or rewrite the card.
+      if (!itemHasIncomingChanges(existing, incoming)) {
+        unchanged += 1;
+        continue;
+      }
+
       let mode: 'overwrite' | 'keep' = conflictMode === 'keep' ? 'keep' : 'overwrite';
 
       if (
@@ -788,7 +1064,7 @@ export function upsertAutofillItems<T extends Record<string, unknown>>(
     }
   }
 
-  return { items, added, updated };
+  return { items, added, updated, unchanged };
 }
 
 /** @deprecated Prefer upsertAutofillItems — kept for tests/callers that only need unique appends. */
@@ -834,7 +1110,7 @@ export function applyExtractedArrayWithDedup<T extends Record<string, unknown>>(
   currentItems: T[],
   incomingItems: T[],
   conflictMode: AutofillConflictMode = 'overwrite',
-): { items: T[]; updated: number; added: number } {
+): { items: T[]; updated: number; added: number; unchanged: number } {
   const matcher =
     duplicateMatcherForSection(sectionId, subsectionKey) ||
     ((a, b) => namedItemsAreDuplicates(a, b));
@@ -863,12 +1139,19 @@ export function buildUpsertAutofillNotice(
   updated: number,
   itemLabel: string,
   targetIndex?: number,
+  unchanged = 0,
 ): string | null {
   const label = itemLabel.toLowerCase();
 
+  if (added === 0 && updated === 0 && unchanged > 0) {
+    return unchanged === 1
+      ? `That ${label} is already on file with the same data — nothing new to fill.`
+      : `${unchanged} matching ${label}s are already on file with the same data — nothing new to fill.`;
+  }
+
   if (typeof targetIndex === 'number' && added + updated > 0) {
     if (updated > 0 && added === 0) {
-      return `AI updated ${itemLabel} #${targetIndex + 1}. Please review the fields.`;
+      return `AI updated ${itemLabel} #${targetIndex + 1} with new data from this document.`;
     }
     if (added === 1 && updated === 0) {
       return `AI filled ${itemLabel} #${targetIndex + 1}. Please review the fields.`;
@@ -877,18 +1160,22 @@ export function buildUpsertAutofillNotice(
 
   if (updated > 0 && added === 0) {
     return updated === 1
-      ? `AI updated 1 existing ${label} with the latest document details. Please review the fields.`
-      : `AI updated ${updated} existing ${label}s with the latest document details. Please review the fields.`;
+      ? `That ${label} is already on file — new/changed fields were updated from this document. No new card was created.`
+      : `${updated} matching ${label}s were already on file and were updated with new data. No new cards were created.`;
   }
 
   if (added > 0 && updated === 0) {
+    const sameNote =
+      unchanged > 0
+        ? ` ${unchanged} matching ${label}${unchanged === 1 ? ' was' : 's were'} already on file (same data).`
+        : '';
     return added === 1
-      ? `AI added 1 ${label}. Please review the fields.`
-      : `AI added ${added} ${label}s. Please review the fields.`;
+      ? `AI added 1 new ${label} card.${sameNote} Please review the fields.`
+      : `AI added ${added} new ${label} cards.${sameNote} Please review the fields.`;
   }
 
   if (added > 0 && updated > 0) {
-    return `AI updated ${updated} and added ${added} ${label}${added + updated === 1 ? '' : 's'}. Please review the fields.`;
+    return `AI updated ${updated} existing ${label}${updated === 1 ? '' : 's'} with new data and added ${added} new card${added === 1 ? '' : 's'}. Please review.`;
   }
 
   return null;

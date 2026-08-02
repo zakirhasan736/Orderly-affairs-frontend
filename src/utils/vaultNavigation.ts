@@ -54,7 +54,6 @@ export const VAULT_NAVIGATION: VaultSection[] = [
   {
     id: '7',
     title: 'Insurance Policies',
-    hasObituaryTag: true,
     subsections: [{ id: '7A', title: 'Insurance Policies' }],
   },
   {
@@ -77,6 +76,7 @@ export const VAULT_NAVIGATION: VaultSection[] = [
   {
     id: '11',
     title: 'Military Service',
+    hasObituaryTag: true,
     subsections: [{ id: '11A', title: 'Service Details' }],
   },
   {

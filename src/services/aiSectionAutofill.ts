@@ -86,12 +86,15 @@ export async function runAiSectionAutofill({
   aiRouting,
 }: RunAiAutofillArgs) {
   try {
-    // Overview already filled + saved this section — never hit the temp document API again.
-    if (isAiAutofillDoneForSection(sectionId)) {
+    // Same document already filled this section — don't re-hit the temp API.
+    // Other documents for the same section (2nd vehicle, 2nd policy) still run.
+    if (file_id && isAiAutofillDoneForSection(sectionId, file_id)) {
       markAiSectionFilled(sectionId);
       return {
-        result: peekDashboardAiPatch(sectionId)?.result || { patch: {} },
-        document_summary: 'Auto fill already completed for this section.',
+        result: peekDashboardAiPatch(sectionId, file_id)?.result || {
+          patch: {},
+        },
+        document_summary: 'Auto fill already completed for this document.',
         additional_sections: undefined,
         section_previews: undefined,
         document_deleted: true,
@@ -99,15 +102,15 @@ export async function runAiSectionAutofill({
       };
     }
 
-    const peeked = peekDashboardAiPatch(sectionId);
-    // Prefer temp-stored extraction for this exact section (overview upload path).
+    const peeked = peekDashboardAiPatch(sectionId, file_id);
+    // Prefer temp-stored extraction for this exact document × section.
     if (
       peeked?.result &&
       (!file_id || !peeked.file_id || peeked.file_id === file_id)
     ) {
       const stashedPatch = unwrapAiAutofillPatch(peeked.result);
       if (aiPatchHasValues(stashedPatch)) {
-        const stashed = takeDashboardAiPatch(sectionId);
+        const stashed = takeDashboardAiPatch(sectionId, peeked.file_id || file_id);
         if (stashed) {
           const json = {
             result: stashed.result as any,
@@ -139,7 +142,7 @@ export async function runAiSectionAutofill({
         }
       }
       // Empty stash — drop it and try a live extraction.
-      takeDashboardAiPatch(sectionId);
+      takeDashboardAiPatch(sectionId, peeked.file_id || file_id);
     }
 
     const json = await autofillSectionFromDocument({

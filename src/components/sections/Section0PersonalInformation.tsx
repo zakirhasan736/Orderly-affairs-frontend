@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 
 import { Card, CardContent } from '@common/ui/card';
 import { DynamicFormField } from '@/components/DynamicFormField';
@@ -163,14 +163,19 @@ export default function Section0PersonalInformation({
   onFullyRead,
   onContinue,
 }: Props) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const [openMap, setOpenMap] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
       INSTRUCTION_BLOCKS.map((block, index) => [block.id, index === 0]),
     ),
   );
   const [activeId, setActiveId] = useState(INSTRUCTION_BLOCKS[0].id);
-  const [readTriggered, setReadTriggered] = useState(false);
+  const [hasMarkedRead, setHasMarkedRead] = useState(false);
+
+  const markAsRead = () => {
+    if (hasMarkedRead) return;
+    setHasMarkedRead(true);
+    onFullyRead?.();
+  };
 
   const scrollToBlock = (id: string) => {
     setActiveId(id);
@@ -180,39 +185,8 @@ export default function Section0PersonalInformation({
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const handleScroll = () => {
-      const scrollTop = el.scrollTop;
-      const scrollHeight = el.scrollHeight;
-      const clientHeight = el.clientHeight;
-
-      if (scrollHeight <= clientHeight + 10 && !readTriggered) {
-        setReadTriggered(true);
-        onFullyRead?.();
-        return;
-      }
-
-      const scrolledPercent = (scrollTop + clientHeight) / scrollHeight;
-
-      if (scrolledPercent >= 0.95 && !readTriggered) {
-        setReadTriggered(true);
-        onFullyRead?.();
-      }
-    };
-
-    el.addEventListener('scroll', handleScroll);
-    handleScroll();
-
-    return () => {
-      el.removeEventListener('scroll', handleScroll);
-    };
-  }, [onFullyRead, readTriggered]);
-
   return (
-    <section ref={containerRef} className="w-full scroll-smooth">
+    <section className="w-full scroll-smooth">
       <div className="space-y-5 sm:space-y-6">
         <Card className="overflow-hidden rounded-3xl border bg-gradient-to-br from-primary/10 via-background to-background shadow-sm">
           <CardContent className="p-4 sm:p-6 lg:p-7">
@@ -350,23 +324,36 @@ export default function Section0PersonalInformation({
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold">You’re ready to continue</h3>
+                  <h3 className="font-semibold">Confirm you’ve read this</h3>
                   <p className="mt-1 text-sm leading-6">
-                    Once you understand the purpose of this kit, continue
-                    section by section. You can come back and update details
-                    anytime life changes.
+                    Mark these instructions as read to complete this section,
+                    then continue into the kit. You can revisit anytime.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReadTriggered(true);
-                      onFullyRead?.();
-                      onContinue?.();
-                    }}
-                    className="mt-4 inline-flex items-center justify-center rounded-2xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800"
-                  >
-                    Continue to Vital Information
-                  </button>
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={markAsRead}
+                      className={`inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-semibold shadow-sm transition ${
+                        hasMarkedRead
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-emerald-700 text-white hover:bg-emerald-800'
+                      }`}
+                    >
+                      {hasMarkedRead
+                        ? 'Marked as read'
+                        : "I've read these instructions"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        markAsRead();
+                        onContinue?.();
+                      }}
+                      className="inline-flex items-center justify-center rounded-2xl border border-emerald-700 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-800 shadow-sm transition hover:bg-emerald-50"
+                    >
+                      Continue to Vital Information
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

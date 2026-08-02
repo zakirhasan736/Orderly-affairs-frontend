@@ -497,29 +497,53 @@ export function VaultSidebarNavigation({
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 pb-4 pt-2">
-          <button
-            type="button"
-            onClick={goToDashboard}
-            className={cn(
-              'owner-dashboard-item mb-2 flex w-full items-center gap-3 rounded-full px-3.5 py-2.5 text-left transition',
-              activeSection === 'dashboard'
-                ? 'bg-[#2B5A8C] text-white shadow-lg shadow-black/25'
-                : 'text-white/85 hover:bg-white/10 hover:text-white',
-            )}
-          >
-            <span
-              className={cn(
-                'flex h-7 w-7 items-center justify-center rounded-full',
-                activeSection === 'dashboard' ? 'bg-white/20' : 'bg-white/10',
-              )}
-            >
-              <Home className="h-3.5 w-3.5" />
-            </span>
-            <span className="text-[13px] font-semibold">Dashboard</span>
-          </button>
-
           <div className="space-y-2">
-            {sections.map(section => {
+            {(
+              [
+                ...sections
+                  .filter(section => section.id === '0')
+                  .map(section => ({
+                    kind: 'section' as const,
+                    section,
+                  })),
+                { kind: 'dashboard' as const },
+                ...sections
+                  .filter(section => section.id !== '0')
+                  .map(section => ({
+                    kind: 'section' as const,
+                    section,
+                  })),
+              ] as const
+            ).map(navItem => {
+              if (navItem.kind === 'dashboard') {
+                return (
+                  <button
+                    key="owner-dashboard"
+                    type="button"
+                    onClick={goToDashboard}
+                    className={cn(
+                      'owner-dashboard-item flex w-full items-center gap-3 rounded-full px-3.5 py-2.5 text-left transition',
+                      activeSection === 'dashboard'
+                        ? 'bg-[#2B5A8C] text-white shadow-lg shadow-black/25'
+                        : 'text-white/85 hover:bg-white/10 hover:text-white',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'flex h-7 w-7 items-center justify-center rounded-full',
+                        activeSection === 'dashboard'
+                          ? 'bg-white/20'
+                          : 'bg-white/10',
+                      )}
+                    >
+                      <Home className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="text-[13px] font-semibold">Dashboard</span>
+                  </button>
+                );
+              }
+
+              const section = navItem.section;
               const isSelected =
                 activeSection === section.id && !activeSubsection;
               const isExpanded =

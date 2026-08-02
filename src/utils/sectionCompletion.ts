@@ -198,19 +198,17 @@ export function getNokLetterProgress(
   return result(filled, total);
 }
 
+/**
+ * A letter "exists" only when the owner customized at least one message field.
+ * Auto-created API stubs + Access Management autofill (name/email alone) do NOT
+ * count — otherwise section 3 shows Done for brand-new accounts.
+ */
 function isPresentNokLetter(letter: unknown): boolean {
   if (!letter || typeof letter !== 'object') return false;
   const doc = letter as Record<string, unknown>;
-  // Persisted / API letter row
-  if (doc.id || doc._id) return true;
-  // Draft tied to a next-of-kin from Access Management
-  if (typeof doc.nok_id === 'string' && doc.nok_id.trim()) return true;
-  if (typeof doc.next_of_kin_id === 'string' && doc.next_of_kin_id.trim()) {
-    return true;
+  for (const key of NOK_LETTER_MESSAGE_KEYS) {
+    if (isLetterContentFilled(key, doc[key])) return true;
   }
-  // Owner has started / personalized the letter for someone
-  if (typeof doc.letter_to === 'string' && doc.letter_to.trim()) return true;
-  if (typeof doc.nok_email === 'string' && doc.nok_email.trim()) return true;
   return false;
 }
 

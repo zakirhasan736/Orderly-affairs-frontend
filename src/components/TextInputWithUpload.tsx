@@ -23,13 +23,45 @@ export function TextInputWithUpload({
 }: any) {
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const unwrapText = (raw: unknown): string => {
+    if (raw === null || raw === undefined) return '';
+    if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
+      return String(raw);
+    }
+    if (Array.isArray(raw)) {
+      return raw.map(unwrapText).filter(Boolean).join(', ');
+    }
+    if (typeof raw === 'object') {
+      const record = raw as Record<string, unknown>;
+      if ('text' in record || 'files' in record) return unwrapText(record.text);
+      for (const key of ['label', 'name', 'value', 'title']) {
+        const nested = unwrapText(record[key]);
+        if (nested) return nested;
+      }
+    }
+    return '';
+  };
+
   // AI often returns a plain string; form state expects { text, files }.
   const normalizedValue =
     typeof value === 'string' || typeof value === 'number'
-      ? { text: String(value), files: [], _deleted_files: [] }
+      ? { text: String(value), files: [] as unknown[], _deleted_files: [] as string[] }
       : value && typeof value === 'object'
-        ? value
-        : { text: '', files: [], _deleted_files: [] };
+        ? {
+            ...(value as Record<string, unknown>),
+            text: unwrapText(
+              (value as { text?: unknown }).text ?? value,
+            ),
+            files: Array.isArray((value as { files?: unknown }).files)
+              ? (value as { files: unknown[] }).files
+              : [],
+            _deleted_files: Array.isArray(
+              (value as { _deleted_files?: unknown })._deleted_files,
+            )
+              ? ((value as { _deleted_files: string[] })._deleted_files)
+              : [],
+          }
+        : { text: '', files: [] as unknown[], _deleted_files: [] as string[] };
 
   const files = normalizedValue.files || [];
   const deleted = normalizedValue._deleted_files || [];

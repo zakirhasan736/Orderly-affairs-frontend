@@ -16,10 +16,8 @@ import {
 } from '@/utils/aiMobileUi';
 
 function isSectionDoneForUpload(sectionId: string, fileId?: string) {
-  if (!isAiAutofillDoneForSection(sectionId)) return false;
-  // Autofill-done for this section means the card should not keep nagging.
-  void fileId;
-  return true;
+  // Only suppress when THIS document already filled the section.
+  return isAiAutofillDoneForSection(sectionId, fileId);
 }
 
 /**
@@ -74,10 +72,10 @@ export function AiRoutingFloatingNotifications() {
     return null;
   }
 
-  // Safety: never show a card for data already filled.
+  // Safety: never show a card for data already filled by this document.
   if (
     isAiPendingUploadConsumed(active, {}, isSectionDoneForUpload) ||
-    isAiAutofillDoneForSection(active.targetSectionId)
+    isAiAutofillDoneForSection(active.targetSectionId, active.file_id)
   ) {
     return null;
   }

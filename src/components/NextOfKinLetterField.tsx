@@ -601,15 +601,18 @@ export function NextOfKinLetterField({
   }, [selectedNokId]);
 
   useEffect(() => {
-    if (!serverData) return;
+    // 404 / no saved letter yet → start from template + Access Management autofill.
+    // Do not treat empty GET as a completed letter (sidebar uses customized content).
+    if (!serverData && !isError) return;
 
+    const base = serverData || data || {};
     const merged = applyNokLetterTemplateDefaults(
-      mergeAccessManagementAutofill(serverData, selectedPerson, ownerName),
+      mergeAccessManagementAutofill(base, selectedPerson, ownerName),
     );
     setLocalData(merged);
     onChange(merged);
     hydratedRef.current = true;
-  }, [serverData, selectedPerson, ownerName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [serverData, isError, selectedPerson, ownerName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!hydratedRef.current) return;

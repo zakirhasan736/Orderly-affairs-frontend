@@ -17,6 +17,10 @@ import {
   useStartSubscriptionMutation,
 } from '@/services/billingApi';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
+import {
+  SUBSCRIPTION_PLAN_LIST,
+  type SubscriptionPlanId,
+} from '@/constants/subscriptionPlans';
 
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
@@ -37,7 +41,7 @@ function RepairPaymentInner({ message, onResolved }: Props) {
   const [changePlan] = useChangePlanMutation();
   const [startSubscription] = useStartSubscriptionMutation();
   const [portal] = usePortalMutation();
-  const [plan, setPlan] = useState<'monthly' | 'yearly'>('monthly');
+  const [plan, setPlan] = useState<SubscriptionPlanId>('yearly');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -116,20 +120,27 @@ function RepairPaymentInner({ message, onResolved }: Props) {
       )}
 
       <div className="grid gap-2 sm:grid-cols-2">
-        <Button
-          type="button"
-          variant={plan === 'monthly' ? 'default' : 'outline'}
-          onClick={() => setPlan('monthly')}
-        >
-          Monthly
-        </Button>
-        <Button
-          type="button"
-          variant={plan === 'yearly' ? 'default' : 'outline'}
-          onClick={() => setPlan('yearly')}
-        >
-          Yearly
-        </Button>
+        {SUBSCRIPTION_PLAN_LIST.map(p => (
+          <Button
+            key={p.id}
+            type="button"
+            variant={plan === p.id ? 'default' : 'outline'}
+            onClick={() => setPlan(p.id)}
+            className="h-auto flex-col items-start gap-0.5 py-3 text-left"
+          >
+            <span>{p.title}</span>
+            <span className="text-xs font-normal opacity-80">
+              {p.listPrice ? (
+                <>
+                  <span className="line-through opacity-70">{p.listPrice}</span>{' '}
+                  {p.amount}/yr
+                </>
+              ) : (
+                <>{p.amount}/yr</>
+              )}
+            </span>
+          </Button>
+        ))}
       </div>
 
       <div className="rounded-lg border bg-white p-4">

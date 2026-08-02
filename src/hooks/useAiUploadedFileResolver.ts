@@ -54,15 +54,12 @@ export function useRestoreAiPendingUploadForSection({
   const pendingUploads = routing?.getPendingUploadsForSection(sectionId) ?? [];
 
   useEffect(() => {
-    // Do not restore a consumed document that already filled this section —
-    // that causes "document not found" when Auto-fill is clicked again.
-    if (isAiAutofillDoneForSection(sectionId)) {
-      return;
-    }
-
+    // Restore each open document that has not filled this section yet.
+    // Do not bail when a *different* document already filled the section —
+    // multi-vehicle / multi-policy uploads need every sibling restored.
     const activeUploads = pendingUploads.filter(upload => {
       if (!upload.highlightUpload) return false;
-      if (isAiAutofillDoneForSection(sectionId)) return false;
+      if (isAiAutofillDoneForSection(sectionId, upload.file_id)) return false;
       return true;
     });
 

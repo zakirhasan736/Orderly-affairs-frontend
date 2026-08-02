@@ -111,7 +111,7 @@ describe('AiPendingUploadBanner (AI ready popup/actions)', () => {
 });
 
 describe('Section0PersonalInformation (continue flow)', () => {
-  it('continues to next section and marks instructions read', async () => {
+  it('marks instructions read only after explicit confirmation', async () => {
     const user = userEvent.setup();
     const onFullyRead = vi.fn();
     const onContinue = vi.fn();
@@ -123,12 +123,19 @@ describe('Section0PersonalInformation (continue flow)', () => {
       />,
     );
 
-    expect(screen.getByText(/you’re ready to continue|you're ready to continue/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /i've read these instructions/i }),
+    ).toBeInTheDocument();
+    expect(onFullyRead).not.toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole('button', { name: /i've read these instructions/i }),
+    );
+    expect(onFullyRead).toHaveBeenCalledTimes(1);
 
     await user.click(
       screen.getByRole('button', { name: /continue to vital information/i }),
     );
-    expect(onFullyRead).toHaveBeenCalled();
     expect(onContinue).toHaveBeenCalledTimes(1);
   });
 });

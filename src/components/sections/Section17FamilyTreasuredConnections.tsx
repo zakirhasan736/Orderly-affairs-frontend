@@ -1384,7 +1384,10 @@ export default function Section17FamilyTreasuredConnections({
   };
 
   const getItems = (subsection: SubsectionId) => {
-    return Array.isArray(data[subsection]) ? data[subsection] : [];
+    const raw = data[subsection];
+    if (Array.isArray(raw)) return raw;
+    if (raw && typeof raw === 'object') return [raw];
+    return [];
   };
 
   const makeEmptyItem = (fields: any[]) => ({

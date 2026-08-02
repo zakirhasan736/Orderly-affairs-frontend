@@ -1,3 +1,5 @@
+import { isJunkVehicleCard } from '@/utils/aiItemDedup';
+
 export type DynamicTopic = {
   id: string;
   sectionId: string;
@@ -59,14 +61,31 @@ export const SUBSECTION_TOPIC_CONFIG: Record<
   Record<string, SubsectionTopicConfig>
 > = {
   '5': {
-    '5A': topicConfig('5A', 'Vehicle', ['year', 'make', 'model']),
+    // Make first so sidebar shows "Toyota · Camry · 2020", not year-leading labels.
+    '5A': topicConfig('5A', 'Vehicle', ['make', 'model', 'year']),
   },
   '7': {
-    '7A': topicConfig('7A', 'Policy', [
-      'policy_type',
-      'policy_company',
-      'policy_number',
-    ]),
+    '7A': {
+      dataKey: '7A',
+      fallbackPrefix: 'Policy',
+      getLabel: (item, index) => {
+        const company = str(item.policy_company || item.insurance_company);
+        const type = str(item.policy_type);
+        const notes = str(item.notes || item.additional_notes);
+        const brandMatch = notes.match(
+          /\b(toyota|honda|jeep|ford|chevrolet|chevy|bmw|nissan|hyundai|kia|subaru|mazda|lexus|gmc|ram|dodge|tesla)\b/i,
+        );
+        const brand = brandMatch?.[1]
+          ? brandMatch[1].charAt(0).toUpperCase() +
+            brandMatch[1].slice(1).toLowerCase()
+          : '';
+        const name = str(
+          item.policy_name || item.named_insured || item.insured_name,
+        );
+        const parts = [company, brand || name, type].filter(Boolean);
+        return parts.join(' · ') || `Policy #${index + 1}`;
+      },
+    },
   },
   '8': {
     '8A': topicConfig('8A', 'Organization', ['organization_name']),
@@ -247,16 +266,43 @@ export function getDynamicTopicsForSubsection(
   const config = SUBSECTION_TOPIC_CONFIG[sectionId]?.[subsectionId];
   if (!config) return [];
 
-  return readTopicItems(sectionData, config).map((item, index) => ({
-    id: `${subsectionId}:${index}`,
-    sectionId,
-    subsectionId,
-    index,
-    label: config.getLabel(
-      (item && typeof item === 'object' ? item : {}) as Record<string, unknown>,
-      index,
-    ),
-  }));
+  // Keep real card indexes for scroll/focus, but hide empty shells / OCR junk
+  // (e.g. "TO.01/08") so the sidebar only lists named document cards.
+  return readTopicItems(sectionData, config)
+    .map((item, index) => {
+      const record =
+        item && typeof item === 'object' && !Array.isArray(item)
+          ? (item as Record<string, unknown>)
+          : {};
+      if (sectionId === '5' && isJunkVehicleCard(record)) return null;
+      const hasContent = Object.entries(record).some(([key, value]) => {
+        if (key === '__rowId') return false;
+        if (value === null || value === undefined || value === '') return false;
+        if (Array.isArray(value)) return value.length > 0;
+        if (typeof value === 'object') {
+          const upload = value as { text?: unknown; files?: unknown[] };
+          if ('text' in upload || 'files' in upload) {
+            return Boolean(
+              (typeof upload.text === 'string' && upload.text.trim()) ||
+                (Array.isArray(upload.files) && upload.files.length),
+            );
+          }
+          return Object.values(upload).some(
+            nested => nested !== null && nested !== undefined && nested !== '',
+          );
+        }
+        return true;
+      });
+      if (!hasContent) return null;
+      return {
+        id: `${subsectionId}:${index}`,
+        sectionId,
+        subsectionId,
+        index,
+        label: config.getLabel(record, index),
+      };
+    })
+    .filter((topic): topic is DynamicTopic => topic !== null);
 }
 
 export function getDynamicTopicsForSection(

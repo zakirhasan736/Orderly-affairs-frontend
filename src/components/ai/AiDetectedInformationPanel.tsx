@@ -19,8 +19,14 @@ function dedupeOpenUploads(uploads: AiPendingUpload[]) {
   const result: AiPendingUpload[] = [];
 
   for (const upload of uploads) {
-    if (isAiAutofillDoneForSection(upload.targetSectionId)) continue;
-    const key = upload.targetSectionId;
+    // Skip only when THIS document already filled the section.
+    if (
+      isAiAutofillDoneForSection(upload.targetSectionId, upload.file_id)
+    ) {
+      continue;
+    }
+    // One card per document×section (not one per section).
+    const key = `${upload.file_id}::${upload.targetSectionId}`;
     if (seen.has(key)) continue;
     seen.add(key);
     result.push(upload);
@@ -56,10 +62,13 @@ export function AiDetectedInformationPanel({
   const factsBySection = useMemo(() => {
     const map = new Map<string, DetectedAiFact[]>();
     listDashboardAiPatches().forEach(entry => {
-      if (isAiAutofillDoneForSection(entry.section_id)) return;
+      if (isAiAutofillDoneForSection(entry.section_id, entry.file_id)) return;
       const facts = entry.detectedFields || [];
       if (!facts.length) return;
-      map.set(entry.section_id, facts.slice(0, 8));
+      // Prefer newest open doc per section for the fact preview strip.
+      if (!map.has(entry.section_id)) {
+        map.set(entry.section_id, facts.slice(0, 8));
+      }
     });
     return map;
   }, [stashTick, detected]);
@@ -72,7 +81,10 @@ export function AiDetectedInformationPanel({
     detected.length > 0
       ? detected
       : listDashboardAiPatches()
-          .filter(entry => !isAiAutofillDoneForSection(entry.section_id))
+          .filter(
+            entry =>
+              !isAiAutofillDoneForSection(entry.section_id, entry.file_id),
+          )
           .map(entry => ({
             targetSectionId: entry.section_id,
             file_id: entry.file_id,

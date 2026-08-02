@@ -47,6 +47,11 @@ import {
   type CheckoutOrderSummary,
 } from '@/components/auth/AuthPortalShell';
 import { StartTrialCheckout } from '@/components/auth/StartTrialCheckout';
+import {
+  SUBSCRIPTION_PLAN_LIST,
+  SUBSCRIPTION_PLANS,
+  type SubscriptionPlanId,
+} from '@/constants/subscriptionPlans';
 import { cn } from '@common/ui/utils';
 import { isValidE164PhoneNumber } from '@/utils/phoneCountries';
 import { getOtpSessionId } from '@/utils/otpSession';
@@ -300,50 +305,32 @@ function getCheckoutBillingDates(days = TRIAL_DAYS) {
 
 const PLAN_PRICES = {
   yearly: {
-    label: 'Yearly plan',
-    price: '$94.95',
-    note: 'Billed once a year · save about 20%',
-  },
-  monthly: {
-    label: 'Monthly plan',
-    price: '$9.95',
-    note: 'Pay monthly · 1-year minimum commitment',
+    label: SUBSCRIPTION_PLANS.yearly.label,
+    price: SUBSCRIPTION_PLANS.yearly.annualPrice,
+    note: SUBSCRIPTION_PLANS.yearly.note,
   },
 } as const;
 
 function buildCheckoutOrderSummary(options: {
-  selectedPlan: 'monthly' | 'yearly';
+  selectedPlan: SubscriptionPlanId;
   isTrial: boolean;
   trialMode?: 'cardless' | 'card_on_file';
 }): CheckoutOrderSummary {
   const plan = PLAN_PRICES[options.selectedPlan];
   const dates = getCheckoutBillingDates();
   const dueToday = options.isTrial ? '$0.00' : plan.price;
-  const isYearly = options.selectedPlan === 'yearly';
 
   let dueNote: string;
   let footerNote: string;
 
   if (options.isTrial) {
-    if (isYearly) {
-      dueNote = `Your ${TRIAL_DAYS}-day trial runs to ${dates.trialEndShort}. First charge of ${plan.price} on ${dates.trialEndFull}, then renews yearly.`;
-      footerNote =
-        options.trialMode === 'cardless'
-          ? `No card today. Add payment any time in settings. Cancel before ${dates.trialEndShort} and you won’t be charged.`
-          : `Card fields are provided by Stripe — we never see or store your card number. Cancel any time before ${dates.trialEndShort} and you won’t be charged.`;
-    } else {
-      dueNote = `Your ${TRIAL_DAYS}-day trial runs to ${dates.trialEndShort}. First charge of ${plan.price} on ${dates.trialEndFull}, then ${plan.price}/month (1-year minimum).`;
-      footerNote =
-        options.trialMode === 'cardless'
-          ? `No card today. Add payment any time in settings. Cancel before ${dates.trialEndShort} and you won’t be charged.`
-          : `Card fields are provided by Stripe — we never see or store your card number. Cancel any time before ${dates.trialEndShort} and you won’t be charged.`;
-    }
-  } else if (isYearly) {
-    dueNote = `Charged today. Next yearly renewal on ${dates.yearlyRenewalFromTodayFull}.`;
+    dueNote = `Your ${TRIAL_DAYS}-day trial runs to ${dates.trialEndShort}. First charge of ${plan.price} on ${dates.trialEndFull}, then renews yearly.`;
     footerNote =
-      'Card fields are provided by Stripe — we never see or store your card number. Cancel any time from settings.';
+      options.trialMode === 'cardless'
+        ? `No card today. Add payment any time in settings. Cancel before ${dates.trialEndShort} and you won’t be charged.`
+        : `Card fields are provided by Stripe — we never see or store your card number. Cancel any time before ${dates.trialEndShort} and you won’t be charged.`;
   } else {
-    dueNote = `Charged today. Then ${plan.price} each month · 1-year minimum commitment.`;
+    dueNote = `Charged today. Next yearly renewal on ${dates.yearlyRenewalFromTodayFull}.`;
     footerNote =
       'Card fields are provided by Stripe — we never see or store your card number. Cancel any time from settings.';
   }
@@ -384,9 +371,8 @@ export default function LoginPage() {
   const [newPassword, setNewPassword] = useState('');
 
   const [step, setStep] = useState<OnboardingStep>('credentials');
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>(
-    'yearly',
-  );
+  const [selectedPlan] = useState<SubscriptionPlanId>('yearly');
+  const [planDetailsOpen, setPlanDetailsOpen] = useState(false);
   const [isTrial, setIsTrial] = useState(false);
   const [trialMode, setTrialMode] = useState<'cardless' | 'card_on_file'>(
     'cardless',
@@ -1687,18 +1673,13 @@ const checkoutOrderSummary = (() => {
   if (step === 'plan_selection') {
     const plan = PLAN_PRICES[selectedPlan];
     const dates = getCheckoutBillingDates();
-    const isYearly = selectedPlan === 'yearly';
     return {
       planLabel: plan.label,
       planPrice: plan.price,
       planNote: plan.note,
       dueToday: '$0.00',
-      dueNote: isYearly
-        ? `Trial or pay today. On trial, first charge of ${plan.price} is ${dates.trialEndFull}, then renews yearly.`
-        : `Trial or pay today. On trial, first charge of ${plan.price} is ${dates.trialEndFull}, then ${plan.price}/month.`,
-      footerNote: isYearly
-        ? `Yearly saves about 20%. After the first charge, your next renewal is ${dates.yearlyRenewalAfterTrialFull}.`
-        : 'Monthly billing has a 1-year minimum commitment. Cancel any time from settings after that.',
+      dueNote: `Trial or pay today. On trial, first charge of ${plan.price} is ${dates.trialEndFull}, then renews yearly.`,
+      footerNote: `Annual billing only. After the first charge, your next renewal is ${dates.yearlyRenewalAfterTrialFull}.`,
     } satisfies CheckoutOrderSummary;
   }
   return buildCheckoutOrderSummary({
@@ -1728,14 +1709,14 @@ const signupAsideSteps = (() => {
       description: mfaLabel,
     },
     {
-      title: 'Choose your plan',
+      title: 'Your annual plan',
       description: 'Then payment, or start the trial',
     },
   ];
 })();
 
 const mobileTitle = (() => {
-  if (step === 'plan_selection') return 'Choose your plan';
+  if (step === 'plan_selection') return 'Your annual plan';
   if (step === 'payment') {
     return isTrial ? 'Start your trial' : 'Secure checkout';
   }
@@ -2955,89 +2936,76 @@ const backButtonLabel =
                           Step 3 of 3
                         </p>
                         <h2 className="mt-3.5 mb-0 font-[family-name:var(--font-family-display)] text-[34px] font-normal leading-[1.2] text-[#213D59]">
-                          Choose your plan
+                          Your annual plan
                         </h2>
                         <p className="mt-3 mb-0 max-w-[52ch] text-[16.5px] leading-snug text-[#5a6b80] text-pretty">
                           Start paid now, or begin a 14-day trial with no charge.
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-[11px] lg:mt-7 lg:grid-cols-2 lg:gap-3.5">
-                        {(
-                          [
-                            {
-                              id: 'yearly' as const,
-                              title: 'Yearly',
-                              amount: '$94.95',
-                              period: '/ year',
-                              description: 'Best value — save about 20%.',
-                              badge: 'Save 20%',
-                            },
-                            {
-                              id: 'monthly' as const,
-                              title: 'Monthly',
-                              amount: '$9.95',
-                              period: '/ month',
-                              description:
-                                'Pay the monthly rate · minimum 1 year commitment.',
-                              badge: '1-year min',
-                            },
-                          ] as const
-                        ).map(plan => {
-                          const selected = selectedPlan === plan.id;
+                      <div className="lg:mt-7">
+                        {SUBSCRIPTION_PLAN_LIST.map(plan => {
+                          const detailsOpen = planDetailsOpen;
                           return (
-                            <label
+                            <div
                               key={plan.id}
                               data-cy={`checkout-plan-${plan.id}`}
-                              className={cn(
-                                'flex cursor-pointer flex-col rounded-2xl p-4 transition lg:px-6 lg:py-[22px]',
-                                selected
-                                  ? 'border-[1.5px] border-[#2B5A8C] bg-[#f7f9fc]'
-                                  : 'border border-[#7688a1] bg-white',
-                              )}
+                              className="flex flex-col rounded-2xl border-[1.5px] border-[#2B5A8C] bg-[#f7f9fc] p-4 lg:px-6 lg:py-[22px]"
                             >
-                              <input
-                                type="radio"
-                                name="billingPlan"
-                                value={plan.id}
-                                checked={selected}
-                                onChange={() => setSelectedPlan(plan.id)}
-                                className="sr-only"
-                              />
                               <div className="flex items-center gap-[11px] lg:gap-3">
-                                <span
-                                  className={cn(
-                                    'h-[19px] w-[19px] shrink-0 rounded-full lg:h-5 lg:w-5',
-                                    selected
-                                      ? 'bg-[#2B5A8C] shadow-[inset_0_0_0_3.5px_#fff]'
-                                      : 'border-[1.5px] border-[#7688a1] bg-transparent',
-                                  )}
-                                  aria-hidden
-                                />
                                 <p className="m-0 flex-1 text-[16.5px] font-semibold text-[#213D59] lg:text-[17px]">
                                   {plan.title}
                                 </p>
-                                <span
-                                  className={cn(
-                                    'shrink-0 rounded-md px-[7px] py-[3px] text-[11px] font-medium lg:rounded-md lg:px-[9px] lg:py-1 lg:text-xs',
-                                    selected
-                                      ? 'bg-[#e7eef7] text-[#2B5A8C]'
-                                      : 'bg-[#e7eef7] text-[#5a6b80]',
-                                  )}
-                                >
+                                <span className="shrink-0 rounded-md bg-[#fff3dd] px-[7px] py-[3px] text-[11px] font-medium text-[#7a5a1c] lg:rounded-md lg:px-[9px] lg:py-1 lg:text-xs">
                                   {plan.badge}
                                 </span>
                               </div>
-                              <p className="mt-3 mb-0 font-[family-name:var(--font-family-display)] text-[23px] font-normal leading-none text-[#213D59] lg:mt-4 lg:text-[26px]">
-                                {plan.amount}{' '}
-                                <span className="font-[family-name:var(--font-family)] text-sm text-[#5a6b80] lg:text-[15px]">
-                                  {plan.period}
+                              <div className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 lg:mt-4">
+                                <span className="font-[family-name:var(--font-family-display)] text-[18px] leading-none text-[#8a97a8] line-through decoration-[#8a97a8] lg:text-[20px]">
+                                  {plan.listPrice}
                                 </span>
+                                <p className="m-0 font-[family-name:var(--font-family-display)] text-[23px] font-normal leading-none text-[#213D59] lg:text-[26px]">
+                                  {plan.amount}{' '}
+                                  <span className="font-[family-name:var(--font-family)] text-sm text-[#5a6b80] lg:text-[15px]">
+                                    {plan.period}
+                                  </span>
+                                </p>
+                              </div>
+                              <p className="mt-1.5 mb-0 text-[12.5px] font-semibold text-[#7a5a1c] lg:text-[13px]">
+                                Limited-time offer · Save {plan.discountPercent}%
                               </p>
                               <p className="mt-1.5 mb-0 text-[13.5px] leading-snug text-[#5a6b80] lg:mt-2 lg:text-[14.5px] lg:leading-normal">
                                 {plan.description}
                               </p>
-                            </label>
+                              <button
+                                type="button"
+                                data-cy={`checkout-plan-details-${plan.id}`}
+                                className="mt-3 self-start text-[13px] font-semibold text-[#2B5A8C] underline-offset-2 hover:underline lg:text-[13.5px]"
+                                aria-expanded={detailsOpen}
+                                onClick={() =>
+                                  setPlanDetailsOpen(open => !open)
+                                }
+                              >
+                                {detailsOpen ? 'Hide details' : 'Details'}
+                              </button>
+                              {detailsOpen ? (
+                                <ul className="mt-3 mb-0 space-y-2 border-t border-[#d5dde8] pt-3">
+                                  {plan.features.map(feature => (
+                                    <li
+                                      key={feature.label}
+                                      className="flex items-baseline justify-between gap-3 text-[12.5px] leading-snug lg:text-[13px]"
+                                    >
+                                      <span className="text-[#5a6b80]">
+                                        {feature.label}
+                                      </span>
+                                      <span className="shrink-0 font-semibold text-[#213D59]">
+                                        {feature.value}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                            </div>
                           );
                         })}
                       </div>
@@ -3185,7 +3153,7 @@ const backButtonLabel =
                           </b>{' '}
                           on the{' '}
                           <b className="font-semibold text-[#33506e]">
-                            {selectedPlan === 'yearly' ? 'Yearly' : 'Monthly'}
+                            {SUBSCRIPTION_PLANS[selectedPlan].title}
                           </b>{' '}
                           plan. You can switch plans or add a card any time in
                           settings.

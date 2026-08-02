@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -26,7 +26,8 @@ import {
   createEmptyItemFromFields,
   mergeAiPatchWithDefaults,
 } from '@/utils/aiPatchNormalizer';
-import { vehiclesAreDuplicates } from '@/utils/aiItemDedup';
+import { isJunkVehicleCard, vehiclesAreDuplicates } from '@/utils/aiItemDedup';
+import { describeAutofillItem } from '@/utils/aiMultiItemAutofill';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
@@ -205,7 +206,30 @@ export default function Section5Vehicles({
     latestUploadRef,
   });
 
-  const vehicles: any[] = Array.isArray(data['5A']) ? data['5A'] : [];
+  // Coerce a legacy single-object save so one card still renders.
+  // Drop OCR junk titles like "TO.01/08" that are not real vehicles.
+  const vehiclesRaw: any[] = Array.isArray(data['5A'])
+    ? data['5A']
+    : data['5A'] && typeof data['5A'] === 'object'
+      ? [data['5A']]
+      : [];
+  const vehicles: any[] = vehiclesRaw.filter(
+    item =>
+      item &&
+      typeof item === 'object' &&
+      !isJunkVehicleCard(item as Record<string, unknown>),
+  );
+
+  useEffect(() => {
+    if (vehiclesRaw.length > 0 && vehicles.length !== vehiclesRaw.length) {
+      onChange({
+        ...data,
+        '5A': vehicles,
+      });
+    }
+    // One-time prune of junk cards already saved in the vault.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const show5A = !activeSubsection || activeSubsection === '5A';
 
@@ -299,7 +323,8 @@ export default function Section5Vehicles({
         .map(vehicle => normalizeVehiclePatch(vehicle))
         .filter(vehicle =>
           Object.values(vehicle).some(value => !isEmptyValue(value)),
-        );
+        )
+        .filter(vehicle => !isJunkVehicleCard(vehicle as Record<string, unknown>));
     }
 
     if (rawVehicles && typeof rawVehicles === 'object') {
@@ -538,7 +563,16 @@ export default function Section5Vehicles({
 
           {vehicles.map((vehicle, index) => {
             const itemScope = `vehicle:${index}` as UploadScope;
-            const itemLabel = `${SECTION_5.itemLabel} #${index + 1}`;
+            const named = describeAutofillItem(vehicle || {}, [
+              'make',
+              'model',
+              'year',
+              'vin',
+            ]);
+            const itemLabel =
+              named && named !== 'Entry'
+                ? named
+                : `${SECTION_5.itemLabel} #${index + 1}`;
             const topicProps = getTopicCardProps('5A', index, activeTopicId);
 
             return (

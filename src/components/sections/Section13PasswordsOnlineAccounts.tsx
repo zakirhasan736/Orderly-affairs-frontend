@@ -419,7 +419,11 @@ export default function Section13PasswordsOnlineAccounts({
     latestUploadRef,
   });
 
-  const accounts: any[] = Array.isArray(data['13A']) ? data['13A'] : [];
+  const accounts: any[] = Array.isArray(data['13A'])
+    ? data['13A']
+    : data['13A'] && typeof data['13A'] === 'object'
+      ? [data['13A']]
+      : [];
   const show13A = !activeSubsection || activeSubsection === '13A';
 
   useScrollToVaultTopic(activeTopicId, accounts.length);

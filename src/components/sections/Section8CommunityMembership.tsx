@@ -177,7 +177,11 @@ export default function Section8CommunityMembership({
     latestUploadRef,
   });
 
-  const groups: any[] = Array.isArray(data['8A']) ? data['8A'] : [];
+  const groups: any[] = Array.isArray(data['8A'])
+    ? data['8A']
+    : data['8A'] && typeof data['8A'] === 'object'
+      ? [data['8A']]
+      : [];
   const show8A = !activeSubsection || activeSubsection === '8A';
 
   useScrollToVaultTopic(activeTopicId, groups.length);

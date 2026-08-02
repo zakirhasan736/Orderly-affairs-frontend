@@ -9,7 +9,11 @@ import { DatePicker } from './DatePicker';
 import { TextInputWithUpload } from './TextInputWithUpload';
 import { PODInstructionsModal } from './PODInstructionsModal';
 import { FieldDefinition } from '@/types/formTypes';
-import { getAiFieldDisplayLabel, resolveClosestOption } from '@/utils/aiPatchNormalizer';
+import {
+  asPlainFieldText,
+  getAiFieldDisplayLabel,
+  resolveClosestOption,
+} from '@/utils/aiPatchNormalizer';
 import { MultiSelect } from './MultiSelect';
 import { AccessManagement } from './AccessManagement';
 import { LettersToNextOfKinField } from './LettersToNextOfKinField';
@@ -28,8 +32,15 @@ interface DynamicFormFieldProps {
 }
 
 export function DynamicFormField({ field, value, onChange, formData, rowId, isVisible = true, className, lettersClearNonce }: DynamicFormFieldProps) {
-  // Initialize value with default if no value is set
-  const currentValue = value !== undefined && value !== null ? value : (field.defaultValue || '');
+  // Plain inputs must never receive `{ text, files }` (shows as "[object Object]").
+  const rawValue = value !== undefined && value !== null ? value : (field.defaultValue || '');
+  const currentValue =
+    field.type === 'TextInput' ||
+    field.type === 'TextArea' ||
+    field.type === 'DatePicker' ||
+    field.type === 'DateInput'
+      ? asPlainFieldText(rawValue)
+      : rawValue;
   const isPassword = field.inputType === 'password';
   const [showPassword, setShowPassword] = useState(false);
   // If there's a default value and no current value, set it

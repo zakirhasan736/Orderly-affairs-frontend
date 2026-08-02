@@ -443,8 +443,16 @@ export default function Section16CreditCardsDebt({
     latestUploadRef,
   });
 
-  const creditCards: any[] = Array.isArray(data['16A']) ? data['16A'] : [];
-  const debts: any[] = Array.isArray(data['16B']) ? data['16B'] : [];
+  const creditCards: any[] = Array.isArray(data['16A'])
+    ? data['16A']
+    : data['16A'] && typeof data['16A'] === 'object'
+      ? [data['16A']]
+      : [];
+  const debts: any[] = Array.isArray(data['16B'])
+    ? data['16B']
+    : data['16B'] && typeof data['16B'] === 'object'
+      ? [data['16B']]
+      : [];
 
   useScrollToVaultTopic(activeTopicId, creditCards.length + debts.length);
 

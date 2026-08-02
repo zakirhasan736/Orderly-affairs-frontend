@@ -530,8 +530,16 @@ export default function Section12BankingFinancialAccounts({
     latestUploadRef,
   });
 
-  const bankAccounts: any[] = Array.isArray(data['12A']) ? data['12A'] : [];
-  const digitalAccounts: any[] = Array.isArray(data['12B']) ? data['12B'] : [];
+  const bankAccounts: any[] = Array.isArray(data['12A'])
+    ? data['12A']
+    : data['12A'] && typeof data['12A'] === 'object'
+      ? [data['12A']]
+      : [];
+  const digitalAccounts: any[] = Array.isArray(data['12B'])
+    ? data['12B']
+    : data['12B'] && typeof data['12B'] === 'object'
+      ? [data['12B']]
+      : [];
 
   useScrollToVaultTopic(
     activeTopicId,

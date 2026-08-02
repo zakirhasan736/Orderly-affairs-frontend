@@ -15,11 +15,19 @@ import {
 import {
   buildDuplicateSkippedNotice,
   buildUpsertAutofillNotice,
+  collapseInsurancePolicies,
   filterDuplicateAutofillItems,
   insurancePoliciesAreDuplicates,
+  isJunkVehicleCard,
   upsertAutofillItems,
   vehiclesAreDuplicates,
 } from '@/utils/aiItemDedup';
+import { selectMatchReviewDocuments } from '@/utils/aiMatchReviewDocs';
+import {
+  applyAiResultToSectionForm,
+  applyAiResultToSectionFormDetailed,
+  coerceSubsectionItems,
+} from '@/utils/aiSectionFormApply';
 import {
   getDynamicTopicsForSubsection,
   getTopicElementId,
@@ -245,6 +253,128 @@ describe('aiMultiItemAutofill', () => {
 });
 
 describe('aiItemDedup', () => {
+  it('rejects date-title junk vehicle cards like TO.01/08', () => {
+    expect(isJunkVehicleCard({ make: 'TO.01/08' })).toBe(true);
+    expect(isJunkVehicleCard({ year: '01/08', make: 'TO' })).toBe(true);
+    expect(
+      isJunkVehicleCard({
+        year: '2020',
+        make: 'Toyota',
+        model: 'Camry',
+      }),
+    ).toBe(false);
+  });
+
+  it('match review popup keeps only meaningful insurance docs', () => {
+    const docs = selectMatchReviewDocuments('7', [
+      {
+        file_id: 'ins-1',
+        section_id: '7',
+        section_key: 'insurance_policies',
+        createdAt: 1,
+        result: {
+          patch: {
+            '7A': [
+              {
+                policy_company: 'State Farm',
+                policy_type: 'Vehicle',
+                notes: 'Toyota Camry',
+                coverage_amount: '50k',
+              },
+            ],
+          },
+        },
+      },
+      {
+        file_id: 'ins-2',
+        section_id: '7',
+        section_key: 'insurance_policies',
+        createdAt: 2,
+        result: {
+          patch: {
+            '7A': [
+              {
+                policy_company: 'State Farm',
+                policy_type: 'Vehicle',
+                notes: 'Honda Civic',
+                coverage_amount: '45k',
+              },
+            ],
+          },
+        },
+      },
+      {
+        file_id: 'ins-3',
+        section_id: '7',
+        section_key: 'insurance_policies',
+        createdAt: 3,
+        result: {
+          patch: {
+            '7A': [
+              {
+                policy_company: 'State Farm',
+                policy_type: 'Vehicle',
+                notes: 'Jeep Wrangler',
+                coverage_amount: '60k',
+              },
+            ],
+          },
+        },
+      },
+      // Thin partner seeds from vehicle uploads — should not inflate the count
+      {
+        file_id: 'veh-1',
+        section_id: '7',
+        section_key: 'insurance_policies',
+        createdAt: 4,
+        result: {
+          patch: {
+            '7A': [{ policy_company: 'State Farm', policy_type: 'Vehicle' }],
+          },
+        },
+      },
+      {
+        file_id: 'veh-2',
+        section_id: '7',
+        section_key: 'insurance_policies',
+        createdAt: 5,
+        result: {
+          patch: {
+            '7A': [{ policy_company: 'State Farm', policy_type: 'Vehicle' }],
+          },
+        },
+      },
+      {
+        file_id: 'veh-3',
+        section_id: '7',
+        section_key: 'insurance_policies',
+        createdAt: 6,
+        result: {
+          patch: {
+            '7A': [{ policy_company: 'State Farm', policy_type: 'Vehicle' }],
+          },
+        },
+      },
+      {
+        file_id: 'old',
+        section_id: '7',
+        section_key: 'insurance_policies',
+        createdAt: 7,
+        result: {
+          patch: {
+            '7A': [{ policy_company: 'Geico', policy_type: 'Vehicle' }],
+          },
+        },
+      },
+    ]);
+    expect(docs).toHaveLength(3);
+    expect(docs.map(d => d.file_id).sort()).toEqual([
+      'ins-1',
+      'ins-2',
+      'ins-3',
+    ]);
+  });
+
   it('detects duplicate vehicles by VIN and year/make/model', () => {
     expect(
       vehiclesAreDuplicates(
@@ -262,6 +392,23 @@ describe('aiItemDedup', () => {
       vehiclesAreDuplicates(
         { year: '2022', make: 'Honda', model: 'CR-V' },
         { year: '2023', make: 'Honda', model: 'CR-V' },
+      ),
+    ).toBe(false);
+    // Same policy number covering two different cars must not collapse.
+    expect(
+      vehiclesAreDuplicates(
+        {
+          year: '2020',
+          make: 'Toyota',
+          model: 'Camry',
+          insurance_policy: 'POL-99',
+        },
+        {
+          year: '2018',
+          make: 'Ford',
+          model: 'F-150',
+          insurance_policy: 'POL-99',
+        },
       ),
     ).toBe(false);
   });
@@ -335,7 +482,99 @@ describe('aiItemDedup', () => {
     expect(items[0].coverage_amount).toBe('200');
     expect(added).toBe(1);
     expect(updated).toBe(1);
-    expect(buildUpsertAutofillNotice(1, 1, 'Policy')).toMatch(/updated 1 and added 1/i);
+    expect(buildUpsertAutofillNotice(1, 1, 'Policy')).toMatch(
+      /updated 1 existing policy.*added 1 new card/i,
+    );
+  });
+
+  it('keeps Honda Jeep Toyota vehicle policies separate by notes/name', () => {
+    expect(
+      insurancePoliciesAreDuplicates(
+        {
+          policy_company: 'State Farm',
+          policy_type: 'Vehicle',
+          notes: 'Toyota Camry policy',
+          coverage_amount: '50k',
+        },
+        {
+          policy_company: 'State Farm',
+          policy_type: 'Vehicle',
+          notes: 'Honda Civic policy',
+          coverage_amount: '45k',
+        },
+      ),
+    ).toBe(false);
+    expect(
+      insurancePoliciesAreDuplicates(
+        {
+          policy_company: 'Geico',
+          policy_type: 'Vehicle',
+          policy_name: 'Jeep Wrangler',
+          premium_info: '$110',
+        },
+        {
+          policy_company: 'Geico',
+          policy_type: 'Vehicle',
+          policy_name: 'Toyota RAV4',
+          premium_info: '$95',
+        },
+      ),
+    ).toBe(false);
+    expect(
+      collapseInsurancePolicies([
+        {
+          policy_company: 'State Farm',
+          policy_type: 'Vehicle',
+          notes: 'Covers Toyota',
+          coverage_amount: '1',
+        },
+        {
+          policy_company: 'State Farm',
+          policy_type: 'Vehicle',
+          notes: 'Covers Honda',
+          coverage_amount: '2',
+        },
+        {
+          policy_company: 'State Farm',
+          policy_type: 'Vehicle',
+          notes: 'Covers Jeep',
+          coverage_amount: '3',
+        },
+      ]),
+    ).toHaveLength(3);
+  });
+
+  it('keeps separate full Vehicle policies from the same carrier without numbers', () => {
+    expect(
+      insurancePoliciesAreDuplicates(
+        {
+          policy_company: 'State Farm',
+          policy_type: 'Vehicle',
+          coverage_amount: '50k',
+          premium_info: '$100/mo',
+        },
+        {
+          policy_company: 'State Farm',
+          policy_type: 'Vehicle',
+          coverage_amount: '60k',
+          premium_info: '$120/mo',
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it('does not absorb a thin same-policy seed into an identified vehicle', () => {
+    expect(
+      vehiclesAreDuplicates(
+        {
+          year: '2020',
+          make: 'Toyota',
+          model: 'Camry',
+          insurance_policy: 'POL-1',
+        },
+        { insurance_policy: 'POL-1' },
+      ),
+    ).toBe(false);
   });
 
   it('filters duplicates and builds skip notices', () => {
@@ -624,5 +863,198 @@ describe('vaultNavOrder', () => {
     ).toEqual(['c', 'a', 'b']);
     expect(reorderIds(['a', 'b', 'c'], 'a', 'c')).toEqual(['b', 'c', 'a']);
     expect(reorderIds(['a', 'b'], 'a', 'a')).toEqual(['a', 'b']);
+  });
+});
+
+describe('applyAiResultToSectionForm multi-card', () => {
+  it('coerces a single object into a one-item card list', () => {
+    expect(coerceSubsectionItems({ make: 'Toyota' })).toEqual([
+      { make: 'Toyota' },
+    ]);
+  });
+
+  it('appends distinct vehicles and never saves 5A as a bare object', () => {
+    const first = applyAiResultToSectionForm(
+      '5',
+      {},
+      { patch: { '5A': { year: '2020', make: 'Toyota', model: 'Camry' } } },
+      '5A',
+    );
+    expect(Array.isArray(first?.['5A'])).toBe(true);
+    expect((first?.['5A'] as unknown[]).length).toBe(1);
+
+    const second = applyAiResultToSectionForm(
+      '5',
+      first,
+      {
+        patch: {
+          '5A': [
+            { year: '2019', make: 'Honda', model: 'Civic' },
+            { year: '2021', make: 'Jeep', model: 'Wrangler' },
+          ],
+        },
+      },
+      '5A',
+    );
+    const makes = ((second?.['5A'] as Record<string, unknown>[]) || []).map(
+      item => item.make,
+    );
+    expect(makes).toEqual(expect.arrayContaining(['Toyota', 'Honda', 'Jeep']));
+    expect(makes).toHaveLength(3);
+  });
+
+  it('updates an existing Toyota card instead of duplicating it', () => {
+    const current = {
+      '5A': [
+        {
+          year: '2020',
+          make: 'Toyota',
+          model: 'Camry',
+          vin: { text: 'VINTOYOTA', files: [] },
+        },
+      ],
+    };
+    const next = applyAiResultToSectionForm(
+      '5',
+      current,
+      {
+        patch: {
+          '5A': [
+            {
+              year: '2020',
+              make: 'Toyota',
+              model: 'Camry',
+              vin: { text: 'VINTOYOTA', files: [] },
+              color: 'Blue',
+            },
+            { year: '2018', make: 'Honda', model: 'Accord' },
+          ],
+        },
+      },
+      '5A',
+    );
+    const items = (next?.['5A'] as Record<string, unknown>[]) || [];
+    expect(items).toHaveLength(2);
+    expect(items[0].color).toBe('Blue');
+    expect(items.map(item => item.make)).toEqual(
+      expect.arrayContaining(['Toyota', 'Honda']),
+    );
+  });
+
+  it('skips identical Toyota re-upload and updates when any field differs', () => {
+    const current = {
+      '5A': [
+        {
+          year: '2020',
+          make: 'Toyota',
+          model: 'Camry',
+          vin: 'VINTOYOTA',
+          color: 'Blue',
+        },
+      ],
+    };
+
+    const samePatch = {
+      patch: {
+        '5A': [
+          {
+            year: '2020',
+            make: 'Toyota',
+            model: 'Camry',
+            vin: 'VINTOYOTA',
+            color: 'Blue',
+          },
+        ],
+      },
+    };
+    const same = applyAiResultToSectionFormDetailed(
+      '5',
+      current,
+      samePatch,
+      '5A',
+    );
+    expect(same.stats.unchanged).toBe(1);
+    expect(same.stats.added).toBe(0);
+    expect(same.stats.updated).toBe(0);
+    expect(applyAiResultToSectionForm('5', current, samePatch, '5A')).toBeNull();
+
+    const changed = applyAiResultToSectionFormDetailed(
+      '5',
+      current,
+      {
+        patch: {
+          '5A': [
+            {
+              year: '2020',
+              make: 'Toyota',
+              model: 'Camry',
+              vin: 'VINTOYOTA',
+              color: 'Red',
+            },
+          ],
+        },
+      },
+      '5A',
+    );
+    expect(changed.stats.updated).toBe(1);
+    expect(changed.stats.added).toBe(0);
+    expect((changed.data?.['5A'] as Record<string, unknown>[])[0].color).toBe(
+      'Red',
+    );
+  });
+
+  it('stores VIN and insurance_policy as plain strings, not upload objects', () => {
+    const next = applyAiResultToSectionForm(
+      '5',
+      { '5A': [] },
+      {
+        patch: {
+          '5A': [
+            {
+              year: '2020',
+              make: 'Toyota',
+              model: 'Camry',
+              vin: { text: '4T1B11HK5JU123456', files: [] },
+              insurance_policy: { text: 'POL-998877', files: [] },
+            },
+          ],
+        },
+      },
+      '5A',
+    );
+    const item = ((next?.['5A'] as Record<string, unknown>[]) || [])[0];
+    expect(item.vin).toBe('4T1B11HK5JU123456');
+    expect(item.insurance_policy).toBe('POL-998877');
+    expect(typeof item.vin).toBe('string');
+    expect(typeof item.insurance_policy).toBe('string');
+  });
+
+  it('unwraps nested policy_number text for insurance cards', () => {
+    const next = applyAiResultToSectionForm(
+      '7',
+      { '7A': [] },
+      {
+        patch: {
+          '7A': [
+            {
+              policy_type: 'Vehicle',
+              policy_company: 'State Farm',
+              policy_number: {
+                text: { text: 'SF-445566', files: [] },
+                files: [],
+              },
+            },
+          ],
+        },
+      },
+      '7A',
+    );
+    const item = ((next?.['7A'] as Record<string, unknown>[]) || [])[0];
+    const policy = item.policy_number as { text?: unknown } | string;
+    if (typeof policy === 'string') {
+      expect(policy).toBe('SF-445566');
+    } else {
+      expect(policy?.text).toBe('SF-445566');
+    }
   });
 });

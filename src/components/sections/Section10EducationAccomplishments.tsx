@@ -212,7 +212,11 @@ export default function Section10EducationAccomplishments({
     latestUploadRef,
   });
 
-  const educationItems: any[] = Array.isArray(data['10A']) ? data['10A'] : [];
+  const educationItems: any[] = Array.isArray(data['10A'])
+    ? data['10A']
+    : data['10A'] && typeof data['10A'] === 'object'
+      ? [data['10A']]
+      : [];
   const show10A = !activeSubsection || activeSubsection === '10A';
 
   useScrollToVaultTopic(activeTopicId, educationItems.length);

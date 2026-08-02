@@ -22,6 +22,27 @@ export function createEmptyItemFromFields(fields: SectionFieldConfig[]) {
   );
 }
 
+function plainUploadText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).trim();
+  }
+  if (Array.isArray(value)) {
+    return value.map(plainUploadText).filter(Boolean).join(', ');
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if ('text' in record || 'files' in record) {
+      return plainUploadText(record.text);
+    }
+    for (const key of ['label', 'name', 'value', 'title']) {
+      const nested = plainUploadText(record[key]);
+      if (nested) return nested;
+    }
+  }
+  return '';
+}
+
 export function normalizeUploadField(value: unknown) {
   if (value === '' || value == null) {
     return createEmptyUploadField();
@@ -37,7 +58,8 @@ export function normalizeUploadField(value: unknown) {
   if (typeof value === 'object') {
     const field = value as Record<string, unknown>;
     return {
-      text: typeof field.text === 'string' ? field.text : '',
+      // Nested AI payloads sometimes put another object in `text`.
+      text: plainUploadText(field.text ?? field),
       files: Array.isArray(field.files) ? field.files : [],
       _deleted_files: Array.isArray(field._deleted_files)
         ? field._deleted_files

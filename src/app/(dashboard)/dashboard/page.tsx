@@ -49,25 +49,38 @@ import {
 } from '@/utils/overviewExpiryAlerts';
 import { AiActiveSectionProvider } from '@/contexts/AiActiveSectionContext';
 import { AiPendingUploadSectionBanner } from '@/components/ai/AiPendingUploadSectionBanner';
-import { AiSectionFieldMatchDialog } from '@/components/ai/AiSectionFieldMatchDialog';
 import {
-  peekDashboardAiPatch,
+  AiSectionFieldMatchDialog,
+  stashToMatchDocument,
+} from '@/components/ai/AiSectionFieldMatchDialog';
+import {
+  listDashboardAiPatchesForSection,
   takeDashboardAiPatch,
   type StashedAiPatch,
 } from '@/utils/aiDashboardPatchCache';
+import { selectMatchReviewDocuments } from '@/utils/aiMatchReviewDocs';
 import {
   markAiSectionFilled,
   wasAiSectionRecentlyFilled,
 } from '@/utils/aiSectionFillGuard';
 import {
   applyAiResultToSectionForm,
+  applyAiResultToSectionFormDetailed,
   countFilledAiFields,
+  type AiSectionApplyStats,
 } from '@/utils/aiSectionFormApply';
+import { buildUpsertAutofillNotice } from '@/utils/aiItemDedup';
+import { getAiSectionLabel } from '@/utils/aiSectionRegistry';
 import { applyFieldEditsToSectionData } from '@/utils/aiFieldMatchReview';
 import {
-  isAiSectionReviewed,
   markAiSectionReviewed,
 } from '@/utils/aiSectionReviewState';
+import {
+  persistAllPendingStashesForSection,
+  persistPartnerStashesForFiles,
+} from '@/services/aiBackgroundSectionPersist';
+import { markAiAutofillDoneForSection } from '@/utils/aiAutofillDoneSections';
+import { ensureFreshSession } from '@/libs/secureFetch';
 import {
   listSectionLastUpdated,
   setSectionLastUpdated,
@@ -309,8 +322,10 @@ export default function DashboardPage() {
   const [reviewInboxTab, setReviewInboxTab] =
     useState<VaultActivityTab>('alerts');
   const kitReadyShownRef = useRef(false);
-  const [sectionMatchReview, setSectionMatchReview] =
-    useState<StashedAiPatch | null>(null);
+  const [sectionMatchReview, setSectionMatchReview] = useState<{
+    sectionId: string;
+    documents: StashedAiPatch[];
+  } | null>(null);
   const [sectionMatchApplying, setSectionMatchApplying] = useState(false);
   const sectionMatchShownRef = useRef<string | null>(null);
   const [disabledSections, setDisabledSections] = useState<
@@ -342,13 +357,14 @@ export default function DashboardPage() {
   );
   // Sections that include obituary content (marked with dove symbol)
   const obituarySections = useMemo(
-    () => new Set(['7', '8', '9', '10', '16']),
+    () => new Set(['8', '9', '10', '11', '16']),
     [],
   );
   const obituarySubsections = useMemo(() => new Set(['20B']), []);
 
   const { data: dashboardNokLetter } = useGetNokLetterQuery(
-    firstNokId ? { nokId: firstNokId } : undefined,
+    { nokId: firstNokId },
+    { skip: !firstNokId },
   );
 
   const recordLoadedSection = useCallback(
@@ -367,7 +383,7 @@ export default function DashboardPage() {
         return;
       }
 
-      if (peekDashboardAiPatch(sectionId)) {
+      if (listDashboardAiPatchesForSection(sectionId).length) {
         return;
       }
 
@@ -380,6 +396,22 @@ export default function DashboardPage() {
           wasAiSectionRecentlyFilled(sectionId)
         ) {
           return prev;
+        }
+
+        // Never replace a longer multi-card list with a shorter stale GET
+        // (e.g. late prefetch after Accept already appended Toyota+Honda+Jeep).
+        if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+          const existingRec = existing as Record<string, unknown>;
+          const incomingRec = data as Record<string, unknown>;
+          for (const key of Object.keys(existingRec)) {
+            const cur = existingRec[key];
+            const next = incomingRec?.[key];
+            if (Array.isArray(cur)) {
+              if (!Array.isArray(next) || next.length < cur.length) {
+                return prev;
+              }
+            }
+          }
         }
 
         return {
@@ -568,7 +600,7 @@ export default function DashboardPage() {
       return;
     }
 
-    if (peekDashboardAiPatch(activeSection)) {
+    if (listDashboardAiPatchesForSection(activeSection).length) {
       return;
     }
 
@@ -787,9 +819,8 @@ export default function DashboardPage() {
     setFormData(prev => ({ ...prev, [sectionId]: data }));
   }, []);
 
-  // When owner opens a section after overview upload: show read↔field match dialog.
-  // Background persist already saved values — this dialog lets the user review
-  // and fill any remaining AI values that did not land yet.
+  // When owner opens a section after overview upload: show read↔field match
+  // dialog for EVERY pending document (Toyota + Honda + Jeep), not just one.
   useEffect(() => {
     sectionMatchShownRef.current = null;
   }, [activeSection]);
@@ -799,26 +830,34 @@ export default function DashboardPage() {
     if (!activeSection || activeSection === 'dashboard') return;
     if (!/^\d+$/.test(activeSection)) return;
 
-    const stash = peekDashboardAiPatch(activeSection);
-    if (!stash) return;
-    if (!stash.result && !(stash.detectedFields || []).length) return;
+    const stashes = selectMatchReviewDocuments(
+      activeSection,
+      listDashboardAiPatchesForSection(activeSection),
+    );
 
-    const shownKey = `${activeSection}:${stash.file_id}:${stash.createdAt}`;
+    if (!stashes.length) return;
+
+    const shownKey = `${activeSection}:${stashes
+      .map(item => `${item.file_id}:${item.createdAt}`)
+      .join('|')}`;
     if (sectionMatchShownRef.current === shownKey) return;
-    if (isAiSectionReviewed(activeSection, stash.file_id)) return;
 
     sectionMatchShownRef.current = shownKey;
-    setSectionMatchReview(stash);
+    setSectionMatchReview({
+      sectionId: activeSection,
+      documents: stashes,
+    });
 
-    if (stash.subsection) {
+    const firstSub = stashes[0]?.subsection;
+    if (firstSub) {
       const uiSubsection =
-        stash.subsection === 'vital_info'
+        firstSub === 'vital_info'
           ? '1A'
-          : stash.subsection === 'next_of_kin' ||
-              stash.subsection === 'executor_trustee' ||
-              stash.subsection === 'additional_contacts'
+          : firstSub === 'next_of_kin' ||
+              firstSub === 'executor_trustee' ||
+              firstSub === 'additional_contacts'
             ? '1C'
-            : stash.subsection;
+            : firstSub;
       setActiveSubsection(uiSubsection);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1034,18 +1073,24 @@ export default function DashboardPage() {
     setAppMode('nok_dashboard');
   }, []);
   const [instructionRead, setInstructionRead] = useState(false);
-  useEffect(() => {
-    const stored = localStorage.getItem('instruction_read');
-    if (stored === 'true') {
-      setInstructionRead(true);
-    }
-  }, []);
+  const instructionStorageKey = currentUser?.email
+    ? `instruction_read:${String(currentUser.email).toLowerCase()}`
+    : null;
 
   useEffect(() => {
-    if (instructionRead) {
-      localStorage.setItem('instruction_read', 'true');
+    if (!instructionStorageKey) {
+      setInstructionRead(false);
+      return;
     }
-  }, [instructionRead]);
+    setInstructionRead(
+      localStorage.getItem(instructionStorageKey) === 'true',
+    );
+  }, [instructionStorageKey]);
+
+  useEffect(() => {
+    if (!instructionStorageKey || !instructionRead) return;
+    localStorage.setItem(instructionStorageKey, 'true');
+  }, [instructionRead, instructionStorageKey]);
 
   // Field-fill progress: checkmark only at 100%
   const sectionProgressCtx = useMemo(
@@ -2212,96 +2257,183 @@ export default function DashboardPage() {
                       onOpenChange={open => {
                         if (!open) setSectionMatchReview(null);
                       }}
-                      sectionId={sectionMatchReview.section_id}
-                      subsection={sectionMatchReview.subsection}
-                      fileName={sectionMatchReview.file_name}
-                      documentSummary={sectionMatchReview.document_summary}
-                      facts={sectionMatchReview.detectedFields || []}
-                      sectionData={formData[sectionMatchReview.section_id]}
+                      sectionId={sectionMatchReview.sectionId}
+                      subsection={
+                        sectionMatchReview.documents[0]?.subsection || null
+                      }
+                      documents={sectionMatchReview.documents.map(
+                        stashToMatchDocument,
+                      )}
+                      sectionData={formData[sectionMatchReview.sectionId]}
                       applying={sectionMatchApplying}
                       onCloseReviewed={() => {
-                        markAiSectionReviewed({
-                          sectionId: sectionMatchReview.section_id,
-                          fileId: sectionMatchReview.file_id,
+                        sectionMatchReview.documents.forEach(stash => {
+                          markAiSectionReviewed({
+                            sectionId: sectionMatchReview.sectionId,
+                            fileId: stash.file_id,
+                          });
+                          takeDashboardAiPatch(
+                            sectionMatchReview.sectionId,
+                            stash.file_id,
+                          );
                         });
-                        takeDashboardAiPatch(sectionMatchReview.section_id);
                         setSectionMatchReview(null);
                       }}
-                      onApplyRemaining={async () => {
+                      onApplyAll={async () => {
                         setSectionMatchApplying(true);
                         try {
-                          const applied = applyAiResultToSectionForm(
-                            sectionMatchReview.section_id,
-                            formData[sectionMatchReview.section_id],
-                            sectionMatchReview.result,
-                            sectionMatchReview.subsection,
+                          await ensureFreshSession();
+                          const sectionId = sectionMatchReview.sectionId;
+                          const ordered = [
+                            ...sectionMatchReview.documents,
+                          ].sort(
+                            (a, b) => (a.createdAt || 0) - (b.createdAt || 0),
                           );
-                          if (applied) {
-                            markAiSectionFilled(sectionMatchReview.section_id);
-                            updateSectionData(
-                              sectionMatchReview.section_id,
-                              applied,
-                            );
-                            const saver =
-                              sectionSaveMap[sectionMatchReview.section_id];
-                            if (saver) {
-                              await saver(applied);
-                              setSectionLastUpdated(
-                                sectionMatchReview.section_id,
+
+                          // Apply every document into vault arrays (append distinct
+                          // policies/vehicles; merge true duplicates; skip identical).
+                          let working = formData[sectionId] || {};
+                          let totals: AiSectionApplyStats = {
+                            added: 0,
+                            updated: 0,
+                            unchanged: 0,
+                          };
+                          for (const stash of ordered) {
+                            const { data: applied, stats } =
+                              applyAiResultToSectionFormDetailed(
+                                sectionId,
+                                working,
+                                stash.result,
+                                stash.subsection,
                               );
+                            if (applied) working = applied;
+                            totals = {
+                              added: totals.added + stats.added,
+                              updated: totals.updated + stats.updated,
+                              unchanged: totals.unchanged + stats.unchanged,
+                            };
+                          }
+
+                          const hadChanges =
+                            totals.added > 0 || totals.updated > 0;
+
+                          if (hadChanges) {
+                            markAiSectionFilled(sectionId);
+                            updateSectionData(sectionId, working);
+                            const saver = sectionSaveMap[sectionId];
+                            if (saver) {
+                              await saver(working);
+                              setSectionLastUpdated(sectionId);
                               setSectionLastUpdatedMap(
                                 listSectionLastUpdated(),
                               );
                             }
-                            const filledCount = countFilledAiFields(applied);
-                            toast.success(
-                              filledCount > 0
-                                ? `Filled ${filledCount} field${filledCount === 1 ? '' : 's'} from AI`
-                                : 'Section updated from AI data',
-                            );
+
+                            // Also persist via queued API path + partner sections
+                            // (insurance ↔ vehicles) so server state matches UI.
+                            const clearedFiles = new Set<string>();
+                            await persistAllPendingStashesForSection({
+                              sectionId,
+                              onFileDone: fileId => {
+                                if (fileId) clearedFiles.add(fileId);
+                              },
+                            });
+                            await persistPartnerStashesForFiles({
+                              fileIds: [...clearedFiles],
+                              excludeSectionId: sectionId,
+                            });
                           }
-                          markAiSectionReviewed({
-                            sectionId: sectionMatchReview.section_id,
-                            fileId: sectionMatchReview.file_id,
+
+                          ordered.forEach(stash => {
+                            markAiSectionReviewed({
+                              sectionId,
+                              fileId: stash.file_id,
+                            });
+                            markAiAutofillDoneForSection({
+                              sectionId,
+                              fileId: stash.file_id,
+                              fileName: stash.file_name,
+                            });
+                            takeDashboardAiPatch(sectionId, stash.file_id);
                           });
-                          takeDashboardAiPatch(sectionMatchReview.section_id);
+
+                          const itemLabel =
+                            sectionId === '5'
+                              ? 'Vehicle'
+                              : sectionId === '7'
+                                ? 'Policy'
+                                : getAiSectionLabel(sectionId) || 'Entry';
+                          const notice =
+                            buildUpsertAutofillNotice(
+                              totals.added,
+                              totals.updated,
+                              itemLabel,
+                              undefined,
+                              totals.unchanged,
+                            ) ||
+                            (hadChanges
+                              ? `Filled ${countFilledAiFields(working as Record<string, unknown>)} fields from AI`
+                              : 'Already on file — nothing new to fill.');
+
+                          toast.success(notice);
                           setSectionMatchReview(null);
                         } finally {
                           setSectionMatchApplying(false);
                         }
                       }}
-                      onSaveEdits={async edits => {
+                      onSaveEdits={async (edits, document) => {
                         if (!Object.keys(edits).length) return;
                         setSectionMatchApplying(true);
                         try {
+                          const sectionId = sectionMatchReview.sectionId;
+                          const stash = sectionMatchReview.documents.find(
+                            item =>
+                              item.file_id === document.fileId ||
+                              item.file_name === document.fileName,
+                          );
+                          // Prefer upserting this document's extract (creates/updates
+                          // the right card) then overlay manual edits.
+                          let working = formData[sectionId] || {};
+                          if (stash?.result) {
+                            const applied = applyAiResultToSectionForm(
+                              sectionId,
+                              working,
+                              stash.result,
+                              stash.subsection || document.subsection,
+                            );
+                            if (applied) working = applied;
+                          }
                           const next = applyFieldEditsToSectionData({
-                            sectionId: sectionMatchReview.section_id,
-                            subsection: sectionMatchReview.subsection,
-                            sectionData:
-                              formData[sectionMatchReview.section_id],
+                            sectionId,
+                            subsection:
+                              stash?.subsection || document.subsection,
+                            sectionData: working,
                             edits,
                           });
-                          markAiSectionFilled(sectionMatchReview.section_id);
-                          updateSectionData(
-                            sectionMatchReview.section_id,
-                            next,
-                          );
-                          const saver =
-                            sectionSaveMap[sectionMatchReview.section_id];
+                          markAiSectionFilled(sectionId);
+                          updateSectionData(sectionId, next);
+                          const saver = sectionSaveMap[sectionId];
                           if (saver) {
                             await saver(next);
-                            setSectionLastUpdated(
-                              sectionMatchReview.section_id,
-                            );
+                            setSectionLastUpdated(sectionId);
                             setSectionLastUpdatedMap(listSectionLastUpdated());
                           }
                           toast.success('Saved your field edits');
-                          markAiSectionReviewed({
-                            sectionId: sectionMatchReview.section_id,
-                            fileId: sectionMatchReview.file_id,
-                          });
-                          takeDashboardAiPatch(sectionMatchReview.section_id);
-                          setSectionMatchReview(null);
+                          if (stash) {
+                            markAiSectionReviewed({
+                              sectionId,
+                              fileId: stash.file_id,
+                            });
+                            takeDashboardAiPatch(sectionId, stash.file_id);
+                          }
+                          const remaining = sectionMatchReview.documents.filter(
+                            item => item.file_id !== stash?.file_id,
+                          );
+                          setSectionMatchReview(
+                            remaining.length
+                              ? { sectionId, documents: remaining }
+                              : null,
+                          );
                         } finally {
                           setSectionMatchApplying(false);
                         }

@@ -21,7 +21,10 @@ import {
 import { cn } from '@common/ui/utils';
 import { AI_ROUTING_DIALOG_SHEET } from '@/utils/aiMobileUi';
 import { getAiSectionLabel } from '@/utils/aiSectionRegistry';
-import type { DetectedAiFact } from '@/utils/aiDashboardPatchCache';
+import type {
+  DetectedAiFact,
+  StashedAiPatch,
+} from '@/utils/aiDashboardPatchCache';
 import {
   buildFieldMatchRows,
   averageMatchConfidence,
@@ -30,20 +33,35 @@ import {
 } from '@/utils/aiFieldMatchReview';
 import { aiNoFieldsMessage } from '@/utils/aiReadSourceLabels';
 import { AI_SECTION_BY_ID } from '@/utils/aiSectionRegistry';
+import { unwrapAiAutofillPatch } from '@/utils/aiPatchNormalizer';
+import { flattenDetectedFactsFromPatch } from '@/utils/aiSemanticFieldMatch';
+import { describeAutofillItem } from '@/utils/aiMultiItemAutofill';
+
+export type MatchReviewDocument = {
+  fileId?: string;
+  fileName?: string;
+  documentSummary?: string;
+  facts: DetectedAiFact[];
+  result?: unknown;
+  subsection?: string | null;
+  createdAt?: number;
+};
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sectionId: string;
   subsection?: string | null;
-  fileName?: string;
-  documentSummary?: string;
-  facts: DetectedAiFact[];
+  /** One entry per uploaded document pending for this section. */
+  documents: MatchReviewDocument[];
   sectionData: unknown;
-  /** Apply remaining AI patch into the section form. */
-  onApplyRemaining: () => void | Promise<void>;
-  /** Save manual edits made in this popup (fieldKey → text). */
-  onSaveEdits: (edits: Record<string, string>) => void | Promise<void>;
+  /** Apply every pending document into separate cards / fields. */
+  onApplyAll: () => void | Promise<void>;
+  /** Save manual edits for the currently selected document. */
+  onSaveEdits: (
+    edits: Record<string, string>,
+    document: MatchReviewDocument,
+  ) => void | Promise<void>;
   onCloseReviewed: () => void;
   applying?: boolean;
 };
@@ -73,42 +91,188 @@ function StatusPill({ status }: { status: 'filled' | 'available' | 'empty' }) {
   );
 }
 
+function asTabText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).trim();
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const key of ['label', 'name', 'value', 'text', 'title']) {
+      const nested = asTabText(record[key]);
+      if (nested) return nested;
+    }
+  }
+  return '';
+}
+
+function normalizeFactKey(raw: string): string {
+  return String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+}
+
+function itemFromMatchDocument(
+  doc: MatchReviewDocument,
+  sectionId: string,
+): Record<string, unknown> {
+  const item: Record<string, unknown> = {};
+
+  (doc.facts || []).forEach(fact => {
+    const keys = [
+      normalizeFactKey(fact.field_key || ''),
+      normalizeFactKey(fact.label || ''),
+    ].filter(Boolean);
+    keys.forEach(key => {
+      if (!item[key] && fact.value) item[key] = fact.value;
+    });
+  });
+
+  const patch = unwrapAiAutofillPatch(doc.result);
+  const preferredKeys =
+    sectionId === '5'
+      ? ['5A']
+      : sectionId === '7'
+        ? ['7A']
+        : doc.subsection
+          ? [doc.subsection]
+          : [];
+
+  const tryCard = (raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return;
+    const card = Array.isArray(raw)
+      ? (raw.find(entry => entry && typeof entry === 'object') as
+          | Record<string, unknown>
+          | undefined)
+      : (raw as Record<string, unknown>);
+    if (!card) return;
+    Object.entries(card).forEach(([key, value]) => {
+      if (item[key] == null || item[key] === '') item[key] = value;
+    });
+  };
+
+  preferredKeys.forEach(key => tryCard(patch[key]));
+  if (!asTabText(item.make) && !asTabText(item.policy_company)) {
+    Object.values(patch).forEach(value => {
+      if (Array.isArray(value) || (value && typeof value === 'object')) {
+        tryCard(value);
+      }
+    });
+  }
+
+  return item;
+}
+
+/** Toyota · Camry · 2020 — never bare "1" / "Document 1". */
+function tabLabel(
+  doc: MatchReviewDocument,
+  index: number,
+  sectionId: string,
+) {
+  const item = itemFromMatchDocument(doc, sectionId);
+
+  if (sectionId === '5') {
+    const parts = [item.make, item.model, item.year]
+      .map(asTabText)
+      .filter(Boolean);
+    if (parts.length) return parts.join(' · ');
+  }
+
+  if (sectionId === '7') {
+    const parts = [
+      item.policy_company || item.insurance_company,
+      item.policy_type,
+      item.policy_number,
+    ]
+      .map(asTabText)
+      .filter(Boolean);
+    if (parts.length) return parts.join(' · ');
+  }
+
+  const described = describeAutofillItem(item, [
+    'make',
+    'model',
+    'year',
+    'policy_company',
+    'insurance_company',
+    'policy_type',
+    'policy_number',
+    'vin',
+  ]);
+  if (described && described !== 'Entry') return described;
+  if (doc.fileName) return doc.fileName.replace(/\.[^.]+$/, '');
+  return `Document ${index + 1}`;
+}
+
+export function stashToMatchDocument(stash: StashedAiPatch): MatchReviewDocument {
+  const facts =
+    stash.detectedFields && stash.detectedFields.length
+      ? stash.detectedFields
+      : flattenDetectedFactsFromPatch(
+          unwrapAiAutofillPatch(stash.result),
+          stash.section_key,
+        );
+  return {
+    fileId: stash.file_id,
+    fileName: stash.file_name,
+    documentSummary: stash.document_summary,
+    facts,
+    result: stash.result,
+    subsection: stash.subsection,
+    createdAt: stash.createdAt,
+  };
+}
+
 export function AiSectionFieldMatchDialog({
   open,
   onOpenChange,
   sectionId,
   subsection,
-  fileName,
-  documentSummary,
-  facts,
+  documents,
   sectionData,
-  onApplyRemaining,
+  onApplyAll,
   onSaveEdits,
   onCloseReviewed,
   applying = false,
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const docs = documents.length ? documents : [];
+  const safeIndex = Math.min(activeIndex, Math.max(0, docs.length - 1));
+  const activeDoc = docs[safeIndex] || null;
+
+  const facts = activeDoc?.facts || [];
+  const fileName = activeDoc?.fileName;
+  const documentSummary = activeDoc?.documentSummary;
 
   const rows = useMemo(
     () =>
       buildFieldMatchRows({
         sectionId,
-        subsection,
+        subsection: activeDoc?.subsection || subsection,
         sectionData,
         facts,
       }),
-    [sectionId, subsection, sectionData, facts],
+    [sectionId, subsection, sectionData, facts, activeDoc?.subsection],
   );
 
   useEffect(() => {
     if (!open) return;
+    setActiveIndex(0);
+  }, [open, sectionId, docs.map(d => d.fileId).join('|')]);
+
+  useEffect(() => {
+    if (!open || !activeDoc) return;
     const next: Record<string, string> = {};
     const built = buildFieldMatchRows({
       sectionId,
-      subsection,
+      subsection: activeDoc.subsection || subsection,
       sectionData,
-      facts,
+      facts: activeDoc.facts || [],
     });
     built.forEach(row => {
       next[row.fieldKey] =
@@ -117,15 +281,15 @@ export function AiSectionFieldMatchDialog({
         '';
     });
     setDrafts(next);
-    // Only seed drafts when the dialog opens for a section/file.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, sectionId, fileName]);
+  }, [open, sectionId, safeIndex, activeDoc?.fileId]);
 
   const unfilledCount = countUnfilledAiRows(rows);
   const editableCount = countEditableEmptyRows(rows);
   const avgConfidence = averageMatchConfidence(rows);
   const sectionLabel = getAiSectionLabel(sectionId) || `Section ${sectionId}`;
   const subsectionLabel =
+    activeDoc?.subsection ||
     subsection ||
     AI_SECTION_BY_ID[sectionId]?.defaultSubsection ||
     null;
@@ -150,7 +314,7 @@ export function AiSectionFieldMatchDialog({
   const handleApplyAi = async () => {
     setBusy(true);
     try {
-      await onApplyRemaining();
+      await onApplyAll();
       onCloseReviewed();
       onOpenChange(false);
     } finally {
@@ -159,9 +323,10 @@ export function AiSectionFieldMatchDialog({
   };
 
   const handleSaveEdits = async () => {
+    if (!activeDoc) return;
     setBusy(true);
     try {
-      await onSaveEdits(dirtyEdits);
+      await onSaveEdits(dirtyEdits, activeDoc);
       onCloseReviewed();
       onOpenChange(false);
     } finally {
@@ -196,13 +361,41 @@ export function AiSectionFieldMatchDialog({
                 ) : null}
               </DialogTitle>
               <DialogDescription className="text-slate-600">
-                Left: fields we read from your document. Right: this section’s
-                form fields (including subsection groups) with match confidence.
+                {docs.length > 1
+                  ? `${docs.length} documents ready — tabs are named by vehicle/policy (Toyota, Honda, Jeep…). Same card already on file is updated only when data differs.`
+                  : 'Left: fields we read from your document. Right: this section’s form fields with match confidence.'}
               </DialogDescription>
             </div>
           </div>
+
+          {docs.length > 1 ? (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {docs.map((doc, index) => (
+                <button
+                  key={doc.fileId || `${doc.fileName}-${index}`}
+                  type="button"
+                  onClick={() => setActiveIndex(index)}
+                  className={cn(
+                    'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
+                    index === safeIndex
+                      ? 'border-[#213D59] bg-[#213D59] text-white'
+                      : 'border-slate-200 bg-white text-[#213D59] hover:border-[#213D59]/40',
+                  )}
+                >
+                  {tabLabel(doc, index, sectionId)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           {documentSummary ? (
             <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              {docs.length > 1 ? (
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#2B5A8C]">
+                  {tabLabel(activeDoc!, safeIndex, sectionId)}
+                  {fileName ? ` · ${fileName}` : ''}
+                </span>
+              ) : null}
               {documentSummary}
             </p>
           ) : null}
@@ -335,12 +528,14 @@ export function AiSectionFieldMatchDialog({
 
         <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
           <p className="text-xs text-slate-500">
-            {editableCount > 0
-              ? `${editableCount} field${editableCount === 1 ? '' : 's'} can be edited here. Filled ones are locked as read-only.`
-              : 'All listed fields already have values. You can close.'}
+            {docs.length > 1
+              ? `Fill all applies each named document into Vehicles/Insurance cards. Same Toyota again only updates when something changed — identical data is skipped.`
+              : editableCount > 0
+                ? `${editableCount} field${editableCount === 1 ? '' : 's'} can be edited here. Filled ones are locked as read-only.`
+                : 'All listed fields already have values. You can close.'}
           </p>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            {unfilledCount > 0 ? (
+            {docs.length > 0 ? (
               <Button
                 type="button"
                 variant="outline"
@@ -348,10 +543,16 @@ export function AiSectionFieldMatchDialog({
                 disabled={busy || applying}
                 onClick={() => void handleApplyAi()}
               >
-                {busy || applying ? 'Filling…' : 'Fill all from AI'}
+                {busy || applying
+                  ? 'Filling…'
+                  : docs.length > 1
+                    ? `Fill all ${docs.length} documents`
+                    : unfilledCount > 0
+                      ? 'Fill all from AI'
+                      : 'Apply AI data'}
               </Button>
             ) : null}
-            {Object.keys(dirtyEdits).length > 0 ? (
+            {Object.keys(dirtyEdits).length > 0 && activeDoc ? (
               <Button
                 type="button"
                 className="rounded-xl bg-[#213D59] hover:bg-[#1a3148]"

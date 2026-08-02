@@ -272,7 +272,11 @@ export default function Section14InvestmentAccounts({
     latestUploadRef,
   });
 
-  const accounts: any[] = Array.isArray(data['14A']) ? data['14A'] : [];
+  const accounts: any[] = Array.isArray(data['14A'])
+    ? data['14A']
+    : data['14A'] && typeof data['14A'] === 'object'
+      ? [data['14A']]
+      : [];
   const show14A = !activeSubsection || activeSubsection === '14A';
 
   useScrollToVaultTopic(activeTopicId, accounts.length);

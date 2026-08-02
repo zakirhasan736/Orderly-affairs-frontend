@@ -56,21 +56,22 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
   const applyExtracted = useCallback(
     (items: T[], targetIndex?: number) => {
       if (items.length === 0) {
-        return { added: 0, updated: 0 };
+        return { added: 0, updated: 0, unchanged: 0 };
       }
 
-      const { items: nextItems, added, updated } = applyItemsToIndexedList({
-        currentItems: getCurrentItems(),
-        extractedItems: normalizeItems(items),
-        targetIndex,
-        createEmpty,
-        preserveRowId,
-        isDuplicate,
-        conflictMode,
-      });
+      const { items: nextItems, added, updated, unchanged } =
+        applyItemsToIndexedList({
+          currentItems: getCurrentItems(),
+          extractedItems: normalizeItems(items),
+          targetIndex,
+          createEmpty,
+          preserveRowId,
+          isDuplicate,
+          conflictMode,
+        });
 
       setItems(nextItems);
-      return { added, updated };
+      return { added, updated, unchanged };
     },
     [
       conflictMode,
@@ -117,10 +118,18 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
         return 'pending_user';
       }
 
-      const { added, updated } = applyExtracted(extracted, targetIndex);
+      const { added, updated, unchanged } = applyExtracted(
+        extracted,
+        targetIndex,
+      );
       const notice =
-        buildUpsertAutofillNotice(added, updated, activeLabel, targetIndex) ||
-        buildAutofillSuccessNotice(1, activeLabel, targetIndex);
+        buildUpsertAutofillNotice(
+          added,
+          updated,
+          activeLabel,
+          targetIndex,
+          unchanged,
+        ) || buildAutofillSuccessNotice(1, activeLabel, targetIndex);
       setAiNotice(notice);
       return 'applied';
     },
@@ -146,7 +155,7 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
       targetIndex={prompt?.targetIndex}
       onAddAll={() => {
         if (!prompt) return;
-        const { added, updated } = applyExtracted(
+        const { added, updated, unchanged } = applyExtracted(
           prompt.items,
           prompt.targetIndex,
         );
@@ -156,6 +165,7 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
             updated,
             prompt.itemLabel,
             prompt.targetIndex,
+            unchanged,
           ) ||
             buildAutofillSuccessNotice(
               prompt.items.length,
@@ -168,7 +178,7 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
       }}
       onAddFirstOnly={() => {
         if (!prompt) return;
-        const { added, updated } = applyExtracted(
+        const { added, updated, unchanged } = applyExtracted(
           [prompt.items[0]],
           prompt.targetIndex,
         );
@@ -178,6 +188,7 @@ export function useAiMultiItemAutofill<T extends Record<string, unknown>>({
             updated,
             prompt.itemLabel,
             prompt.targetIndex,
+            unchanged,
           ) ||
             buildAutofillSuccessNotice(
               1,

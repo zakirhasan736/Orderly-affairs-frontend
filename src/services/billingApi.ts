@@ -34,7 +34,7 @@ export const billingApi = createApi({
     startSubscription: builder.mutation<
       any,
       {
-        plan: 'monthly' | 'yearly';
+        plan: 'monthly' | 'yearly' | 'essentials' | 'advantage';
         is_trial: boolean;
         trial_mode?: 'cardless' | 'card_on_file';
       }
@@ -79,7 +79,10 @@ export const billingApi = createApi({
       }),
     }),
 
-    changePlan: builder.mutation<any, { plan: 'monthly' | 'yearly' }>({
+    changePlan: builder.mutation<
+      any,
+      { plan: 'monthly' | 'yearly' | 'essentials' | 'advantage' }
+    >({
       query: body => ({
         url: '/change-plan',
         method: 'POST',

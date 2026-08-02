@@ -30,13 +30,46 @@ export type StashedAiPatch = {
   pending_accept?: boolean;
 };
 
+/** One stash slot per document × section so batch uploads never overwrite. */
+function stashKey(sectionId: string, fileId?: string | null): string {
+  const section = String(sectionId || '').trim();
+  const file = String(fileId || '').trim();
+  return file ? `${section}::${file}` : section;
+}
+
+function parseStashKey(key: string): { sectionId: string; fileId: string } {
+  const sep = key.indexOf('::');
+  if (sep < 0) return { sectionId: key, fileId: '' };
+  return {
+    sectionId: key.slice(0, sep),
+    fileId: key.slice(sep + 2),
+  };
+}
+
 function readMap(): Record<string, StashedAiPatch> {
   if (typeof window === 'undefined') return {};
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    if (!parsed || typeof parsed !== 'object') return {};
+
+    // Migrate legacy section-only keys → section::file when file_id is present.
+    const migrated: Record<string, StashedAiPatch> = {};
+    Object.entries(parsed as Record<string, StashedAiPatch>).forEach(
+      ([key, entry]) => {
+        if (!entry || typeof entry !== 'object') return;
+        const sectionId = entry.section_id || parseStashKey(key).sectionId;
+        const fileId = entry.file_id || parseStashKey(key).fileId;
+        const nextKey = stashKey(sectionId, fileId || undefined);
+        migrated[nextKey] = {
+          ...entry,
+          section_id: sectionId,
+          file_id: fileId || entry.file_id || '',
+        };
+      },
+    );
+    return migrated;
   } catch {
     return {};
   }
@@ -55,9 +88,18 @@ function writeMap(map: Record<string, StashedAiPatch>) {
   }
 }
 
+function entriesForSection(sectionId: string): StashedAiPatch[] {
+  const sid = String(sectionId || '').trim();
+  if (!sid) return [];
+  return Object.values(readMap())
+    .filter(entry => entry.section_id === sid)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
 export function stashDashboardAiPatch(entry: StashedAiPatch) {
   const map = readMap();
-  map[entry.section_id] = {
+  const key = stashKey(entry.section_id, entry.file_id);
+  map[key] = {
     ...entry,
     createdAt: entry.createdAt || Date.now(),
   };
@@ -76,17 +118,64 @@ export function stashDashboardAiPatch(entry: StashedAiPatch) {
   }
 }
 
-export function takeDashboardAiPatch(sectionId: string): StashedAiPatch | null {
+/**
+ * Remove and return a stash.
+ * Prefer fileId when accepting a specific document so sibling uploads stay.
+ * Without fileId, returns/removes the newest stash for the section.
+ */
+export function takeDashboardAiPatch(
+  sectionId: string,
+  fileId?: string | null,
+): StashedAiPatch | null {
   const map = readMap();
-  const entry = map[sectionId];
-  if (!entry) return null;
-  delete map[sectionId];
+  if (fileId) {
+    const key = stashKey(sectionId, fileId);
+    const entry = map[key];
+    if (!entry) {
+      // Legacy / missing file key — fall back to section scan.
+      const fallback = entriesForSection(sectionId).find(
+        item => !item.file_id || item.file_id === fileId,
+      );
+      if (!fallback) return null;
+      const fallbackKey = stashKey(fallback.section_id, fallback.file_id);
+      delete map[fallbackKey];
+      writeMap(map);
+      return fallback;
+    }
+    delete map[key];
+    writeMap(map);
+    return entry;
+  }
+
+  const newest = entriesForSection(sectionId)[0];
+  if (!newest) return null;
+  delete map[stashKey(newest.section_id, newest.file_id)];
   writeMap(map);
-  return entry;
+  return newest;
 }
 
-export function peekDashboardAiPatch(sectionId: string): StashedAiPatch | null {
-  return readMap()[sectionId] || null;
+/** Peek one stash (newest for section, or exact file when fileId provided). */
+export function peekDashboardAiPatch(
+  sectionId: string,
+  fileId?: string | null,
+): StashedAiPatch | null {
+  if (fileId) {
+    const exact = readMap()[stashKey(sectionId, fileId)];
+    if (exact) return exact;
+    return (
+      entriesForSection(sectionId).find(
+        item => !item.file_id || item.file_id === fileId,
+      ) || null
+    );
+  }
+  return entriesForSection(sectionId)[0] || null;
+}
+
+/** All stashes for a section (newest first) — used for multi-doc Accept/merge. */
+export function listDashboardAiPatchesForSection(
+  sectionId: string,
+): StashedAiPatch[] {
+  return entriesForSection(sectionId);
 }
 
 export function listDashboardAiPatches(): StashedAiPatch[] {

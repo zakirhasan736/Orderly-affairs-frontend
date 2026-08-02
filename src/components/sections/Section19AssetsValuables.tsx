@@ -372,8 +372,16 @@ export default function Section19AssetsValuables({
     latestUploadRef,
   });
 
-  const valuableItems: any[] = Array.isArray(data['19A']) ? data['19A'] : [];
-  const properties: any[] = Array.isArray(data['19B']) ? data['19B'] : [];
+  const valuableItems: any[] = Array.isArray(data['19A'])
+    ? data['19A']
+    : data['19A'] && typeof data['19A'] === 'object'
+      ? [data['19A']]
+      : [];
+  const properties: any[] = Array.isArray(data['19B'])
+    ? data['19B']
+    : data['19B'] && typeof data['19B'] === 'object'
+      ? [data['19B']]
+      : [];
 
   useScrollToVaultTopic(
     activeTopicId,

@@ -14,7 +14,6 @@ import { AiGuidedNavigationCallout } from '@/components/ai/AiGuidedNavigationCal
 import { AiRoutingFloatingNotifications } from '@/components/ai/AiRoutingFloatingNotifications';
 import { AiSectionMismatchDialog } from '@/components/ai/AiSectionMismatchDialog';
 import {
-  getAiAutofillDoneForSection,
   isAiAutofillDoneForSection,
 } from '@/utils/aiAutofillDoneSections';
 import { peekDashboardAiPatch } from '@/utils/aiDashboardPatchCache';
@@ -132,10 +131,11 @@ function updatePendingUpload(
 }
 
 function isSectionDoneForUpload(sectionId: string, fileId?: string) {
-  const done = getAiAutofillDoneForSection(sectionId);
-  if (!done) return isAiAutofillDoneForSection(sectionId);
-  if (!fileId || !done.fileId) return true;
-  return done.fileId === fileId;
+  // File-aware: accepting vehicle doc A must not mark vehicle doc B as done.
+  if (fileId) {
+    return isAiAutofillDoneForSection(sectionId, fileId);
+  }
+  return isAiAutofillDoneForSection(sectionId);
 }
 
 export function AiDocumentRoutingProvider({
@@ -177,8 +177,14 @@ export function AiDocumentRoutingProvider({
     // Drop stale "New data" pins from failed fills (e.g. Gemini 503 after
     // classify queued review sections but never wrote a stash / done marker).
     const cleaned = stored.filter(upload => {
-      if (peekDashboardAiPatch(upload.targetSectionId)) return true;
-      if (isAiAutofillDoneForSection(upload.targetSectionId)) return true;
+      if (peekDashboardAiPatch(upload.targetSectionId, upload.file_id)) {
+        return true;
+      }
+      if (
+        isAiAutofillDoneForSection(upload.targetSectionId, upload.file_id)
+      ) {
+        return true;
+      }
       if (upload.navigateIntent === 'review') return false;
       return true;
     });
@@ -311,7 +317,8 @@ export function AiDocumentRoutingProvider({
     [patchPendingUpload],
   );
 
-  // Visiting a section that is already filled removes its card and reveals the next one.
+  // Visiting a section drops only uploads already filled for that document —
+  // sibling docs for the same section (2nd vehicle, 2nd policy) stay queued.
   useEffect(() => {
     if (!currentSectionId || currentSectionId === 'dashboard') return;
 
@@ -321,21 +328,31 @@ export function AiDocumentRoutingProvider({
       );
       if (!related.length) return current;
 
-      const shouldDrop = related.every(
-        item =>
+      const keepRelated = related.filter(item => {
+        // Still waiting on Accept / review for this exact document.
+        if (peekDashboardAiPatch(currentSectionId, item.file_id)) {
+          return true;
+        }
+        if (
           isAiPendingUploadConsumed(
             item,
             filledSectionsByFile,
             isSectionDoneForUpload,
-          ) || isSectionDoneForUpload(currentSectionId, item.file_id),
-      );
+          ) ||
+          isSectionDoneForUpload(currentSectionId, item.file_id)
+        ) {
+          return false;
+        }
+        return true;
+      });
 
-      if (!shouldDrop && !isAiAutofillDoneForSection(currentSectionId)) {
-        return current;
-      }
+      if (keepRelated.length === related.length) return current;
 
       const next = pruneAndPromotePending(
-        current.filter(item => item.targetSectionId !== currentSectionId),
+        [
+          ...current.filter(item => item.targetSectionId !== currentSectionId),
+          ...keepRelated,
+        ],
         filledSectionsByFile,
       );
       writePendingUploadsToStorage(next);
@@ -644,18 +661,17 @@ export function AiDocumentRoutingProvider({
 
   const getPendingFileForSection = useCallback(
     (sectionId: string, scope = 'full') => {
+      const isOpen = (item: (typeof pendingUploads)[number]) =>
+        item.targetSectionId === sectionId &&
+        item.highlightUpload &&
+        !isAiAutofillDoneForSection(sectionId, item.file_id);
+
       const match =
         pendingUploads.find(
-          item =>
-            item.targetSectionId === sectionId &&
-            item.uploadScope === scope &&
-            item.highlightUpload,
+          item => item.uploadScope === scope && isOpen(item),
         ) ||
         pendingUploads.find(
-          item =>
-            item.targetSectionId === sectionId &&
-            item.uploadScope === 'full' &&
-            item.highlightUpload,
+          item => item.uploadScope === 'full' && isOpen(item),
         );
 
       return match ? pendingUploadToAiFile(match) : null;
@@ -665,21 +681,19 @@ export function AiDocumentRoutingProvider({
 
   const shouldHighlightUpload = useCallback(
     (sectionId: string, scope = 'full') => {
-      // Overview already filled this section — show pin only, never "ready to read".
-      if (isAiAutofillDoneForSection(sectionId)) return false;
+      const isOpenPending = (item: (typeof pendingUploads)[number]) =>
+        item.targetSectionId === sectionId &&
+        item.highlightUpload &&
+        item.navigateIntent !== 'review' &&
+        !isAiAutofillDoneForSection(sectionId, item.file_id);
 
-      return pendingUploads.some(
-        item =>
-          item.targetSectionId === sectionId &&
-          item.uploadScope === scope &&
-          item.highlightUpload &&
-          item.navigateIntent !== 'review',
-      ) || pendingUploads.some(
-        item =>
-          item.targetSectionId === sectionId &&
-          item.uploadScope === 'full' &&
-          item.highlightUpload &&
-          item.navigateIntent !== 'review',
+      return (
+        pendingUploads.some(
+          item => item.uploadScope === scope && isOpenPending(item),
+        ) ||
+        pendingUploads.some(
+          item => item.uploadScope === 'full' && isOpenPending(item),
+        )
       );
     },
     [pendingUploads],

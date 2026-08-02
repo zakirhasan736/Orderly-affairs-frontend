@@ -295,6 +295,28 @@ function isTruthyFlag(value: unknown): boolean | null {
   return null;
 }
 
+/** Plain text for TextInput / TextArea — never leave `{ text, files }` objects. */
+export function asPlainFieldText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).trim();
+  }
+  if (Array.isArray(value)) {
+    return value.map(asPlainFieldText).filter(Boolean).join(', ');
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if ('text' in record || 'files' in record) {
+      return asPlainFieldText(record.text);
+    }
+    for (const key of ['label', 'name', 'value', 'title']) {
+      const nested = asPlainFieldText(record[key]);
+      if (nested) return nested;
+    }
+  }
+  return '';
+}
+
 export function coerceAiFieldValue(field: FieldDefinition, value: unknown) {
   if (isEmptyAiValue(value)) {
     return getEmptyValueForFieldType(field.type);
@@ -321,14 +343,14 @@ export function coerceAiFieldValue(field: FieldDefinition, value: unknown) {
     if (flag === true) return only;
     if (flag === false) return '';
     const resolved = resolveClosestOption(value, field.options);
-    return resolved || (String(value).trim() === only ? only : '');
+    return resolved || (asPlainFieldText(value) === only ? only : '');
   }
 
   if (OPTION_TYPE_SET.has(field.type) && field.options?.length) {
     if (field.type === 'MultiSelect') {
       const parts = Array.isArray(value)
         ? value
-        : String(value)
+        : asPlainFieldText(value)
             .split(/[,;|/]+/)
             .map(part => part.trim())
             .filter(Boolean);
@@ -342,7 +364,7 @@ export function coerceAiFieldValue(field: FieldDefinition, value: unknown) {
     if (resolved) return resolved;
 
     // Keep raw string so UI can still show placeholder text of unrecognized value.
-    return String(value).trim();
+    return asPlainFieldText(value);
   }
 
   if (
@@ -351,7 +373,19 @@ export function coerceAiFieldValue(field: FieldDefinition, value: unknown) {
     value !== undefined &&
     value !== ''
   ) {
-    return String(value);
+    return asPlainFieldText(value);
+  }
+
+  // Plain text fields (VIN, policy number when typed as TextInput, etc.):
+  // always unwrap upload-shaped AI/API payloads to a string.
+  if (
+    field.type === 'TextInput' ||
+    field.type === 'TextArea' ||
+    field.type === 'DatePicker' ||
+    field.type === 'DateInput' ||
+    !field.type
+  ) {
+    return asPlainFieldText(value);
   }
 
   if (
@@ -362,11 +396,11 @@ export function coerceAiFieldValue(field: FieldDefinition, value: unknown) {
     return String(value);
   }
 
-  // Nested upload-like objects without a field type match
+  // Nested upload-like objects for unknown field types → plain text, not object.
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const record = value as Record<string, unknown>;
     if ('text' in record || 'files' in record) {
-      return normalizeUploadField(value);
+      return asPlainFieldText(value);
     }
   }
 
@@ -389,7 +423,23 @@ export function coerceAiFieldValues(
       // Keep schema keys even when the catalog/formConfig was incomplete.
       // Catalog guides placement — it must not delete extracted data.
       if (!isEmptyAiValue(value)) {
-        next[key] = value;
+        // Prefer plain text over orphan `{ text, files }` so VIN-style fields
+        // never land as objects when the field catalog missed the key.
+        if (
+          value &&
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          ('text' in (value as object) || 'files' in (value as object))
+        ) {
+          const record = value as { text?: unknown; files?: unknown[] };
+          const files = Array.isArray(record.files) ? record.files : [];
+          next[key] =
+            files.length > 0
+              ? normalizeUploadField(value)
+              : asPlainFieldText(value);
+        } else {
+          next[key] = value;
+        }
       }
       return;
     }

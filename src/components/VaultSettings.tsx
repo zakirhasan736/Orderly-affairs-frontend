@@ -48,6 +48,10 @@ import { useLogout } from '@/libs/logoutHandler';
 import { StripePaymentForm } from './StripePaymentForm';
 import { PhoneNumberInput } from './PhoneNumberInput';
 import { TurnstileCaptcha } from './TurnstileCaptcha';
+import {
+  SUBSCRIPTION_PLAN_LIST,
+  type SubscriptionPlanId,
+} from '@/constants/subscriptionPlans';
 import { isValidE164PhoneNumber } from '@/utils/phoneCountries';
 import { getOtpSessionId } from '@/utils/otpSession';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
@@ -144,7 +148,7 @@ const VaultSettings = () => {
   const logout = useLogout();
 
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>(
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlanId>(
     'yearly',
   );
   const [isProcessing, setIsProcessing] = useState(false);
@@ -1427,26 +1431,36 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                 MOBILE_SHEET_SCROLL_PADDING,
               )}
             >
-              <button
-                type="button"
-                onClick={() => setSelectedPlan('monthly')}
-                className={cn(
-                  'mb-3 w-full rounded-2xl border p-4 text-left',
-                  selectedPlan === 'monthly' && 'border-primary bg-primary/5',
-                )}
-              >
-                Monthly
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedPlan('yearly')}
-                className={cn(
-                  'mb-5 w-full rounded-2xl border p-4 text-left',
-                  selectedPlan === 'yearly' && 'border-primary bg-primary/5',
-                )}
-              >
-                Yearly
-              </button>
+              {SUBSCRIPTION_PLAN_LIST.map(plan => (
+                <button
+                  key={plan.id}
+                  type="button"
+                  onClick={() => setSelectedPlan(plan.id)}
+                  className={cn(
+                    'mb-3 w-full rounded-2xl border p-4 text-left',
+                    selectedPlan === plan.id && 'border-primary bg-primary/5',
+                  )}
+                >
+                  <p className="m-0 font-semibold text-[#213D59]">
+                    {plan.title}
+                  </p>
+                  <p className="mt-1 mb-0 text-sm text-[rgba(33,61,89,0.7)]">
+                    {plan.listPrice ? (
+                      <>
+                        <span className="mr-1.5 line-through opacity-60">
+                          {plan.listPrice}
+                        </span>
+                        {plan.amount}/year
+                        {plan.discountPercent
+                          ? ` · ${plan.discountPercent}% off`
+                          : ''}
+                      </>
+                    ) : (
+                      <>{plan.amount}/year</>
+                    )}
+                  </p>
+                </button>
+              ))}
               <StripePaymentForm onSuccess={handleProcessPayment} />
             </div>
           </div>
@@ -1457,27 +1471,34 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
             <div className="w-full max-w-md rounded-3xl bg-white p-8">
               <h3 className="mb-6 font-black uppercase">Choose Plan</h3>
 
-              <button
-                type="button"
-                onClick={() => setSelectedPlan('monthly')}
-                className={cn(
-                  'mb-3 w-full rounded-xl p-4',
-                  selectedPlan === 'monthly' && 'bg-slate-100 font-black',
-                )}
-              >
-                Monthly
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSelectedPlan('yearly')}
-                className={cn(
-                  'w-full rounded-xl p-4',
-                  selectedPlan === 'yearly' && 'bg-slate-100 font-black',
-                )}
-              >
-                Yearly
-              </button>
+              {SUBSCRIPTION_PLAN_LIST.map(plan => (
+                <button
+                  key={plan.id}
+                  type="button"
+                  onClick={() => setSelectedPlan(plan.id)}
+                  className={cn(
+                    'mb-3 w-full rounded-xl p-4 text-left',
+                    selectedPlan === plan.id && 'bg-slate-100 font-black',
+                  )}
+                >
+                  <p className="m-0">{plan.title}</p>
+                  <p className="mt-1 mb-0 text-sm font-normal text-slate-600">
+                    {plan.listPrice ? (
+                      <>
+                        <span className="mr-1.5 line-through opacity-60">
+                          {plan.listPrice}
+                        </span>
+                        {plan.amount}/year
+                        {plan.discountPercent
+                          ? ` · ${plan.discountPercent}% off`
+                          : ''}
+                      </>
+                    ) : (
+                      <>{plan.amount}/year</>
+                    )}
+                  </p>
+                </button>
+              ))}
 
               <StripePaymentForm onSuccess={handleProcessPayment} />
             </div>

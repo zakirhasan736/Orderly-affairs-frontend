@@ -20,58 +20,52 @@ type Props = {
 };
 
 /**
- * When the user opens a section that overview already filled, show "done"
- * guidance. Keep the uploaded AI document on the server so section / overview
- * history preview still works until TTL expiry or the user deletes it.
+ * When the user opens a section that overview already filled, show guidance.
+ * Multi-document review/fill lives in AiSectionFieldMatchDialog (tabs per doc).
  */
 export function AiPendingUploadSectionBanner({ activeSectionId }: Props) {
   const {
     getPendingUploadsForSection,
     dismissHighlight,
     clearNavigateIntent,
-    clearPendingForSection,
+    clearAllPendingForFile,
   } = useAiDocumentRouting();
   const pendingForSection = getPendingUploadsForSection(activeSectionId);
-  const pendingUpload = pendingForSection.find(item => item.highlightUpload);
+  const openPending = pendingForSection.filter(
+    item => !isAiAutofillDoneForSection(activeSectionId, item.file_id),
+  );
+  const pendingUpload =
+    openPending.find(item => item.highlightUpload) || openPending[0] || null;
   const handledIntentRef = useRef<string | null>(null);
-  const clearedPendingRef = useRef<string | null>(null);
+  const clearedFilesRef = useRef<Set<string>>(new Set());
 
   const sectionAlreadyFilled = isAiAutofillDoneForSection(activeSectionId);
   const doneRecord = getAiAutofillDoneForSection(activeSectionId);
 
   useEffect(() => {
-    if (!sectionAlreadyFilled && !wasAiSectionRecentlyFilled(activeSectionId, 120000)) {
-      return;
-    }
-
-    const clearKey = `${activeSectionId}:${doneRecord?.fileId || pendingUpload?.file_id || 'done'}`;
-    if (clearedPendingRef.current === clearKey) return;
-    clearedPendingRef.current = clearKey;
-
-    // Clear pending autofill hooks for this section so UI shows "Auto fill done".
-    // Do NOT delete the temp AI document here — history preview needs it.
-    clearPendingForSection(activeSectionId, pendingUpload?.uploadScope || 'full');
-    dismissHighlight(activeSectionId, pendingUpload?.uploadScope || 'full');
-  }, [
-    activeSectionId,
-    clearPendingForSection,
-    dismissHighlight,
-    doneRecord?.fileId,
-    pendingUpload?.file_id,
-    pendingUpload?.uploadScope,
-    sectionAlreadyFilled,
-  ]);
+    pendingForSection.forEach(item => {
+      if (!item.file_id) return;
+      if (!isAiAutofillDoneForSection(activeSectionId, item.file_id)) return;
+      if (clearedFilesRef.current.has(item.file_id)) return;
+      clearedFilesRef.current.add(item.file_id);
+      clearAllPendingForFile(item.file_id);
+    });
+  }, [activeSectionId, clearAllPendingForFile, pendingForSection]);
 
   useEffect(() => {
     if (!pendingUpload?.navigateIntent) return;
 
-    const intentKey = `${pendingUpload.targetSectionId}:${pendingUpload.uploadScope}:${pendingUpload.navigateIntent}`;
+    const intentKey = `${pendingUpload.targetSectionId}:${pendingUpload.uploadScope}:${pendingUpload.navigateIntent}:${pendingUpload.file_id}`;
     if (handledIntentRef.current === intentKey) return;
     handledIntentRef.current = intentKey;
 
-    // Overview already filled — never re-run Auto-fill; pin stays on the zone.
+    const thisFileDone = isAiAutofillDoneForSection(
+      activeSectionId,
+      pendingUpload.file_id,
+    );
+
     if (
-      sectionAlreadyFilled ||
+      thisFileDone ||
       wasAiSectionRecentlyFilled(activeSectionId, 120000) ||
       pendingUpload.navigateIntent === 'review'
     ) {
@@ -79,12 +73,9 @@ export function AiPendingUploadSectionBanner({ activeSectionId }: Props) {
         pendingUpload.targetSectionId,
         pendingUpload.uploadScope,
       );
-      // Do not scroll/pulse the section drop zone as if it needs another read.
       return;
     }
 
-    // Legacy autofill intent without done marker — still do not auto-click if
-    // the section data was already persisted in background.
     clearNavigateIntent(
       pendingUpload.targetSectionId,
       pendingUpload.uploadScope,
@@ -98,45 +89,41 @@ export function AiPendingUploadSectionBanner({ activeSectionId }: Props) {
     }, 400);
 
     return () => window.clearTimeout(timer);
-  }, [
-    activeSectionId,
-    clearNavigateIntent,
-    pendingUpload,
-    sectionAlreadyFilled,
-  ]);
+  }, [activeSectionId, clearNavigateIntent, pendingUpload]);
 
-  if (!pendingUpload && !sectionAlreadyFilled) return null;
-
-  if (sectionAlreadyFilled) {
+  if (pendingUpload) {
     return (
-      <InlineNotice
-        variant="info"
-        title="Pinned from Overview"
-        description={
-          <>
-            Fields were filled from your overview upload
-            {doneRecord?.fileName ? ` (${doneRecord.fileName})` : ''}. The
-            document was only read there — the section drop zone shows a pin, not
-            another read.
-          </>
+      <AiPendingUploadBanner
+        pendingUpload={pendingUpload}
+        mode="review"
+        onDismiss={() =>
+          dismissHighlight(
+            pendingUpload.targetSectionId,
+            pendingUpload.uploadScope,
+          )
         }
+        onScrollToUpload={() => {
+          scrollToAiUploadZone();
+        }}
       />
     );
   }
 
+  if (!sectionAlreadyFilled) return null;
+
   return (
-    <AiPendingUploadBanner
-      pendingUpload={pendingUpload!}
-      mode="review"
-      onDismiss={() =>
-        dismissHighlight(
-          pendingUpload!.targetSectionId,
-          pendingUpload!.uploadScope,
-        )
+    <InlineNotice
+      variant="info"
+      title="Pinned from Overview"
+      description={
+        <>
+          Fields were filled from your overview upload
+          {doneRecord?.fileName ? ` (${doneRecord.fileName})` : ''}. The
+          document was only read there — the section drop zone shows a pin, not
+          another read. Upload another document to add a new vehicle, policy, or
+          card.
+        </>
       }
-      onScrollToUpload={() => {
-        scrollToAiUploadZone();
-      }}
     />
   );
 }

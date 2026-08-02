@@ -27,6 +27,14 @@ import {
 } from '@/libs/mappers/section1Mapper';
 import { applyAiResultToSectionForm } from '@/utils/aiSectionFormApply';
 import { AI_SECTION_BY_ID } from '@/utils/aiSectionRegistry';
+import {
+  listDashboardAiPatchesForSection,
+  takeDashboardAiPatch,
+  type StashedAiPatch,
+} from '@/utils/aiDashboardPatchCache';
+import { markAiAutofillDoneForSection } from '@/utils/aiAutofillDoneSections';
+import { markAiSectionFilled } from '@/utils/aiSectionFillGuard';
+import { markAiSectionReviewed } from '@/utils/aiSectionReviewState';
 
 type SectionIo = {
   load: () => Promise<Record<string, unknown>>;
@@ -47,7 +55,7 @@ const SECTION_IO: Record<string, SectionIo> = {
   },
   '5': {
     load: () => loadDataEnvelope(getSection5),
-    save: data => saveSection5(data),
+    save: data => saveSection5({ '5A': data?.['5A'] ?? [] }),
   },
   '6': {
     load: () => loadDataEnvelope(getSection6),
@@ -133,12 +141,23 @@ export type BackgroundPersistResult = {
   ok: boolean;
   data?: Record<string, unknown>;
   error?: string;
+  addedCards?: number;
 };
 
-/**
- * Load current section → conceptually merge AI result → save. Runs without UI navigation.
- */
-export async function persistAiResultToSectionBackground(args: {
+/** Serialize load→merge→save per section so rapid Accepts cannot overwrite each other. */
+const persistChains = new Map<string, Promise<unknown>>();
+
+function enqueueSectionPersist<T>(
+  sectionId: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  const prev = persistChains.get(sectionId) || Promise.resolve();
+  const next = prev.catch(() => undefined).then(task);
+  persistChains.set(sectionId, next.then(() => undefined, () => undefined));
+  return next;
+}
+
+async function persistAiResultUnlocked(args: {
   sectionId: string;
   sectionKey?: string;
   result: unknown;
@@ -160,6 +179,14 @@ export async function persistAiResultToSectionBackground(args: {
 
   try {
     const current = await io.load();
+    const beforeLen = Array.isArray(current?.[subsection || ''] )
+      ? (current[subsection as string] as unknown[]).length
+      : Array.isArray(current?.['5A'])
+        ? (current['5A'] as unknown[]).length
+        : Array.isArray(current?.['7A'])
+          ? (current['7A'] as unknown[]).length
+          : 0;
+
     const merged = applyAiResultToSectionForm(
       sectionId,
       current,
@@ -180,6 +207,16 @@ export async function persistAiResultToSectionBackground(args: {
 
     await io.save(merged);
 
+    const defaultSub =
+      subsection || AI_SECTION_BY_ID[sectionId]?.defaultSubsection || '';
+    const afterItems = Array.isArray(merged[defaultSub])
+      ? (merged[defaultSub] as unknown[])
+      : Array.isArray(merged['5A'])
+        ? (merged['5A'] as unknown[])
+        : Array.isArray(merged['7A'])
+          ? (merged['7A'] as unknown[])
+          : [];
+
     if (typeof window !== 'undefined') {
       const { setSectionLastUpdated } = await import(
         '@/utils/sectionLastUpdated'
@@ -192,7 +229,13 @@ export async function persistAiResultToSectionBackground(args: {
       );
     }
 
-    return { sectionId, sectionKey, ok: true, data: merged };
+    return {
+      sectionId,
+      sectionKey,
+      ok: true,
+      data: merged,
+      addedCards: Math.max(0, afterItems.length - beforeLen),
+    };
   } catch (error: any) {
     return {
       sectionId,
@@ -201,4 +244,165 @@ export async function persistAiResultToSectionBackground(args: {
       error: error?.message || 'Background save failed',
     };
   }
+}
+
+/**
+ * Load current section → conceptually merge AI result → save. Runs without UI navigation.
+ * Concurrent calls for the same section are queued (no lost Toyota/Honda/Jeep cards).
+ */
+export async function persistAiResultToSectionBackground(args: {
+  sectionId: string;
+  sectionKey?: string;
+  result: unknown;
+  subsection?: string | null;
+}): Promise<BackgroundPersistResult> {
+  return enqueueSectionPersist(args.sectionId, () =>
+    persistAiResultUnlocked(args),
+  );
+}
+
+export type FlushStashesResult = {
+  ok: boolean;
+  saved: number;
+  failed: number;
+  sectionIds: string[];
+  error?: string;
+};
+
+/**
+ * Persist every pending stash for a section (oldest first), then drop them.
+ * Used when Accepting one inbox row so sibling docs (Honda/Jeep) are not left behind.
+ */
+export async function persistAllPendingStashesForSection(args: {
+  sectionId: string;
+  /** Prefer this stash first (e.g. with user-edited facts). */
+  primary?: StashedAiPatch | null;
+  onFileDone?: (fileId: string, sectionId: string) => void;
+}): Promise<FlushStashesResult> {
+  const { sectionId, primary, onFileDone } = args;
+  const others = listDashboardAiPatchesForSection(sectionId).filter(
+    item =>
+      !primary ||
+      item.file_id !== primary.file_id ||
+      item.section_id !== primary.section_id,
+  );
+  // Oldest first so chronological uploads append in order.
+  const queue = [
+    ...(primary ? [primary] : []),
+    ...[...others].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)),
+  ];
+
+  if (!queue.length) {
+    return { ok: true, saved: 0, failed: 0, sectionIds: [] };
+  }
+
+  let saved = 0;
+  let failed = 0;
+  let lastError: string | undefined;
+  const sectionIds = new Set<string>([sectionId]);
+
+  for (const stash of queue) {
+    const result = await persistAiResultToSectionBackground({
+      sectionId: stash.section_id,
+      sectionKey: stash.section_key,
+      result: stash.result,
+      subsection: stash.subsection,
+    });
+
+    if (!result.ok) {
+      failed += 1;
+      lastError = result.error;
+      continue;
+    }
+
+    saved += 1;
+    markAiSectionFilled(stash.section_id);
+    markAiAutofillDoneForSection({
+      sectionId: stash.section_id,
+      fileId: stash.file_id,
+      fileName: stash.file_name,
+    });
+    markAiSectionReviewed({
+      sectionId: stash.section_id,
+      fileId: stash.file_id,
+    });
+    takeDashboardAiPatch(stash.section_id, stash.file_id);
+    onFileDone?.(stash.file_id, stash.section_id);
+    sectionIds.add(stash.section_id);
+  }
+
+  return {
+    ok: failed === 0,
+    saved,
+    failed,
+    sectionIds: [...sectionIds],
+    error: lastError,
+  };
+}
+
+/**
+ * Also flush partner-section stashes for the same uploaded files
+ * (vehicle Accept also saves that file's insurance extract).
+ */
+export async function persistPartnerStashesForFiles(args: {
+  fileIds: string[];
+  excludeSectionId?: string;
+  onFileDone?: (fileId: string, sectionId: string) => void;
+}): Promise<FlushStashesResult> {
+  const fileSet = new Set(args.fileIds.filter(Boolean));
+  if (!fileSet.size) {
+    return { ok: true, saved: 0, failed: 0, sectionIds: [] };
+  }
+
+  const { listDashboardAiPatches } = await import(
+    '@/utils/aiDashboardPatchCache'
+  );
+  const partners = listDashboardAiPatches()
+    .filter(
+      item =>
+        fileSet.has(item.file_id) &&
+        item.section_id !== args.excludeSectionId,
+    )
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+  let saved = 0;
+  let failed = 0;
+  let lastError: string | undefined;
+  const sectionIds = new Set<string>();
+
+  for (const stash of partners) {
+    const result = await persistAiResultToSectionBackground({
+      sectionId: stash.section_id,
+      sectionKey: stash.section_key,
+      result: stash.result,
+      subsection: stash.subsection,
+    });
+    if (!result.ok) {
+      failed += 1;
+      lastError = result.error;
+      continue;
+    }
+    saved += 1;
+    markAiSectionFilled(stash.section_id);
+    markAiAutofillDoneForSection({
+      sectionId: stash.section_id,
+      fileId: stash.file_id,
+      fileName: stash.file_name,
+    });
+    markAiSectionReviewed({
+      sectionId: stash.section_id,
+      fileId: stash.file_id,
+    });
+    takeDashboardAiPatch(stash.section_id, stash.file_id);
+    onFileDone?.(stash.file_id, stash.section_id);
+    sectionIds.add(stash.section_id);
+  }
+
+  return {
+    ok: failed === 0,
+    saved,
+    failed,
+    sectionIds: [...sectionIds],
+    error: lastError,
+  };
 }

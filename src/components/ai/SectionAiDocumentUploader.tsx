@@ -134,8 +134,14 @@ export function SectionAiDocumentUploader({
   }, []);
 
   const processFile = useCallback(
-    async (file: File | null | undefined) => {
-      if (!file || isBusy) return;
+    async (
+      file: File | null | undefined,
+      options?: { ignoreBusy?: boolean },
+    ) => {
+      if (!file) return;
+      if (!options?.ignoreBusy && isBusy) return;
+      // Clear only so a new document can fill again; other docs already in the
+      // vault stay — apply/upsert merges by identity (VIN/policy/etc.).
       if (resolvedSectionId) clearAiAutofillDoneForSection(resolvedSectionId);
 
       const historyId = `section-${resolvedSectionId || 'local'}-${Date.now()}-${Math.random()
@@ -204,6 +210,21 @@ export function SectionAiDocumentUploader({
     [isBusy, onUpload, resolvedSectionId],
   );
 
+  const processFiles = useCallback(
+    async (files: File[]) => {
+      const list = files.filter(Boolean);
+      if (!list.length) return;
+      for (const file of list) {
+        try {
+          await processFile(file, { ignoreBusy: true });
+        } catch {
+          // Continue remaining documents — one failure shouldn't stop the batch.
+        }
+      }
+    },
+    [processFile],
+  );
+
   const handleDragEnter = (event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -229,8 +250,8 @@ export function SectionAiDocumentUploader({
     setIsDragging(false);
     if (isBusy) return;
 
-    const file = event.dataTransfer.files?.[0] ?? null;
-    void processFile(file);
+    const files = Array.from(event.dataTransfer.files || []);
+    void processFiles(files);
   };
 
   const openFilePicker = () => {
@@ -349,11 +370,12 @@ export function SectionAiDocumentUploader({
             type="file"
             className="sr-only"
             accept={AI_DOCUMENT_ACCEPT}
+            multiple
             disabled={isBusy}
             onChange={event => {
-              const file = event.currentTarget.files?.[0] ?? null;
-              void processFile(file);
+              const files = Array.from(event.currentTarget.files || []);
               event.currentTarget.value = '';
+              void processFiles(files);
             }}
           />
 
@@ -417,7 +439,7 @@ export function SectionAiDocumentUploader({
                   </span>
                 </p>
                 <p className="text-xs text-[#5a6b80]">
-                  PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB
+                  PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB · Multiple OK
                 </p>
               </>
             )}

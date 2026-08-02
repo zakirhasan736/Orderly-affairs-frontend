@@ -21,7 +21,6 @@ import { AiDocumentPreviewDialog } from '@/components/ai/AiDocumentPreviewDialog
 import {
   listDashboardAiPatches,
   peekDashboardAiPatch,
-  stashDashboardAiPatch,
   takeDashboardAiPatch,
   type DetectedAiFact,
   type StashedAiPatch,
@@ -53,9 +52,10 @@ import {
 import { clearAiUploadMeta } from '@/utils/aiDocumentUploadUi';
 import { buildAiUploadReviewSummary } from '@/utils/aiUploadReviewSummary';
 import { applyEditedFactsToStash } from '@/utils/aiReviewAcceptSave';
-import { persistAiResultToSectionBackground } from '@/services/aiBackgroundSectionPersist';
-import { markAiSectionFilled } from '@/utils/aiSectionFillGuard';
-import { markAiAutofillDoneForSection } from '@/utils/aiAutofillDoneSections';
+import {
+  persistAllPendingStashesForSection,
+  persistPartnerStashesForFiles,
+} from '@/services/aiBackgroundSectionPersist';
 import { ensureFreshSession } from '@/libs/secureFetch';
 import { flattenDetectedFactsFromPatch } from '@/utils/aiSemanticFieldMatch';
 import { unwrapAiAutofillPatch } from '@/utils/aiPatchNormalizer';
@@ -608,14 +608,14 @@ export function AiReviewInboxPanel({
       if (row.status !== 'ready' || row.sectionId === 'overview') return;
       markAiReviewRead(row.sectionId, row.fileId);
 
-      const patch = peekDashboardAiPatch(row.sectionId);
+      const patch = peekDashboardAiPatch(row.sectionId, row.fileId);
       const pending =
-        routing?.getPendingUploadsForSection(row.sectionId)?.[0] ||
         routing?.pendingUploads?.find(
           item =>
             item.file_id === row.fileId &&
             item.targetSectionId === row.sectionId,
-        );
+        ) ||
+        routing?.getPendingUploadsForSection(row.sectionId)?.[0];
 
       const factsFromPending = (pending?.extractedFields || []).map(field => ({
         label: field.field_label || field.field_path || 'Field',
@@ -674,59 +674,75 @@ export function AiReviewInboxPanel({
       }
       setApprovingId(row.id);
       try {
-        const stash = peekDashboardAiPatch(row.sectionId);
-        if (stash) {
-          const nextStash = editedFacts?.length
+        const stash = peekDashboardAiPatch(row.sectionId, row.fileId);
+        const primary = stash
+          ? editedFacts?.length
             ? applyEditedFactsToStash(stash, editedFacts)
-            : stash;
+            : stash
+          : null;
 
-          await ensureFreshSession();
-          const persistResult = await persistAiResultToSectionBackground({
-            sectionId: row.sectionId,
-            sectionKey:
-              nextStash.section_key ||
-              AI_SECTION_BY_ID[row.sectionId]?.key ||
-              row.sectionId,
-            result: nextStash.result,
-            subsection: nextStash.subsection,
-          });
+        await ensureFreshSession();
 
-          if (!persistResult.ok) {
-            toast.error(
-              persistResult.error ||
-                'Could not save these fields. Please try again.',
-            );
-            return;
-          }
+        // Accept one vehicle/insurance alert → save ALL pending docs for that
+        // section (Toyota + Honda + Jeep), then partner extracts on those files.
+        const clearedFiles = new Set<string>();
+        const flush = await persistAllPendingStashesForSection({
+          sectionId: row.sectionId,
+          primary,
+          onFileDone: fileId => {
+            if (fileId) clearedFiles.add(fileId);
+          },
+        });
 
-          markAiSectionFilled(row.sectionId);
-          markAiAutofillDoneForSection({
-            sectionId: row.sectionId,
-            fileId: row.fileId || nextStash.file_id,
-            fileName: row.fileName,
-          });
+        if (flush.saved === 0 && flush.failed > 0) {
+          toast.error(
+            flush.error ||
+              'Could not save these fields. Please try again.',
+          );
+          return;
+        }
 
-          stashDashboardAiPatch({
-            ...nextStash,
-            pending_accept: false,
-            detectedFields: editedFacts || nextStash.detectedFields,
-          });
+        const partners = await persistPartnerStashesForFiles({
+          fileIds: [...clearedFiles],
+          excludeSectionId: row.sectionId,
+          onFileDone: fileId => {
+            if (fileId) clearedFiles.add(fileId);
+          },
+        });
+
+        clearedFiles.forEach(fileId => {
+          routing?.clearAllPendingForFile(fileId);
+        });
+        if (!clearedFiles.size) {
+          routing?.clearPendingForSection(row.sectionId);
         }
 
         markAiSectionReviewed({
           sectionId: row.sectionId,
           fileId: row.fileId,
         });
-        takeDashboardAiPatch(row.sectionId);
-        routing?.clearPendingForSection(row.sectionId);
-        if (row.fileId) {
-          routing?.clearAllPendingForFile(row.fileId);
-        }
         setReviewTick(value => value + 1);
-        toast.success('Saved to your vault', {
-          description:
-            'Open the section to finish any blanks — use Fill empty fields.',
-        });
+
+        const totalSaved = flush.saved + partners.saved;
+        toast.success(
+          totalSaved > 1
+            ? `Saved ${totalSaved} documents to your vault`
+            : 'Saved to your vault',
+          {
+            description:
+              totalSaved > 1
+                ? 'Separate cards were created for each distinct vehicle/policy. Matching data updates existing cards instead of duplicating.'
+                : 'Open the section to finish any blanks — use Fill empty fields.',
+          },
+        );
+
+        if (flush.failed > 0 || partners.failed > 0) {
+          toast.error(
+            flush.error ||
+              partners.error ||
+              'Some documents could not be saved. Check Vault Activity and Accept again.',
+          );
+        }
       } finally {
         setApprovingId(null);
       }
@@ -740,9 +756,12 @@ export function AiReviewInboxPanel({
         sectionId: row.sectionId,
         fileId: row.fileId,
       });
-      takeDashboardAiPatch(row.sectionId);
-      routing?.clearPendingForSection(row.sectionId);
-      if (row.fileId) routing?.clearAllPendingForFile(row.fileId);
+      takeDashboardAiPatch(row.sectionId, row.fileId);
+      if (row.fileId) {
+        routing?.clearAllPendingForFile(row.fileId);
+      } else {
+        routing?.clearPendingForSection(row.sectionId);
+      }
       setReviewTick(value => value + 1);
       toast.message('Alert removed');
     },
@@ -756,8 +775,7 @@ export function AiReviewInboxPanel({
       sectionId: reviewDoc.sectionId,
       fileId,
     });
-    takeDashboardAiPatch(reviewDoc.sectionId);
-    routing?.clearPendingForSection(reviewDoc.sectionId);
+    takeDashboardAiPatch(reviewDoc.sectionId, fileId);
     if (fileId) {
       routing?.clearAllPendingForFile(fileId);
       clearAiUploadMeta(fileId);
@@ -767,6 +785,8 @@ export function AiReviewInboxPanel({
       } catch {
         // local clear still helps
       }
+    } else {
+      routing?.clearPendingForSection(reviewDoc.sectionId);
     }
     setReviewTick(value => value + 1);
     setReviewDoc(null);

@@ -10,7 +10,7 @@ export function markAiSectionFilled(sectionId: string) {
 
 export function wasAiSectionRecentlyFilled(
   sectionId: string,
-  withinMs = 20000,
+  withinMs = 120000,
 ) {
   const stamped = recentFills.get(String(sectionId));
   if (!stamped) return false;
