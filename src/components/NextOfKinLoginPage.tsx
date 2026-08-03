@@ -16,6 +16,8 @@ interface NextOfKinLoginPageProps {
   captchaSlot?: React.ReactNode;
   /** When captcha is shown, block submit until Cloudflare finishes. */
   captchaReady?: boolean;
+  titleOverride?: string;
+  subtitleOverride?: string;
 }
 
 function ShieldIcon({ className }: { className?: string }) {
@@ -43,7 +45,15 @@ function ShieldIcon({ className }: { className?: string }) {
   );
 }
 
-function BrandAside({ onBackToOwner }: { onBackToOwner: () => void }) {
+function BrandAside({
+  onBackToOwner,
+  title,
+  subtitle,
+}: {
+  onBackToOwner: () => void;
+  title: string;
+  subtitle: string;
+}) {
   return (
     <aside className="relative hidden min-h-[100dvh] w-full max-w-[min(100%,37.5rem)] flex-col bg-[#213D59] px-12 py-12 text-white lg:flex">
       <button
@@ -53,7 +63,7 @@ function BrandAside({ onBackToOwner }: { onBackToOwner: () => void }) {
         style={{ fontFamily: "'Manrope', sans-serif" }}
       >
         <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.7} />
-        Owner dashboard
+        Owner sign-in
       </button>
 
       <div className="mt-auto flex items-start gap-[18px]">
@@ -72,10 +82,10 @@ function BrandAside({ onBackToOwner }: { onBackToOwner: () => void }) {
             Orderly Affairs
           </p>
           <h1 className="nok-serif mt-2.5 mb-0 text-[40px] leading-[1.1] font-normal text-white">
-            Next of Kin
+            {title}
           </h1>
           <p className="mt-3.5 mb-0 max-w-[40ch] text-[16px] leading-[1.7] text-white/72">
-            Secure access to the vault shared with you.
+            {subtitle}
           </p>
         </div>
       </div>
@@ -88,7 +98,15 @@ function BrandAside({ onBackToOwner }: { onBackToOwner: () => void }) {
   );
 }
 
-function MobileBrandHeader({ onBackToOwner }: { onBackToOwner: () => void }) {
+function MobileBrandHeader({
+  onBackToOwner,
+  title,
+  subtitle,
+}: {
+  onBackToOwner: () => void;
+  title: string;
+  subtitle: string;
+}) {
   return (
     <div className="bg-[#213D59] px-5 pb-[30px] pt-[max(0.75rem,env(safe-area-inset-top))] text-white lg:hidden">
       <button
@@ -98,7 +116,7 @@ function MobileBrandHeader({ onBackToOwner }: { onBackToOwner: () => void }) {
         style={{ fontFamily: "'Manrope', sans-serif" }}
       >
         <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.7} />
-        Owner dashboard
+        Owner sign-in
       </button>
 
       <div className="mt-[22px] flex items-start gap-3.5">
@@ -117,10 +135,10 @@ function MobileBrandHeader({ onBackToOwner }: { onBackToOwner: () => void }) {
             Orderly Affairs
           </p>
           <h1 className="nok-serif mt-1.5 mb-0 text-[28px] leading-[1.1] font-normal text-white">
-            Next of Kin
+            {title}
           </h1>
           <p className="mt-2 mb-0 text-sm leading-[1.55] text-white/70">
-            Secure access to the vault shared with you.
+            {subtitle}
           </p>
         </div>
       </div>
@@ -133,7 +151,12 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
   onBackToOwner,
   captchaSlot,
   captchaReady = true,
+  titleOverride,
+  subtitleOverride,
 }) => {
+  const title = titleOverride || 'Next of Kin';
+  const subtitle =
+    subtitleOverride || 'Secure access to the vault shared with you.';
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -187,8 +210,16 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
 
   return (
     <div className="nok-login flex min-h-[100dvh] flex-col lg:flex-row">
-      <BrandAside onBackToOwner={onBackToOwner} />
-      <MobileBrandHeader onBackToOwner={onBackToOwner} />
+      <BrandAside
+        onBackToOwner={onBackToOwner}
+        title={title}
+        subtitle={subtitle}
+      />
+      <MobileBrandHeader
+        onBackToOwner={onBackToOwner}
+        title={title}
+        subtitle={subtitle}
+      />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] lg:items-center lg:justify-center lg:p-12">
         <div className="mx-auto flex w-full max-w-[min(100%,28.75rem)] flex-1 flex-col lg:flex-none">

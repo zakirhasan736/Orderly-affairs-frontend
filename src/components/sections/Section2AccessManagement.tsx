@@ -28,13 +28,13 @@ const SECTION_2A = {
 
 const GUIDE_STEPS = [
   {
-    title: 'Add people',
-    text: 'Choose who can access your kit — full access or selected sections only.',
+    title: 'Add next of kin',
+    text: 'Invite up to 5 people who can open your kit dashboard — full kit or up to 5 specific sections.',
     icon: UserPlus,
   },
   {
     title: 'Set access & timing',
-    text: 'Pick sections and whether they log in now (immediate) or after death (password card).',
+    text: 'Choose immediate login (email with password) or upon-death access (password card). Next of kin is view-only.',
     icon: ShieldCheck,
   },
   {
@@ -52,7 +52,8 @@ const GUIDE_STEPS = [
 const SECURITY_RULES = [
   'Do not give anyone their Master Access Password directly.',
   'Only tell them where their printed Password Card is stored.',
-  'Add at least 1 trusted person to enable emergency access.',
+  'Add at least 1 trusted next of kin to enable emergency access.',
+  'Maximum 5 next-of-kin accounts. Family edit roles are managed in Vault Settings — not here.',
   'Use Revoke All if you need to immediately lock everyone out.',
 ];
 

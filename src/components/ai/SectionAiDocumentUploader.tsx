@@ -25,13 +25,14 @@ import {
   isAiAutofillDoneForSection,
 } from '@/utils/aiAutofillDoneSections';
 import { toAiUserFacingMessage } from '@/utils/aiUserFacingError';
-import { useAiActiveSectionId } from '@/contexts/AiActiveSectionContext';
+import { useAiActiveSectionId, useAiActiveSubsectionId } from '@/contexts/AiActiveSectionContext';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
   listAiUploadHistory,
   upsertAiUploadHistory,
 } from '@/utils/aiUploadHistory';
 import { getAiSectionLabel } from '@/utils/aiSectionRegistry';
+import { SectionLastUpdatedPin } from '@/components/vault/SectionLastUpdatedPin';
 
 export type SectionAiUploaderTone = {
   wrapper?: string;
@@ -58,6 +59,8 @@ type SectionAiDocumentUploaderProps = {
   tone?: SectionAiUploaderTone;
   /** Vault section id — enables autofill-done state + shared history popup. */
   sectionId?: string;
+  /** Subsection id for footprint pin (e.g. 5A). */
+  subsectionId?: string;
   /** Force "Auto fill done" (overview already filled this section). */
   autofillDone?: boolean;
   /** Force overview pin even if session flag not set yet. */
@@ -83,6 +86,7 @@ export function SectionAiDocumentUploader({
   pendingHint,
   tone,
   sectionId,
+  subsectionId,
   autofillDone: autofillDoneProp,
   showOverviewPin: showOverviewPinProp,
   onUpload,
@@ -92,8 +96,10 @@ export function SectionAiDocumentUploader({
   const [isDragging, setIsDragging] = useState(false);
   const [doneTick, setDoneTick] = useState(0);
   const activeSectionId = useAiActiveSectionId();
+  const activeSubsectionId = useAiActiveSubsectionId();
   const aiRouting = useOptionalAiDocumentRouting();
   const resolvedSectionId = sectionId || activeSectionId || undefined;
+  const resolvedSubsectionId = subsectionId || activeSubsectionId || undefined;
   const resolvedMimeType = uploadedFile?.mime_type || uploadedMimeType;
   const hasUploadedFile = Boolean(resolvedMimeType || uploadedFile?.file_id);
   const isBusy = disabled || isUploading || isReading;
@@ -301,6 +307,14 @@ export function SectionAiDocumentUploader({
       />
 
       <div className="relative space-y-3">
+        {resolvedSectionId ? (
+          <SectionLastUpdatedPin
+            sectionId={resolvedSectionId}
+            subsectionId={resolvedSubsectionId}
+            label="Last update here"
+            compact
+          />
+        ) : null}
         {autofillDone && (
           <div className="rounded-xl border border-[#2c7a63]/30 bg-[#e7f2ee] px-3 py-2 text-sm leading-snug text-[#213D59]">
             <p className="font-semibold text-[#2c7a63]">Pinned from Overview</p>

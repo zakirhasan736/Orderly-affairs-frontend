@@ -477,6 +477,7 @@ export default function Section5Vehicles({
       compact={compact}
       tone={tone}
       sectionId="5"
+      subsectionId="5A"
       disabled={isAnyAIActionRunning}
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}

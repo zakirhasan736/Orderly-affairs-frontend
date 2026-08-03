@@ -564,6 +564,7 @@ export default function Section7InsurancePolicies({
       compact={compact}
       tone={tone}
       sectionId="7"
+      subsectionId="7A"
       disabled={isAnyAIActionRunning}
       isUploading={uploadingScope === scope}
       isReading={aiLoadingScope === scope}

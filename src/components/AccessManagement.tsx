@@ -68,6 +68,8 @@ import {
 import {
   isDuplicateAccessEmail,
   validateAccessWizardStep,
+  MAX_NEXTKIN_ACCOUNTS,
+  MAX_NOK_AUTHORIZED_SECTIONS,
   type WizardStepId,
 } from '@/utils/accessManagementValidation';
 
@@ -1377,6 +1379,12 @@ export const AccessManagement = forwardRef<
   }, []);
 
   const openAddWizard = useCallback(() => {
+    if (authorizedPeople.length >= MAX_NEXTKIN_ACCOUNTS) {
+      toast.error(
+        `You can add at most ${MAX_NEXTKIN_ACCOUNTS} next-of-kin accounts`,
+      );
+      return;
+    }
     setDraft(createEmptyPerson());
     setOriginalMasterPassword('');
     setWizardMode('add');
@@ -1385,7 +1393,7 @@ export const AccessManagement = forwardRef<
     setSectionPickerOpen(false);
     setShowWizardCardPreview(!isMobile);
     setWizardOpen(true);
-  }, [isMobile]);
+  }, [authorizedPeople.length, isMobile]);
 
   useImperativeHandle(ref, () => ({ openAddWizard }), [openAddWizard]);
 
@@ -1412,10 +1420,21 @@ export const AccessManagement = forwardRef<
 
   const toggleDraftSection = (id: string) => {
     if (!draft) return;
-    const updated = draft.authorized_sections.includes(id)
-      ? draft.authorized_sections.filter(s => s !== id)
-      : [...draft.authorized_sections, id];
-    patchDraft({ authorized_sections: updated });
+    if (draft.authorized_sections.includes(id)) {
+      patchDraft({
+        authorized_sections: draft.authorized_sections.filter(s => s !== id),
+      });
+      return;
+    }
+    if (draft.authorized_sections.length >= MAX_NOK_AUTHORIZED_SECTIONS) {
+      toast.error(
+        `Next-of-Kin section access allows at most ${MAX_NOK_AUTHORIZED_SECTIONS} sections`,
+      );
+      return;
+    }
+    patchDraft({
+      authorized_sections: [...draft.authorized_sections, id],
+    });
   };
 
   const toggleDraftSectionGroup = (parentId: string) => {
@@ -1426,10 +1445,27 @@ export const AccessManagement = forwardRef<
       draft.authorized_sections.includes(id),
     );
 
+    if (allSelected) {
+      patchDraft({
+        authorized_sections: draft.authorized_sections.filter(
+          id => !groupIds.includes(id),
+        ),
+      });
+      return;
+    }
+
+    const merged = Array.from(
+      new Set([...draft.authorized_sections, ...groupIds]),
+    );
+    if (merged.length > MAX_NOK_AUTHORIZED_SECTIONS) {
+      toast.error(
+        `Next-of-Kin section access allows at most ${MAX_NOK_AUTHORIZED_SECTIONS} sections`,
+      );
+      return;
+    }
+
     patchDraft({
-      authorized_sections: allSelected
-        ? draft.authorized_sections.filter(id => !groupIds.includes(id))
-        : Array.from(new Set([...draft.authorized_sections, ...groupIds])),
+      authorized_sections: merged,
     });
   };
 
@@ -1472,11 +1508,20 @@ export const AccessManagement = forwardRef<
       sectionRegistry,
     );
 
+    const nextSections = isActive
+      ? draft.authorized_sections.filter(id => !presetIds.includes(id))
+      : Array.from(new Set([...draft.authorized_sections, ...presetIds]));
+
+    if (!isActive && nextSections.length > MAX_NOK_AUTHORIZED_SECTIONS) {
+      toast.error(
+        `Next-of-Kin section access allows at most ${MAX_NOK_AUTHORIZED_SECTIONS} sections`,
+      );
+      return;
+    }
+
     patchDraft({
       access_level: 'Section-Specific Access',
-      authorized_sections: isActive
-        ? draft.authorized_sections.filter(id => !presetIds.includes(id))
-        : Array.from(new Set([...draft.authorized_sections, ...presetIds])),
+      authorized_sections: nextSections,
     });
 
     if (!isActive) {
@@ -1908,16 +1953,18 @@ export const AccessManagement = forwardRef<
                       <div>
                         <h4 className="font-semibold">Choose Access Level</h4>
                         <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
-                          Control how much of your kit they can view.
+                          Full kit or up to {MAX_NOK_AUTHORIZED_SECTIONS}{' '}
+                          specific sections. Next of kin can view only.
                         </p>
                         {draft.immediate_access && (
                           <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm leading-5 text-emerald-900">
                             Immediate access — they will receive login details by
-                            email. No password card or physical credentials are
-                            needed.
+                            email (sections, email &amp; password). No password
+                            card is required.
                           </p>
                         )}
                       </div>
+
                       <div
                         role="radiogroup"
                         aria-label="Access level"
@@ -1932,7 +1979,7 @@ export const AccessManagement = forwardRef<
                             })
                           }
                           title="Full Kit Access"
-                          description="They can view your complete kit."
+                          description="They can open your complete kit (view only)."
                           icon={ShieldCheck}
                           iconClassName="bg-emerald-100 text-emerald-700"
                         />
@@ -1947,7 +1994,7 @@ export const AccessManagement = forwardRef<
                             setSectionPickerOpen(true);
                           }}
                           title="Section-Specific Access"
-                          description="Choose exactly which sections they can access."
+                          description={`Choose up to ${MAX_NOK_AUTHORIZED_SECTIONS} sections they can view.`}
                           icon={FileText}
                           iconClassName="bg-blue-100 text-blue-700"
                         />
@@ -1961,7 +2008,8 @@ export const AccessManagement = forwardRef<
                                 Select Sections
                               </p>
                               <p className="text-sm text-blue-800">
-                                {draft.authorized_sections.length} selected
+                                {draft.authorized_sections.length} /{' '}
+                                {MAX_NOK_AUTHORIZED_SECTIONS} selected
                               </p>
                             </div>
                             <Button
@@ -2571,6 +2619,7 @@ export const AccessManagement = forwardRef<
           )}
           <Button
             onClick={openAddWizard}
+            disabled={authorizedPeople.length >= MAX_NEXTKIN_ACCOUNTS}
             className={cn(
               'rounded-2xl',
               MIN_TOUCH,
@@ -2578,8 +2627,11 @@ export const AccessManagement = forwardRef<
             )}
           >
             <Plus className={cn('h-4 w-4', !isMobile && 'mr-2')} />
-            {!isMobile && 'Add Trusted Person'}
-            {isMobile && <span className="sr-only">Add Trusted Person</span>}
+            {!isMobile &&
+              (authorizedPeople.length >= MAX_NEXTKIN_ACCOUNTS
+                ? `Limit ${MAX_NEXTKIN_ACCOUNTS} reached`
+                : 'Add Next of Kin')}
+            {isMobile && <span className="sr-only">Add Next of Kin</span>}
           </Button>
         </div>
       </div>

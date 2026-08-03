@@ -43,6 +43,7 @@ import {
 } from '@/utils/vaultActivityTabs';
 import { VaultFillGapsProvider } from '@/components/vault/VaultFillGapsContext';
 import { ActiveSubsectionFillBar } from '@/components/vault/ActiveSubsectionFillBar';
+import { SubsectionFootprintStrip } from '@/components/vault/SubsectionFootprintStrip';
 import {
   collectOverviewExpiryAlerts,
   OVERVIEW_REMINDER_HORIZON_DAYS,
@@ -106,6 +107,15 @@ import { useGetStatusQuery } from '@/services/billingApi';
 import { fetchSession, nokLogout as apiNokLogout, ownerLogout as apiOwnerLogout, secureFetch } from '@/libs/secureFetch';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import { parseAuthApiError } from '@/utils/authRateLimit';
+import {
+  familyAllowedVaultSectionIds,
+  familyCanManageNextKin,
+  familyCanSeeOverview,
+  familyCanViewVaultSettings,
+  firstAllowedFamilySectionId,
+  parseFamilyDashboardSession,
+  type FamilyDashboardSession,
+} from '@/utils/familyDashboardAccess';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/common/ui/button';
 import { Card, CardContent } from '@/components/common/ui/card';
@@ -232,6 +242,10 @@ export default function DashboardPage() {
   const [nokCaptchaResetKey, setNokCaptchaResetKey] = useState(0);
   const [showWelcome, setShowWelcome] = useState(false);
   const [tourStarted, setTourStarted] = useState(false);
+  const [familyAcl, setFamilyAcl] = useState<FamilyDashboardSession>(() =>
+    parseFamilyDashboardSession({}),
+  );
+  const [sessionReady, setSessionReady] = useState(false);
   const derivedRole = useMemo(() => {
     if (appMode === 'owner') return 'owner';
     if (appMode === 'nok_dashboard' || appMode === 'nok_section_view')
@@ -247,15 +261,20 @@ export default function DashboardPage() {
     skip: appMode !== 'owner',
   });
   const [pendingMessageCount, setPendingMessageCount] = useState(0);
-  const [supportUnread] = useState(0);
+  const [supportUnread, setSupportUnread] = useState(0);
 
   // backed next kin handler
   const [nextkinLogin] = useNextkinLoginMutation();
 
+  const canFetchNextKin =
+    appMode === 'owner' &&
+    sessionReady &&
+    (!familyAcl.isFamily || familyCanManageNextKin(familyAcl));
+
   const { data: myNextKin, refetch: refetchNextKin } = useGetMyNextKinQuery(
     undefined,
     {
-      skip: appMode !== 'owner',
+      skip: !canFetchNextKin,
     },
   );
   const firstNokId = myNextKin?.[0]?.id;
@@ -340,21 +359,31 @@ export default function DashboardPage() {
   const [subsectionOrder, setSubsectionOrder] = useState<
     Record<string, string[]>
   >({});
-  const allSections = useMemo(
-    () =>
-      VAULT_NAVIGATION.map(section => {
-        if (!section.subsections?.length) return section;
-        return {
-          ...section,
-          subsections: applySubsectionOrder(
-            section.subsections,
-            section.id,
-            subsectionOrder,
-          ),
-        };
-      }),
-    [subsectionOrder],
-  );
+  const allSections = useMemo(() => {
+    let sections = VAULT_NAVIGATION.map(section => {
+      if (!section.subsections?.length) return section;
+      return {
+        ...section,
+        subsections: applySubsectionOrder(
+          section.subsections,
+          section.id,
+          subsectionOrder,
+        ),
+      };
+    });
+
+    if (familyAcl.isFamily) {
+      const allowed = familyAllowedVaultSectionIds(familyAcl);
+      if (allowed !== 'all') {
+        sections = sections.filter(section => allowed.has(section.id));
+      }
+      if (!familyCanManageNextKin(familyAcl)) {
+        sections = sections.filter(section => section.id !== '2');
+      }
+    }
+
+    return sections;
+  }, [subsectionOrder, familyAcl]);
   // Sections that include obituary content (marked with dove symbol)
   const obituarySections = useMemo(
     () => new Set(['8', '9', '10', '11', '16']),
@@ -746,15 +775,28 @@ export default function DashboardPage() {
       if (cancelled) return;
 
       if (session.authenticated && session.role === 'nextkin') {
+        if (session.access_type === 'family') {
+          const acl = parseFamilyDashboardSession(session);
+          setFamilyAcl(acl);
+          setCurrentUser({
+            email: session.email || '',
+            full_name: session.full_name,
+          });
+          setAppMode('owner');
+          setSessionReady(true);
+          return;
+        }
         router.replace('/next-kin/dashboard');
         return;
       }
 
       if (session.authenticated && session.role === 'owner') {
+        setFamilyAcl(parseFamilyDashboardSession({}));
         setCurrentUser({ email: session.email || '' });
         // Do not reset activeSection here — remounts/re-hydrates must not
         // yank the owner off the section they are editing.
         setAppMode('owner');
+        setSessionReady(true);
         return;
       }
 
@@ -767,6 +809,40 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [router]);
+
+  // Redirect family collaborators away from areas they cannot open
+  useEffect(() => {
+    if (!sessionReady || !familyAcl.isFamily || appMode !== 'owner') return;
+
+    if (
+      activeSection === 'vault-settings' &&
+      !familyCanViewVaultSettings(familyAcl)
+    ) {
+      setActiveSection(firstAllowedFamilySectionId(familyAcl));
+      return;
+    }
+
+    if (activeSection === 'dashboard' && !familyCanSeeOverview(familyAcl)) {
+      setActiveSection(firstAllowedFamilySectionId(familyAcl));
+      return;
+    }
+
+    if (
+      activeSection &&
+      activeSection !== 'dashboard' &&
+      activeSection !== 'vault-settings'
+    ) {
+      const allowed = familyAllowedVaultSectionIds(familyAcl);
+      const nokOk =
+        activeSection !== '2' || familyCanManageNextKin(familyAcl);
+      if (
+        (allowed !== 'all' && !allowed.has(activeSection)) ||
+        !nokOk
+      ) {
+        setActiveSection(firstAllowedFamilySectionId(familyAcl));
+      }
+    }
+  }, [sessionReady, familyAcl, appMode, activeSection]);
 
   // Load form data when switching to owner mode
   useEffect(() => {
@@ -1047,6 +1123,16 @@ export default function DashboardPage() {
   }, [appMode]);
 
   const handleOwnerLogout = async () => {
+    if (familyAcl.isFamily) {
+      try {
+        await nextkinLogout({}).unwrap();
+      } catch {}
+      try {
+        await apiNokLogout();
+      } catch {}
+      router.push('/family/login');
+      return;
+    }
     try {
       await ownerLogout({}).unwrap();
     } catch {}
@@ -1822,12 +1908,58 @@ export default function DashboardPage() {
     }
   };
 
+  const goToSection = useCallback(
+    (sectionId: string) => {
+      if (familyAcl.isFamily) {
+        if (
+          sectionId === 'vault-settings' &&
+          !familyCanViewVaultSettings(familyAcl)
+        ) {
+          toast.error('Vault Settings is not included in your access');
+          return;
+        }
+        if (sectionId === 'dashboard' && !familyCanSeeOverview(familyAcl)) {
+          setActiveSection(firstAllowedFamilySectionId(familyAcl));
+          setActiveSubsection(null);
+          setActiveTopicId(null);
+          setSidebarOpen(false);
+          setMobileMoreOpen(false);
+          return;
+        }
+        if (sectionId === '2' && !familyCanManageNextKin(familyAcl)) {
+          toast.error('Next of Kin management is not included in your access');
+          return;
+        }
+        if (
+          sectionId !== 'dashboard' &&
+          sectionId !== 'vault-settings'
+        ) {
+          const allowed = familyAllowedVaultSectionIds(familyAcl);
+          if (allowed !== 'all' && !allowed.has(sectionId)) {
+            toast.error('You do not have access to that section');
+            return;
+          }
+        }
+      }
+
+      setActiveSection(sectionId);
+      setActiveSubsection(null);
+      setActiveTopicId(null);
+      setSidebarOpen(false);
+      setMobileMoreOpen(false);
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'auto' });
+        const main = document.querySelector('main');
+        if (main instanceof HTMLElement) {
+          main.scrollTo({ top: 0, behavior: 'auto' });
+        }
+      });
+    },
+    [familyAcl],
+  );
+
   const goToDashboard = useCallback(() => {
-    setActiveSection('dashboard');
-    setActiveSubsection(null);
-    setActiveTopicId(null);
-    setSidebarOpen(false);
-    setMobileMoreOpen(false);
+    goToSection('dashboard');
     window.setTimeout(() => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       const overview = document.querySelector(
@@ -1839,22 +1971,7 @@ export default function DashboardPage() {
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
     }, 60);
-  }, []);
-
-  const goToSection = useCallback((sectionId: string) => {
-    setActiveSection(sectionId);
-    setActiveSubsection(null);
-    setActiveTopicId(null);
-    setSidebarOpen(false);
-    setMobileMoreOpen(false);
-    window.requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, behavior: 'auto' });
-      const main = document.querySelector('main');
-      if (main instanceof HTMLElement) {
-        main.scrollTo({ top: 0, behavior: 'auto' });
-      }
-    });
-  }, []);
+  }, [goToSection]);
 
   const openReviewInbox = useCallback(
     (tab: VaultActivityTabInput = 'alerts') => {
@@ -1890,6 +2007,14 @@ export default function DashboardPage() {
 
   const handleNoticeSelect = useCallback(
     (notice: DashboardNotice) => {
+      if (notice.id === 'event-support') {
+        window.dispatchEvent(
+          new CustomEvent('orderly-open-help', {
+            detail: { mode: 'live' },
+          }),
+        );
+        return;
+      }
       if (notice.category === 'reminder') {
         openReviewInbox('dues');
         return;
@@ -1946,7 +2071,17 @@ export default function DashboardPage() {
       } catch {
         /* ignore */
       }
-      // Live support polling disabled while contact-support UI is hidden.
+      try {
+        const { fetchMySupportThread } = await import(
+          '@/libs/api/supportChat'
+        );
+        const { thread } = await fetchMySupportThread();
+        if (!cancelled) {
+          setSupportUnread(Number(thread?.unread || 0));
+        }
+      } catch {
+        /* ignore — support optional */
+      }
     };
     void load();
     const id = window.setInterval(() => void load(), 45000);
@@ -2175,7 +2310,18 @@ export default function DashboardPage() {
               }}
               exportPayload={exportPayload}
               currentUserEmail={currentUser?.email}
-              onAccountInfo={() => goToSection('vault-settings')}
+              onAccountInfo={() => {
+                if (
+                  familyAcl.isFamily &&
+                  !familyCanViewVaultSettings(familyAcl)
+                ) {
+                  toast.error(
+                    'Vault Settings is not included in your access',
+                  );
+                  return;
+                }
+                goToSection('vault-settings');
+              }}
               onLogout={handleOwnerLogout}
               notices={headerNotices}
               onNoticeSelect={handleNoticeSelect}
@@ -2618,7 +2764,15 @@ export default function DashboardPage() {
                           | undefined
                       }
                     />
-                    <AiActiveSectionProvider sectionId={activeSection}>
+                    <SubsectionFootprintStrip
+                      sectionId={activeSection}
+                      subsectionId={activeSubsection}
+                      topicId={activeTopicId}
+                    />
+                    <AiActiveSectionProvider
+                      sectionId={activeSection}
+                      subsectionId={activeSubsection}
+                    >
                       {renderSection()}
                     </AiActiveSectionProvider>
                   </div>
@@ -2890,6 +3044,7 @@ export default function DashboardPage() {
 
         <HelpAssistantHost
           currentSectionId={activeSection}
+          formData={formData as Record<string, unknown>}
           onStartTour={() => {
             startTour(derivedRole ?? 'owner');
             setTourStarted(true);

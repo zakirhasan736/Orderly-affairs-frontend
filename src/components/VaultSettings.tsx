@@ -8,8 +8,11 @@ import {
   MessageSquare,
   ShieldCheck,
   Smartphone,
+  Users,
   X,
 } from 'lucide-react';
+import { FamilyAccessManagement } from '@/components/vault/FamilyAccessManagement';
+import { fetchSession } from '@/libs/secureFetch';
 import { toast } from 'sonner';
 import { Button } from '@common/ui/button';
 import { InlineNotice } from '@/components/common/ui/inline-notice';
@@ -120,6 +123,32 @@ const getErrorMessage = (err: unknown, fallback: string) =>
 
 /* ---------------- Component ---------------- */
 const VaultSettings = () => {
+  const [familySession, setFamilySession] = useState<{
+    isFamily: boolean;
+    canManageFamily: boolean;
+    canManageBilling: boolean;
+    canViewVaultSettings: boolean;
+  }>({
+    isFamily: false,
+    canManageFamily: true,
+    canManageBilling: true,
+    canViewVaultSettings: true,
+  });
+
+  useEffect(() => {
+    void fetchSession().then(session => {
+      if (session.role === 'nextkin' && session.access_type === 'family') {
+        const perms = session.dashboard_permissions || {};
+        setFamilySession({
+          isFamily: true,
+          canManageFamily: Boolean(perms.can_manage_family_access),
+          canManageBilling: Boolean(perms.can_manage_billing),
+          canViewVaultSettings: Boolean(perms.can_view_vault_settings),
+        });
+      }
+    });
+  }, []);
+
   const {
     data: status,
     isLoading: statusLoading,
@@ -849,9 +878,49 @@ const renderMfaSetupContent = (optionId: MFAMethod) => {
 const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
 
   /* ---------------- UI ---------------- */
+  const showFamilyBlock =
+    !familySession.isFamily || familySession.canManageFamily;
+  const showMfaBlock = !familySession.isFamily;
+  const showBillingBlock =
+    !familySession.isFamily || familySession.canManageBilling;
+
   return (
     <div className="vault-settings-section w-full space-y-4 pb-24 sm:space-y-5 sm:pb-28">
+      {/* FAMILY ROLE & ACCESS */}
+      {showFamilyBlock && (
+      <section className="w-full overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[28px]">
+        <div className="relative overflow-hidden bg-[#0f3d4c] px-4 py-5 text-white sm:px-6 sm:py-6 md:px-8">
+          <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-teal-300/20 blur-2xl" />
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
+                Family access
+              </p>
+              <h2 className="mt-1 text-[20px] font-bold tracking-tight sm:text-[22px]">
+                Roles &amp; section permissions
+              </h2>
+              <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-white/75 sm:text-sm">
+                Invite up to 5 family collaborators to the owner dashboard with
+                clear roles. Each person gets their own login session and email
+                link — separate from your owner sign-in and from Next of Kin
+                (Section 2).
+              </p>
+            </div>
+            <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ring-1 ring-white/20">
+              <Users className="h-3.5 w-3.5" />
+              Access
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4 p-3 sm:p-5 md:p-6">
+          <FamilyAccessManagement />
+        </div>
+      </section>
+      )}
+
       {/* OWNER MFA SETTINGS */}
+      {showMfaBlock && (
       <section className="w-full overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[28px]">
         <div className="relative overflow-hidden bg-[#00305C] px-4 py-5 text-white sm:px-6 sm:py-6 md:px-8">
           <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-sky-300/20 blur-2xl" />
@@ -994,8 +1063,11 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
           )}
         </div>
       </section>
+      )}
 
-      {/* PLAN CARD */}
+      {/* PLAN CARD + INVOICES */}
+      {showBillingBlock && (
+      <>
       <section className="w-full overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px]">
         <div className="flex flex-col gap-4 border-b border-[#dbe3ed] bg-white px-4 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-6 sm:py-6 md:px-8">
           <div>
@@ -1268,7 +1340,10 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
           </table>
         </div>
       </section>
+      </>
+      )}
 
+      {!familySession.isFamily && (
       <section className="rounded-3xl border border-[#a2453c]/35 bg-[#fbeceb]/40 p-6 sm:p-8">
         <h2 className="text-lg font-bold text-[#8e372f]">Danger zone</h2>
         <InlineNotice
@@ -1335,6 +1410,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
           </div>
         )}
       </section>
+      )}
 
       {/* MFA SETUP — mobile bottom sheet */}
       {isMobile && (

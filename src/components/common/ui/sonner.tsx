@@ -105,7 +105,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          zIndex: 200,
+          zIndex: 100050,
         } as CSSProperties
       }
       {...props}

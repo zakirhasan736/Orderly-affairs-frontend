@@ -535,24 +535,27 @@ export function getSectionProgress(
       : { percent: 0, complete: false, filled: 0, total: 1 };
   }
 
+  const formData =
+    ctx.formData && typeof ctx.formData === 'object' ? ctx.formData : {};
+
   if (sectionId === '2') {
     return getAccessManagementSectionProgress(ctx.myNextKin);
   }
 
   if (sectionId === '3') {
-    const section3 = ctx.formData['3'] as Record<string, unknown> | undefined;
+    const section3 = formData['3'] as Record<string, unknown> | undefined;
     return getNokLetterSectionProgress(section3, ctx.dashboardNokLetter);
   }
 
   if (sectionId === '4') {
     return getPersonalMessagesProgress(
-      ctx.formData['4'] as Record<string, unknown> | undefined,
+      formData['4'] as Record<string, unknown> | undefined,
     );
   }
 
   return getFormConfigSectionProgress(
     sectionId,
-    ctx.formData[sectionId] as Record<string, unknown> | undefined,
+    formData[sectionId] as Record<string, unknown> | undefined,
   );
 }
 
@@ -676,44 +679,142 @@ export function listAreaFields(
   const itemIndex = options?.itemIndex;
   const groupId = options?.groupId;
 
-  let fields: FieldDefinition[] = [];
-  let row: Record<string, unknown> = {};
+  const pushFields = (
+    fields: FieldDefinition[] | undefined,
+    row: Record<string, unknown>,
+    labelPrefix?: string,
+  ) => {
+    const all: IncompleteField[] = [];
+    for (const field of fields || []) {
+      if (!shouldCountField(field, row)) continue;
+      const baseLabel = field.label || field.key;
+      all.push({
+        key: field.key,
+        label: labelPrefix ? `${labelPrefix} · ${baseLabel}` : baseLabel,
+        field,
+        value: row[field.key],
+      });
+    }
+    return all;
+  };
 
   if (groupId) {
     const group = (subsection.groups || []).find(g => g.id === groupId);
     if (!group) return [];
-    fields = group.fields || [];
     const items = Array.isArray(data[groupId])
       ? (data[groupId] as unknown[])
       : [];
     if (typeof itemIndex === 'number') {
       const item = items[itemIndex];
-      row =
+      const row =
         item && typeof item === 'object'
           ? (item as Record<string, unknown>)
           : {};
+      return pushFields(group.fields, row);
     }
-  } else if (typeof itemIndex === 'number' && Array.isArray(data[subsectionId])) {
-    fields = subsection.fields || [];
-    const item = (data[subsectionId] as unknown[])[itemIndex];
-    row =
-      item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
-  } else {
-    fields = subsection.fields || [];
-    row = resolveObjectBucket(data, subsectionId, sectionId) || {};
+    // Whole group: walk every non-empty item card
+    const out: IncompleteField[] = [];
+    const countable = (group.fields || []).filter(f => shouldCountField(f, {}));
+    if (items.length === 0) {
+      return pushFields(group.fields, {});
+    }
+    items.forEach((item, idx) => {
+      if (!item || typeof item !== 'object') return;
+      const row = item as Record<string, unknown>;
+      const hasAny = countable.some(f => isMeaningfulFilled(row[f.key]));
+      if (!hasAny) return;
+      out.push(
+        ...pushFields(group.fields, row, `${group.title || 'Item'} #${idx + 1}`),
+      );
+    });
+    if (out.length === 0) return pushFields(group.fields, {});
+    return out;
   }
 
-  const all: IncompleteField[] = [];
-  for (const field of fields) {
-    if (!shouldCountField(field, row)) continue;
-    all.push({
-      key: field.key,
-      label: field.label || field.key,
-      field,
-      value: row[field.key],
-    });
+  const bucket = data[subsectionId];
+
+  if (typeof itemIndex === 'number' && Array.isArray(bucket)) {
+    const item = bucket[itemIndex];
+    const row =
+      item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+    return pushFields(subsection.fields, row);
   }
-  return all;
+
+  // Repeatable subsection cards (vehicles, policies, …)
+  if (Array.isArray(bucket)) {
+    const countable = (subsection.fields || []).filter(f =>
+      shouldCountField(f, {}),
+    );
+    if (bucket.length === 0) {
+      return pushFields(subsection.fields, {});
+    }
+    const out: IncompleteField[] = [];
+    const itemNoun =
+      subsection.itemLabel ||
+      subsection.title?.replace(/s$/i, '') ||
+      'Item';
+    bucket.forEach((item, idx) => {
+      if (!item || typeof item !== 'object') return;
+      const row = item as Record<string, unknown>;
+      const hasAny = countable.some(f => isMeaningfulFilled(row[f.key]));
+      if (!hasAny) return;
+      out.push(
+        ...pushFields(subsection.fields, row, `${itemNoun} #${idx + 1}`),
+      );
+    });
+    if (out.length === 0) return pushFields(subsection.fields, {});
+    return out;
+  }
+
+  const row = resolveObjectBucket(data, subsectionId, sectionId) || {};
+  return pushFields(subsection.fields, row);
+}
+
+/**
+ * Empty countable fields across every subsection / card in a section.
+ */
+export function listIncompleteFieldsForSection(
+  sectionId: string,
+  sectionData: Record<string, unknown> | undefined,
+): IncompleteField[] {
+  const config = findSectionConfig(sectionId);
+  if (!config) return [];
+  const data =
+    sectionData && typeof sectionData === 'object' ? sectionData : {};
+  const out: IncompleteField[] = [];
+
+  if (config.fields?.length) {
+    for (const field of config.fields) {
+      if (!shouldCountField(field, data)) continue;
+      if (isMeaningfulFilled(data[field.key])) continue;
+      out.push({
+        key: field.key,
+        label: field.label || field.key,
+        field,
+        value: data[field.key],
+      });
+    }
+  }
+
+  for (const subsection of config.subsections || []) {
+    out.push(
+      ...listIncompleteFields(sectionId, subsection.id, data).map(item => ({
+        ...item,
+        label: item.label.includes('·')
+          ? item.label
+          : `${subsection.title || subsection.id} · ${item.label}`,
+      })),
+    );
+    for (const group of subsection.groups || []) {
+      out.push(
+        ...listIncompleteFields(sectionId, subsection.id, data, {
+          groupId: group.id,
+        }),
+      );
+    }
+  }
+
+  return out;
 }
 
 /**

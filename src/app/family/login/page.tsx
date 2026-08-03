@@ -11,7 +11,11 @@ import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import { parseAuthApiError } from '@/utils/authRateLimit';
 import { markPortalSession } from '@/libs/secureFetch';
 
-export default function NextKinLoginPageWrapper() {
+/**
+ * Family collaborator sign-in — separate cookie session from the owner.
+ * Lands on the owner dashboard with granted area permissions.
+ */
+export default function FamilyLoginPage() {
   const router = useRouter();
   const [nextkinLogin] = useNextkinLoginMutation();
   const [captchaToken, setCaptchaToken] = useState('');
@@ -48,12 +52,15 @@ export default function NextKinLoginPageWrapper() {
         throw new Error('Session not established');
       }
 
-      toast.success('Login successful');
-      if ((res as { access_type?: string }).access_type === 'family') {
-        await markPortalSession();
+      await markPortalSession();
+
+      if (res.access_type === 'family') {
+        toast.success('Signed in to the owner dashboard');
         router.push('/dashboard');
         return;
       }
+
+      toast.success('Login successful');
       router.push('/next-kin/dashboard');
     } catch (err: unknown) {
       const parsed = parseAuthApiError(err, '');
@@ -61,10 +68,7 @@ export default function NextKinLoginPageWrapper() {
         err,
         'Login failed. Check your email and password.',
       );
-
-      // Always mint a fresh Turnstile token after an attempt (tokens are single-use).
       refreshCaptcha();
-
       if (
         parsed.status === 400 &&
         /captcha|security check/i.test(parsed.message || message)
@@ -82,15 +86,17 @@ export default function NextKinLoginPageWrapper() {
   return (
     <NextOfKinLoginPage
       onLoginSuccess={handleLoginSuccess}
-      onBackToOwner={() => router.push('/dashboard')}
+      onBackToOwner={() => router.push('/login')}
       formData={{}}
-      captchaReady={captchaReady}
+      titleOverride="Family collaborator sign-in"
+      subtitleOverride="Use the email invite from the kit owner. This is your own session — signing in as the owner does not open this access."
       captchaSlot={
         <TurnstileCaptcha
-          gateMode
-          onTokenChange={setCaptchaToken}
-          onReadyChange={setCaptchaReady}
-          resetKey={captchaResetKey}
+          key={captchaResetKey}
+          onToken={token => {
+            setCaptchaToken(token);
+            setCaptchaReady(Boolean(token));
+          }}
         />
       }
     />

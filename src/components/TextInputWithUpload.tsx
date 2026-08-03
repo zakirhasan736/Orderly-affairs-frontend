@@ -20,6 +20,10 @@ type UploadFileEntry = {
   name?: string;
   version?: number;
   scan_status?: string;
+  uploaded_by_name?: string;
+  uploaded_by_email?: string;
+  uploaded_by_role?: string;
+  uploaded_at?: string;
 };
 
 function asUploadFiles(value: unknown): UploadFileEntry[] {
@@ -169,12 +173,33 @@ export function TextInputWithUpload({
       {files.map((f, i) => (
         <div
           key={f.public_id || `${f.name || 'file'}-${i}`}
-          className="flex justify-between items-center bg-muted p-2 rounded text-xs"
+          className="flex justify-between items-start gap-2 bg-muted p-2 rounded text-xs"
         >
-          <a href={f.url} target="_blank" className="underline">
-            {f.name}
-            {f.version && <span className="ml-1">v{f.version}</span>}
-          </a>
+          <div className="min-w-0">
+            <a href={f.url} target="_blank" className="underline">
+              {f.name}
+              {f.version && <span className="ml-1">v{f.version}</span>}
+            </a>
+            {f.uploaded_by_name && (
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                Uploaded by{' '}
+                {f.uploaded_by_role === 'owner'
+                  ? 'Owner'
+                  : f.uploaded_by_name}
+                {f.uploaded_by_role && f.uploaded_by_role !== 'owner'
+                  ? ` (${f.uploaded_by_role})`
+                  : ''}
+                {f.uploaded_at
+                  ? ` · ${new Date(f.uploaded_at).toLocaleString([], {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}`
+                  : ''}
+              </p>
+            )}
+          </div>
 
           <button type="button" onClick={() => removeFile(f, i)}>
             <X className="h-3 w-3" />

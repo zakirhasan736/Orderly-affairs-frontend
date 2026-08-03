@@ -2493,6 +2493,7 @@ html {
 [data-sonner-toaster].oa-toaster {
   --width: min(420px, calc(100vw - 2rem));
   font-family: inherit;
+  z-index: 100050 !important;
 }
 
 [data-sonner-toaster].oa-toaster [data-sonner-toast].oa-toast {

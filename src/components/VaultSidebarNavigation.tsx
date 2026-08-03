@@ -370,7 +370,7 @@ export function VaultSidebarNavigation({
   onReorderSubsection,
   onReorderTopic,
   onDeleteTopic,
-  onOpenHelp: _onOpenHelp,
+  onOpenHelp,
 }: VaultSidebarNavigationProps) {
   const fillGaps = useVaultFillGaps();
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -869,10 +869,34 @@ export function VaultSidebarNavigation({
           </div>
         </div>
 
-        <div className="border-t border-white/10 px-4 py-3">
-          <p className="text-[11px] leading-snug text-white/45">
-            Upload on Overview or any section · sparkle fills blanks
-          </p>
+        <div className="border-t border-white/10 px-3 py-3">
+          {onOpenHelp ? (
+            <button
+              type="button"
+              data-tour="tour-contact-support"
+              onClick={() => {
+                onOpenHelp();
+                onCloseSidebar();
+              }}
+              className="group flex w-full items-center gap-2.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-left transition hover:border-white/25 hover:bg-white/15"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#7c3aed]/90 text-white shadow-sm ring-1 ring-white/20">
+                <Sparkles className="h-3.5 w-3.5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12px] font-semibold text-white">
+                  Contact Support
+                </span>
+                <span className="block truncate text-[10px] text-white/55">
+                  Ask AI · Email · Live agent
+                </span>
+              </span>
+            </button>
+          ) : (
+            <p className="px-1 text-[11px] leading-snug text-white/45">
+              Upload on Overview or any section · sparkle fills blanks
+            </p>
+          )}
         </div>
       </div>
     </aside>

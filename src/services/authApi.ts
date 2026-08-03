@@ -18,6 +18,34 @@ export interface NextKinCreatePayload {
   documents_bag_location?: string | null;
   special_instructions?: string | null;
 }
+
+export interface FamilyMemberPayload {
+  email: string;
+  full_name: string;
+  relationship: string;
+  phone_number?: string | null;
+  access_level?: string;
+  authorized_sections?: string[];
+  portal_role?: string;
+  master_password?: string | null;
+}
+
+export interface FamilyMemberResponse {
+  id: string;
+  email: string;
+  full_name?: string;
+  relationship?: string;
+  phone_number?: string | null;
+  access_level: string;
+  authorized_sections: string[];
+  access_type: 'family';
+  portal_role: string;
+  immediate_access: boolean;
+  has_master_password?: boolean;
+  master_password?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
 export interface CreateNextKinSingleResponse {
   message: string;
   email: string;
@@ -55,6 +83,7 @@ export interface NextKinAccessResponse {
   full_access: boolean;
   authorized_sections: 'all' | string[];
   access_level: string;
+  portal_role?: string;
   immediate_access: boolean;
   access_timing?: 'immediate' | 'upon_death' | string;
   nok_letter_received?: boolean;
@@ -77,6 +106,62 @@ export interface NextKinAccessResponse {
   created_at?: string;
   updated_at?: string;
 }
+
+export type PortalRoleId =
+  | 'viewer'
+  | 'editor'
+  | 'portal_manager'
+  | 'admin'
+  | 'super_admin';
+
+export interface PortalRoleOption {
+  id: PortalRoleId | string;
+  label: string;
+  description: string;
+  can_write: boolean;
+  can_upload: boolean;
+  can_manage_family_access?: boolean;
+  can_manage_nextkin?: boolean;
+  can_manage_billing?: boolean;
+  can_view_vault_settings?: boolean;
+}
+
+export interface SectionFootprintActor {
+  user_id?: string;
+  full_name?: string;
+  email?: string;
+  role?: string;
+  portal_role?: string | null;
+  portal_role_label?: string;
+  source?: string;
+}
+
+export interface SectionFootprintLatest {
+  section_id: string;
+  section_key?: string;
+  updated_at?: string;
+  actor: SectionFootprintActor;
+}
+
+export interface SectionFootprintSubsectionLatest {
+  section_id: string;
+  section_key?: string;
+  scope_id: string;
+  subsection_id?: string;
+  updated_at?: string;
+  actor: SectionFootprintActor;
+}
+
+export interface SectionFootprintHistoryItem {
+  id: string;
+  section_id: string;
+  section_key?: string;
+  source?: string;
+  scopes?: string[];
+  created_at: string;
+  actor: SectionFootprintActor;
+}
+
 export interface AccessActionResponse {
   message: string;
   nextkin_email?: string;
@@ -189,7 +274,7 @@ export const authApi = createApi({
       extraOptions,
     );
   },
-  tagTypes: ['NextKin', 'NextKinAccess'],
+  tagTypes: ['NextKin', 'NextKinAccess', 'Family'],
   endpoints: builder => ({
     // Owner auth
     signup: builder.mutation({
@@ -311,6 +396,65 @@ export const authApi = createApi({
       query: () => ({ url: '/my-nextkin', method: 'GET' }),
       providesTags: ['NextKin'],
     }),
+    getPortalRoles: builder.query<{ roles: PortalRoleOption[] }, void>({
+      query: () => ({ url: '/portal-roles', method: 'GET' }),
+    }),
+    getSectionFootprints: builder.query<
+      {
+        latest: SectionFootprintLatest[];
+        latest_subsections?: SectionFootprintSubsectionLatest[];
+        history: SectionFootprintHistoryItem[];
+      },
+      { limit?: number; section_id?: string } | void
+    >({
+      query: args => {
+        const params = new URLSearchParams();
+        if (args?.limit) params.set('limit', String(args.limit));
+        if (args?.section_id) params.set('section_id', args.section_id);
+        const qs = params.toString();
+        return {
+          url: qs ? `/section-footprints?${qs}` : '/section-footprints',
+          method: 'GET',
+        };
+      },
+      providesTags: ['Family'],
+      keepUnusedDataFor: 15,
+    }),
+    createFamilyMember: builder.mutation<
+      {
+        message: string;
+        email: string;
+        id: string;
+        portal_role: string;
+        master_password?: string;
+        temp_password_sent?: boolean;
+      },
+      FamilyMemberPayload
+    >({
+      query: body => ({ url: '/create-family', method: 'POST', body }),
+      invalidatesTags: ['Family'],
+    }),
+    getMyFamily: builder.query<FamilyMemberResponse[], void>({
+      query: () => ({ url: '/my-family', method: 'GET' }),
+      providesTags: ['Family'],
+    }),
+    updateFamilyMember: builder.mutation<
+      { message: string; family_id: string; password_email_sent?: boolean },
+      { id: string; body: Partial<FamilyMemberPayload> }
+    >({
+      query: ({ id, body }) => ({
+        url: `/update-family/${id}`,
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: ['Family'],
+    }),
+    deleteFamilyMember: builder.mutation<{ message: string; deleted_id: string }, string>(
+      {
+        query: id => ({ url: `/delete-family/${id}`, method: 'DELETE' }),
+        invalidatesTags: ['Family'],
+      },
+    ),
     approveNextKinAccess: builder.mutation<AccessActionResponse, string>({
       query: id => ({
         url: `/approve-nextkin-access/${id}`,
@@ -457,6 +601,12 @@ export const {
   useNextkinLogoutMutation,
   useCreateNextKinMutation,
   useGetMyNextKinQuery,
+  useGetPortalRolesQuery,
+  useGetSectionFootprintsQuery,
+  useCreateFamilyMemberMutation,
+  useGetMyFamilyQuery,
+  useUpdateFamilyMemberMutation,
+  useDeleteFamilyMemberMutation,
   useApproveNextKinAccessMutation,
   useUpdateNextKinMutation,
   useDeleteNextKinMutation,

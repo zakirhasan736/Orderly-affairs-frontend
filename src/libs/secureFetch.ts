@@ -85,6 +85,13 @@ export async function secureFetch(
 export async function fetchSession(): Promise<{
   authenticated: boolean;
   role?: 'owner' | 'nextkin';
+  access_type?: 'family' | 'nextkin' | string;
+  portal_role?: string;
+  portal_role_label?: string;
+  dashboard_permissions?: Record<string, boolean>;
+  authorized_sections?: string[];
+  access_level?: string;
+  full_name?: string;
   email?: string;
   owner_id?: string;
   billing_status?: string;

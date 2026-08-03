@@ -56,7 +56,10 @@ export function validateAccessPersonStep(
   return { ok: true };
 }
 
-/** Step 2 — section-specific access needs at least one section. */
+/** Step 2 — section-specific access needs at least one section (max 5 for NOK). */
+export const MAX_NOK_AUTHORIZED_SECTIONS = 5;
+export const MAX_NEXTKIN_ACCOUNTS = 5;
+
 export function validateAccessSectionsStep(
   draft: AccessPersonDraft | null | undefined,
 ): AccessValidationResult {
@@ -70,6 +73,12 @@ export function validateAccessSectionsStep(
       return {
         ok: false,
         message: 'Select at least one section for section-specific access',
+      };
+    }
+    if (sections.length > MAX_NOK_AUTHORIZED_SECTIONS) {
+      return {
+        ok: false,
+        message: `Select at most ${MAX_NOK_AUTHORIZED_SECTIONS} sections for Next-of-Kin access`,
       };
     }
   }
