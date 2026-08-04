@@ -234,12 +234,8 @@ export function FamilyAccessManagement() {
         }
         toast.success('Family member updated');
       } else {
-        const created = (await createFamily(body).unwrap()) as FamilyMemberResponse & {
-          id?: string;
-          _id?: string;
-          master_password?: string;
-        };
-        const memberId = String(created.id || created._id || '').trim();
+        const created = await createFamily(body).unwrap();
+        const memberId = String(created.id || '').trim();
         const pw =
           (created.master_password || '').trim() ||
           draft.master_password.trim();
