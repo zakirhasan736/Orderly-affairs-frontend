@@ -21,17 +21,20 @@ export async function unlockVaultWithPassword(password: string): Promise<void> {
       postE2eeSetup,
     );
     if (isE2eeUnlocked()) {
-      // Migrate legacy server-AES rows to client E2EE in the background.
-      void migrateLegacySectionsToE2ee()
-        .then(result => {
-          if (result.migrated > 0 && typeof window !== 'undefined') {
-            console.info(
-              `E2EE migrated ${result.migrated} section(s)` +
-                (created ? ' (new vault key)' : ''),
-            );
-          }
-        })
-        .catch(() => undefined);
+      // Only the owner migrates legacy rows — family/NOK share the same DEK wrap.
+      const status = await fetchE2eeStatus().catch(() => null);
+      if (status?.role === 'owner') {
+        void migrateLegacySectionsToE2ee()
+          .then(result => {
+            if (result.migrated > 0 && typeof window !== 'undefined') {
+              console.info(
+                `E2EE migrated ${result.migrated} section(s)` +
+                  (created ? ' (new vault key)' : ''),
+              );
+            }
+          })
+          .catch(() => undefined);
+      }
     }
   } catch (err) {
     // Wrong password unwrap or server off — leave locked; sections fall back to legacy.

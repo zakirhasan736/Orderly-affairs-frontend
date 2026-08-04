@@ -13,6 +13,7 @@ import {
   isCsrfFailure,
   rememberCsrfFromResponse,
 } from '@/libs/csrf';
+import { refreshAuthSession } from '@/libs/sessionRefresh';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
@@ -44,32 +45,6 @@ function requestMethod(args: string | FetchArgs): string {
   return (args.method || 'GET').toUpperCase();
 }
 
-let refreshPromise: Promise<boolean> | null = null;
-
-async function refreshSession(): Promise<boolean> {
-  if (!refreshPromise) {
-    refreshPromise = (async () => {
-      await bootstrapCsrfToken();
-      const headers = new Headers({ 'Content-Type': 'application/json' });
-      applyCsrfHeader(headers, 'POST');
-      try {
-        const res = await fetch(`${API_BASE}/auth/refresh-token`, {
-          method: 'POST',
-          credentials: 'include',
-          headers,
-        });
-        rememberCsrfFromResponse(res);
-        return res.ok;
-      } catch {
-        return false;
-      }
-    })().finally(() => {
-      refreshPromise = null;
-    });
-  }
-  return refreshPromise;
-}
-
 export function createSecureBaseQuery(
   pathPrefix: string,
 ): BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> {
@@ -83,6 +58,14 @@ export function createSecureBaseQuery(
       const token = getCsrfToken();
       if (token) {
         headers.set('X-CSRF-Token', token);
+      }
+      try {
+        const kind = sessionStorage.getItem('oa_portal_kind');
+        if (kind === 'family' || kind === 'nextkin' || kind === 'owner') {
+          headers.set('X-OA-Session-Kind', kind);
+        }
+      } catch {
+        /* ignore */
       }
       return headers;
     },
@@ -127,7 +110,7 @@ export function createSecureBaseQuery(
       result.error.status === 401 &&
       !shouldSkipRefresh(args)
     ) {
-      const refreshed = await refreshSession();
+      const refreshed = await refreshAuthSession();
       if (refreshed) {
         result = await rawBaseQuery(args, api, extraOptions);
         rememberCsrfFromResponse(result.meta?.response);

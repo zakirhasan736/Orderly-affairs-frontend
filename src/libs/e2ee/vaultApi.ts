@@ -160,7 +160,22 @@ export async function getVaultSection(legacyPath: string): Promise<any> {
     return {};
   }
   if (json.e2ee && json.ciphertext) {
-    const data = await decryptJson(json.ciphertext);
+    if (!isE2eeUnlocked()) {
+      throw new Error(
+        'Vault encryption is locked — sign in again to unlock shared sections',
+      );
+    }
+    const decrypted = await decryptJson(json.ciphertext);
+    // Normalize: some clients saved the wire shape `{ data: {...} }` as ciphertext.
+    const data =
+      decrypted &&
+      typeof decrypted === 'object' &&
+      !Array.isArray(decrypted) &&
+      'data' in (decrypted as Record<string, unknown>) &&
+      (decrypted as Record<string, unknown>).data &&
+      typeof (decrypted as Record<string, unknown>).data === 'object'
+        ? (decrypted as { data: unknown }).data
+        : decrypted;
     return { section_key: json.section_key, data, e2ee: true, encryption_version: 3 };
   }
   return json;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { NextOfKinLoginPage } from '@/components/NextOfKinLoginPage';
@@ -24,6 +24,15 @@ export default function FamilyLoginPage() {
   const [captchaToken, setCaptchaToken] = useState('');
   const [captchaReady, setCaptchaReady] = useState(false);
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
+
+  // Prefer NOK cookies for E2EE unlock / refresh before MFA completes.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('oa_portal_kind', 'family');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const refreshCaptcha = useCallback(() => {
     setCaptchaToken('');
@@ -90,7 +99,14 @@ export default function FamilyLoginPage() {
       } catch {
         /* ignore */
       }
-      toast.success('Signed in to the owner dashboard');
+      const { isE2eeUnlocked } = await import('@/libs/e2ee/unlock');
+      if (!isE2eeUnlocked()) {
+        toast.warning(
+          'Signed in, but vault encryption is locked. Ask the owner to re-save your family access password so encrypted sections can open.',
+        );
+      } else {
+        toast.success('Signed in to the owner dashboard');
+      }
       // Full navigation so AuthWatcher re-runs with the new cookie session.
       window.location.assign('/dashboard');
       return;

@@ -258,10 +258,14 @@ export default function DashboardPage() {
 
   const { startTour, activeRole } = useOnboarding();
 
-  const { data: status, isLoading: loading } = useGetTourStatusQuery();
+  const { data: status, isLoading: loading } = useGetTourStatusQuery(undefined, {
+    // Family sessions are NOK cookies — skip owner tour until session is ready.
+    skip: !sessionReady || familyAcl.isFamily,
+  });
   const [updateStatus] = useUpdateTourStatusMutation();
   const { data: billingStatus } = useGetStatusQuery(undefined, {
-    skip: appMode !== 'owner',
+    // Billing is owner-cookie only; calling it as family caused 401 refresh races.
+    skip: appMode !== 'owner' || !sessionReady || familyAcl.isFamily,
   });
   const [pendingMessageCount, setPendingMessageCount] = useState(0);
   const [supportUnread, setSupportUnread] = useState(0);
@@ -455,10 +459,10 @@ export default function DashboardPage() {
     [],
   );
 
-  // Prefetch all owner section data on load so sidebar checkmarks are accurate
+  // Prefetch owner section data on load so sidebar checkmarks are accurate
   // without requiring the user to visit each section first.
   useEffect(() => {
-    if (appMode !== 'owner') {
+    if (appMode !== 'owner' || !sessionReady) {
       sectionsPrefetchedRef.current = false;
       return;
     }
@@ -467,93 +471,107 @@ export default function DashboardPage() {
 
     sectionsPrefetchedRef.current = true;
 
-    getSection1()
-      .then(res => recordLoadedSection('1', mapSection1ResponseToUI(res)))
-      .catch(err => console.error('Failed to load Section 1', err));
+    const allowed = familyAllowedVaultSectionIds(familyAcl);
+    const canLoad = (id: string) =>
+      allowed === 'all' || allowed.has(id);
 
-    getSection5()
-      .then(res => {
-        if (res?.data) recordLoadedSection('5', res.data);
-      })
-      .catch(err => console.error('Failed to load Section 5', err));
+    if (canLoad('1')) {
+      getSection1()
+        .then(res => recordLoadedSection('1', mapSection1ResponseToUI(res)))
+        .catch(err => console.error('Failed to load Section 1', err));
+    }
 
-    getSection6()
-      .then(res => recordLoadedSection('6', res.data))
-      .catch(err => console.error('Failed to load Section 6', err));
-    getSection7()
-      .then(res => recordLoadedSection('7', res.data))
-      .catch(err => console.error('Failed to load Section 7', err));
-    getSection8()
-      .then(res => recordLoadedSection('8', res.data))
-      .catch(err => console.error('Failed to load Section 8', err));
-    getSection9()
-      .then(res => recordLoadedSection('9', res.data))
-      .catch(err => console.error('Failed to load Section 9', err));
-    getSection10()
-      .then(res => recordLoadedSection('10', res.data))
-      .catch(err => console.error('Failed to load Section 10', err));
-    getSection11()
-      .then(res => recordLoadedSection('11', res.data))
-      .catch(err => console.error('Failed to load Section 11', err));
-    getSection12()
-      .then(res => {
-        if (res?.data) recordLoadedSection('12', res.data);
-      })
-      .catch(err => console.error('Failed to load Section 12', err));
-    getSection13()
-      .then(res => {
-        if (res?.data) recordLoadedSection('13', res.data);
-      })
-      .catch(err => console.error('Failed to load Section 13', err));
-    getSection14()
-      .then(res => {
-        if (res?.data) recordLoadedSection('14', res.data);
-      })
-      .catch(err => console.error('Failed to load Section 14', err));
-    getSection15()
-      .then(res => {
-        if (res?.data) recordLoadedSection('15', res.data);
-      })
-      .catch(err => console.error('Failed to load Section 15', err));
-    getSection16()
-      .then(res => {
-        if (res?.data) recordLoadedSection('16', res.data);
-      })
-      .catch(err => console.error('Failed to load Section 16', err));
-    getSection17()
-      .then(res => {
-        if (res?.data) recordLoadedSection('17', res.data);
-      })
-      .catch(err => console.error('Failed to load Section 17', err));
-    getSection18()
-      .then(res => {
-        if (res?.data) recordLoadedSection('18', res.data);
-      })
-      .catch(err => console.error('Failed to load Section 18', err));
-    getSection19()
-      .then(res => {
-        if (res?.data) recordLoadedSection('19', res.data);
-      })
-      .catch(err => console.error('Failed to load Section 19', err));
-    getSection20()
-      .then(res => {
-        if (res?.data) recordLoadedSection('20', res.data);
-      })
-      .catch(err => console.error('Failed to load Section 20', err));
-    getSection21()
-      .then(res => {
-        if (res?.data) recordLoadedSection('21', res.data);
-      })
-      .catch(err => console.error('Failed to load Section 21', err));
+    const sectionLoaders: Array<{
+      id: string;
+      load: () => Promise<any>;
+      pick?: (res: any) => any;
+    }> = [
+      {
+        id: '5',
+        load: getSection5,
+        pick: res => (res?.data ? res.data : null),
+      },
+      { id: '6', load: getSection6, pick: res => res?.data },
+      { id: '7', load: getSection7, pick: res => res?.data },
+      { id: '8', load: getSection8, pick: res => res?.data },
+      { id: '9', load: getSection9, pick: res => res?.data },
+      { id: '10', load: getSection10, pick: res => res?.data },
+      { id: '11', load: getSection11, pick: res => res?.data },
+      {
+        id: '12',
+        load: getSection12,
+        pick: res => (res?.data ? res.data : null),
+      },
+      {
+        id: '13',
+        load: getSection13,
+        pick: res => (res?.data ? res.data : null),
+      },
+      {
+        id: '14',
+        load: getSection14,
+        pick: res => (res?.data ? res.data : null),
+      },
+      {
+        id: '15',
+        load: getSection15,
+        pick: res => (res?.data ? res.data : null),
+      },
+      {
+        id: '16',
+        load: getSection16,
+        pick: res => (res?.data ? res.data : null),
+      },
+      {
+        id: '17',
+        load: getSection17,
+        pick: res => (res?.data ? res.data : null),
+      },
+      {
+        id: '18',
+        load: getSection18,
+        pick: res => (res?.data ? res.data : null),
+      },
+      {
+        id: '19',
+        load: getSection19,
+        pick: res => (res?.data ? res.data : null),
+      },
+      {
+        id: '20',
+        load: getSection20,
+        pick: res => (res?.data ? res.data : null),
+      },
+      {
+        id: '21',
+        load: getSection21,
+        pick: res => (res?.data ? res.data : null),
+      },
+    ];
 
-    getMessages()
-      .then(messages => {
-        if (Array.isArray(messages) && messages.length > 0) {
-          recordLoadedSection('4', { '4A': { letters_data: messages } });
-        }
-      })
-      .catch(err => console.error('Failed to load Section 4 messages', err));
-  }, [appMode, recordLoadedSection]);
+    for (const entry of sectionLoaders) {
+      if (!canLoad(entry.id)) continue;
+      entry
+        .load()
+        .then(res => {
+          const data = entry.pick ? entry.pick(res) : res;
+          if (data) recordLoadedSection(entry.id, data);
+        })
+        .catch(err =>
+          console.error(`Failed to load Section ${entry.id}`, err),
+        );
+    }
+
+    if (canLoad('4')) {
+      getMessages()
+        .then(messages => {
+          if (Array.isArray(messages) && messages.length > 0) {
+            recordLoadedSection('4', { '4A': { letters_data: messages } });
+          }
+        })
+        .catch(err => console.error('Failed to load Section 4 messages', err));
+    }
+  }, [appMode, sessionReady, familyAcl, recordLoadedSection]);
 
   // Section 3 letters are stored per next-of-kin via a separate API.
   useEffect(() => {

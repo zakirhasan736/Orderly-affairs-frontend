@@ -211,9 +211,58 @@ export function FamilyAccessManagement() {
     try {
       if (editingId) {
         await updateFamily({ id: editingId, body }).unwrap();
+        const pw = draft.master_password.trim();
+        if (pw) {
+          try {
+            const { wrapDekForNokPassword, isE2eeUnlocked } = await import(
+              '@/libs/e2ee/crypto'
+            );
+            const { postE2eeNokWrap } = await import('@/libs/e2ee/vaultApi');
+            if (isE2eeUnlocked()) {
+              const wrap = await wrapDekForNokPassword(pw);
+              await postE2eeNokWrap({ nok_user_id: editingId, ...wrap });
+            } else {
+              toast.message(
+                'Family member updated. Unlock your vault (re-sign in), then set their password again so they can open encrypted sections.',
+              );
+            }
+          } catch {
+            toast.error(
+              'Saved family member, but vault key share failed. Re-save their password while your vault is unlocked.',
+            );
+          }
+        }
         toast.success('Family member updated');
       } else {
-        await createFamily(body).unwrap();
+        const created = (await createFamily(body).unwrap()) as FamilyMemberResponse & {
+          id?: string;
+          _id?: string;
+          master_password?: string;
+        };
+        const memberId = String(created.id || created._id || '').trim();
+        const pw =
+          (created.master_password || '').trim() ||
+          draft.master_password.trim();
+        if (memberId && pw) {
+          try {
+            const { wrapDekForNokPassword, isE2eeUnlocked } = await import(
+              '@/libs/e2ee/crypto'
+            );
+            const { postE2eeNokWrap } = await import('@/libs/e2ee/vaultApi');
+            if (isE2eeUnlocked()) {
+              const wrap = await wrapDekForNokPassword(pw);
+              await postE2eeNokWrap({ nok_user_id: memberId, ...wrap });
+            } else {
+              toast.message(
+                'Invite sent. Unlock your vault then edit this person and re-save their password so encrypted sections open for them.',
+              );
+            }
+          } catch {
+            toast.error(
+              'Invite sent, but vault key share failed. Edit them and re-save the password while your vault is unlocked.',
+            );
+          }
+        }
         toast.success(
           'Invite sent — they get a separate dashboard login (not the owner session)',
         );

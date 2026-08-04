@@ -5,60 +5,32 @@ import {
   isCsrfFailure,
   rememberCsrfFromResponse,
 } from '@/libs/csrf';
+import {
+  ensureFreshSession,
+  refreshAuthSession,
+  stillAuthenticated,
+} from '@/libs/sessionRefresh';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
-let refreshPromise: Promise<boolean> | null = null;
-let lastRefreshAt = 0;
-
-/** Soft refresh at most once per minute during long AI batches. */
-const REFRESH_COOLDOWN_MS = 60_000;
-
-async function tryRefreshSession(): Promise<boolean> {
-  if (!API_BASE) return false;
-
-  if (!refreshPromise) {
-    refreshPromise = (async () => {
-      await bootstrapCsrfToken();
-      const headers = new Headers({ 'Content-Type': 'application/json' });
-      applyCsrfHeader(headers, 'POST');
-      try {
-        const res = await fetch(`${API_BASE}/auth/refresh-token`, {
-          method: 'POST',
-          credentials: 'include',
-          headers,
-        });
-        rememberCsrfFromResponse(res);
-        if (res.ok) {
-          lastRefreshAt = Date.now();
-          return true;
-        }
-        return false;
-      } catch {
-        return false;
-      }
-    })().finally(() => {
-      refreshPromise = null;
-    });
-  }
-
-  return refreshPromise;
-}
-
-/**
- * Keep cookies fresh during long AI uploads (access token can expire mid-batch).
- * Safe to call often — cooldown prevents refresh spam.
- */
-export async function ensureFreshSession(): Promise<boolean> {
-  if (Date.now() - lastRefreshAt < REFRESH_COOLDOWN_MS) {
-    return true;
-  }
-  return tryRefreshSession();
-}
+export { ensureFreshSession };
 
 function notifySessionExpired() {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent('orderly-session-expired'));
+}
+
+/** Tell the API which cookie session to prefer when leftovers exist. */
+function applySessionKindHeader(headers: Headers) {
+  if (typeof window === 'undefined') return;
+  try {
+    const kind = sessionStorage.getItem('oa_portal_kind');
+    if (kind === 'family' || kind === 'nextkin' || kind === 'owner') {
+      headers.set('X-OA-Session-Kind', kind);
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function secureFetch(
@@ -83,6 +55,7 @@ export async function secureFetch(
     await bootstrapCsrfToken();
   }
   applyCsrfHeader(headers, method);
+  applySessionKindHeader(headers);
 
   const res = await fetch(url, {
     ...options,
@@ -101,11 +74,14 @@ export async function secureFetch(
   }
 
   if (res.status === 401 && !retried) {
-    const refreshed = await tryRefreshSession();
+    const refreshed = await refreshAuthSession();
     if (refreshed) {
       return secureFetch(path, options, true);
     }
-    notifySessionExpired();
+    // Owner-only routes 401 valid family sessions; only expire if session is gone.
+    if (!(await stillAuthenticated())) {
+      notifySessionExpired();
+    }
   }
 
   return res;
