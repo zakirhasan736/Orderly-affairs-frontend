@@ -1,6 +1,7 @@
 // src/services/aiDocumentUpload.ts
 
 import { secureFetch } from '@/libs/secureFetch';
+import { resolveApiBaseUrl } from '@/libs/apiBase';
 
 const ALLOWED_TYPES = [
   'application/pdf',
@@ -11,8 +12,6 @@ const ALLOWED_TYPES = [
 ];
 
 const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
 export type AIDocumentUploadResponse = {
   success: boolean;
@@ -121,7 +120,8 @@ export async function listOwnerAiDocuments(): Promise<OwnerAiDocument[]> {
 export function getAiDocumentPreviewUrl(fileId: string) {
   if (!fileId) return '';
   const path = `/ai/document/${encodeURIComponent(fileId)}/preview`;
-  return API_BASE ? `${API_BASE}${path}` : path;
+  const base = resolveApiBaseUrl();
+  return base ? `${base}${path}` : path;
 }
 
 /**

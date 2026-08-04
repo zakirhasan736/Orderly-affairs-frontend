@@ -1,16 +1,26 @@
 import { secureFetch } from '@/libs/secureFetch';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+import { resolveApiBaseUrl } from '@/libs/apiBase';
 
 async function adminFetch(path: string, options: RequestInit = {}) {
-  const res = await secureFetch(path.startsWith('http') ? path : path, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await secureFetch(path.startsWith('http') ? path : path, {
+      ...options,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/failed to fetch|networkerror|load failed|mixed content/i.test(msg)) {
+      throw new Error(
+        'Could not reach the API. Redeploy the portal so /oa-api proxies to https://api.orderly-affairs.com (set NEXT_PUBLIC_API_BASE_URL + rebuild).',
+      );
+    }
+    throw err instanceof Error ? err : new Error(msg || 'Request failed');
+  }
   const text = await res.text();
   let data: unknown = null;
   try {
@@ -175,7 +185,7 @@ export async function adminListUsers(params?: {
   if (params?.page) sp.set('page', String(params.page));
   if (params?.page_size) sp.set('page_size', String(params.page_size));
   const qs = sp.toString();
-  return adminFetch(`/admin/users${qs ? `?${qs}` : ''}`) as Promise<{
+  return adminFetch(`/admin/users/${qs ? `?${qs}` : ''}`) as Promise<{
     users: AdminUser[];
     total: number;
     page: number;
@@ -236,7 +246,7 @@ export async function adminCouponStats() {
 
 export async function adminListCoupons(status?: string) {
   const qs = status ? `?status=${encodeURIComponent(status)}` : '';
-  return adminFetch(`/admin/coupons${qs}`) as Promise<{
+  return adminFetch(`/admin/coupons/${qs}`) as Promise<{
     coupons: AdminCoupon[];
   }>;
 }
@@ -706,5 +716,4 @@ export async function adminRestoreBackup(
   }>;
 }
 
-/** Avoid unused import warning when API_BASE checked elsewhere. */
-export const adminApiBase = API_BASE;
+export const adminApiBase = () => resolveApiBaseUrl();

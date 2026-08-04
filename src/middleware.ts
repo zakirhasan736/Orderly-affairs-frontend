@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { resolveApiBaseUrl } from '@/libs/apiBase';
 
 /**
  * Edge UX guard + Content-Security-Policy with per-request nonce.
@@ -8,17 +9,37 @@ import type { NextRequest } from 'next/server';
  * visible to portal middleware. Client AuthWatcher validates via GET /auth/session.
  */
 function buildCsp(nonce: string): string {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+  const apiBase = resolveApiBaseUrl();
   let apiOrigin = '';
   try {
-    if (apiBase) apiOrigin = new URL(apiBase).origin;
+    if (apiBase.startsWith('http://') || apiBase.startsWith('https://')) {
+      apiOrigin = new URL(apiBase).origin;
+    }
   } catch {
     apiOrigin = '';
+  }
+
+  // Always allow direct API hosts in case of older clients / absolute URLs.
+  const configured = String(process.env.NEXT_PUBLIC_API_BASE_URL || '')
+    .trim()
+    .replace(/\/+$/, '');
+  let configuredOrigin = '';
+  try {
+    if (configured.startsWith('http')) {
+      const upgraded = configured.startsWith('http://')
+        ? `https://${configured.slice('http://'.length)}`
+        : configured;
+      configuredOrigin = new URL(upgraded).origin;
+    }
+  } catch {
+    configuredOrigin = '';
   }
 
   const connectSrc = [
     "'self'",
     apiOrigin,
+    configuredOrigin,
+    'https://api.orderly-affairs.com',
     'https://challenges.cloudflare.com',
     'https://api.stripe.com',
     'https://res.cloudinary.com',

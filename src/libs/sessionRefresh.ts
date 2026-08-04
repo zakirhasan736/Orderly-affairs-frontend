@@ -9,8 +9,11 @@ import {
   bootstrapCsrfToken,
   rememberCsrfFromResponse,
 } from '@/libs/csrf';
+import { resolveApiBaseUrl } from '@/libs/apiBase';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+function apiBase(): string {
+  return resolveApiBaseUrl();
+}
 
 let refreshPromise: Promise<boolean> | null = null;
 let lastRefreshAt = 0;
@@ -39,7 +42,9 @@ async function postRefresh(): Promise<boolean> {
     if (preferred === 'family' || preferred === 'nextkin') {
       headers.set('X-OA-Session-Kind', preferred);
     }
-    const res = await fetch(`${API_BASE}/auth/refresh-token`, {
+    const base = apiBase();
+    if (!base) return false;
+    const res = await fetch(`${base}/auth/refresh-token`, {
       method: 'POST',
       credentials: 'include',
       headers,
@@ -56,7 +61,7 @@ async function postRefresh(): Promise<boolean> {
 }
 
 export async function refreshAuthSession(): Promise<boolean> {
-  if (!API_BASE) return false;
+  if (!apiBase()) return false;
 
   if (!refreshPromise) {
     refreshPromise = postRefresh().finally(() => {
@@ -80,9 +85,10 @@ export async function ensureFreshSession(): Promise<boolean> {
  * race must not log collaborators out.
  */
 export async function stillAuthenticated(): Promise<boolean> {
-  if (!API_BASE) return false;
+  const base = apiBase();
+  if (!base) return false;
   try {
-    const res = await fetch(`${API_BASE}/auth/session`, {
+    const res = await fetch(`${base}/auth/session`, {
       method: 'GET',
       credentials: 'include',
     });

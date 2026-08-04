@@ -49,8 +49,22 @@ async function readJson<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function feedbackFetch(path: string, options?: RequestInit) {
+  try {
+    return await secureFetch(path, options);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/failed to fetch|networkerror|load failed|mixed content/i.test(msg)) {
+      throw new Error(
+        'Could not reach the API. Redeploy the portal so /oa-api proxies to https://api.orderly-affairs.com.',
+      );
+    }
+    throw err instanceof Error ? err : new Error(msg || 'Request failed');
+  }
+}
+
 export async function submitFeedback(payload: SubmitFeedbackPayload) {
-  const res = await secureFetch('/feedback/submit', {
+  const res = await feedbackFetch('/feedback/submit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -68,7 +82,9 @@ export async function adminListFeedback(params?: {
   if (params?.category) qs.set('category', params.category);
   if (params?.limit) qs.set('limit', String(params.limit));
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
-  const res = await secureFetch(`/admin/feedback/list${suffix}`, { method: 'GET' });
+  const res = await feedbackFetch(`/admin/feedback/list${suffix}`, {
+    method: 'GET',
+  });
   return readJson<{ feedback: FeedbackItem[]; count: number }>(res);
 }
 
@@ -76,7 +92,7 @@ export async function adminUpdateFeedbackStatus(
   feedbackId: string,
   status: 'open' | 'reviewed' | 'closed',
 ) {
-  const res = await secureFetch(
+  const res = await feedbackFetch(
     `/admin/feedback/${encodeURIComponent(feedbackId)}?status=${encodeURIComponent(status)}`,
     { method: 'PATCH' },
   );

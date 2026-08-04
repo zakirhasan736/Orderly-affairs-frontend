@@ -10,14 +10,38 @@ import {
   refreshAuthSession,
   stillAuthenticated,
 } from '@/libs/sessionRefresh';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+import { resolveApiBaseUrl } from '@/libs/apiBase';
 
 export { ensureFreshSession };
 
 function notifySessionExpired() {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent('orderly-session-expired'));
+}
+
+/** Prefer HTTPS API origin; rewrite accidental http:// absolute URLs too. */
+function buildApiUrl(path: string): string {
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    try {
+      const url = new URL(path);
+      const host = url.hostname.toLowerCase();
+      const isLocal =
+        host === 'localhost' || host === '127.0.0.1' || host === '::1';
+      if (!isLocal && url.protocol === 'http:') {
+        url.protocol = 'https:';
+      }
+      // Prefer same-origin proxy when available so cookies + HTTPS stay clean.
+      const proxyBase = resolveApiBaseUrl();
+      if (proxyBase === '/oa-api') {
+        return `/oa-api${url.pathname}${url.search}${url.hash}`;
+      }
+      return url.toString();
+    } catch {
+      return path;
+    }
+  }
+  const base = resolveApiBaseUrl();
+  return `${base}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
 /** Tell the API which cookie session to prefer when leftovers exist. */
@@ -38,7 +62,7 @@ export async function secureFetch(
   options: RequestInit = {},
   retried = false,
 ): Promise<Response> {
-  const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
+  const url = buildApiUrl(path);
   const headers = new Headers(options.headers || undefined);
   const method = (options.method || 'GET').toUpperCase();
 
@@ -106,7 +130,7 @@ export async function fetchSession(): Promise<{
   trial_mode?: string | null;
   lock_message?: string | null;
 }> {
-  if (!API_BASE) return { authenticated: false };
+  if (!resolveApiBaseUrl()) return { authenticated: false };
 
   try {
     const res = await secureFetch('/auth/session', { method: 'GET' });

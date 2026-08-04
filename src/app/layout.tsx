@@ -18,7 +18,7 @@ export default async function RootLayout({
   const nonce = headerStore.get('x-nonce') ?? undefined;
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -33,7 +33,7 @@ export default async function RootLayout({
         />
         {nonce ? <meta property="csp-nonce" content={nonce} /> : null}
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

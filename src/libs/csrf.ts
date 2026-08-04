@@ -1,8 +1,12 @@
 /** Shared CSRF token cache for cookie-auth API calls (portal ↔ API). */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+import { resolveApiBaseUrl } from '@/libs/apiBase';
 
 let csrfToken: string | null = null;
+
+function apiBase(): string {
+  return resolveApiBaseUrl();
+}
 
 export function getCsrfToken(): string | null {
   return csrfToken;
@@ -39,9 +43,10 @@ export function applyCsrfHeader(headers: Headers, method: string): void {
 }
 
 export async function bootstrapCsrfToken(): Promise<void> {
-  if (!API_BASE || csrfToken) return;
+  const base = apiBase();
+  if (!base || csrfToken) return;
   try {
-    const res = await fetch(`${API_BASE}/auth/session`, {
+    const res = await fetch(`${base}/auth/session`, {
       method: 'GET',
       credentials: 'include',
     });

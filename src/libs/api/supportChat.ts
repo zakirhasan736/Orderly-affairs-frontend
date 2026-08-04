@@ -44,21 +44,35 @@ async function readJson<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function supportFetch(path: string, options?: RequestInit) {
+  try {
+    return await secureFetch(path, options);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/failed to fetch|networkerror|load failed|mixed content/i.test(msg)) {
+      throw new Error(
+        'Could not reach the API. Redeploy the portal so /oa-api proxies to https://api.orderly-affairs.com.',
+      );
+    }
+    throw err instanceof Error ? err : new Error(msg || 'Request failed');
+  }
+}
+
 export async function fetchMySupportThread() {
-  const res = await secureFetch('/support/thread', { method: 'GET' });
+  const res = await supportFetch('/support/thread', { method: 'GET' });
   return readJson<{ thread: SupportThread }>(res);
 }
 
 export async function fetchMySupportMessages(after?: string) {
   const qs = after ? `?after=${encodeURIComponent(after)}` : '';
-  const res = await secureFetch(`/support/thread/messages${qs}`, {
+  const res = await supportFetch(`/support/thread/messages${qs}`, {
     method: 'GET',
   });
   return readJson<{ thread: SupportThread; messages: SupportMessage[] }>(res);
 }
 
 export async function sendOwnerSupportMessage(text: string) {
-  const res = await secureFetch('/support/thread/messages', {
+  const res = await supportFetch('/support/thread/messages', {
     method: 'POST',
     body: JSON.stringify({ text }),
   });
@@ -66,19 +80,19 @@ export async function sendOwnerSupportMessage(text: string) {
 }
 
 export async function adminListSupportThreads() {
-  const res = await secureFetch('/admin/support/threads', { method: 'GET' });
+  const res = await supportFetch('/admin/support/threads', { method: 'GET' });
   return readJson<{ threads: SupportThread[] }>(res);
 }
 
 export async function adminGetSupportThread(threadId: string) {
-  const res = await secureFetch(`/admin/support/threads/${threadId}`, {
+  const res = await supportFetch(`/admin/support/threads/${threadId}`, {
     method: 'GET',
   });
   return readJson<{ thread: SupportThread; messages: SupportMessage[] }>(res);
 }
 
 export async function adminReplySupportThread(threadId: string, text: string) {
-  const res = await secureFetch(`/admin/support/threads/${threadId}/messages`, {
+  const res = await supportFetch(`/admin/support/threads/${threadId}/messages`, {
     method: 'POST',
     body: JSON.stringify({ text }),
   });

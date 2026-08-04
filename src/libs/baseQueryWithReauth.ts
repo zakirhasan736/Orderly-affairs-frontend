@@ -14,8 +14,7 @@ import {
   rememberCsrfFromResponse,
 } from '@/libs/csrf';
 import { refreshAuthSession } from '@/libs/sessionRefresh';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+import { resolveApiBaseUrl } from '@/libs/apiBase';
 
 /** Auth routes where a 401 must NOT trigger refresh-token (avoids 429 spam). */
 const SKIP_REFRESH_PATHS = [
@@ -48,30 +47,33 @@ function requestMethod(args: string | FetchArgs): string {
 export function createSecureBaseQuery(
   pathPrefix: string,
 ): BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> {
-  const rawBaseQuery = fetchBaseQuery({
-    baseUrl: `${API_BASE}${pathPrefix}`,
-    credentials: 'include',
-    prepareHeaders: headers => {
-      if (!headers.has('Content-Type')) {
-        headers.set('Content-Type', 'application/json');
+  const prepareHeaders = (headers: Headers) => {
+    if (!headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+    const token = getCsrfToken();
+    if (token) {
+      headers.set('X-CSRF-Token', token);
+    }
+    try {
+      const kind = sessionStorage.getItem('oa_portal_kind');
+      if (kind === 'family' || kind === 'nextkin' || kind === 'owner') {
+        headers.set('X-OA-Session-Kind', kind);
       }
-      const token = getCsrfToken();
-      if (token) {
-        headers.set('X-CSRF-Token', token);
-      }
-      try {
-        const kind = sessionStorage.getItem('oa_portal_kind');
-        if (kind === 'family' || kind === 'nextkin' || kind === 'owner') {
-          headers.set('X-OA-Session-Kind', kind);
-        }
-      } catch {
-        /* ignore */
-      }
-      return headers;
-    },
-  });
+    } catch {
+      /* ignore */
+    }
+    return headers;
+  };
 
   return async (args, api, extraOptions) => {
+    // Resolve per request so HTTPS portal always uses same-origin /oa-api.
+    const rawBaseQuery = fetchBaseQuery({
+      baseUrl: `${resolveApiBaseUrl()}${pathPrefix}`,
+      credentials: 'include',
+      prepareHeaders,
+    });
+
     const method = requestMethod(args);
     if (method !== 'GET' && method !== 'HEAD') {
       await bootstrapCsrfToken();

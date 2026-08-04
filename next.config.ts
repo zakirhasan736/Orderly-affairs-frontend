@@ -14,6 +14,27 @@ const securityHeaders = [
   // Content-Security-Policy is set in middleware.ts with a per-request nonce.
 ];
 
+function apiProxyDestination(): string {
+  const raw = (
+    process.env.API_PROXY_TARGET ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    'http://127.0.0.1:8000'
+  )
+    .trim()
+    .replace(/\/+$/, '');
+  try {
+    if (raw.startsWith('http://')) {
+      const host = new URL(raw).hostname.toLowerCase();
+      if (host !== 'localhost' && host !== '127.0.0.1' && host !== '::1') {
+        return `https://${raw.slice('http://'.length)}`;
+      }
+    }
+  } catch {
+    /* keep raw */
+  }
+  return raw || 'http://127.0.0.1:8000';
+}
+
 const nextConfig: NextConfig = {
   reactCompiler: true,
   productionBrowserSourceMaps: false,
@@ -26,6 +47,17 @@ const nextConfig: NextConfig = {
     : {}),
   experimental: {
     turbopackFileSystemCacheForDev: true,
+  },
+  async rewrites() {
+    const dest = apiProxyDestination();
+    return [
+      // Same-origin proxy so HTTPS portal never hits http://api (Mixed Content).
+      // Browser → /oa-api/admin/users/ → Next rewrite → https://api…/admin/users/
+      {
+        source: '/oa-api/:path*',
+        destination: `${dest}/:path*`,
+      },
+    ];
   },
   async headers() {
     return [
