@@ -5,6 +5,8 @@ export type FamilyDashboardSession = {
   accessLevel?: string | null;
   authorizedSections: string[];
   permissions: Record<string, boolean>;
+  portalRole?: string | null;
+  portalRoleLabel?: string | null;
 };
 
 const SPECIAL_AREAS = new Set([
@@ -20,6 +22,8 @@ export function parseFamilyDashboardSession(session: {
   access_level?: string | null;
   authorized_sections?: string[];
   dashboard_permissions?: Record<string, boolean>;
+  portal_role?: string | null;
+  portal_role_label?: string | null;
 }): FamilyDashboardSession {
   const isFamily =
     session.role === 'nextkin' &&
@@ -31,6 +35,8 @@ export function parseFamilyDashboardSession(session: {
       ? session.authorized_sections.map(String)
       : [],
     permissions: session.dashboard_permissions || {},
+    portalRole: session.portal_role || null,
+    portalRoleLabel: session.portal_role_label || null,
   };
 }
 
@@ -76,11 +82,42 @@ export function familyAllowedVaultSectionIds(
   return ids;
 }
 
+export function familyCanWrite(session: FamilyDashboardSession): boolean {
+  if (!session.isFamily) return true;
+  return Boolean(session.permissions.can_write);
+}
+
+export function familyCanUpload(session: FamilyDashboardSession): boolean {
+  if (!session.isFamily) return true;
+  return Boolean(session.permissions.can_upload);
+}
+
+export function familyCanManageFamilyAccess(
+  session: FamilyDashboardSession,
+): boolean {
+  if (!session.isFamily) return true;
+  return Boolean(session.permissions.can_manage_family_access);
+}
+
+/** Super Admin may view billing status; payment mutations stay owner-only. */
+export function familyCanViewBilling(session: FamilyDashboardSession): boolean {
+  if (!session.isFamily) return true;
+  return (
+    Boolean(session.permissions.can_manage_billing) &&
+    (familyHasFullDashboard(session) || familyHasArea(session, 'billing'))
+  );
+}
+
 export function familyCanViewVaultSettings(
   session: FamilyDashboardSession,
 ): boolean {
   if (!session.isFamily) return true;
-  if (!familyHasArea(session, 'vault_settings')) return false;
+  if (
+    !familyHasArea(session, 'vault_settings') &&
+    !familyHasFullDashboard(session)
+  ) {
+    return false;
+  }
   return Boolean(
     session.permissions.can_view_vault_settings ||
       session.permissions.can_manage_family_access ||
@@ -94,7 +131,8 @@ export function familyCanManageNextKin(
   if (!session.isFamily) return true;
   return (
     Boolean(session.permissions.can_manage_nextkin) &&
-    familyHasArea(session, 'section2_nextkin')
+    (familyHasFullDashboard(session) ||
+      familyHasArea(session, 'section2_nextkin'))
   );
 }
 
@@ -116,4 +154,13 @@ export function firstAllowedFamilySectionId(
   }
   const preferred = [...allowed].sort((a, b) => Number(a) - Number(b));
   return preferred[0] || 'dashboard';
+}
+
+export function familyRoleBannerText(
+  session: FamilyDashboardSession,
+): string | null {
+  if (!session.isFamily) return null;
+  const label = session.portalRoleLabel || session.portalRole || 'Viewer';
+  const write = familyCanWrite(session) ? 'edit' : 'view-only';
+  return `Family ${label} · ${write} on granted areas`;
 }

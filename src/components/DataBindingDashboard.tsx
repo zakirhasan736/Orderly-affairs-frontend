@@ -63,6 +63,10 @@ interface DataBindingDashboardProps {
   ownerEmail?: string | null;
   ownerName?: string | null;
   notices?: DashboardNotice[];
+  /** Family Viewer — hide mutating overview actions. */
+  readOnly?: boolean;
+  /** Family without can_upload — hide AI document drop zone. */
+  uploadsDisabled?: boolean;
 }
 
 interface ApiMessage {
@@ -99,10 +103,13 @@ export function DataBindingDashboard({
   ownerEmail: _ownerEmail = null,
   ownerName: _ownerName = null,
   notices: _notices = [],
+  readOnly = false,
+  uploadsDisabled = false,
 }: DataBindingDashboardProps) {
   void _ownerEmail;
   void _ownerName;
   void _notices;
+  const hideUploads = readOnly || uploadsDisabled;
   const [activeTab, setActiveTab] = useState<PeopleTab>('access');
   const [mobileHubTab, setMobileHubTab] = useState<MobileHubTab>('people');
   const [messages, setMessages] = useState<ApiMessage[]>([]);
@@ -511,16 +518,25 @@ export function DataBindingDashboard({
             />
           </div>
 
-          {/* 2) Upload document */}
-          <OverviewAiUploadCard
-            jobs={batch.jobs}
-            enqueueFiles={batch.enqueueFiles}
-            dismissJob={batch.dismissJob}
-            maxConcurrent={batch.maxConcurrent}
-          />
-          <div className="overview-upload-types">
-            <AiUploadSupportedSectionsHint />
-          </div>
+          {/* 2) Upload document — hidden for family Viewers / no-upload roles */}
+          {!hideUploads && !isNextOfKin && (
+            <>
+              <OverviewAiUploadCard
+                jobs={batch.jobs}
+                enqueueFiles={batch.enqueueFiles}
+                dismissJob={batch.dismissJob}
+                maxConcurrent={batch.maxConcurrent}
+              />
+              <div className="overview-upload-types">
+                <AiUploadSupportedSectionsHint />
+              </div>
+            </>
+          )}
+          {hideUploads && !isNextOfKin && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+              Document upload is not available for your family role.
+            </div>
+          )}
 
           <OverviewBrowseGrid
             className="hidden md:block"

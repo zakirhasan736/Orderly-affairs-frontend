@@ -33,31 +33,31 @@ const FALLBACK_ROLES = [
     id: 'viewer',
     label: 'Viewer',
     description:
-      'View granted dashboard vault sections only. No edits, uploads, billing, family roles, or Next of Kin.',
+      'View granted dashboard vault sections only. Cannot edit fields, upload documents, manage billing, family roles, or Next of Kin.',
   },
   {
     id: 'editor',
     label: 'Editor',
     description:
-      'Edit granted vault sections and upload documents. Cannot manage family roles, Next of Kin, or billing.',
+      'View and update granted vault sections, including drag-and-drop document uploads. Cannot manage family roles, Next of Kin, billing, or Vault Settings.',
   },
   {
     id: 'portal_manager',
     label: 'Portal Manager',
     description:
-      'Editor + invite/edit other family collaborators. Cannot manage Next of Kin or billing.',
+      'Editor rights on granted areas, plus invite/edit other family collaborators (role & area access). Cannot approve/delete Next of Kin or change billing. Vault Settings family area only — MFA stays owner-only.',
   },
   {
     id: 'admin',
     label: 'Admin',
     description:
-      'Edit/upload granted areas, manage family access, and manage Section 2 Next of Kin (approve/revoke/delete).',
+      'Full edit/upload on granted dashboard areas, manage family collaborators, and manage Section 2 Next of Kin (approve, revoke, delete). Cannot change owner billing or owner MFA.',
   },
   {
     id: 'super_admin',
     label: 'Super Admin',
     description:
-      'Highest family role: family access, Next of Kin, and view billing in Vault Settings (owner still owns payment).',
+      'Highest family collaborator role: edit/upload granted areas, manage family access, manage Next of Kin, and view billing status in Vault Settings (payment changes still require the owner).',
   },
 ] as const;
 

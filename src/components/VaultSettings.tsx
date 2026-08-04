@@ -137,7 +137,10 @@ const VaultSettings = () => {
 
   useEffect(() => {
     void fetchSession().then(session => {
-      if (session.role === 'nextkin' && session.access_type === 'family') {
+      if (
+        session.role === 'nextkin' &&
+        String(session.access_type || '').toLowerCase() === 'family'
+      ) {
         const perms = session.dashboard_permissions || {};
         setFamilySession({
           isFamily: true,
@@ -881,8 +884,10 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
   const showFamilyBlock =
     !familySession.isFamily || familySession.canManageFamily;
   const showMfaBlock = !familySession.isFamily;
+  // Super Admin may view billing status; payment mutations stay owner-only.
   const showBillingBlock =
     !familySession.isFamily || familySession.canManageBilling;
+  const billingViewOnly = familySession.isFamily && familySession.canManageBilling;
 
   return (
     <div className="vault-settings-section w-full space-y-4 pb-24 sm:space-y-5 sm:pb-28">
@@ -1113,6 +1118,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                     : 'Off — you will not be charged automatically. Access may pause when the period ends until you pay.'}
                 </p>
               </div>
+              {!billingViewOnly && (
               <button
                 type="button"
                 disabled={autoRenewLoading || disableActions}
@@ -1139,9 +1145,16 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
               >
                 {billing.auto_renew !== false ? 'On' : 'Off'}
               </button>
+              )}
             </div>
           )}
 
+          {billingViewOnly ? (
+            <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              Billing status is view-only for family Super Admin. Payment method,
+              plan changes, and portal access require the kit owner.
+            </p>
+          ) : (
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
@@ -1187,6 +1200,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
               Manage Billing
             </button>
           </div>
+          )}
         </div>
       </section>
 

@@ -111,7 +111,10 @@ import {
   familyAllowedVaultSectionIds,
   familyCanManageNextKin,
   familyCanSeeOverview,
+  familyCanUpload,
   familyCanViewVaultSettings,
+  familyCanWrite,
+  familyRoleBannerText,
   firstAllowedFamilySectionId,
   parseFamilyDashboardSession,
   type FamilyDashboardSession,
@@ -895,10 +898,19 @@ export default function DashboardPage() {
     }
   }, [appMode]); // Only when appMode changes to 'owner'
 
-  // Optimized update functions
-  const updateSectionData = useCallback((sectionId: string, data: any) => {
-    setFormData(prev => ({ ...prev, [sectionId]: data }));
-  }, []);
+  // Optimized update functions — family Viewers cannot mutate vault fields.
+  const updateSectionData = useCallback(
+    (sectionId: string, data: any) => {
+      if (familyAcl.isFamily && !familyCanWrite(familyAcl)) {
+        toast.error(
+          'Your family role is view-only. Ask the kit owner for Editor or higher.',
+        );
+        return;
+      }
+      setFormData(prev => ({ ...prev, [sectionId]: data }));
+    },
+    [familyAcl],
+  );
 
   // When owner opens a section after overview upload: show read↔field match
   // dialog for EVERY pending document (Toyota + Honda + Jeep), not just one.
@@ -1570,11 +1582,20 @@ export default function DashboardPage() {
           />
         );
       case '2':
-        return (
+        return familyCanManageNextKin(familyAcl) ? (
           <Section2AccessManagement
             data={formData['2'] || {}}
             onChange={data => updateSectionData('2', data)}
           />
+        ) : (
+          <div className="rounded-3xl border border-amber-200 bg-amber-50/80 p-6 text-sm text-amber-950">
+            <p className="font-semibold">Next of Kin management is restricted</p>
+            <p className="mt-2 text-amber-900/80">
+              Only family Admin or Super Admin (with Section 2 access) can
+              approve, revoke, or delete Next of Kin. Your role:{' '}
+              {familyAcl.portalRoleLabel || 'Viewer'}.
+            </p>
+          </div>
         );
       case '3':
         return (
@@ -2344,6 +2365,17 @@ export default function DashboardPage() {
             <div className="mx-auto w-full max-w-[1480px] px-4 py-4 sm:px-5 md:px-6 md:py-6 lg:px-8 xl:px-10">
               {activeSection === 'dashboard' ? (
                 <div className="owner-dashboard-overview-area space-y-5 md:space-y-6">
+                  {familyAcl.isFamily && familyRoleBannerText(familyAcl) && (
+                    <div className="rounded-2xl border border-teal-200/80 bg-teal-50/90 px-4 py-3 text-sm text-teal-950">
+                      <span className="font-semibold">
+                        {familyRoleBannerText(familyAcl)}
+                      </span>
+                      <span className="mt-0.5 block text-teal-900/75">
+                        You share the owner dashboard — only granted areas and
+                        actions for your role are available.
+                      </span>
+                    </div>
+                  )}
                   {/* Overview upload + task cards live inside DataBindingDashboard */}
                   {appMode === 'owner' ? (
                     <DataBindingDashboard
@@ -2363,6 +2395,12 @@ export default function DashboardPage() {
                       }
                       notices={headerNotices}
                       onNavigateToSection={sectionId => goToSection(sectionId)}
+                      readOnly={
+                        familyAcl.isFamily && !familyCanWrite(familyAcl)
+                      }
+                      uploadsDisabled={
+                        familyAcl.isFamily && !familyCanUpload(familyAcl)
+                      }
                     />
                   ) : (
                     <DataBindingDashboard
@@ -2403,12 +2441,23 @@ export default function DashboardPage() {
                 </div>
               ) : currentSection ? (
                 <div className="space-y-5 md:space-y-6">
-                  {appMode === 'owner' && (
+                  {familyAcl.isFamily && familyRoleBannerText(familyAcl) && (
+                    <div className="rounded-2xl border border-teal-200/80 bg-teal-50/90 px-4 py-3 text-sm text-teal-950">
+                      <span className="font-semibold">
+                        {familyRoleBannerText(familyAcl)}
+                      </span>
+                    </div>
+                  )}
+                  {appMode === 'owner' &&
+                    familyCanUpload(familyAcl) &&
+                    familyCanWrite(familyAcl) && (
                     <AiPendingUploadSectionBanner
                       activeSectionId={activeSection}
                     />
                   )}
-                  {appMode === 'owner' && sectionMatchReview ? (
+                  {appMode === 'owner' &&
+                  familyCanWrite(familyAcl) &&
+                  sectionMatchReview ? (
                     <AiSectionFieldMatchDialog
                       open={Boolean(sectionMatchReview)}
                       onOpenChange={open => {
@@ -2784,11 +2833,25 @@ export default function DashboardPage() {
                       sectionId={activeSection}
                       subsectionId={activeSubsection}
                     >
-                      {renderSection()}
+                      {familyAcl.isFamily && !familyCanWrite(familyAcl) ? (
+                        <fieldset
+                          disabled
+                          className="min-w-0 border-0 p-0 disabled:opacity-[0.98] [&_button]:cursor-not-allowed [&_input]:cursor-not-allowed [&_textarea]:cursor-not-allowed"
+                        >
+                          <legend className="sr-only">View-only vault section</legend>
+                          <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                            View-only — your family role cannot edit or upload
+                            here.
+                          </div>
+                          {renderSection()}
+                        </fieldset>
+                      ) : (
+                        renderSection()
+                      )}
                     </AiActiveSectionProvider>
                   </div>
 
-                  {activeSection === '4' && (
+                  {activeSection === '4' && familyCanWrite(familyAcl) && (
                     <div className="mt-2 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
                       <p className="min-w-0 text-[11px] leading-snug text-slate-400">
                         Need a clean slate? Wipe every message in this section.
