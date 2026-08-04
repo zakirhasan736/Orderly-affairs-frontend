@@ -775,7 +775,7 @@ export default function DashboardPage() {
       if (cancelled) return;
 
       if (session.authenticated && session.role === 'nextkin') {
-        if (session.access_type === 'family') {
+        if (String(session.access_type || '').toLowerCase() === 'family') {
           const acl = parseFamilyDashboardSession(session);
           setFamilyAcl(acl);
           setCurrentUser({
@@ -784,6 +784,11 @@ export default function DashboardPage() {
           });
           setAppMode('owner');
           setSessionReady(true);
+          try {
+            sessionStorage.setItem('oa_portal_kind', 'family');
+          } catch {
+            /* ignore */
+          }
           return;
         }
         router.replace('/next-kin/dashboard');

@@ -10,6 +10,18 @@ import {
   markPortalSession,
 } from '@/libs/secureFetch';
 
+const PORTAL_KIND_KEY = 'oa_portal_kind';
+
+function isFamilyCollaborator(session: {
+  role?: string;
+  access_type?: string;
+}): boolean {
+  return (
+    session.role === 'nextkin' &&
+    String(session.access_type || '').toLowerCase() === 'family'
+  );
+}
+
 export default function AuthWatcher({
   children,
 }: {
@@ -20,7 +32,8 @@ export default function AuthWatcher({
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    if (pathname.startsWith('/next-kin')) {
+    // NOK portal and family login use their own session UX.
+    if (pathname.startsWith('/next-kin') || pathname.startsWith('/family')) {
       return;
     }
 
@@ -42,7 +55,28 @@ export default function AuthWatcher({
         return;
       }
 
+      // Family collaborators use the owner dashboard shell with ACL.
+      if (isOwnerArea && isFamilyCollaborator(session)) {
+        try {
+          sessionStorage.setItem(PORTAL_KIND_KEY, 'family');
+        } catch {
+          /* ignore */
+        }
+        await markPortalSession();
+        return;
+      }
+
       if (isOwnerArea && session.role !== 'owner') {
+        // Pure Next-of-Kin should use /next-kin/dashboard, not owner login.
+        if (session.role === 'nextkin') {
+          try {
+            sessionStorage.setItem(PORTAL_KIND_KEY, 'nextkin');
+          } catch {
+            /* ignore */
+          }
+          router.replace('/next-kin/dashboard');
+          return;
+        }
         router.replace('/');
         return;
       }
@@ -58,6 +92,11 @@ export default function AuthWatcher({
       }
 
       if (session.role === 'owner' && !session.requires_billing) {
+        try {
+          sessionStorage.setItem(PORTAL_KIND_KEY, 'owner');
+        } catch {
+          /* ignore */
+        }
         await markPortalSession();
       }
     };
@@ -65,8 +104,23 @@ export default function AuthWatcher({
     void verify();
 
     const onSessionExpired = () => {
+      let portalKind = 'owner';
+      try {
+        portalKind = sessionStorage.getItem(PORTAL_KIND_KEY) || 'owner';
+        sessionStorage.removeItem(PORTAL_KIND_KEY);
+      } catch {
+        /* ignore */
+      }
       dispatch(clearSession());
       void clearPortalSession().finally(() => {
+        if (portalKind === 'family') {
+          router.replace('/family/login?session=expired');
+          return;
+        }
+        if (portalKind === 'nextkin') {
+          router.replace('/next-kin?session=expired');
+          return;
+        }
         router.replace('/?session=expired');
       });
     };

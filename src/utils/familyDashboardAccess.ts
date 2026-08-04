@@ -22,7 +22,8 @@ export function parseFamilyDashboardSession(session: {
   dashboard_permissions?: Record<string, boolean>;
 }): FamilyDashboardSession {
   const isFamily =
-    session.role === 'nextkin' && session.access_type === 'family';
+    session.role === 'nextkin' &&
+    String(session.access_type || '').toLowerCase() === 'family';
   return {
     isFamily,
     accessLevel: session.access_level,

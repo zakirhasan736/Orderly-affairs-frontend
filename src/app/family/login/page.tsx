@@ -76,13 +76,27 @@ export default function FamilyLoginPage() {
       throw new Error('Session not established');
     }
     await markPortalSession();
-    if (res.access_type === 'family') {
+
+    let accessType = String(res.access_type || '').toLowerCase();
+    if (!accessType) {
+      const { fetchSession } = await import('@/libs/secureFetch');
+      const session = await fetchSession();
+      accessType = String(session.access_type || '').toLowerCase();
+    }
+
+    if (accessType === 'family') {
+      try {
+        sessionStorage.setItem('oa_portal_kind', 'family');
+      } catch {
+        /* ignore */
+      }
       toast.success('Signed in to the owner dashboard');
-      router.push('/dashboard');
+      // Full navigation so AuthWatcher re-runs with the new cookie session.
+      window.location.assign('/dashboard');
       return;
     }
     toast.success('Login successful');
-    router.push('/next-kin/dashboard');
+    window.location.assign('/next-kin/dashboard');
   };
 
   return (
