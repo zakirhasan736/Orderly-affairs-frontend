@@ -30,6 +30,7 @@ import { OverviewAiUploadCard } from './ai/OverviewAiUploadCard';
 import { OverviewTaskBoard } from './ai/OverviewTaskBoard';
 import { OverviewBrowseGrid } from './ai/OverviewBrowseGrid';
 import { AiUploadSupportedSectionsHint } from './ai/AiUploadSupportedSectionsHint';
+import { AiUploadHistoryPopup } from './ai/AiUploadHistoryPopup';
 import { useDashboardAiBatch } from '@/contexts/DashboardAiBatchContext';
 import { AiOverviewReadMatchDialog } from './ai/AiOverviewReadMatchDialog';
 import type { OverviewDocumentReview } from './ai/AiOverviewReadMatchDialog';
@@ -67,6 +68,11 @@ interface DataBindingDashboardProps {
   readOnly?: boolean;
   /** Family without can_upload — hide AI document drop zone. */
   uploadsDisabled?: boolean;
+  /** Restrict browse / cards to these vault section ids. */
+  allowedSectionIds?: 'all' | Set<string>;
+  showAccessPeople?: boolean;
+  showNokLetters?: boolean;
+  showMessages?: boolean;
 }
 
 interface ApiMessage {
@@ -105,11 +111,15 @@ export function DataBindingDashboard({
   notices: _notices = [],
   readOnly = false,
   uploadsDisabled = false,
+  allowedSectionIds = 'all',
+  showAccessPeople = true,
+  showNokLetters = true,
+  showMessages = true,
 }: DataBindingDashboardProps) {
   void _ownerEmail;
   void _ownerName;
   void _notices;
-  const hideUploads = readOnly || uploadsDisabled;
+  const hideDropZone = uploadsDisabled;
   const [activeTab, setActiveTab] = useState<PeopleTab>('access');
   const [mobileHubTab, setMobileHubTab] = useState<MobileHubTab>('people');
   const [messages, setMessages] = useState<ApiMessage[]>([]);
@@ -120,6 +130,13 @@ export function DataBindingDashboard({
   const [stashTick, setStashTick] = useState(0);
   const batchReviewShownRef = useRef(false);
   const prevWorkingRef = useRef(false);
+
+  useEffect(() => {
+    // Prefer a visible people tab when ACL hides the default.
+    if (showAccessPeople) setActiveTab('access');
+    else if (showNokLetters) setActiveTab('nok-letters');
+    else if (showMessages) setActiveTab('messages');
+  }, [showAccessPeople, showNokLetters, showMessages]);
 
   useEffect(() => {
     const onStash = () => setStashTick(value => value + 1);
@@ -302,6 +319,10 @@ export function DataBindingDashboard({
     let cancelled = false;
 
     const fetchMessages = async () => {
+      if (!showMessages) {
+        setMessages([]);
+        return;
+      }
       try {
         setLoadingMessages(true);
         const response = await getMessages();
@@ -315,11 +336,11 @@ export function DataBindingDashboard({
       }
     };
 
-    fetchMessages();
+    void fetchMessages();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [showMessages]);
 
   const accessPeople = useMemo(
     () => (Array.isArray(nextKinList) ? nextKinList : []),
@@ -518,8 +539,8 @@ export function DataBindingDashboard({
             />
           </div>
 
-          {/* 2) Upload document — hidden for family Viewers / no-upload roles */}
-          {!hideUploads && !isNextOfKin && (
+          {/* 2) Upload document — drop zone for Editor+; history for all family readers */}
+          {!hideDropZone && !isNextOfKin && (
             <>
               <OverviewAiUploadCard
                 jobs={batch.jobs}
@@ -532,9 +553,19 @@ export function DataBindingDashboard({
               </div>
             </>
           )}
-          {hideUploads && !isNextOfKin && (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
-              Document upload is not available for your family role.
+          {hideDropZone && !isNextOfKin && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-slate-600">
+                  Document upload is not available for your family role. You can
+                  still open documents the owner (or editors) already uploaded.
+                </p>
+                <AiUploadHistoryPopup
+                  absolute={false}
+                  source="overview"
+                  variant="dialog"
+                />
+              </div>
             </div>
           )}
 
@@ -542,6 +573,7 @@ export function DataBindingDashboard({
             className="hidden md:block"
             onNavigateToSection={onNavigateToSection}
             completedSectionIds={completedSectionIds}
+            allowedSectionIds={allowedSectionIds}
           />
 
           <AiOverviewReadMatchDialog
@@ -558,27 +590,34 @@ export function DataBindingDashboard({
               sectionProgressById={sectionProgressById}
               lastUpdatedBySection={lastUpdatedBySection}
               onNavigateToSection={onNavigateToSection}
+              allowedSectionIds={allowedSectionIds}
             />
           </div>
 
           {/* 4) Quick actions */}
           <section className="md:hidden">
             <div className="grid grid-cols-4 gap-2">
-              <QuickAction
-                icon={<Plus className="h-4 w-4" />}
-                label="Add a person"
-                onClick={() => onNavigateToSection('2')}
-              />
-              <QuickAction
-                icon={<Pencil className="h-4 w-4" />}
-                label="Write letter"
-                onClick={() => onNavigateToSection('3')}
-              />
-              <QuickAction
-                icon={<Mail className="h-4 w-4" />}
-                label="Send message"
-                onClick={() => onNavigateToSection('4')}
-              />
+              {showAccessPeople && (
+                <QuickAction
+                  icon={<Plus className="h-4 w-4" />}
+                  label={readOnly ? 'View people' : 'Add a person'}
+                  onClick={() => onNavigateToSection('2')}
+                />
+              )}
+              {showNokLetters && (
+                <QuickAction
+                  icon={<Pencil className="h-4 w-4" />}
+                  label={readOnly ? 'View letter' : 'Write letter'}
+                  onClick={() => onNavigateToSection('3')}
+                />
+              )}
+              {showMessages && (
+                <QuickAction
+                  icon={<Mail className="h-4 w-4" />}
+                  label={readOnly ? 'View messages' : 'Send message'}
+                  onClick={() => onNavigateToSection('4')}
+                />
+              )}
               <QuickAction
                 icon={<Activity className="h-4 w-4" />}
                 label="View activity"
@@ -600,7 +639,15 @@ export function DataBindingDashboard({
             className="scroll-mt-24 space-y-3 md:hidden"
           >
             <div className="rounded-[22px] border border-slate-200 bg-white p-1.5 shadow-sm">
-              <div className="grid grid-cols-2 gap-1">
+              <div
+                className={cn(
+                  'grid gap-1',
+                  showAccessPeople || showNokLetters || showMessages
+                    ? 'grid-cols-2'
+                    : 'grid-cols-1',
+                )}
+              >
+                {(showAccessPeople || showNokLetters || showMessages) && (
                 <button
                   type="button"
                   onClick={() => setMobileHubTab('people')}
@@ -613,12 +660,14 @@ export function DataBindingDashboard({
                 >
                   People & messages
                 </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setMobileHubTab('activity')}
                   className={cn(
                     'rounded-xl px-3 py-2.5 text-[12px] font-semibold transition',
-                    mobileHubTab === 'activity'
+                    mobileHubTab === 'activity' ||
+                      !(showAccessPeople || showNokLetters || showMessages)
                       ? 'bg-[#213D59] text-white shadow-sm'
                       : 'text-slate-500',
                   )}
@@ -628,7 +677,8 @@ export function DataBindingDashboard({
               </div>
             </div>
 
-            {mobileHubTab === 'activity' ? (
+            {mobileHubTab === 'activity' ||
+            !(showAccessPeople || showNokLetters || showMessages) ? (
               <div
                 id="recent-activity"
                 className="overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-sm"
@@ -692,31 +742,55 @@ export function DataBindingDashboard({
                   value={activeTab}
                   onValueChange={value => setActiveTab(value as PeopleTab)}
                 >
-                  <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
-                    <TabsTrigger
-                      value="access"
-                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
-                    >
-                      Access ({accessPeople.length})
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="nok-letters"
-                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
-                    >
-                      Letter ({nokLetter ? 1 : 0})
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="messages"
-                      className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
-                    >
-                      Messages ({pendingMessages.length})
-                    </TabsTrigger>
+                  <TabsList
+                    className={cn(
+                      'grid h-auto w-full gap-1 rounded-xl bg-slate-100 p-1',
+                      [
+                        showAccessPeople,
+                        showNokLetters,
+                        showMessages,
+                      ].filter(Boolean).length <= 1
+                        ? 'grid-cols-1'
+                        : [
+                              showAccessPeople,
+                              showNokLetters,
+                              showMessages,
+                            ].filter(Boolean).length === 2
+                          ? 'grid-cols-2'
+                          : 'grid-cols-3',
+                    )}
+                  >
+                    {showAccessPeople && (
+                      <TabsTrigger
+                        value="access"
+                        className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
+                      >
+                        Access ({accessPeople.length})
+                      </TabsTrigger>
+                    )}
+                    {showNokLetters && (
+                      <TabsTrigger
+                        value="nok-letters"
+                        className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
+                      >
+                        Letter ({nokLetter ? 1 : 0})
+                      </TabsTrigger>
+                    )}
+                    {showMessages && (
+                      <TabsTrigger
+                        value="messages"
+                        className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
+                      >
+                        Messages ({pendingMessages.length})
+                      </TabsTrigger>
+                    )}
                   </TabsList>
 
+                  {showAccessPeople && (
                   <TabsContent value="access" className="mt-3 space-y-3">
                     <ListPanelHeader
                       title="People you trust"
-                      action="Manage"
+                      action={readOnly ? 'View' : 'Manage'}
                       onAction={() => onNavigateToSection('2')}
                     />
                     {accessPeople.length > 0 ? (
@@ -752,17 +826,25 @@ export function DataBindingDashboard({
                     ) : (
                       <EmptyBlock
                         title="No access people yet"
-                        description="Add trusted people who can access your kit."
-                        action="Add access people"
-                        onClick={() => onNavigateToSection('2')}
+                        description={
+                          readOnly
+                            ? 'No trusted people are listed for this kit yet.'
+                            : 'Add trusted people who can access your kit.'
+                        }
+                        action={readOnly ? undefined : 'Add access people'}
+                        onClick={
+                          readOnly ? undefined : () => onNavigateToSection('2')
+                        }
                       />
                     )}
                   </TabsContent>
+                  )}
 
+                  {showNokLetters && (
                   <TabsContent value="nok-letters" className="mt-3 space-y-3">
                     <ListPanelHeader
                       title="Next of kin letter"
-                      action="Manage"
+                      action={readOnly ? 'View' : 'Manage'}
                       onAction={() => onNavigateToSection('3')}
                     />
                     {nokLetter ? (
@@ -782,17 +864,25 @@ export function DataBindingDashboard({
                     ) : (
                       <EmptyBlock
                         title="No letter yet"
-                        description="Write a letter so your next of kin knows what to do."
-                        action="Create letter"
-                        onClick={() => onNavigateToSection('3')}
+                        description={
+                          readOnly
+                            ? 'No next of kin letter has been written yet.'
+                            : 'Write a letter so your next of kin knows what to do.'
+                        }
+                        action={readOnly ? undefined : 'Create letter'}
+                        onClick={
+                          readOnly ? undefined : () => onNavigateToSection('3')
+                        }
                       />
                     )}
                   </TabsContent>
+                  )}
 
+                  {showMessages && (
                   <TabsContent value="messages" className="mt-3 space-y-3">
                     <ListPanelHeader
                       title="Personal messages"
-                      action="Manage"
+                      action={readOnly ? 'View' : 'Manage'}
                       onAction={() => onNavigateToSection('4')}
                     />
                     {loadingMessages ? (
@@ -837,12 +927,19 @@ export function DataBindingDashboard({
                     ) : (
                       <EmptyBlock
                         title="No messages yet"
-                        description="Create letters, audio, or video for loved ones."
-                        action="Create message"
-                        onClick={() => onNavigateToSection('4')}
+                        description={
+                          readOnly
+                            ? 'No personal messages are saved yet.'
+                            : 'Create letters, audio, or video for loved ones.'
+                        }
+                        action={readOnly ? undefined : 'Create message'}
+                        onClick={
+                          readOnly ? undefined : () => onNavigateToSection('4')
+                        }
                       />
                     )}
                   </TabsContent>
+                  )}
                 </Tabs>
               </div>
             )}
@@ -851,6 +948,7 @@ export function DataBindingDashboard({
       )}
 
       {/* Desktop people & messages panel */}
+      {(showAccessPeople || showNokLetters || showMessages) && (
       <section
         id={isNextOfKin ? 'people-messages' : undefined}
         className={cn(
@@ -876,36 +974,60 @@ export function DataBindingDashboard({
             value={activeTab}
             onValueChange={value => setActiveTab(value as PeopleTab)}
           >
-            <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
-              <TabsTrigger
-                value="access"
-                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
-              >
-                <Users className="mr-1.5 h-4 w-4" />
-                Access ({accessPeople.length})
-              </TabsTrigger>
-              <TabsTrigger
-                value="nok-letters"
-                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
-              >
-                <FileText className="mr-1.5 h-4 w-4" />
-                Letter ({nokLetter ? 1 : 0})
-              </TabsTrigger>
-              <TabsTrigger
-                value="messages"
-                className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
-              >
-                <MessageSquare className="mr-1.5 h-4 w-4" />
-                Messages ({pendingMessages.length})
-              </TabsTrigger>
+            <TabsList
+              className={cn(
+                'grid h-auto w-full gap-1 rounded-xl bg-slate-100 p-1',
+                [
+                  showAccessPeople,
+                  showNokLetters,
+                  showMessages,
+                ].filter(Boolean).length <= 1
+                  ? 'grid-cols-1'
+                  : [
+                        showAccessPeople,
+                        showNokLetters,
+                        showMessages,
+                      ].filter(Boolean).length === 2
+                    ? 'grid-cols-2'
+                    : 'grid-cols-3',
+              )}
+            >
+              {showAccessPeople && (
+                <TabsTrigger
+                  value="access"
+                  className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
+                >
+                  <Users className="mr-1.5 h-4 w-4" />
+                  Access ({accessPeople.length})
+                </TabsTrigger>
+              )}
+              {showNokLetters && (
+                <TabsTrigger
+                  value="nok-letters"
+                  className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
+                >
+                  <FileText className="mr-1.5 h-4 w-4" />
+                  Letter ({nokLetter ? 1 : 0})
+                </TabsTrigger>
+              )}
+              {showMessages && (
+                <TabsTrigger
+                  value="messages"
+                  className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
+                >
+                  <MessageSquare className="mr-1.5 h-4 w-4" />
+                  Messages ({pendingMessages.length})
+                </TabsTrigger>
+              )}
             </TabsList>
 
+            {showAccessPeople && (
             <TabsContent value="access" className="mt-5">
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)]">
                 <div>
                   <PanelActions
                     onAction={() => onNavigateToSection('2')}
-                    label="Manage access"
+                    label={readOnly ? 'View access' : 'Manage access'}
                   />
                   {accessPeople.length > 0 ? (
                     <div className="mt-4 grid gap-4">
@@ -921,9 +1043,15 @@ export function DataBindingDashboard({
                   ) : (
                     <EmptyBlock
                       title="No access people yet"
-                      description="Add trusted people who can access your kit."
-                      action="Add access people"
-                      onClick={() => onNavigateToSection('2')}
+                      description={
+                        readOnly
+                          ? 'No trusted people are listed for this kit yet.'
+                          : 'Add trusted people who can access your kit.'
+                      }
+                      action={readOnly ? undefined : 'Add access people'}
+                      onClick={
+                        readOnly ? undefined : () => onNavigateToSection('2')
+                      }
                     />
                   )}
                 </div>
@@ -946,16 +1074,18 @@ export function DataBindingDashboard({
                     onClick={() => onNavigateToSection('2')}
                     className="mt-4 h-11 w-full rounded-xl bg-[#213D59] text-white hover:bg-[#00305C]"
                   >
-                    Manage Access
+                    {readOnly ? 'View Access' : 'Manage Access'}
                   </Button>
                 </aside>
               </div>
             </TabsContent>
+            )}
 
+            {showNokLetters && (
             <TabsContent value="nok-letters" className="mt-5">
               <PanelActions
                 onAction={() => onNavigateToSection('3')}
-                label="Manage letter"
+                label={readOnly ? 'View letter' : 'Manage letter'}
               />
               {nokLetter ? (
                 <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -968,17 +1098,25 @@ export function DataBindingDashboard({
               ) : (
                 <EmptyBlock
                   title="No next of kin letter yet"
-                  description="Write a letter so your next of kin knows what to do."
-                  action="Create letter"
-                  onClick={() => onNavigateToSection('3')}
+                  description={
+                    readOnly
+                      ? 'No next of kin letter has been written yet.'
+                      : 'Write a letter so your next of kin knows what to do.'
+                  }
+                  action={readOnly ? undefined : 'Create letter'}
+                  onClick={
+                    readOnly ? undefined : () => onNavigateToSection('3')
+                  }
                 />
               )}
             </TabsContent>
+            )}
 
+            {showMessages && (
             <TabsContent value="messages" className="mt-5">
               <PanelActions
                 onAction={() => onNavigateToSection('4')}
-                label="Manage messages"
+                label={readOnly ? 'View messages' : 'Manage messages'}
               />
               {loadingMessages ? (
                 <div className="mt-4 flex items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 py-12 text-sm text-slate-500">
@@ -1000,15 +1138,23 @@ export function DataBindingDashboard({
               ) : (
                 <EmptyBlock
                   title="No messages yet"
-                  description="Create letters, audio, or video for loved ones."
-                  action="Create message"
-                  onClick={() => onNavigateToSection('4')}
+                  description={
+                    readOnly
+                      ? 'No personal messages are saved yet.'
+                      : 'Create letters, audio, or video for loved ones.'
+                  }
+                  action={readOnly ? undefined : 'Create message'}
+                  onClick={
+                    readOnly ? undefined : () => onNavigateToSection('4')
+                  }
                 />
               )}
             </TabsContent>
+            )}
           </Tabs>
         </div>
       </section>
+      )}
     </div>
   );
 }
@@ -1294,8 +1440,8 @@ function EmptyBlock({
 }: {
   title: string;
   description: string;
-  action: string;
-  onClick: () => void;
+  action?: string;
+  onClick?: () => void;
 }) {
   return (
     <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center sm:mt-4 sm:px-6 sm:py-10">
@@ -1303,13 +1449,15 @@ function EmptyBlock({
       <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
         {description}
       </p>
-      <Button
-        type="button"
-        onClick={onClick}
-        className="mt-4 rounded-xl bg-[#213D59] text-white hover:bg-[#00305C]"
-      >
-        {action}
-      </Button>
+      {action && onClick ? (
+        <Button
+          type="button"
+          onClick={onClick}
+          className="mt-4 rounded-xl bg-[#213D59] text-white hover:bg-[#00305C]"
+        >
+          {action}
+        </Button>
+      ) : null}
     </div>
   );
 }

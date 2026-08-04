@@ -2,18 +2,29 @@
 
 import React, { useMemo, useState } from 'react';
 import {
+  Check,
+  LayoutGrid,
   Loader2,
   Plus,
   Trash2,
   UserRound,
   Pencil,
   RefreshCw,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@common/ui/button';
 import { Input } from '@common/ui/input';
 import { Label } from '@common/ui/label';
 import { cn } from '@common/ui/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/common/ui/dialog';
 import { formConfig } from '@/config/formConfig';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import {
@@ -61,12 +72,12 @@ const FALLBACK_ROLES = [
   },
 ] as const;
 
-const SPECIAL_AREAS = [
-  { id: 'overview', title: 'Dashboard overview' },
-  { id: 'billing', title: 'Billing & subscription' },
-  { id: 'vault_settings', title: 'Vault Settings (roles & security)' },
-  { id: 'section2_nextkin', title: 'Section 2 — Next of Kin management' },
-] as const;
+type AreaRow = {
+  id: string;
+  title: string;
+  group: string;
+  hint?: string;
+};
 
 type Draft = {
   full_name: string;
@@ -122,17 +133,65 @@ export function FamilyAccessManagement() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [areasOpen, setAreasOpen] = useState(false);
+  const [areaDraft, setAreaDraft] = useState<string[]>([]);
+  const [areaMode, setAreaMode] = useState<
+    'Full Dashboard Access' | 'Area-Specific Access'
+  >('Area-Specific Access');
 
-  const vaultSections = useMemo(
-    () =>
-      formConfig.chunks.flatMap(chunk =>
-        chunk.sections.map(section => ({
-          id: section.id,
-          title: section.title,
+  const areaRows = useMemo<AreaRow[]>(() => {
+    const special: AreaRow[] = [
+      {
+        id: 'overview',
+        title: 'Dashboard overview',
+        group: 'Dashboard',
+        hint: 'Overview snapshot + document drag & drop zone',
+      },
+      {
+        id: 'section2_nextkin',
+        title: 'Access management (Next of Kin)',
+        group: 'People & letters',
+        hint: 'Section 2 — approve / manage Next of Kin',
+      },
+      {
+        id: '3',
+        title: 'Letter of next of kin',
+        group: 'People & letters',
+        hint: 'Section 3 — NOK letters',
+      },
+      {
+        id: '4',
+        title: 'Personal messages',
+        group: 'People & letters',
+        hint: 'Section 4 — letters, audio, video messages',
+      },
+      {
+        id: 'billing',
+        title: 'Billing & subscription',
+        group: 'Account',
+        hint: 'View billing status (payment changes stay owner-only)',
+      },
+      {
+        id: 'vault_settings',
+        title: 'Vault Settings (roles & security)',
+        group: 'Account',
+        hint: 'Family role management area in Vault Settings',
+      },
+    ];
+
+    const vault = formConfig.chunks.flatMap(chunk =>
+      chunk.sections
+        .filter(section => !['2', '3', '4'].includes(String(section.id)))
+        .map(section => ({
+          id: String(section.id),
+          title: `${section.id}. ${section.title}`,
+          group: 'Vault sections',
+          hint: 'Section data & per-section drag/drop when role allows upload',
         })),
-      ),
-    [],
-  );
+    );
+
+    return [...special, ...vault];
+  }, []);
 
   const roleLabel = (id?: string) =>
     roles.find(r => r.id === id)?.label || id || 'Viewer';
@@ -159,7 +218,7 @@ export function FamilyAccessManagement() {
       portal_role: member.portal_role || 'viewer',
       access_level: isFull ? 'Full Dashboard Access' : 'Area-Specific Access',
       authorized_sections: Array.isArray(member.authorized_sections)
-        ? member.authorized_sections
+        ? member.authorized_sections.map(String)
         : [],
       master_password: member.master_password || '',
     });
@@ -168,22 +227,66 @@ export function FamilyAccessManagement() {
   const closeForm = () => {
     setDraft(null);
     setEditingId(null);
+    setAreasOpen(false);
   };
 
-  const toggleArea = (id: string) => {
+  const openAreasPopup = () => {
     if (!draft) return;
-    const has = draft.authorized_sections.includes(id);
-    setDraft({
-      ...draft,
-      authorized_sections: has
-        ? draft.authorized_sections.filter(s => s !== id)
-        : [...draft.authorized_sections, id],
-    });
+    setAreaMode(draft.access_level);
+    setAreaDraft(
+      draft.access_level === 'Full Dashboard Access'
+        ? areaRows.map(row => row.id)
+        : [...draft.authorized_sections],
+    );
+    setAreasOpen(true);
+  };
+
+  const toggleAreaMark = (id: string) => {
+    setAreaMode('Area-Specific Access');
+    setAreaDraft(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id],
+    );
+  };
+
+  const markAllAreas = () => {
+    setAreaMode('Area-Specific Access');
+    setAreaDraft(areaRows.map(row => row.id));
+  };
+
+  const unmarkAllAreas = () => {
+    setAreaMode('Area-Specific Access');
+    setAreaDraft([]);
+  };
+
+  const applyAreasPopup = () => {
+    if (!draft) return;
+    if (areaMode === 'Full Dashboard Access') {
+      setDraft({
+        ...draft,
+        access_level: 'Full Dashboard Access',
+        authorized_sections: [],
+      });
+    } else {
+      if (areaDraft.length === 0) {
+        toast.error('Mark at least one access area, or choose full dashboard');
+        return;
+      }
+      setDraft({
+        ...draft,
+        access_level: 'Area-Specific Access',
+        authorized_sections: areaDraft,
+      });
+    }
+    setAreasOpen(false);
   };
 
   const save = async () => {
     if (!draft) return;
-    if (!draft.full_name.trim() || !draft.email.trim() || !draft.relationship.trim()) {
+    if (
+      !draft.full_name.trim() ||
+      !draft.email.trim() ||
+      !draft.relationship.trim()
+    ) {
       toast.error('Full name, email, and relationship are required');
       return;
     }
@@ -191,7 +294,7 @@ export function FamilyAccessManagement() {
       draft.access_level === 'Area-Specific Access' &&
       draft.authorized_sections.length === 0
     ) {
-      toast.error('Select at least one dashboard area');
+      toast.error('Open Access areas and mark at least one area');
       return;
     }
 
@@ -289,6 +392,24 @@ export function FamilyAccessManagement() {
     }
   };
 
+  const accessSummary = draft
+    ? draft.access_level === 'Full Dashboard Access'
+      ? 'Full dashboard (all areas)'
+      : `${draft.authorized_sections.length} area${
+          draft.authorized_sections.length === 1 ? '' : 's'
+        } marked`
+    : '';
+
+  const groupedRows = useMemo(() => {
+    const map = new Map<string, AreaRow[]>();
+    for (const row of areaRows) {
+      const list = map.get(row.group) || [];
+      list.push(row);
+      map.set(row.group, list);
+    }
+    return [...map.entries()];
+  }, [areaRows]);
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3.5 py-3 text-[12px] leading-relaxed text-slate-600">
@@ -296,6 +417,12 @@ export function FamilyAccessManagement() {
         login link. Owner and family sessions stay separate — logging in as the
         owner does not open a family session. This is owner dashboard access,
         not Next of Kin access (Section 2).
+        <span className="mt-2 block font-medium text-slate-700">
+          To let them see encrypted vault sections, save their invite while your
+          vault is unlocked (after a normal owner password sign-in). If a member
+          shows “Vault key not shared”, edit them, enter their password, and
+          save again.
+        </span>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -338,8 +465,8 @@ export function FamilyAccessManagement() {
             No family collaborators yet
           </p>
           <p className="mt-1 text-xs text-slate-500">
-            Invite up to {MAX_FAMILY} people with clear roles and dashboard
-            areas. Hide Vault Settings role management from Viewer/Editor.
+            Invite up to {MAX_FAMILY} people, then mark which dashboard areas
+            and vault sections they can open.
           </p>
           <Button type="button" className="mt-4 rounded-xl" onClick={openAdd}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -367,6 +494,9 @@ export function FamilyAccessManagement() {
                   {member.access_level === 'Full Kit Access'
                     ? 'Full dashboard'
                     : `${(member.authorized_sections || []).length} areas`}
+                  {member.e2ee_wrap_configured === false
+                    ? ' · Vault key not shared'
+                    : ''}
                 </p>
                 <p className="mt-0.5 truncate text-xs text-slate-400">
                   {member.email}
@@ -467,8 +597,37 @@ export function FamilyAccessManagement() {
             </div>
           </div>
 
-          <div>
-            <Label className="mb-2 block">Portal role — what they can manage</Label>
+          <div className="rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-900">
+                  Owner vault access areas
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                  Mark or unmark overview drag/drop, Access Management, letter
+                  of next of kin, messages, every vault section, billing, and
+                  Vault Settings.
+                </p>
+                <p className="mt-2 text-xs font-medium text-[#213D59]">
+                  Current: {accessSummary}
+                </p>
+              </div>
+              <Button
+                type="button"
+                className="rounded-xl"
+                onClick={openAreasPopup}
+              >
+                <LayoutGrid className="mr-1.5 h-4 w-4" />
+                Manage access areas
+              </Button>
+            </div>
+          </div>
+
+          {/* Role stays at the bottom of the invite/edit card */}
+          <div className="border-t border-slate-200 pt-4">
+            <Label className="mb-2 block">
+              Portal role — what they can do in marked areas
+            </Label>
             <div className="grid gap-2">
               {roles.map(role => (
                 <label
@@ -501,95 +660,6 @@ export function FamilyAccessManagement() {
             </div>
           </div>
 
-          <div>
-            <Label className="mb-2 block">Owner dashboard areas</Label>
-            <p className="mb-3 text-xs text-slate-500">
-              Choose the whole dashboard or specific areas — vault sections,
-              billing, Vault Settings, and Section 2 Next of Kin management.
-            </p>
-            <div className="mb-3 flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={
-                  draft.access_level === 'Full Dashboard Access'
-                    ? 'default'
-                    : 'outline'
-                }
-                className="rounded-full"
-                onClick={() =>
-                  setDraft({
-                    ...draft,
-                    access_level: 'Full Dashboard Access',
-                    authorized_sections: [],
-                  })
-                }
-              >
-                Full dashboard access
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={
-                  draft.access_level === 'Area-Specific Access'
-                    ? 'default'
-                    : 'outline'
-                }
-                className="rounded-full"
-                onClick={() =>
-                  setDraft({
-                    ...draft,
-                    access_level: 'Area-Specific Access',
-                  })
-                }
-              >
-                Specific dashboard areas
-              </Button>
-            </div>
-            {draft.access_level === 'Area-Specific Access' && (
-              <div className="max-h-64 space-y-3 overflow-y-auto rounded-xl border bg-white p-3">
-                <div>
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    Management areas
-                  </p>
-                  {SPECIAL_AREAS.map(area => (
-                    <label
-                      key={area.id}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={draft.authorized_sections.includes(area.id)}
-                        onChange={() => toggleArea(area.id)}
-                      />
-                      <span>{area.title}</span>
-                    </label>
-                  ))}
-                </div>
-                <div>
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    Vault sections
-                  </p>
-                  {vaultSections.map(section => (
-                    <label
-                      key={section.id}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={draft.authorized_sections.includes(section.id)}
-                        onChange={() => toggleArea(section.id)}
-                      />
-                      <span>
-                        {section.id}. {section.title}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
           <Button
             type="button"
             className="w-full rounded-xl"
@@ -603,6 +673,166 @@ export function FamilyAccessManagement() {
           </Button>
         </div>
       )}
+
+      <Dialog open={areasOpen} onOpenChange={setAreasOpen}>
+        <DialogContent className="flex max-h-[min(92dvh,44rem)] w-[min(100vw-1rem,52rem)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
+          <DialogHeader className="shrink-0 space-y-1 border-b border-slate-100 px-4 py-4 pr-12 sm:px-5">
+            <DialogTitle className="text-[#213D59]">
+              Mark vault access areas
+            </DialogTitle>
+            <DialogDescription>
+              Toggle areas on or off for this family member. Full dashboard
+              marks everything; specific mode lets you choose section by
+              section.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-3 sm:px-5">
+            <Button
+              type="button"
+              size="sm"
+              variant={
+                areaMode === 'Full Dashboard Access' ? 'default' : 'outline'
+              }
+              className="rounded-full"
+              onClick={() => {
+                setAreaMode('Full Dashboard Access');
+                setAreaDraft(areaRows.map(row => row.id));
+              }}
+            >
+              Full dashboard
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={
+                areaMode === 'Area-Specific Access' ? 'default' : 'outline'
+              }
+              className="rounded-full"
+              onClick={() => setAreaMode('Area-Specific Access')}
+            >
+              Specific areas
+            </Button>
+            <div className="ml-auto flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="rounded-xl"
+                disabled={areaMode === 'Full Dashboard Access'}
+                onClick={markAllAreas}
+              >
+                Mark all
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="rounded-xl"
+                disabled={areaMode === 'Full Dashboard Access'}
+                onClick={unmarkAllAreas}
+              >
+                Unmark all
+              </Button>
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 sm:px-3">
+            <table className="w-full border-separate border-spacing-y-1 text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur">
+                <tr className="text-[11px] uppercase tracking-wide text-slate-400">
+                  <th className="px-3 py-2 font-semibold">Area</th>
+                  <th className="hidden px-3 py-2 font-semibold sm:table-cell">
+                    Group
+                  </th>
+                  <th className="px-3 py-2 text-right font-semibold">Access</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupedRows.map(([group, rows]) =>
+                  rows.map(row => {
+                    const marked =
+                      areaMode === 'Full Dashboard Access' ||
+                      areaDraft.includes(row.id);
+                    return (
+                      <tr
+                        key={row.id}
+                        className={cn(
+                          'rounded-xl transition',
+                          marked ? 'bg-emerald-50/70' : 'bg-white',
+                        )}
+                      >
+                        <td className="rounded-l-xl px-3 py-2.5 align-top">
+                          <p className="font-medium text-slate-900">
+                            {row.title}
+                          </p>
+                          {row.hint ? (
+                            <p className="mt-0.5 text-[11px] text-slate-500">
+                              {row.hint}
+                            </p>
+                          ) : null}
+                          <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400 sm:hidden">
+                            {group}
+                          </p>
+                        </td>
+                        <td className="hidden px-3 py-2.5 align-middle text-xs text-slate-500 sm:table-cell">
+                          {group}
+                        </td>
+                        <td className="rounded-r-xl px-3 py-2.5 text-right align-middle">
+                          <button
+                            type="button"
+                            disabled={areaMode === 'Full Dashboard Access'}
+                            onClick={() => toggleAreaMark(row.id)}
+                            className={cn(
+                              'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
+                              marked
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                              areaMode === 'Full Dashboard Access' &&
+                                'cursor-default opacity-90',
+                            )}
+                            aria-pressed={marked}
+                          >
+                            {marked ? (
+                              <>
+                                <Check className="h-3.5 w-3.5" />
+                                Marked
+                              </>
+                            ) : (
+                              <>
+                                <X className="h-3.5 w-3.5" />
+                                Unmarked
+                              </>
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  }),
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <DialogFooter className="shrink-0 gap-2 border-t border-slate-100 px-4 py-3 sm:px-5">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setAreasOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="rounded-xl"
+              onClick={applyAreasPopup}
+            >
+              Apply access areas
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <SectionFootprintsPanel />
     </div>

@@ -6,6 +6,7 @@ import { DynamicFormField } from './DynamicFormField';
 import { RepeatableGroup } from './RepeatableGroup';
 import { MedicareMedicaidInfoModal } from './MedicareMedicaidInfoModal';
 import { FieldDefinition } from '@/types/formTypes';
+import { useFamilyAcl } from '@/contexts/FamilyAclContext';
 
 
 
@@ -65,6 +66,7 @@ interface DynamicSectionProps {
 }
 
 export function DynamicSection({ section, data, onChange, activeSubsection,  disabledSubsections = {}, collapsedSubsections = {}, onToggleSubsectionDisabled, onToggleSubsectionCollapsed, fullFormData }: DynamicSectionProps) {
+  const { isReadOnly } = useFamilyAcl();
   // Subsections that include obituary content (marked with dove symbol)
   const obituarySubsections = new Set(['20B']);
   // const updateField = (key: string, value: any) => {
@@ -72,6 +74,7 @@ export function DynamicSection({ section, data, onChange, activeSubsection,  dis
   // };
 
   const updateSubsectionData = (subsectionId: string, subsectionData: any) => {
+    if (isReadOnly) return;
     onChange({ ...data, [subsectionId]: subsectionData });
   };
 
@@ -279,10 +282,12 @@ export function DynamicSection({ section, data, onChange, activeSubsection,  dis
                   </div>
                 )}
               </div>
-              <Button type="button" onClick={addItem}>
+              {!isReadOnly && (
+              <Button type="button" data-oa-mutate onClick={addItem}>
                 <Plus className="h-4 w-4 mr-1" />
                 Add {subsection.itemLabel}
               </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -348,11 +353,12 @@ export function DynamicSection({ section, data, onChange, activeSubsection,  dis
               >
                 <div className="flex items-center justify-between mb-4">
                   <h4>{subsection.itemLabel} {index + 1}</h4>
-                  {items.length > 0 && (
+                  {items.length > 0 && !isReadOnly && (
                     <Button
                       type="button"
                       variant="destructive"
                       size="sm"
+                      data-oa-mutate
                       onClick={() => removeItem(index)}
                     >
                       <Minus className="h-4 w-4 mr-1" />
@@ -499,10 +505,12 @@ export function DynamicSection({ section, data, onChange, activeSubsection,  dis
                   <p className="text-sm text-muted-foreground mt-2">{subsection.description}</p>
                 )}
               </div>
-              <Button type="button" onClick={addItem}>
+              {!isReadOnly && (
+              <Button type="button" data-oa-mutate onClick={addItem}>
                 <Plus className="h-4 w-4 mr-1" />
                 Add {itemLabel}
               </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -520,11 +528,12 @@ export function DynamicSection({ section, data, onChange, activeSubsection,  dis
               >
                 <div className="flex items-center justify-between mb-4">
                   <h4>{itemLabel} {index + 1}</h4>
-                  {items.length > 0 && (
+                  {items.length > 0 && !isReadOnly && (
                     <Button
                       type="button"
                       variant="destructive"
                       size="sm"
+                      data-oa-mutate
                       onClick={() => removeItem(index)}
                     >
                       <Minus className="h-4 w-4 mr-1" />
@@ -866,10 +875,12 @@ export function DynamicSection({ section, data, onChange, activeSubsection,  dis
                     {section.title}
                   </CardTitle>
                 </div>
-                <Button type="button" onClick={addItem}>
+                {!isReadOnly && (
+                <Button type="button" data-oa-mutate onClick={addItem}>
                   <Plus className="h-4 w-4 mr-1" />
                   Add {itemLabel}
                 </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -887,11 +898,12 @@ export function DynamicSection({ section, data, onChange, activeSubsection,  dis
                 >
                   <div className="flex items-center justify-between mb-4">
                     <h4>{itemLabel} {index + 1}</h4>
-                    {items.length > 0 && (
+                    {items.length > 0 && !isReadOnly && (
                       <Button
                         type="button"
                         variant="destructive"
                         size="sm"
+                        data-oa-mutate
                         onClick={() => removeItem(index)}
                       >
                         <Minus className="h-4 w-4 mr-1" />

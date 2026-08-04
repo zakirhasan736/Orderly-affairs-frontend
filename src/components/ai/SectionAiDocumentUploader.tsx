@@ -27,6 +27,7 @@ import {
 import { toAiUserFacingMessage } from '@/utils/aiUserFacingError';
 import { useAiActiveSectionId, useAiActiveSubsectionId } from '@/contexts/AiActiveSectionContext';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
+import { useFamilyAcl } from '@/contexts/FamilyAclContext';
 import {
   hydrateAiUploadHistoryFromServer,
   listAiUploadHistory,
@@ -95,6 +96,7 @@ export function SectionAiDocumentUploader({
   onUpload,
   onAutofill,
 }: SectionAiDocumentUploaderProps) {
+  const familyAcl = useFamilyAcl();
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [doneTick, setDoneTick] = useState(0);
@@ -105,7 +107,11 @@ export function SectionAiDocumentUploader({
   const resolvedSubsectionId = subsectionId || activeSubsectionId || undefined;
   const resolvedMimeType = uploadedFile?.mime_type || uploadedMimeType;
   const hasUploadedFile = Boolean(resolvedMimeType || uploadedFile?.file_id);
-  const isBusy = disabled || isUploading || isReading;
+  const allowSectionUpload =
+    !resolvedSectionId ||
+    familyAcl.canUseSectionUploads(resolvedSectionId);
+  const allowAutofill = familyAcl.canWrite;
+  const isBusy = disabled || !allowSectionUpload || isUploading || isReading;
 
   const doneRecord = resolvedSectionId
     ? getAiAutofillDoneForSection(resolvedSectionId)
@@ -381,6 +387,12 @@ export function SectionAiDocumentUploader({
           </div>
         )}
 
+        {!allowSectionUpload ? (
+          <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-600">
+            Document upload is not available for your family role. You can still
+            open documents already uploaded for this section.
+          </div>
+        ) : (
         <div
           role="button"
           tabIndex={isBusy ? -1 : 0}
@@ -487,8 +499,9 @@ export function SectionAiDocumentUploader({
             )}
           </div>
         </div>
+        )}
 
-        {hasUploadedFile && !autofillDone && !overviewPin && (
+        {allowSectionUpload && hasUploadedFile && !autofillDone && !overviewPin && allowAutofill && (
           <Button
             type="button"
             size="sm"
@@ -543,7 +556,7 @@ export function SectionAiDocumentUploader({
           </div>
         )}
 
-        <AiUploadSupportedSectionsHint />
+        {allowSectionUpload && <AiUploadSupportedSectionsHint />}
       </div>
 
       <AiUploadHistoryPopup

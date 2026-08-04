@@ -2777,3 +2777,14 @@ html {
   flex: none;
   line-height: 1;
 }
+
+/* Family Viewer — readable fields, no mutate chrome */
+[data-oa-family-readonly='true'] [data-oa-mutate] {
+  display: none !important;
+}
+[data-oa-family-readonly='true'] input:not([data-oa-view-ok]),
+[data-oa-family-readonly='true'] textarea:not([data-oa-view-ok]),
+[data-oa-family-readonly='true'] select:not([data-oa-view-ok]) {
+  caret-color: transparent;
+  background-color: #f8fafc;
+}

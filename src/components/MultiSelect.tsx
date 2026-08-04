@@ -10,12 +10,14 @@ interface MultiSelectProps {
   onChange: (value: string[]) => void;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }
 
-export function MultiSelect({ options, value = [], onChange, placeholder = "Select items...", className }: MultiSelectProps) {
+export function MultiSelect({ options, value = [], onChange, placeholder = "Select items...", className, disabled = false }: MultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleSelect = (option: string) => {
+    if (disabled) return;
     const newValue = value.includes(option)
       ? value.filter(item => item !== option)
       : [...value, option];
@@ -24,20 +26,23 @@ export function MultiSelect({ options, value = [], onChange, placeholder = "Sele
 
   const handleRemove = (option: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (disabled) return;
     onChange(value.filter(item => item !== option));
   };
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (disabled) return;
     onChange([]);
   };
  
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
+    <Popover open={disabled ? false : isOpen} onOpenChange={disabled ? undefined : setIsOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
           role="combobox"
+          disabled={disabled}
           aria-expanded={isOpen}
           className={`w-full justify-between min-h-10 ${className}`}
         >

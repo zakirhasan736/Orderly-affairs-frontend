@@ -42,6 +42,8 @@ export interface FamilyMemberResponse {
   portal_role: string;
   immediate_access: boolean;
   has_master_password?: boolean;
+  /** False until the owner shares the vault DEK wrap for this member. */
+  e2ee_wrap_configured?: boolean;
   master_password?: string | null;
   created_at?: string;
   updated_at?: string;

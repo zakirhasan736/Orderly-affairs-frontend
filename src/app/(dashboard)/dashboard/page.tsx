@@ -109,9 +109,14 @@ import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import { parseAuthApiError } from '@/utils/authRateLimit';
 import {
   familyAllowedVaultSectionIds,
+  familyCanFetchNextKinList,
   familyCanManageNextKin,
+  familyCanSeeNokLetters,
+  familyCanSeeMessages,
   familyCanSeeOverview,
+  familyCanSeeVaultSection,
   familyCanUpload,
+  familyCanUseOverviewUploads,
   familyCanViewVaultSettings,
   familyCanWrite,
   familyRoleBannerText,
@@ -119,6 +124,7 @@ import {
   parseFamilyDashboardSession,
   type FamilyDashboardSession,
 } from '@/utils/familyDashboardAccess';
+import { FamilyAclProvider, FamilyReadOnlyGuard } from '@/contexts/FamilyAclContext';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/common/ui/button';
 import { Card, CardContent } from '@/components/common/ui/card';
@@ -249,6 +255,12 @@ export default function DashboardPage() {
     parseFamilyDashboardSession({}),
   );
   const [sessionReady, setSessionReady] = useState(false);
+  const [vaultPrefetchKey, setVaultPrefetchKey] = useState(0);
+  const [familyVaultGate, setFamilyVaultGate] = useState<
+    'checking' | 'ready' | 'needs_unlock' | 'needs_owner_wrap'
+  >('checking');
+  const [familyUnlockPassword, setFamilyUnlockPassword] = useState('');
+  const [familyUnlockBusy, setFamilyUnlockBusy] = useState(false);
   const derivedRole = useMemo(() => {
     if (appMode === 'owner') return 'owner';
     if (appMode === 'nok_dashboard' || appMode === 'nok_section_view')
@@ -276,7 +288,7 @@ export default function DashboardPage() {
   const canFetchNextKin =
     appMode === 'owner' &&
     sessionReady &&
-    (!familyAcl.isFamily || familyCanManageNextKin(familyAcl));
+    familyCanFetchNextKinList(familyAcl);
 
   const { data: myNextKin, refetch: refetchNextKin } = useGetMyNextKinQuery(
     undefined,
@@ -382,10 +394,15 @@ export default function DashboardPage() {
     if (familyAcl.isFamily) {
       const allowed = familyAllowedVaultSectionIds(familyAcl);
       if (allowed !== 'all') {
-        sections = sections.filter(section => allowed.has(section.id));
-      }
-      if (!familyCanManageNextKin(familyAcl)) {
-        sections = sections.filter(section => section.id !== '2');
+        sections = sections.filter(section =>
+          familyCanSeeVaultSection(familyAcl, section.id),
+        );
+      } else {
+        // Full dashboard: hide Section 2 unless they can open NOK management/view.
+        sections = sections.filter(
+          section =>
+            section.id !== '2' || familyCanSeeVaultSection(familyAcl, '2'),
+        );
       }
     }
 
@@ -464,6 +481,15 @@ export default function DashboardPage() {
   useEffect(() => {
     if (appMode !== 'owner' || !sessionReady) {
       sectionsPrefetchedRef.current = false;
+      return;
+    }
+
+    // Wait for family vault unlock when a wrap exists; still prefetch if the
+    // owner never shared a wrap (legacy v2 rows can still load).
+    if (
+      familyAcl.isFamily &&
+      (familyVaultGate === 'checking' || familyVaultGate === 'needs_unlock')
+    ) {
       return;
     }
 
@@ -571,7 +597,81 @@ export default function DashboardPage() {
         })
         .catch(err => console.error('Failed to load Section 4 messages', err));
     }
-  }, [appMode, sessionReady, familyAcl, recordLoadedSection]);
+  }, [appMode, sessionReady, familyAcl, recordLoadedSection, vaultPrefetchKey, familyVaultGate]);
+
+  // Family collaborators need the shared vault DEK to see owner E2EE sections.
+  useEffect(() => {
+    if (!sessionReady || appMode !== 'owner') {
+      setFamilyVaultGate('ready');
+      return;
+    }
+    if (!familyAcl.isFamily) {
+      setFamilyVaultGate('ready');
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setFamilyVaultGate('checking');
+      try {
+        const { isE2eeUnlocked } = await import('@/libs/e2ee/unlock');
+        if (isE2eeUnlocked()) {
+          if (!cancelled) setFamilyVaultGate('ready');
+          return;
+        }
+        const { fetchE2eeStatus } = await import('@/libs/e2ee/vaultApi');
+        const status = await fetchE2eeStatus();
+        if (cancelled) return;
+        if (status.enabled && status.configured) {
+          setFamilyVaultGate('needs_unlock');
+        } else if (status.enabled) {
+          setFamilyVaultGate('needs_owner_wrap');
+        } else {
+          // Server AES / E2EE off — legacy section GETs still work.
+          setFamilyVaultGate('ready');
+        }
+      } catch {
+        if (!cancelled) setFamilyVaultGate('needs_unlock');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionReady, appMode, familyAcl.isFamily]);
+
+  const handleFamilyVaultUnlock = useCallback(async () => {
+    const pw = familyUnlockPassword.trim();
+    if (!pw) {
+      toast.error('Enter your family login password to unlock the vault');
+      return;
+    }
+    setFamilyUnlockBusy(true);
+    try {
+      const { unlockVaultWithPassword, isE2eeUnlocked } = await import(
+        '@/libs/e2ee/unlock'
+      );
+      await unlockVaultWithPassword(pw);
+      if (!isE2eeUnlocked()) {
+        toast.error(
+          'Could not unlock encrypted sections. Ask the owner to edit your family access and re-save your password while their vault is unlocked.',
+        );
+        setFamilyVaultGate('needs_owner_wrap');
+        return;
+      }
+      setFamilyUnlockPassword('');
+      setFamilyVaultGate('ready');
+      sectionsPrefetchedRef.current = false;
+      setVaultPrefetchKey(k => k + 1);
+      toast.success('Vault unlocked — loading owner sections');
+    } catch (err) {
+      toast.error(
+        getSafeErrorMessage(err, 'Could not unlock the shared vault'),
+      );
+    } finally {
+      setFamilyUnlockBusy(false);
+    }
+  }, [familyUnlockPassword]);
 
   // Section 3 letters are stored per next-of-kin via a separate API.
   useEffect(() => {
@@ -738,6 +838,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (appMode !== 'owner') return;
+    if (familyAcl.isFamily && !familyCanWrite(familyAcl)) return;
     if (!activeSection || activeSection === 'dashboard') return;
     if (!sectionSaveMap[activeSection]) return;
 
@@ -860,9 +961,9 @@ export default function DashboardPage() {
     ) {
       const allowed = familyAllowedVaultSectionIds(familyAcl);
       const nokOk =
-        activeSection !== '2' || familyCanManageNextKin(familyAcl);
+        activeSection !== '2' || familyCanSeeVaultSection(familyAcl, '2');
       if (
-        (allowed !== 'all' && !allowed.has(activeSection)) ||
+        (allowed !== 'all' && !familyCanSeeVaultSection(familyAcl, activeSection)) ||
         !nokOk
       ) {
         setActiveSection(firstAllowedFamilySectionId(familyAcl));
@@ -1616,23 +1717,61 @@ export default function DashboardPage() {
           />
         );
       case '2':
-        return familyCanManageNextKin(familyAcl) ? (
-          <Section2AccessManagement
-            data={formData['2'] || {}}
-            onChange={data => updateSectionData('2', data)}
-          />
+        return familyCanSeeVaultSection(familyAcl, '2') ? (
+          familyCanManageNextKin(familyAcl) ? (
+            <Section2AccessManagement
+              data={formData['2'] || {}}
+              onChange={data => updateSectionData('2', data)}
+            />
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-3xl border border-teal-200 bg-teal-50/80 p-6 text-sm text-teal-950">
+                <p className="font-semibold">Next of Kin — view access</p>
+                <p className="mt-2 text-teal-900/80">
+                  Your role can view Next of Kin on the overview. Approving,
+                  revoking, or deleting requires Admin or Super Admin.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {(myNextKin || []).map(
+                  (person: {
+                    id: string;
+                    full_name?: string;
+                    email?: string;
+                    relationship?: string;
+                    immediate_access?: boolean;
+                  }) => (
+                    <div
+                      key={person.id}
+                      className="rounded-2xl border border-slate-200 bg-white p-4 text-sm"
+                    >
+                      <p className="font-semibold text-slate-900">
+                        {person.full_name || person.email || 'Next of Kin'}
+                      </p>
+                      <p className="mt-1 text-slate-500">
+                        {person.relationship || '—'}
+                        {person.immediate_access ? ' · Immediate access' : ''}
+                      </p>
+                    </div>
+                  ),
+                )}
+                {!myNextKin?.length && (
+                  <p className="text-sm text-slate-500">No Next of Kin listed.</p>
+                )}
+              </div>
+            </div>
+          )
         ) : (
           <div className="rounded-3xl border border-amber-200 bg-amber-50/80 p-6 text-sm text-amber-950">
             <p className="font-semibold">Next of Kin management is restricted</p>
             <p className="mt-2 text-amber-900/80">
-              Only family Admin or Super Admin (with Section 2 access) can
-              approve, revoke, or delete Next of Kin. Your role:{' '}
+              You do not have access to this area. Your role:{' '}
               {familyAcl.portalRoleLabel || 'Viewer'}.
             </p>
           </div>
         );
       case '3':
-        return (
+        return familyCanSeeNokLetters(familyAcl) ? (
           <Section3NextKinLetter
             data={formData['3'] || {}}
             onChange={data => updateSectionData('3', data)}
@@ -1643,9 +1782,16 @@ export default function DashboardPage() {
               null
             }
           />
+        ) : (
+          <div className="rounded-3xl border border-amber-200 bg-amber-50/80 p-6 text-sm text-amber-950">
+            <p className="font-semibold">Letters are restricted</p>
+            <p className="mt-2 text-amber-900/80">
+              Ask the owner to grant Section 3 (Letter to Next of Kin).
+            </p>
+          </div>
         );
       case '4':
-        return (
+        return familyCanSeeMessages(familyAcl) ? (
           <Section4NextKInMessages
             data={formData['4'] || {}}
             fullFormData={formData}
@@ -1653,6 +1799,13 @@ export default function DashboardPage() {
             isActive={!activeSubsection || activeSubsection === '4A'}
             messagesClearNonce={messagesClearNonce}
           />
+        ) : (
+          <div className="rounded-3xl border border-amber-200 bg-amber-50/80 p-6 text-sm text-amber-950">
+            <p className="font-semibold">Messages are restricted</p>
+            <p className="mt-2 text-amber-900/80">
+              Ask the owner to grant Section 4 (Personal Messages).
+            </p>
+          </div>
         );
 
       case '5':
@@ -1992,16 +2145,23 @@ export default function DashboardPage() {
           setMobileMoreOpen(false);
           return;
         }
-        if (sectionId === '2' && !familyCanManageNextKin(familyAcl)) {
-          toast.error('Next of Kin management is not included in your access');
+        if (sectionId === '2' && !familyCanSeeVaultSection(familyAcl, '2')) {
+          toast.error('Next of Kin is not included in your access');
+          return;
+        }
+        if (sectionId === '3' && !familyCanSeeNokLetters(familyAcl)) {
+          toast.error('Letters are not included in your access');
+          return;
+        }
+        if (sectionId === '4' && !familyCanSeeMessages(familyAcl)) {
+          toast.error('Messages are not included in your access');
           return;
         }
         if (
           sectionId !== 'dashboard' &&
           sectionId !== 'vault-settings'
         ) {
-          const allowed = familyAllowedVaultSectionIds(familyAcl);
-          if (allowed !== 'all' && !allowed.has(sectionId)) {
+          if (!familyCanSeeVaultSection(familyAcl, sectionId)) {
             toast.error('You do not have access to that section');
             return;
           }
@@ -2282,6 +2442,7 @@ export default function DashboardPage() {
         }}
       >
       <DashboardAiBatchProvider>
+      <FamilyAclProvider session={familyAcl}>
       <HelpAssistantProvider>
       <VaultFillGapsProvider
         formData={formData}
@@ -2410,6 +2571,50 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   )}
+                  {familyAcl.isFamily &&
+                    (familyVaultGate === 'needs_unlock' ||
+                      familyVaultGate === 'needs_owner_wrap') && (
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950">
+                        <p className="font-semibold">
+                          Encrypted vault sections are locked
+                        </p>
+                        <p className="mt-1 text-amber-900/80">
+                          {familyVaultGate === 'needs_owner_wrap'
+                            ? 'The owner has not shared the vault encryption key with your account yet. Ask them to open Vault Settings → Family access, edit your invite, enter your password, and save while their vault is unlocked.'
+                            : 'Enter the same password you used to sign in to unlock the owner’s completed sections and progress.'}
+                        </p>
+                        {familyVaultGate === 'needs_unlock' && (
+                          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <input
+                              type="password"
+                              autoComplete="current-password"
+                              value={familyUnlockPassword}
+                              onChange={e =>
+                                setFamilyUnlockPassword(e.target.value)
+                              }
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  void handleFamilyVaultUnlock();
+                                }
+                              }}
+                              placeholder="Family login password"
+                              className="h-10 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-amber-400 sm:max-w-xs"
+                            />
+                            <Button
+                              type="button"
+                              className="rounded-xl"
+                              disabled={familyUnlockBusy}
+                              onClick={() => void handleFamilyVaultUnlock()}
+                            >
+                              {familyUnlockBusy
+                                ? 'Unlocking…'
+                                : 'Unlock vault'}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   {/* Overview upload + task cards live inside DataBindingDashboard */}
                   {appMode === 'owner' ? (
                     <DataBindingDashboard
@@ -2433,7 +2638,23 @@ export default function DashboardPage() {
                         familyAcl.isFamily && !familyCanWrite(familyAcl)
                       }
                       uploadsDisabled={
-                        familyAcl.isFamily && !familyCanUpload(familyAcl)
+                        familyAcl.isFamily &&
+                        !familyCanUseOverviewUploads(familyAcl)
+                      }
+                      allowedSectionIds={
+                        familyAcl.isFamily
+                          ? familyAllowedVaultSectionIds(familyAcl)
+                          : 'all'
+                      }
+                      showAccessPeople={
+                        !familyAcl.isFamily ||
+                        familyCanSeeVaultSection(familyAcl, '2')
+                      }
+                      showNokLetters={
+                        !familyAcl.isFamily || familyCanSeeNokLetters(familyAcl)
+                      }
+                      showMessages={
+                        !familyAcl.isFamily || familyCanSeeMessages(familyAcl)
                       }
                     />
                   ) : (
@@ -2710,16 +2931,20 @@ export default function DashboardPage() {
                         </div>
 
                         <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
+                          {(!familyAcl.isFamily || familyCanWrite(familyAcl)) && (
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
+                            data-oa-mutate
                             onClick={manualSave}
                             className="rounded-2xl border-slate-200 bg-white px-4"
                           >
                             <Save className="mr-2 h-4 w-4" />
                             {autoSaving ? 'Saving...' : 'Save'}
                           </Button>
+                          )}
+                          <div data-oa-view-ok>
                           <VaultExportMenu
                             payload={exportPayload}
                             trigger={
@@ -2734,12 +2959,14 @@ export default function DashboardPage() {
                               </Button>
                             }
                           />
+                          </div>
                         </div>
                       </div>
                     </div>
                   </section>
 
-                  {activeSection === '11' && (
+                  {activeSection === '11' &&
+                    (!familyAcl.isFamily || familyCanWrite(familyAcl)) && (
                     <div className="grid gap-3 md:grid-cols-2">
                       <label className="flex cursor-pointer items-start gap-3 rounded-[20px] border border-slate-200 bg-slate-50/80 p-4 shadow-sm sm:items-center sm:rounded-[24px] sm:p-5">
                         <input
@@ -2792,7 +3019,8 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  {activeSection === '18' && (
+                  {activeSection === '18' &&
+                    (!familyAcl.isFamily || familyCanWrite(familyAcl)) && (
                     <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-[20px] border border-slate-200 bg-slate-50/80 p-4 shadow-sm sm:items-center sm:rounded-[24px] sm:p-5">
                       <input
                         type="checkbox"
@@ -2815,7 +3043,9 @@ export default function DashboardPage() {
                     </label>
                   )}
 
-                  {activeSection === '20' && activeSubsection === '20B' && (
+                  {activeSection === '20' &&
+                    activeSubsection === '20B' &&
+                    (!familyAcl.isFamily || familyCanWrite(familyAcl)) && (
                     <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-[20px] border border-slate-200 bg-slate-50/80 p-4 shadow-sm sm:items-center sm:rounded-[24px] sm:p-5">
                       <input
                         type="checkbox"
@@ -2868,17 +3098,13 @@ export default function DashboardPage() {
                       subsectionId={activeSubsection}
                     >
                       {familyAcl.isFamily && !familyCanWrite(familyAcl) ? (
-                        <fieldset
-                          disabled
-                          className="min-w-0 border-0 p-0 disabled:opacity-[0.98] [&_button]:cursor-not-allowed [&_input]:cursor-not-allowed [&_textarea]:cursor-not-allowed"
-                        >
-                          <legend className="sr-only">View-only vault section</legend>
+                        <FamilyReadOnlyGuard className="min-w-0">
                           <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                            View-only — your family role cannot edit or upload
-                            here.
+                            View-only — your family role cannot edit fields, use
+                            Add buttons, or upload documents here.
                           </div>
                           {renderSection()}
-                        </fieldset>
+                        </FamilyReadOnlyGuard>
                       ) : (
                         renderSection()
                       )}
@@ -3097,6 +3323,11 @@ export default function DashboardPage() {
                   goToSection(sectionId);
                 }}
                 completedSectionIds={completedSectionIds}
+                allowedSectionIds={
+                  familyAcl.isFamily
+                    ? familyAllowedVaultSectionIds(familyAcl)
+                    : 'all'
+                }
               />
             </div>
           </div>
@@ -3216,6 +3447,7 @@ export default function DashboardPage() {
       </div>
       </VaultFillGapsProvider>
       </HelpAssistantProvider>
+      </FamilyAclProvider>
       </DashboardAiBatchProvider>
       </AiDocumentRoutingProvider>
     </>

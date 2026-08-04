@@ -42,6 +42,8 @@ type OverviewBrowseGridProps = {
   onNavigateToSection: (sectionId: string) => void;
   completedSectionIds?: string[];
   className?: string;
+  /** Family ACL: hide vault sections the collaborator cannot open. */
+  allowedSectionIds?: 'all' | Set<string>;
   /**
    * `sheet` — mobile bottom-sheet: categories scroll on top; selected
    * category sections dock in a fixed bottom panel (no hunt-to-scroll).
@@ -54,6 +56,7 @@ export function OverviewBrowseGrid({
   onNavigateToSection,
   completedSectionIds = [],
   className,
+  allowedSectionIds = 'all',
   variant = 'default',
 }: OverviewBrowseGridProps) {
   const routing = useOptionalAiDocumentRouting();
@@ -62,19 +65,32 @@ export function OverviewBrowseGrid({
   const detailsRef = useRef<HTMLDivElement>(null);
   const isSheet = variant === 'sheet';
 
+  const canSeeSection = (sectionId: string) =>
+    allowedSectionIds === 'all' || allowedSectionIds.has(String(sectionId));
+
+  const visibleCategories = useMemo(() => {
+    return OVERVIEW_BROWSE_CATEGORIES.map(category => ({
+      ...category,
+      sectionIds: category.sectionIds.filter(canSeeSection),
+    })).filter(category => category.sectionIds.length > 0);
+  }, [allowedSectionIds]);
+
   const pendingBySection = useMemo(() => {
     const map = new Set<string>();
     pendingUploads.forEach(upload => {
-      if (upload.highlightUpload || upload.targetSectionId) {
+      if (
+        (upload.highlightUpload || upload.targetSectionId) &&
+        canSeeSection(upload.targetSectionId)
+      ) {
         map.add(upload.targetSectionId);
       }
     });
     return map;
-  }, [pendingUploads]);
+  }, [pendingUploads, allowedSectionIds]);
 
   const completedSet = useMemo(
-    () => new Set(completedSectionIds.map(String)),
-    [completedSectionIds],
+    () => new Set(completedSectionIds.map(String).filter(canSeeSection)),
+    [completedSectionIds, allowedSectionIds],
   );
 
   const sectionTitle = useMemo(() => {
@@ -86,7 +102,7 @@ export function OverviewBrowseGrid({
   }, []);
 
   const active =
-    OVERVIEW_BROWSE_CATEGORIES.find(item => item.id === activeId) || null;
+    visibleCategories.find(item => item.id === activeId) || null;
 
   const attentionCount = (category: OverviewBrowseCategory) =>
     category.sectionIds.filter(id => pendingBySection.has(id)).length;
@@ -98,6 +114,13 @@ export function OverviewBrowseGrid({
     }
     setActiveId(prev => (prev === category.id ? null : category.id));
   };
+
+  // Clear selection if the active category disappeared under ACL.
+  useEffect(() => {
+    if (activeId && !visibleCategories.some(c => c.id === activeId)) {
+      setActiveId(null);
+    }
+  }, [activeId, visibleCategories]);
 
   // Default (overview) layout: scroll the expanded list into view.
   useEffect(() => {
@@ -177,7 +200,7 @@ export function OverviewBrowseGrid({
         isSheet ? 'grid-cols-2' : 'md:grid-cols-3 lg:grid-cols-5',
       )}
     >
-      {OVERVIEW_BROWSE_CATEGORIES.map(category => {
+      {visibleCategories.map(category => {
         const Icon = ICONS[category.icon];
         const badge = attentionCount(category);
         const selected = activeId === category.id;

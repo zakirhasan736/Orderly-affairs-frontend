@@ -891,39 +891,6 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
 
   return (
     <div className="vault-settings-section w-full space-y-4 pb-24 sm:space-y-5 sm:pb-28">
-      {/* FAMILY ROLE & ACCESS */}
-      {showFamilyBlock && (
-      <section className="w-full overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[28px]">
-        <div className="relative overflow-hidden bg-[#0f3d4c] px-4 py-5 text-white sm:px-6 sm:py-6 md:px-8">
-          <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-teal-300/20 blur-2xl" />
-          <div className="relative flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
-                Family access
-              </p>
-              <h2 className="mt-1 text-[20px] font-bold tracking-tight sm:text-[22px]">
-                Roles &amp; section permissions
-              </h2>
-              <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-white/75 sm:text-sm">
-                Invite up to 5 family collaborators to the owner dashboard with
-                clear roles. Each person gets their own login session and email
-                link — separate from your owner sign-in and from Next of Kin
-                (Section 2).
-              </p>
-            </div>
-            <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ring-1 ring-white/20">
-              <Users className="h-3.5 w-3.5" />
-              Access
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4 p-3 sm:p-5 md:p-6">
-          <FamilyAccessManagement />
-        </div>
-      </section>
-      )}
-
       {/* OWNER MFA SETTINGS */}
       {showMfaBlock && (
       <section className="w-full overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[28px]">
@@ -1355,6 +1322,38 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
         </div>
       </section>
       </>
+      )}
+
+      {/* FAMILY ROLE & ACCESS — bottom of Vault Settings */}
+      {showFamilyBlock && (
+        <section className="w-full overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[28px]">
+          <div className="relative overflow-hidden bg-[#0f3d4c] px-4 py-5 text-white sm:px-6 sm:py-6 md:px-8">
+            <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-teal-300/20 blur-2xl" />
+            <div className="relative flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
+                  Family access
+                </p>
+                <h2 className="mt-1 text-[20px] font-bold tracking-tight sm:text-[22px]">
+                  Roles &amp; section permissions
+                </h2>
+                <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-white/75 sm:text-sm">
+                  Invite up to 5 family collaborators, mark vault areas in a
+                  popup table, then choose their portal role at the bottom of
+                  the invite form. Separate from Next of Kin (Section 2).
+                </p>
+              </div>
+              <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ring-1 ring-white/20">
+                <Users className="h-3.5 w-3.5" />
+                Access
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4 p-3 sm:p-5 md:p-6">
+            <FamilyAccessManagement />
+          </div>
+        </section>
       )}
 
       {!familySession.isFamily && (

@@ -28,6 +28,7 @@ import {
 import type { DashboardAiJob } from '@/hooks/useDashboardAiBatchRunner';
 import { toast } from 'sonner';
 import { AiDocumentPreviewDialog } from '@/components/ai/AiDocumentPreviewDialog';
+import { useFamilyAcl } from '@/contexts/FamilyAclContext';
 import { AiUploadHistoryThumb } from '@/components/ai/AiUploadHistoryThumb';
 
 /** Timeouts / blips / AI backlog — still treat as in progress in the UI. */
@@ -281,6 +282,7 @@ export function AiUploadHistoryPopup({
   variant = 'dialog',
   onDismissJob,
 }: AiUploadHistoryPopupProps) {
+  const { canWrite } = useFamilyAcl();
   const { items, refreshHistory, syncFromServer } = useUploadHistoryItems({
     jobs,
     sectionId,
@@ -380,6 +382,7 @@ export function AiUploadHistoryPopup({
       >
         <button
           type="button"
+          data-oa-view-ok
           title={
             count > 0
               ? 'View section document attachments'
@@ -452,6 +455,7 @@ export function AiUploadHistoryPopup({
                     <div className="flex items-start gap-2">
                       <button
                         type="button"
+                        data-oa-view-ok
                         onClick={() => openPreview(item)}
                         className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-[#2B5A8C] shadow-sm transition hover:bg-emerald-50"
                         title="View document"
@@ -461,6 +465,7 @@ export function AiUploadHistoryPopup({
                       </button>
                       <button
                         type="button"
+                        data-oa-view-ok
                         onClick={() => openPreview(item)}
                         className="min-w-0 flex-1 text-left"
                         title="Click to view document"
@@ -492,8 +497,10 @@ export function AiUploadHistoryPopup({
                           </span>
                         </div>
                       </button>
+                      {canWrite && (
                       <button
                         type="button"
+                        data-oa-mutate
                         disabled={deletingId === item.id}
                         onClick={() => void handleDelete(item)}
                         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
@@ -502,6 +509,7 @@ export function AiUploadHistoryPopup({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
+                      )}
                     </div>
 
                     {item.targetSectionLabel ? (

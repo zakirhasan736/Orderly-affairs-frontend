@@ -18,6 +18,7 @@ import { MultiSelect } from './MultiSelect';
 import { AccessManagement } from './AccessManagement';
 import { LettersToNextOfKinField } from './LettersToNextOfKinField';
 import { NextOfKinLetterField } from './NextOfKinLetterField';
+import { useFamilyAcl } from '@/contexts/FamilyAclContext';
 
 
 interface DynamicFormFieldProps {
@@ -32,6 +33,7 @@ interface DynamicFormFieldProps {
 }
 
 export function DynamicFormField({ field, value, onChange, formData, rowId, isVisible = true, className, lettersClearNonce }: DynamicFormFieldProps) {
+  const { isReadOnly } = useFamilyAcl();
   // Plain inputs must never receive `{ text, files }` (shows as "[object Object]").
   const rawValue = value !== undefined && value !== null ? value : (field.defaultValue || '');
   const currentValue =
@@ -45,10 +47,16 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
   const [showPassword, setShowPassword] = useState(false);
   // If there's a default value and no current value, set it
   React.useEffect(() => {
+    if (isReadOnly) return;
     if (field.defaultValue && (value === undefined || value === null || value === '')) {
       onChange(field.defaultValue);
     }
-  }, [field.defaultValue, value, onChange]);
+  }, [field.defaultValue, value, onChange, isReadOnly]);
+
+  const lockedOnChange = (next: any) => {
+    if (isReadOnly) return;
+    onChange(next);
+  };
 
   // Check if field should be visible based on conditions
   const shouldShowField = () => {
@@ -108,8 +116,9 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
           <div className="relative w-full">
             <Input
               value={currentValue}
-              onChange={e => onChange(e.target.value)}
+              onChange={e => lockedOnChange(e.target.value)}
               placeholder={field.placeholder}
+              readOnly={isReadOnly}
               type={
                 isPassword
                   ? showPassword
@@ -117,11 +126,12 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
                     : 'password'
                   : field.inputType || 'text'
               }
-              className={className || 'w-full'}
+              className={`${className || 'w-full'}${isReadOnly ? ' cursor-default bg-slate-50' : ''}`}
             />
             {isPassword && (
               <button
                 type="button"
+                data-oa-view-ok
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
               >
@@ -172,12 +182,13 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
         return (
           <Textarea
             value={currentValue}
-            onChange={e => onChange(e.target.value)}
+            onChange={e => lockedOnChange(e.target.value)}
             placeholder={field.placeholder}
-            className="w-full min-h-30"
+            className={`w-full min-h-30${isReadOnly ? ' cursor-default bg-slate-50' : ''}`}
             readOnly={
-              field.defaultValue !== undefined &&
-              field.defaultValue.includes('•')
+              isReadOnly ||
+              (field.defaultValue !== undefined &&
+                field.defaultValue.includes('•'))
             }
           />
         );
@@ -187,9 +198,10 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
           <TextInputWithUpload
             label={getAiFieldDisplayLabel(field)}
             value={value}
-            onChange={onChange}
+            onChange={lockedOnChange}
             placeholder={field.placeholder}
             helperText={field.helperText}
+            disabled={isReadOnly}
           />
         );
 
@@ -198,9 +210,10 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
         return (
           <DatePicker
             value={value}
-            onChange={onChange}
+            onChange={lockedOnChange}
             placeholder="MM / DD / YYYY"
             className={className || 'w-full'}
+            disabled={isReadOnly}
           />
         );
 
@@ -226,7 +239,8 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
         return (
           <Select
             value={knownValue}
-            onValueChange={onChange}
+            onValueChange={lockedOnChange}
+            disabled={isReadOnly}
           >
             <SelectTrigger className="w-full">
               <SelectValue
@@ -253,8 +267,9 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
           <MultiSelect
             options={field.options || []}
             value={value || []}
-            onChange={onChange}
+            onChange={lockedOnChange}
             placeholder={field.placeholder || 'Select sections...'}
+            disabled={isReadOnly}
           />
         );
 
@@ -263,6 +278,7 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
           <div className="flex items-center space-x-2">
             <Checkbox
               id={field.key}
+              disabled={isReadOnly}
               checked={
                 value === true ||
                 value === 'true' ||
@@ -271,7 +287,7 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
                 value === 1 ||
                 value === '1'
               }
-              onCheckedChange={checked => onChange(checked === true)}
+              onCheckedChange={checked => lockedOnChange(checked === true)}
             />
             <Label htmlFor={field.key}>{field.label}</Label>
           </div>
@@ -295,9 +311,10 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
             <div className="flex items-center space-x-2">
               <Checkbox
                 id={field.key}
+                disabled={isReadOnly}
                 checked={checked}
                 onCheckedChange={checkedNext =>
-                  onChange(checkedNext ? singleOption : '')
+                  lockedOnChange(checkedNext ? singleOption : '')
                 }
               />
               <Label htmlFor={field.key}>{singleOption}</Label>
@@ -314,7 +331,8 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
           <RadioGroup
             key={`${field.key}-${rowId}`}
             value={radioValue}
-            onValueChange={onChange}
+            onValueChange={lockedOnChange}
+            disabled={isReadOnly}
             className="space-y-3"
           >
             {options.map(option => (
@@ -389,7 +407,7 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
           <div className="w-full">
             <LettersToNextOfKinField
               value={value}
-              onChange={onChange}
+              onChange={lockedOnChange}
               helperText={field.helperText}
               formData={formData}
               clearNonce={lettersClearNonce}
@@ -402,7 +420,7 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
           <div className="w-full">
             <NextOfKinLetterField
               data={value}
-              onChange={onChange}
+              onChange={lockedOnChange}
               formData={formData}
             />
           </div>
@@ -412,9 +430,10 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
         return (
           <Input
             value={value || ''}
-            onChange={e => onChange(e.target.value)}
+            onChange={e => lockedOnChange(e.target.value)}
             placeholder={field.placeholder}
-            className="w-full"
+            readOnly={isReadOnly}
+            className={`w-full${isReadOnly ? ' cursor-default bg-slate-50' : ''}`}
           />
         );
     }

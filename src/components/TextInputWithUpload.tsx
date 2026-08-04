@@ -41,6 +41,7 @@ export function TextInputWithUpload({
   onChange,
   helperText,
   placeholder,
+  disabled = false,
 }: any) {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -88,6 +89,7 @@ export function TextInputWithUpload({
     : [];
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (disabled) return;
     onChange({
       ...normalizedValue,
       text: e.target.value,
@@ -109,6 +111,7 @@ export function TextInputWithUpload({
   }
 
   async function handleUpload(file: File) {
+    if (disabled) return;
     const error = validateFile(file);
     if (error) {
       alert(error);
@@ -132,6 +135,7 @@ export function TextInputWithUpload({
   }
 
   function removeFile(file: UploadFileEntry, index: number) {
+    if (disabled) return;
     onChange({
       ...normalizedValue,
       files: files.filter((_, i) => i !== index),
@@ -168,23 +172,28 @@ export function TextInputWithUpload({
         value={normalizedValue?.text || ''}
         onChange={handleTextChange}
         placeholder={placeholder}
-        className="w-full"
+        readOnly={disabled}
+        className={`w-full${disabled ? ' cursor-default bg-slate-50' : ''}`}
       />
       <div className="flex gap-2">
+        {!disabled && (
         <Button
           type="button"
           size="sm"
           variant="outline"
+          data-oa-mutate
           onClick={() => fileRef.current?.click()}
         >
           <Upload className="h-4 w-4 mr-1" /> Upload
         </Button>
+        )}
       </div>
 
       <input
         ref={fileRef}
         type="file"
         className="hidden"
+        disabled={disabled}
         accept="image/*,application/pdf"
         onChange={e => e.target.files && handleUpload(e.target.files[0])}
       />
@@ -197,6 +206,7 @@ export function TextInputWithUpload({
           <div className="min-w-0">
             <button
               type="button"
+              data-oa-view-ok
               className="underline text-left"
               onClick={() => void openFile(f)}
             >
@@ -224,9 +234,11 @@ export function TextInputWithUpload({
             )}
           </div>
 
-          <button type="button" onClick={() => removeFile(f, i)}>
+          {!disabled && (
+          <button type="button" data-oa-mutate onClick={() => removeFile(f, i)}>
             <X className="h-3 w-3" />
           </button>
+          )}
         </div>
       ))}
     </div>

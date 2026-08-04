@@ -489,7 +489,7 @@ export function hydrateAiUploadHistoryFromServer(
       mimeType: doc.mime_type || undefined,
       sectionId: section,
       sectionIds: section ? [section] : [],
-      source: 'overview',
+      source: section ? 'section' : 'overview',
     });
   }
 

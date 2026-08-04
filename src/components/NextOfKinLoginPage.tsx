@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import Image from 'next/image';
 import { Eye, EyeOff, Lock, Mail, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { InlineNotice } from '@/components/common/ui/inline-notice';
@@ -172,6 +172,7 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
     subtitleOverride || 'Secure access to the vault shared with you.';
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
+  const passwordRef = useRef('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -194,7 +195,7 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
   const finishAuthenticated = async (res: LoginResponse) => {
     try {
       const { unlockVaultWithPassword } = await import('@/libs/e2ee/unlock');
-      await unlockVaultWithPassword(password);
+      await unlockVaultWithPassword(passwordRef.current || password);
     } catch {
       /* vault may stay locked if wrap not configured */
     }
@@ -497,7 +498,10 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
                       autoComplete="current-password"
                       placeholder="••••••••••"
                       value={password}
-                      onChange={e => setPassword(e.target.value)}
+                      onChange={e => {
+                        passwordRef.current = e.target.value;
+                        setPassword(e.target.value);
+                      }}
                       onKeyDown={handleKeyPress}
                       className="nok-field nok-field-password"
                       disabled={isLocked || isLoading}

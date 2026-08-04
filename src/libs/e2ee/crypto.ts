@@ -184,14 +184,21 @@ export async function unlockOrSetupE2ee(
     status.wrapped_dek_b64;
 
   if (canUnwrap) {
-    const wk = await deriveWrappingKey(
-      password,
-      status.salt_b64!,
-      status.kdf_iterations || KDF_ITERATIONS,
-    );
-    const dek = await unwrapDek(status.wrapped_dek_b64!, wk);
-    rememberDek(dek);
-    return { created: false };
+    try {
+      const wk = await deriveWrappingKey(
+        password,
+        status.salt_b64!,
+        status.kdf_iterations || KDF_ITERATIONS,
+      );
+      const dek = await unwrapDek(status.wrapped_dek_b64!, wk);
+      rememberDek(dek);
+      return { created: false };
+    } catch {
+      lockE2ee();
+      throw new Error(
+        'Could not unlock vault with this password. If you are a family member, ask the owner to re-save your invite password while their vault is unlocked.',
+      );
+    }
   }
 
   // Next-of-Kin cannot create an owner envelope — wait for owner nok-wrap.

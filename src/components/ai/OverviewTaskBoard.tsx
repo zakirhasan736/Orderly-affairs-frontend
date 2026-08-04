@@ -32,6 +32,8 @@ type OverviewTaskBoardProps = {
   sectionProgressById?: Record<string, { percent: number; complete: boolean }>;
   lastUpdatedBySection?: Record<string, string>;
   onNavigateToSection: (sectionId: string) => void;
+  /** Family ACL: only show task cards for granted vault sections. */
+  allowedSectionIds?: 'all' | Set<string>;
 };
 
 function pickJobForSection(jobs: DashboardAiJob[], sectionId: string) {
@@ -344,20 +346,32 @@ export function OverviewTaskBoard({
   sectionProgressById = {},
   lastUpdatedBySection = {},
   onNavigateToSection,
+  allowedSectionIds = 'all',
 }: OverviewTaskBoardProps) {
   const routing = useOptionalAiDocumentRouting();
 
   const pendingReady = useMemo(() => {
     const set = new Set<string>();
     (routing?.pendingUploads || []).forEach(upload => {
-      if (upload.highlightUpload) set.add(upload.targetSectionId);
+      if (
+        upload.highlightUpload &&
+        (allowedSectionIds === 'all' ||
+          allowedSectionIds.has(String(upload.targetSectionId)))
+      ) {
+        set.add(upload.targetSectionId);
+      }
     });
     return set;
-  }, [routing?.pendingUploads]);
+  }, [routing?.pendingUploads, allowedSectionIds]);
 
   const allCards = useMemo(
-    () => OVERVIEW_TASK_GROUPS.flatMap(group => group.cards),
-    [],
+    () =>
+      OVERVIEW_TASK_GROUPS.flatMap(group => group.cards).filter(
+        card =>
+          allowedSectionIds === 'all' ||
+          allowedSectionIds.has(String(card.sectionId)),
+      ),
+    [allowedSectionIds],
   );
 
   const openCard = (card: OverviewTaskCard) => {

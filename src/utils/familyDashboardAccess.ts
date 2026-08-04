@@ -67,7 +67,10 @@ export function familyHasArea(
   return false;
 }
 
-/** Vault section ids only (excludes billing / vault_settings / etc.). */
+/**
+ * Vault section ids the collaborator may open in the sidebar / browse grid.
+ * Excludes management-only specials (billing, vault_settings, overview).
+ */
 export function familyAllowedVaultSectionIds(
   session: FamilyDashboardSession,
 ): 'all' | Set<string> {
@@ -75,11 +78,57 @@ export function familyAllowedVaultSectionIds(
   const ids = new Set(
     session.authorizedSections.filter(id => !SPECIAL_AREAS.has(id)),
   );
-  // Special area maps onto vault section 2
   if (session.authorizedSections.includes('section2_nextkin')) {
     ids.add('2');
   }
   return ids;
+}
+
+/** Whether a vault section (1–21) is visible for this family session. */
+export function familyCanSeeVaultSection(
+  session: FamilyDashboardSession,
+  sectionId: string,
+): boolean {
+  if (!session.isFamily) return true;
+  const id = String(sectionId);
+  if (id === 'dashboard' || id === 'overview') {
+    return familyCanSeeOverview(session);
+  }
+  if (id === 'vault-settings' || id === 'vault_settings') {
+    return familyCanViewVaultSettings(session);
+  }
+  // Section 2 management UI needs area grant; Admin+ manage is separate.
+  if (id === '2' || id === 'section2_nextkin') {
+    return (
+      familyHasArea(session, '2') ||
+      familyHasArea(session, 'section2_nextkin') ||
+      familyCanManageNextKin(session)
+    );
+  }
+  const allowed = familyAllowedVaultSectionIds(session);
+  if (allowed === 'all') return true;
+  return allowed.has(id);
+}
+
+export function familyCanSeeMessages(session: FamilyDashboardSession): boolean {
+  return familyCanSeeVaultSection(session, '4');
+}
+
+export function familyCanSeeNokLetters(session: FamilyDashboardSession): boolean {
+  return familyCanSeeVaultSection(session, '3');
+}
+
+/** Fetch NOK list for letters / overview cards (not only Admin manage). */
+export function familyCanFetchNextKinList(
+  session: FamilyDashboardSession,
+): boolean {
+  if (!session.isFamily) return true;
+  return (
+    familyCanManageNextKin(session) ||
+    familyCanSeeVaultSection(session, '2') ||
+    familyCanSeeNokLetters(session) ||
+    familyCanSeeOverview(session)
+  );
 }
 
 export function familyCanWrite(session: FamilyDashboardSession): boolean {
@@ -87,9 +136,60 @@ export function familyCanWrite(session: FamilyDashboardSession): boolean {
   return Boolean(session.permissions.can_write);
 }
 
+/** Viewer (and any family role without can_write): inspect only. */
+export function familyIsReadOnly(session: FamilyDashboardSession): boolean {
+  if (!session.isFamily) return false;
+  return !familyCanWrite(session);
+}
+
+export type FamilyPortalRoleId =
+  | 'viewer'
+  | 'editor'
+  | 'portal_manager'
+  | 'admin'
+  | 'super_admin'
+  | string;
+
+export function familyPortalRoleId(
+  session: FamilyDashboardSession,
+): FamilyPortalRoleId {
+  if (!session.isFamily) return 'owner';
+  const raw = String(session.portalRole || 'viewer')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  if (raw === 'view' || raw === 'read' || raw === 'read_only' || raw === 'readonly') {
+    return 'viewer';
+  }
+  if (raw === 'edit' || raw === 'writer') return 'editor';
+  if (raw === 'manager' || raw === 'portalmanager') return 'portal_manager';
+  if (raw === 'family_admin' || raw === 'kit_admin') return 'admin';
+  if (raw === 'superadmin' || raw === 'super-admin') return 'super_admin';
+  return raw || 'viewer';
+}
+
 export function familyCanUpload(session: FamilyDashboardSession): boolean {
   if (!session.isFamily) return true;
   return Boolean(session.permissions.can_upload);
+}
+
+/** Drag/drop on overview when they can upload and may see overview. */
+export function familyCanUseOverviewUploads(
+  session: FamilyDashboardSession,
+): boolean {
+  if (!session.isFamily) return true;
+  return familyCanUpload(session) && familyCanSeeOverview(session);
+}
+
+/** Drag/drop on a vault section when they can upload and see that section. */
+export function familyCanUseSectionUploads(
+  session: FamilyDashboardSession,
+  sectionId: string,
+): boolean {
+  if (!session.isFamily) return true;
+  return (
+    familyCanUpload(session) && familyCanSeeVaultSection(session, sectionId)
+  );
 }
 
 export function familyCanManageFamilyAccess(
@@ -132,7 +232,8 @@ export function familyCanManageNextKin(
   return (
     Boolean(session.permissions.can_manage_nextkin) &&
     (familyHasFullDashboard(session) ||
-      familyHasArea(session, 'section2_nextkin'))
+      familyHasArea(session, 'section2_nextkin') ||
+      familyHasArea(session, '2'))
   );
 }
 
@@ -150,7 +251,10 @@ export function firstAllowedFamilySectionId(
   if (familyCanViewVaultSettings(session)) return 'vault-settings';
   const allowed = familyAllowedVaultSectionIds(session);
   if (allowed === 'all') {
-    return familyCanManageNextKin(session) ? '2' : '1';
+    if (familyCanManageNextKin(session) || familyCanSeeVaultSection(session, '2')) {
+      return '2';
+    }
+    return '1';
   }
   const preferred = [...allowed].sort((a, b) => Number(a) - Number(b));
   return preferred[0] || 'dashboard';
@@ -161,6 +265,37 @@ export function familyRoleBannerText(
 ): string | null {
   if (!session.isFamily) return null;
   const label = session.portalRoleLabel || session.portalRole || 'Viewer';
-  const write = familyCanWrite(session) ? 'edit' : 'view-only';
-  return `Family ${label} · ${write} on granted areas`;
+  const role = familyPortalRoleId(session);
+  if (role === 'viewer' || familyIsReadOnly(session)) {
+    return `Family ${label} · view-only on granted areas (fields and Add buttons are locked)`;
+  }
+  const parts = ['can edit granted areas'];
+  if (familyCanUpload(session)) parts.push('uploads on');
+  if (familyCanManageFamilyAccess(session)) parts.push('manage family access');
+  if (familyCanManageNextKin(session)) parts.push('manage Next of Kin');
+  if (familyCanViewBilling(session)) parts.push('billing view');
+  return `Family ${label} · ${parts.join(' · ')}`;
+}
+
+/** Click targets that mutate vault data — blocked for Viewers. */
+export function isFamilyMutateControl(el: Element | null): boolean {
+  if (!el || !(el instanceof Element)) return false;
+  if (el.closest('[data-oa-view-ok]')) return false;
+  if (el.closest('[data-oa-mutate]')) return true;
+
+  const file = el.closest('input[type="file"]');
+  if (file) return true;
+
+  const field = el.closest(
+    'input:not([type="button"]):not([type="submit"]):not([type="reset"]), textarea, select, [role="combobox"], [role="listbox"], [role="option"], [role="checkbox"], [role="radio"], [role="switch"], [contenteditable="true"]',
+  );
+  if (field && !field.closest('[data-oa-view-ok]')) return true;
+
+  const btn = el.closest('button, [role="button"], a.button');
+  if (!btn || btn.closest('[data-oa-view-ok]')) return false;
+
+  const label = `${btn.textContent || ''} ${btn.getAttribute('aria-label') || ''} ${btn.getAttribute('title') || ''}`.toLowerCase();
+  return /\b(add|remove|delete|clear|upload|save|create|write|send|autofill|fill empty|choose document|wipe|replace|edit letter|drop)\b/.test(
+    label,
+  );
 }
