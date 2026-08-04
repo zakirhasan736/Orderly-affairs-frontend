@@ -1166,11 +1166,22 @@ export default function DashboardPage() {
   const handleOwnerLogout = async () => {
     if (familyAcl.isFamily) {
       try {
+        const { lockE2ee } = await import('@/libs/e2ee/unlock');
+        lockE2ee();
+      } catch {
+        /* ignore */
+      }
+      try {
         await nextkinLogout({}).unwrap();
       } catch {}
       try {
         await apiNokLogout();
       } catch {}
+      try {
+        sessionStorage.removeItem('oa_portal_kind');
+      } catch {
+        /* ignore */
+      }
       router.push('/family/login');
       return;
     }
@@ -1180,6 +1191,11 @@ export default function DashboardPage() {
     try {
       await apiOwnerLogout();
     } catch {}
+    try {
+      sessionStorage.removeItem('oa_portal_kind');
+    } catch {
+      /* ignore */
+    }
     router.push('/');
   };
 
