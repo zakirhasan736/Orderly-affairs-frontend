@@ -5,6 +5,14 @@ import {
   fetchBaseQuery,
 } from '@reduxjs/toolkit/query/react';
 import { sanitizeFetchBaseQueryError } from '@/utils/sanitizeApiError';
+import {
+  applyCsrfHeader,
+  bootstrapCsrfToken,
+  clearCsrfToken,
+  getCsrfToken,
+  isCsrfFailure,
+  rememberCsrfFromResponse,
+} from '@/libs/csrf';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
@@ -31,20 +39,33 @@ function shouldSkipRefresh(args: string | FetchArgs): boolean {
   );
 }
 
+function requestMethod(args: string | FetchArgs): string {
+  if (typeof args === 'string') return 'GET';
+  return (args.method || 'GET').toUpperCase();
+}
+
 let refreshPromise: Promise<boolean> | null = null;
 
 async function refreshSession(): Promise<boolean> {
   if (!refreshPromise) {
-    refreshPromise = fetch(`${API_BASE}/auth/refresh-token`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-    })
-      .then(res => res.ok)
-      .catch(() => false)
-      .finally(() => {
-        refreshPromise = null;
-      });
+    refreshPromise = (async () => {
+      await bootstrapCsrfToken();
+      const headers = new Headers({ 'Content-Type': 'application/json' });
+      applyCsrfHeader(headers, 'POST');
+      try {
+        const res = await fetch(`${API_BASE}/auth/refresh-token`, {
+          method: 'POST',
+          credentials: 'include',
+          headers,
+        });
+        rememberCsrfFromResponse(res);
+        return res.ok;
+      } catch {
+        return false;
+      }
+    })().finally(() => {
+      refreshPromise = null;
+    });
   }
   return refreshPromise;
 }
@@ -56,13 +77,50 @@ export function createSecureBaseQuery(
     baseUrl: `${API_BASE}${pathPrefix}`,
     credentials: 'include',
     prepareHeaders: headers => {
-      headers.set('Content-Type', 'application/json');
+      if (!headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+      }
+      const token = getCsrfToken();
+      if (token) {
+        headers.set('X-CSRF-Token', token);
+      }
       return headers;
     },
   });
 
   return async (args, api, extraOptions) => {
+    const method = requestMethod(args);
+    if (method !== 'GET' && method !== 'HEAD') {
+      await bootstrapCsrfToken();
+    }
+
+    // Ensure CSRF is on this request even if prepareHeaders ran early.
+    if (typeof args !== 'string') {
+      const headers = new Headers(args.headers as HeadersInit | undefined);
+      applyCsrfHeader(headers, method);
+      args = { ...args, headers };
+    }
+
     let result = await rawBaseQuery(args, api, extraOptions);
+    rememberCsrfFromResponse(result.meta?.response);
+
+    if (
+      result.error &&
+      isCsrfFailure(
+        typeof result.error.status === 'number' ? result.error.status : undefined,
+        result.error.data,
+      )
+    ) {
+      clearCsrfToken();
+      await bootstrapCsrfToken();
+      if (typeof args !== 'string') {
+        const headers = new Headers(args.headers as HeadersInit | undefined);
+        applyCsrfHeader(headers, method);
+        args = { ...args, headers };
+      }
+      result = await rawBaseQuery(args, api, extraOptions);
+      rememberCsrfFromResponse(result.meta?.response);
+    }
 
     if (
       result.error &&
@@ -72,6 +130,7 @@ export function createSecureBaseQuery(
       const refreshed = await refreshSession();
       if (refreshed) {
         result = await rawBaseQuery(args, api, extraOptions);
+        rememberCsrfFromResponse(result.meta?.response);
       }
     }
 
@@ -85,7 +144,6 @@ export function createSecureBaseQuery(
           !Array.isArray(result.error.data)
             ? (result.error.data as Record<string, unknown>)
             : {};
-        // Construct an error-only result (do not spread `data` from the success union)
         result = {
           error: {
             status: result.error.status,

@@ -1,10 +1,11 @@
 
 import React, { useRef } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@common/ui/button';
 import { Input } from '@common/ui/input';
 import { Label } from '@common/ui/label';
 import { Upload, X } from 'lucide-react';
-import { uploadFile } from '@/libs/api/upload';
+import { getSignedUploadUrl, uploadFile } from '@/libs/api/upload';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
@@ -138,6 +139,25 @@ export function TextInputWithUpload({
     });
   }
 
+  async function openFile(file: UploadFileEntry) {
+    if (file.public_id) {
+      try {
+        const signed = await getSignedUploadUrl(file.public_id);
+        if (signed.url) {
+          window.open(signed.url, '_blank', 'noopener,noreferrer');
+          return;
+        }
+      } catch {
+        // Prefer fail-closed over opening a possibly public legacy URL.
+      }
+      toast.error('Could not open secure file link. Try again.');
+      return;
+    }
+    if (file.url) {
+      window.open(file.url, '_blank', 'noopener,noreferrer');
+    }
+  }
+
   return (
     <div className="space-y-2">
       {label && <Label>{label}</Label>}
@@ -176,10 +196,14 @@ export function TextInputWithUpload({
           className="flex justify-between items-start gap-2 bg-muted p-2 rounded text-xs"
         >
           <div className="min-w-0">
-            <a href={f.url} target="_blank" className="underline">
+            <button
+              type="button"
+              className="underline text-left"
+              onClick={() => void openFile(f)}
+            >
               {f.name}
               {f.version && <span className="ml-1">v{f.version}</span>}
-            </a>
+            </button>
             {f.uploaded_by_name && (
               <p className="mt-0.5 text-[10px] text-muted-foreground">
                 Uploaded by{' '}

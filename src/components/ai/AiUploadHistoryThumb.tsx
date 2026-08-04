@@ -53,25 +53,29 @@ export function AiUploadHistoryThumb({
           await fetchAiDocumentPreviewBlob(fileId);
         if (cancelled) return;
 
+        const buffer = await blob.arrayBuffer();
+        if (cancelled) return;
+
+        const titleHint = fetchedName || fileName;
         const mime = resolveAiPreviewMime({
           contentType: fetchedMime,
           blobType: blob.type,
-          fileName: fetchedName || fileName,
+          fileName: titleHint,
           fallbackMime: mimeHint,
+          bytes: buffer,
         });
         setMimeType(mime);
 
         const kind = resolveAiPreviewKind({
           mime,
-          fileName: fetchedName || fileName,
+          fileName: titleHint,
+          bytes: buffer,
         });
 
         if (kind === 'image') {
-          const typed =
-            mime && mime !== blob.type
-              ? new Blob([blob], { type: mime })
-              : blob;
-          createdUrl = URL.createObjectURL(typed);
+          createdUrl = URL.createObjectURL(
+            new Blob([buffer], { type: mime || 'image/png' }),
+          );
           setObjectUrl(createdUrl);
         } else {
           setObjectUrl(null);

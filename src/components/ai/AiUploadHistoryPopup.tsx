@@ -15,12 +15,16 @@ import {
   formatUploadHistoryTime,
   formatUploadRelativeDays,
   formatUploadRelativeShort,
+  hydrateAiUploadHistoryFromServer,
   listAiUploadHistory,
   removeAiUploadHistoryItem,
   type AiUploadHistoryItem,
 } from '@/utils/aiUploadHistory';
 import { clearAiUploadMeta } from '@/utils/aiDocumentUploadUi';
-import { deleteAIDocument } from '@/services/aiDocumentUpload';
+import {
+  deleteAIDocument,
+  listOwnerAiDocuments,
+} from '@/services/aiDocumentUpload';
 import type { DashboardAiJob } from '@/hooks/useDashboardAiBatchRunner';
 import { toast } from 'sonner';
 import { AiDocumentPreviewDialog } from '@/components/ai/AiDocumentPreviewDialog';
@@ -200,13 +204,24 @@ function useUploadHistoryItems(args: {
     );
   }, [sectionId, source]);
 
+  const syncFromServer = useCallback(async () => {
+    try {
+      const docs = await listOwnerAiDocuments();
+      hydrateAiUploadHistoryFromServer(docs);
+    } catch {
+      // keep in-memory list
+    } finally {
+      refreshHistory();
+    }
+  }, [refreshHistory]);
+
   useEffect(() => {
-    refreshHistory();
+    void syncFromServer();
     const onHistory = () => refreshHistory();
     window.addEventListener('orderly-ai-upload-history', onHistory);
     return () =>
       window.removeEventListener('orderly-ai-upload-history', onHistory);
-  }, [refreshHistory]);
+  }, [refreshHistory, syncFromServer]);
 
   const items = useMemo(() => {
     const merged = mergeHistoryWithJobs(history, jobs);
@@ -218,7 +233,7 @@ function useUploadHistoryItems(args: {
     });
   }, [history, jobs, sectionId]);
 
-  return { items, refreshHistory };
+  return { items, refreshHistory, syncFromServer };
 }
 
 function ProgressBar({
@@ -266,7 +281,7 @@ export function AiUploadHistoryPopup({
   variant = 'dialog',
   onDismissJob,
 }: AiUploadHistoryPopupProps) {
-  const { items, refreshHistory } = useUploadHistoryItems({
+  const { items, refreshHistory, syncFromServer } = useUploadHistoryItems({
     jobs,
     sectionId,
     source,
@@ -276,6 +291,7 @@ export function AiUploadHistoryPopup({
   const [preview, setPreview] = useState<{
     fileId: string;
     fileName: string;
+    mimeType?: string;
   } | null>(null);
   const count = items.length;
   const processingCount = useMemo(
@@ -295,22 +311,23 @@ export function AiUploadHistoryPopup({
         const live = jobs.find(job => job.id === item.id);
         const fileId = item.fileId || live?.file_id || '';
 
-        removeAiUploadHistoryItem({ id: item.id, fileId });
         onDismissJob?.(item.id);
         if (fileId) {
           clearAiUploadMeta(fileId);
-          await deleteAIDocument(fileId);
+          const ok = await deleteAIDocument(fileId);
+          if (!ok) throw new Error('delete failed');
         }
-        refreshHistory();
-        toast.success('Upload removed');
+        removeAiUploadHistoryItem({ id: item.id, fileId });
+        await syncFromServer();
+        toast.success('Document deleted');
       } catch {
-        toast.error('Could not delete upload');
-        refreshHistory();
+        toast.error('Could not delete document');
+        await syncFromServer();
       } finally {
         setDeletingId(null);
       }
     },
-    [deletingId, jobs, onDismissJob, refreshHistory],
+    [deletingId, jobs, onDismissJob, syncFromServer],
   );
 
   const openPreview = useCallback((item: AiUploadHistoryItem) => {
@@ -320,17 +337,21 @@ export function AiUploadHistoryPopup({
       toast.error('Preview is not available for this upload yet.');
       return;
     }
-    setPreview({ fileId, fileName: item.fileName });
+    setPreview({
+      fileId,
+      fileName: item.fileName,
+      mimeType: item.mimeType || live?.mime_type || undefined,
+    });
   }, [jobs]);
 
   const handlePreviewMissing = useCallback(
     (fileId: string) => {
       removeAiUploadHistoryItem({ fileId });
-      refreshHistory();
+      void syncFromServer();
       setPreview(null);
-      toast.error('Document no longer on the server. Upload it again to preview.');
+      toast.error('That upload record was removed. Upload the file again to preview.');
     },
-    [refreshHistory],
+    [syncFromServer],
   );
 
   const previewDialog = (
@@ -341,6 +362,7 @@ export function AiUploadHistoryPopup({
       }}
       fileId={preview?.fileId}
       fileName={preview?.fileName}
+      mimeType={preview?.mimeType}
       onNotFound={handlePreviewMissing}
     />
   );

@@ -37,12 +37,14 @@ export function AiDocumentPreviewDialog({
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [resolvedMime, setResolvedMime] = useState(mimeType || '');
   const [textContent, setTextContent] = useState<string | null>(null);
+  const [kind, setKind] = useState<'image' | 'pdf' | 'text' | 'other'>('other');
 
   useEffect(() => {
     if (!open || !fileId) {
       setError('');
       setTextContent(null);
       setLoading(false);
+      setKind('other');
       setObjectUrl(prev => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
@@ -57,6 +59,7 @@ export function AiDocumentPreviewDialog({
       setLoading(true);
       setError('');
       setTextContent(null);
+      setKind('other');
       setObjectUrl(prev => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
@@ -67,29 +70,36 @@ export function AiDocumentPreviewDialog({
           await fetchAiDocumentPreviewBlob(fileId);
         if (cancelled) return;
 
+        const buffer = await blob.arrayBuffer();
+        if (cancelled) return;
+
         const titleHint = fileName || fetchedName || '';
         const mime = resolveAiPreviewMime({
           contentType: fetchedMime,
           blobType: blob.type,
           fileName: titleHint,
           fallbackMime: mimeType,
+          bytes: buffer,
         });
+        const nextKind = resolveAiPreviewKind({
+          mime,
+          fileName: titleHint,
+          bytes: buffer,
+        });
+
         setResolvedMime(mime);
+        setKind(nextKind);
 
-        const kind = resolveAiPreviewKind({ mime, fileName: titleHint });
-
-        if (kind === 'text') {
-          const text = await blob.text();
+        if (nextKind === 'text') {
+          const text = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
           if (!cancelled) setTextContent(text || '(Empty text file)');
           return;
         }
 
-        // Retype when server/browser left the blob as octet-stream so
-        // <img> / PDF iframe previews reliably.
-        const previewBlob =
-          mime && mime !== blob.type
-            ? new Blob([blob], { type: mime })
-            : blob;
+        // Retype from ArrayBuffer so <img> / PDF iframe get a real Content-Type.
+        const previewBlob = new Blob([buffer], {
+          type: mime || 'application/octet-stream',
+        });
         createdUrl = URL.createObjectURL(previewBlob);
         if (!cancelled) setObjectUrl(createdUrl);
       } catch (err) {
@@ -97,7 +107,15 @@ export function AiDocumentPreviewDialog({
           const message =
             err instanceof Error ? err.message : 'Could not open document.';
           setError(message);
-          if (fileId && /not found|deleted/i.test(message)) {
+          // Only purge history when the Mongo row is gone — not when bytes are
+          // missing on this server (shared Atlas / VPS path drift).
+          if (
+            fileId &&
+            /document not found\.?/i.test(message) &&
+            !/not available on this server|missing on disk|re-upload/i.test(
+              message,
+            )
+          ) {
             onNotFound?.(fileId);
           }
         }
@@ -119,10 +137,6 @@ export function AiDocumentPreviewDialog({
   const typeLabel = getReadableAiDocumentType(
     resolvedMime || mimeType || undefined,
   );
-  const kind = resolveAiPreviewKind({
-    mime: resolvedMime || mimeType,
-    fileName: title,
-  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -151,7 +165,7 @@ export function AiDocumentPreviewDialog({
             </div>
           ) : null}
 
-          {!loading && !error && textContent != null ? (
+          {!loading && !error && textContent != null && kind === 'text' ? (
             <pre
               className={cn(
                 'max-h-[min(70dvh,520px)] overflow-auto rounded-xl border border-slate-200 bg-white p-4',

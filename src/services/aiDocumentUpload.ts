@@ -49,6 +49,8 @@ export type OwnerAiDocument = {
   preview_url?: string;
   source?: string;
   section?: string;
+  storage?: string;
+  public_id?: string;
 };
 
 export async function uploadAIDocument(
@@ -150,14 +152,12 @@ export async function fetchAiDocumentPreviewBlob(fileId: string): Promise<{
 
     if (res.status === 410) {
       throw new Error(
-        detail || 'This document has expired. Please upload it again.',
+        detail ||
+          'Document file is not available on this server. Re-upload the file to preview it.',
       );
     }
     if (res.status === 404) {
-      throw new Error(
-        detail ||
-          'Document file not found on the server. It may have expired or been deleted — upload it again to preview.',
-      );
+      throw new Error(detail || 'Document not found.');
     }
     if (res.status === 401) {
       throw new Error('Sign in again to preview this document.');

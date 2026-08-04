@@ -161,6 +161,7 @@ export function OverviewAiUploadCard({
         createdAt: job.createdAt,
         updatedAt: job.updatedAt,
         fileId: job.file_id,
+        mimeType: job.mime_type,
         sectionId: job.targetSectionId || undefined,
         sectionIds: job.targetSectionId
           ? [String(job.targetSectionId)]

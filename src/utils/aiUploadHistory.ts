@@ -72,6 +72,10 @@ function normalizeItem(raw: any): AiUploadHistoryItem | null {
       raw.fileId || raw.file_id
         ? String(raw.fileId || raw.file_id)
         : undefined,
+    mimeType:
+      raw.mimeType || raw.mime_type
+        ? String(raw.mimeType || raw.mime_type)
+        : undefined,
     sectionId,
     sectionIds,
     targetSectionLabel: raw.targetSectionLabel
@@ -172,49 +176,25 @@ function collapseDuplicates(items: AiUploadHistoryItem[]): AiUploadHistoryItem[]
 
 function readHistory(): AiUploadHistoryItem[] {
   if (memoryCache) return memoryCache;
-
-  const store = storage();
-  if (!store) {
-    memoryCache = [];
-    return memoryCache;
-  }
-
-  try {
-    const raw = store.getItem(STORAGE_KEY) || store.getItem(LEGACY_KEY);
-    let items: AiUploadHistoryItem[] = [];
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        items = parsed
-          .map(normalizeItem)
-          .filter(Boolean) as AiUploadHistoryItem[];
-      }
-    }
-    items = collapseDuplicates(items);
-    memoryCache = items;
-    // Persist collapse so old duplicate attempts are cleared from storage.
+  // Durable list lives on the server (Cloudinary + Mongo). Memory only holds
+  // in-flight progress for this tab — never rehydrate from localStorage.
+  memoryCache = [];
+  if (typeof window !== 'undefined') {
     try {
-      store.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, MAX_ITEMS)));
+      const store = storage();
+      store?.removeItem(STORAGE_KEY);
+      store?.removeItem(LEGACY_KEY);
     } catch {
       // ignore
     }
-    return memoryCache;
-  } catch {
-    memoryCache = [];
-    return memoryCache;
   }
+  return memoryCache;
 }
 
 function writeHistory(items: AiUploadHistoryItem[]) {
   const next = collapseDuplicates(items).slice(0, MAX_ITEMS);
   memoryCache = next;
-  const store = storage();
-  if (!store) return;
-  try {
-    store.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // memory still holds list for this session
-  }
+  // Intentionally no localStorage — server list is the source of truth.
 }
 
 function itemMatchesSection(
@@ -328,6 +308,7 @@ export function upsertAiUploadHistory(
       item.status === 'uploading'
         ? item.fileId
         : item.fileId || prev?.fileId,
+    mimeType: item.mimeType || prev?.mimeType,
     sectionId: preservedSectionId,
     sectionIds,
     targetSectionLabel: item.targetSectionLabel ?? prev?.targetSectionLabel,
@@ -437,17 +418,108 @@ export function linkAiUploadHistorySections(args: {
   });
 }
 
-/** Clear all upload footprints (localStorage + memory). */
+/** Clear all upload footprints (memory + wipe any legacy localStorage keys). */
 export function clearAiUploadHistory() {
   memoryCache = [];
   const store = storage();
-  if (!store) return;
-  try {
-    store.removeItem(STORAGE_KEY);
-    store.removeItem(LEGACY_KEY);
-  } catch {
-    // ignore
+  if (store) {
+    try {
+      store.removeItem(STORAGE_KEY);
+      store.removeItem(LEGACY_KEY);
+    } catch {
+      // ignore
+    }
   }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('orderly-ai-upload-history'));
+  }
+}
+
+/**
+ * Replace durable history rows from GET /ai/documents.
+ * Keeps in-flight (uploading/processing/queued) memory rows so progress UI stays live.
+ */
+export function hydrateAiUploadHistoryFromServer(
+  docs: Array<{
+    file_id?: string;
+    name?: string;
+    original_filename?: string;
+    mime_type?: string;
+    status?: string;
+    created_at?: string | null;
+    updated_at?: string | null;
+    section?: string | null;
+  }>,
+): AiUploadHistoryItem[] {
+  const existing = readHistory();
+  const inFlight = existing.filter(item => {
+    const status = String(item.status || '').toLowerCase();
+    return (
+      status === 'uploading' ||
+      status === 'processing' ||
+      status === 'queued' ||
+      status === 'extracting' ||
+      status === 'classifying'
+    );
+  });
+
+  const serverItems: AiUploadHistoryItem[] = [];
+  for (const doc of docs || []) {
+    const fileId = String(doc.file_id || '').trim();
+    if (!fileId) continue;
+    const fileName = String(
+      doc.original_filename || doc.name || 'Uploaded document',
+    );
+    const section =
+      doc.section != null && String(doc.section).trim()
+        ? String(doc.section).trim()
+        : undefined;
+    const createdAt =
+      doc.created_at || doc.updated_at || new Date().toISOString();
+    const updatedAt =
+      doc.updated_at || doc.created_at || new Date().toISOString();
+    serverItems.push({
+      id: `server:${fileId}`,
+      fileName,
+      status:
+        doc.status === 'ready' || !doc.status ? 'done' : String(doc.status),
+      createdAt,
+      updatedAt,
+      fileId,
+      mimeType: doc.mime_type || undefined,
+      sectionId: section,
+      sectionIds: section ? [section] : [],
+      source: 'overview',
+    });
+  }
+
+  // Drop in-flight rows whose fileId already appears on the server list.
+  const serverIds = new Set(
+    serverItems.map(item => item.fileId).filter(Boolean) as string[],
+  );
+  const keepInFlight = inFlight.filter(
+    item => !item.fileId || !serverIds.has(item.fileId),
+  );
+
+  writeHistory([...keepInFlight, ...serverItems]);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('orderly-ai-upload-history'));
+  }
+  return listAiUploadHistory();
+}
+
+/** Remove replaced server file ids from the in-memory list after a topic replace. */
+export function removeReplacedAiUploadFileIds(fileIds: string[]): void {
+  const ids = new Set(
+    (fileIds || []).map(id => String(id || '').trim()).filter(Boolean),
+  );
+  if (!ids.size) return;
+  const existing = readHistory();
+  const next = existing.filter(
+    row => !(row.fileId && ids.has(String(row.fileId))),
+  );
+  if (next.length === existing.length) return;
+  writeHistory(next);
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('orderly-ai-upload-history'));
   }

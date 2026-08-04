@@ -4,17 +4,19 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { EnhancedNOKDashboard } from '@/components/EnhancedNOKDashboard';
 import { useGetMyNextKinAccessQuery, useNextkinLogoutMutation } from '@/services/authApi';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useGetKitForNokQuery } from '@/services/kitApi';
 import { OwnerLetterModal } from '@/components/OwnerLetterModal';
 import { MessagesDeliveryModal } from '@/components/MessagesDeliveryModal';
 import { nokLogout, fetchSession } from '@/libs/secureFetch';
 import { HelpAssistantProvider } from '@/components/help/HelpAssistantContext';
 import { HelpAssistantHost } from '@/components/help/HelpAssistantHost';
+import { SessionTimeoutGuard } from '@/components/SessionTimeoutGuard';
 
 export default function NextKinDashboardPage() {
   const router = useRouter();
   const [sessionReady, setSessionReady] = useState(false);
+  const [accessLevel, setAccessLevel] = useState<string | undefined>();
   const [showOwnerLetter, setShowOwnerLetter] = useState(false);
   const [showMessagesModal, setShowMessagesModal] = useState(false);
 
@@ -24,8 +26,29 @@ export default function NextKinDashboardPage() {
     error,
   } = useGetMyNextKinAccessQuery();
 
-  const { data: kit, isLoading: kitLoading } = useGetKitForNokQuery();
+  const { data: kitRaw, isLoading: kitLoading } = useGetKitForNokQuery();
+  const [kit, setKit] = useState<any>(null);
   const [nextkinLogout] = useNextkinLogoutMutation();
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!kitRaw) {
+        setKit(null);
+        return;
+      }
+      try {
+        const { decryptKitSections } = await import('@/libs/e2ee/vaultApi');
+        const decoded = await decryptKitSections(kitRaw);
+        if (!cancelled) setKit(decoded);
+      } catch {
+        if (!cancelled) setKit(kitRaw);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [kitRaw]);
 
   useEffect(() => {
     fetchSession().then(session => {
@@ -33,9 +56,25 @@ export default function NextKinDashboardPage() {
         router.replace('/next-kin');
         return;
       }
+      setAccessLevel(session.access_level);
       setSessionReady(true);
     });
   }, [router]);
+
+  const fullKit = useMemo(() => {
+    const level = String(accessLevel || '').trim();
+    if (
+      level === 'Area-Specific Access' ||
+      level === 'Section-Specific Access'
+    ) {
+      return false;
+    }
+    return true;
+  }, [accessLevel]);
+
+  // Full Kit JWT = 5 min; section JWT = 10 min. Warn before token dies.
+  const sessionSeconds = fullKit ? 5 * 60 : 10 * 60;
+  const idleMs = fullKit ? 3.5 * 60 * 1000 : 8 * 60 * 1000;
 
   if (!sessionReady) return null;
 
@@ -49,6 +88,8 @@ export default function NextKinDashboardPage() {
 
   const handleLogout = async () => {
     try {
+      const { lockE2ee } = await import('@/libs/e2ee/unlock');
+      lockE2ee();
       await nextkinLogout({}).unwrap();
     } catch {
       // logout should NEVER fail UX
@@ -83,6 +124,7 @@ export default function NextKinDashboardPage() {
 
   return (
     <HelpAssistantProvider>
+      <SessionTimeoutGuard idleMs={idleMs} warnSeconds={45} />
       <EnhancedNOKDashboard
         nokData={access.nextkin}
         kit={kit}
@@ -93,7 +135,7 @@ export default function NextKinDashboardPage() {
         onLogout={handleLogout}
         onOwnerLetterAccess={() => setShowOwnerLetter(true)}
         onDeliverMessages={() => setShowMessagesModal(true)}
-        sessionTime={15 * 60}
+        sessionTime={sessionSeconds}
       />
       {showOwnerLetter && (
         <OwnerLetterModal

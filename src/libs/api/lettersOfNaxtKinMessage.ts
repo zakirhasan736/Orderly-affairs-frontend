@@ -9,6 +9,8 @@ type MessageMediaUploadSignature = {
   cloud_name: string;
   folder: string;
   resource_type: string;
+  type?: string;
+  access_mode?: string;
   max_bytes: number;
 };
 
@@ -26,6 +28,7 @@ export type MessageMediaUploadResult = {
   type: string;
   format?: string;
   size?: number;
+  access_mode?: string;
 };
 
 async function readErrorMessage(res: Response, fallback: string) {
@@ -67,6 +70,26 @@ async function getMessageMediaUploadSignature(
   return res.json();
 }
 
+async function getMessageMediaSignedUrl(
+  publicId: string,
+  resourceType?: string,
+): Promise<string | null> {
+  try {
+    const res = await secureFetch('/message/media/signed-url', {
+      method: 'POST',
+      body: JSON.stringify({
+        public_id: publicId,
+        resource_type: resourceType,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { url?: string };
+    return data.url || null;
+  } catch {
+    return null;
+  }
+}
+
 async function uploadMessageMediaViaApi(
   file: File | Blob,
 ): Promise<MessageMediaUploadResult> {
@@ -105,6 +128,7 @@ async function uploadMessageMediaViaApi(
     type: result.type,
     format: result.format,
     size: result.size,
+    access_mode: result.access_mode || 'authenticated',
   };
 }
 
@@ -122,6 +146,8 @@ async function uploadMessageMediaToCloudinary(
   formData.append('timestamp', String(signature.timestamp));
   formData.append('signature', signature.signature);
   formData.append('folder', signature.folder);
+  formData.append('type', signature.type || 'authenticated');
+  formData.append('access_mode', signature.access_mode || 'authenticated');
 
   const uploadUrl = `https://api.cloudinary.com/v1_1/${signature.cloud_name}/${signature.resource_type}/upload`;
 
@@ -151,13 +177,23 @@ async function uploadMessageMediaToCloudinary(
   }
 
   const result = (await res.json()) as CloudinaryUploadResult;
+  const signed = await getMessageMediaSignedUrl(
+    result.public_id,
+    result.resource_type,
+  );
+  if (!signed) {
+    throw new Error(
+      'Upload saved but secure preview URL could not be created. Please retry.',
+    );
+  }
 
   return {
-    url: result.secure_url,
+    url: signed,
     public_id: result.public_id,
     type: result.resource_type,
     format: result.format,
     size: result.bytes,
+    access_mode: 'authenticated',
   };
 }
 
@@ -267,4 +303,12 @@ export async function deleteUploadedMessageMedia(
     );
   }
   return res.json();
+}
+
+/** Refresh a signed playback URL for authenticated message media. */
+export async function refreshMessageMediaUrl(
+  publicId: string,
+  resourceType?: string,
+): Promise<string | null> {
+  return getMessageMediaSignedUrl(publicId, resourceType);
 }

@@ -50,6 +50,7 @@ import {
   useGetMyNextKinAccessQuery,
   useReportOwnerDeceasedMutation,
 } from '@/services/authApi';
+import { NokMfaSettingsSheet } from '@/components/NokMfaSettingsSheet';
 import { toast } from 'sonner';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import {
@@ -195,6 +196,7 @@ export function EnhancedNOKDashboard({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [mfaSettingsOpen, setMfaSettingsOpen] = useState(false);
   const [reportPassword, setReportPassword] = useState('');
   const [reportConfirmed, setReportConfirmed] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -385,7 +387,7 @@ export function EnhancedNOKDashboard({
       return;
     }
     if (key === 'settings') {
-      toast.message('Vault settings are managed by the kit owner.');
+      setMfaSettingsOpen(true);
     }
   };
 
@@ -1268,6 +1270,13 @@ export function EnhancedNOKDashboard({
             {reportBody}
           </div>
         </div>
+      ) : null}
+
+      {!isPreview ? (
+        <NokMfaSettingsSheet
+          open={mfaSettingsOpen}
+          onOpenChange={setMfaSettingsOpen}
+        />
       ) : null}
     </div>
   );

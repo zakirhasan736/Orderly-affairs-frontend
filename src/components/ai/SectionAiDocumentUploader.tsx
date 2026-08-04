@@ -28,9 +28,12 @@ import { toAiUserFacingMessage } from '@/utils/aiUserFacingError';
 import { useAiActiveSectionId, useAiActiveSubsectionId } from '@/contexts/AiActiveSectionContext';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
+  hydrateAiUploadHistoryFromServer,
   listAiUploadHistory,
+  removeReplacedAiUploadFileIds,
   upsertAiUploadHistory,
 } from '@/utils/aiUploadHistory';
+import { listOwnerAiDocuments } from '@/services/aiDocumentUpload';
 import { getAiSectionLabel } from '@/utils/aiSectionRegistry';
 import { SectionLastUpdatedPin } from '@/components/vault/SectionLastUpdatedPin';
 
@@ -161,6 +164,7 @@ export function SectionAiDocumentUploader({
         progress: 12,
         createdAt: now,
         updatedAt: now,
+        mimeType: file.type || undefined,
         sectionId: resolvedSectionId,
         sectionIds: resolvedSectionId ? [String(resolvedSectionId)] : undefined,
         source: 'section',
@@ -179,6 +183,23 @@ export function SectionAiDocumentUploader({
                   '',
               ) || undefined
             : undefined;
+        const mimeType =
+          result && typeof result === 'object' && 'mime_type' in result
+            ? String((result as { mime_type?: string }).mime_type || '') ||
+              file.type ||
+              undefined
+            : file.type || undefined;
+        const replacedIds =
+          result &&
+          typeof result === 'object' &&
+          Array.isArray((result as { replaced_file_ids?: string[] }).replaced_file_ids)
+            ? ((result as { replaced_file_ids?: string[] }).replaced_file_ids || []).map(
+                String,
+              )
+            : [];
+        if (replacedIds.length) {
+          removeReplacedAiUploadFileIds(replacedIds);
+        }
         upsertAiUploadHistory({
           id: historyId,
           fileName: file.name,
@@ -187,6 +208,7 @@ export function SectionAiDocumentUploader({
           createdAt: now,
           updatedAt: new Date().toISOString(),
           fileId,
+          mimeType,
           sectionId: resolvedSectionId,
           sectionIds: resolvedSectionId ? [String(resolvedSectionId)] : undefined,
           source: 'section',
@@ -194,6 +216,12 @@ export function SectionAiDocumentUploader({
             ? getAiSectionLabel(resolvedSectionId)
             : undefined,
         });
+        try {
+          const docs = await listOwnerAiDocuments();
+          hydrateAiUploadHistoryFromServer(docs);
+        } catch {
+          // memory upsert above is enough for this session
+        }
       } catch (error: any) {
         upsertAiUploadHistory({
           id: historyId,

@@ -2,15 +2,27 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Eye, EyeOff, Lock, Mail, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { InlineNotice } from '@/components/common/ui/inline-notice';
 import { BRAND_LOGO } from '@/constants/brand';
+import {
+  useStartEmailMfaMutation,
+  useVerifyEmailCodeMutation,
+  useVerifyTotpMutation,
+  type LoginResponse,
+  type MFAMethod,
+} from '@/services/authApi';
+import { getOtpSessionId } from '@/utils/otpSession';
+import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 
 interface NextOfKinLoginPageProps {
+  /** Password step — return API body (may be MFA challenge or authenticated). */
   onLoginSuccess: (nokData: {
     email: string;
     password: string;
-  }) => void | Promise<void>;
+  }) => Promise<LoginResponse | void> | LoginResponse | void;
+  /** Called after password+MFA session is established. */
+  onAuthenticated?: (res: LoginResponse) => void | Promise<void>;
   onBackToOwner: () => void;
   formData?: unknown;
   captchaSlot?: React.ReactNode;
@@ -148,6 +160,7 @@ function MobileBrandHeader({
 
 export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
   onLoginSuccess,
+  onAuthenticated,
   onBackToOwner,
   captchaSlot,
   captchaReady = true,
@@ -164,9 +177,64 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
   const [error, setError] = useState('');
   const [failedAttempts, setFailedAttempts] = useState(0);
 
+  const [mfaStep, setMfaStep] = useState(false);
+  const [mfaMethod, setMfaMethod] = useState<MFAMethod | null>(null);
+  const [mfaMethods, setMfaMethods] = useState<MFAMethod[]>([]);
+  const [mfaChallengeToken, setMfaChallengeToken] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+
+  const [verifyTotp] = useVerifyTotpMutation();
+  const [verifyEmailCode] = useVerifyEmailCodeMutation();
+  const [startEmailMfa] = useStartEmailMfaMutation();
+
   const maxAttempts = 3;
   const attemptsLeft = Math.max(0, maxAttempts - failedAttempts);
   const isLocked = failedAttempts >= maxAttempts;
+
+  const finishAuthenticated = async (res: LoginResponse) => {
+    try {
+      const { unlockVaultWithPassword } = await import('@/libs/e2ee/unlock');
+      await unlockVaultWithPassword(password);
+    } catch {
+      /* vault may stay locked if wrap not configured */
+    }
+    if (onAuthenticated) {
+      await onAuthenticated(res);
+      return;
+    }
+    if (!res.authenticated) {
+      throw new Error('Session not established');
+    }
+  };
+
+  const enterMfa = async (res: LoginResponse) => {
+    const method = (res.method as MFAMethod) || 'authenticator';
+    const methods = (
+      Array.isArray(res.methods)
+        ? res.methods
+        : Object.entries(res.mfa_methods || {})
+            .filter(([, on]) => on)
+            .map(([k]) => k)
+    ) as MFAMethod[];
+
+    setMfaChallengeToken(res.mfa_challenge_token || '');
+    setMfaMethods(methods.length ? methods : [method]);
+    setMfaMethod(method);
+    setMfaCode('');
+    setMfaStep(true);
+
+    if (method === 'email' && res.mfa_challenge_token && !res.otp_sent) {
+      try {
+        await startEmailMfa({
+          email: (res.email || emailOrPhone).toLowerCase().trim(),
+          mfa_challenge_token: res.mfa_challenge_token,
+          otp_session_id: getOtpSessionId(),
+        }).unwrap();
+      } catch {
+        /* login may already have sent OTP */
+      }
+    }
+  };
 
   const handleLogin = async () => {
     if (!emailOrPhone || !password) {
@@ -185,7 +253,20 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
     setIsLoading(true);
     setError('');
     try {
-      await onLoginSuccess({ email: emailOrPhone, password });
+      const res = (await onLoginSuccess({
+        email: emailOrPhone,
+        password,
+      })) as LoginResponse | void;
+
+      if (res && res.mfa_required) {
+        await enterMfa(res);
+        setFailedAttempts(0);
+        return;
+      }
+
+      if (res) {
+        await finishAuthenticated(res);
+      }
       setFailedAttempts(0);
     } catch (err: unknown) {
       setFailedAttempts(n => n + 1);
@@ -195,10 +276,67 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
     }
   };
 
+  const handleVerifyMfa = async () => {
+    const code = mfaCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      setError('Enter the 6-digit verification code.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+    const email = emailOrPhone.toLowerCase().trim();
+
+    try {
+      let res: LoginResponse;
+      if (mfaMethod === 'email') {
+        res = (await verifyEmailCode({
+          email,
+          code: parseInt(code, 10),
+          otp_session_id: getOtpSessionId(),
+          mfa_challenge_token: mfaChallengeToken,
+        }).unwrap()) as LoginResponse;
+      } else {
+        res = (await verifyTotp({
+          email,
+          code,
+          mfa_challenge_token: mfaChallengeToken,
+        }).unwrap()) as LoginResponse;
+      }
+
+      if (!res.authenticated) {
+        throw new Error('Session not established');
+      }
+      await finishAuthenticated(res);
+    } catch (err: unknown) {
+      setError(getSafeErrorMessage(err, 'Invalid or expired code'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const switchMfaMethod = async (method: MFAMethod) => {
+    setMfaMethod(method);
+    setMfaCode('');
+    setError('');
+    if (method === 'email' && mfaChallengeToken) {
+      try {
+        await startEmailMfa({
+          email: emailOrPhone.toLowerCase().trim(),
+          mfa_challenge_token: mfaChallengeToken,
+          otp_session_id: getOtpSessionId(),
+        }).unwrap();
+      } catch (err: unknown) {
+        setError(getSafeErrorMessage(err, 'Could not send email code'));
+      }
+    }
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      void handleLogin();
+      if (mfaStep) void handleVerifyMfa();
+      else void handleLogin();
     }
   };
 
@@ -225,13 +363,21 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
         <div className="mx-auto flex w-full max-w-[min(100%,28.75rem)] flex-1 flex-col lg:flex-none">
           <div className="rounded-[18px] border border-[#e4e6e1] bg-white p-5 lg:p-[34px]">
             <div className="flex items-center gap-[11px]">
-              <ShieldIcon className="shrink-0" />
+              {mfaStep ? (
+                <ShieldCheck className="h-5 w-5 shrink-0 text-[#213D59]" />
+              ) : (
+                <ShieldIcon className="shrink-0" />
+              )}
               <div className="min-w-0">
                 <h2 className="m-0 text-[17px] font-semibold text-[#213D59] lg:text-[19px]">
-                  Sign in
+                  {mfaStep ? 'Verify identity' : 'Sign in'}
                 </h2>
                 <p className="mt-0.5 mb-0 text-[12.5px] text-[#8b9995] lg:mt-[2px] lg:text-[13px]">
-                  Registered email and password
+                  {mfaStep
+                    ? mfaMethod === 'email'
+                      ? 'Enter the code we emailed you'
+                      : 'Enter the code from your authenticator app'
+                    : 'Registered email and password'}
                 </p>
               </div>
             </div>
@@ -244,7 +390,7 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
               />
             ) : null}
 
-            {!error && failedAttempts > 0 && attemptsLeft > 0 ? (
+            {!mfaStep && !error && failedAttempts > 0 && attemptsLeft > 0 ? (
               <InlineNotice
                 className="mt-5"
                 variant="warning"
@@ -253,81 +399,149 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
               />
             ) : null}
 
-            <label className="mt-[18px] flex flex-col gap-[7px]">
-              <span className="nok-field-label">Email</span>
-              <span className="relative block">
-                <Mail
-                  className="pointer-events-none absolute top-1/2 left-3.5 h-[15px] w-[15px] -translate-y-1/2 text-[#a5b1ad]"
-                  strokeWidth={1.7}
-                />
-                <input
-                  id="nok-email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="your.email@example.com"
-                  value={emailOrPhone}
-                  onChange={e => setEmailOrPhone(e.target.value)}
-                  onKeyDown={handleKeyPress}
-                  className="nok-field"
-                  disabled={isLocked || isLoading}
-                />
-              </span>
-            </label>
+            {mfaStep ? (
+              <>
+                {mfaMethods.length > 1 ? (
+                  <div className="mt-5 flex gap-2">
+                    {mfaMethods.map(method => (
+                      <button
+                        key={method}
+                        type="button"
+                        onClick={() => void switchMfaMethod(method)}
+                        className={`rounded-xl px-3 py-2 text-xs font-medium ${
+                          mfaMethod === method
+                            ? 'bg-[#213D59] text-white'
+                            : 'bg-[#f5f8fc] text-[#213D59]'
+                        }`}
+                      >
+                        {method === 'email' ? 'Email' : 'Authenticator'}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
 
-            <label className="mt-3.5 flex flex-col gap-[7px] lg:mt-[14px]">
-              <span className="nok-field-label">Password</span>
-              <span className="relative block">
-                <Lock
-                  className="pointer-events-none absolute top-1/2 left-3.5 h-[15px] w-[15px] -translate-y-1/2 text-[#8b9995]"
-                  strokeWidth={1.7}
-                />
-                <input
-                  id="nok-password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  placeholder="••••••••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  onKeyDown={handleKeyPress}
-                  className="nok-field nok-field-password"
-                  disabled={isLocked || isLoading}
-                />
+                <label className="mt-[18px] flex flex-col gap-[7px]">
+                  <span className="nok-field-label">Verification code</span>
+                  <input
+                    id="nok-mfa-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={mfaCode}
+                    onChange={e =>
+                      setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                    }
+                    onKeyDown={handleKeyPress}
+                    className="nok-field tracking-[0.35em]"
+                    disabled={isLoading}
+                  />
+                </label>
+
                 <button
                   type="button"
-                  className="absolute top-1/2 right-3.5 -translate-y-1/2 text-[#8b9995]"
-                  onClick={() => setShowPassword(!showPassword)}
-                  disabled={isLocked || isLoading}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="nok-submit"
+                  onClick={() => void handleVerifyMfa()}
+                  disabled={mfaCode.length !== 6 || isLoading}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" strokeWidth={1.7} />
-                  ) : (
-                    <Eye className="h-4 w-4" strokeWidth={1.7} />
-                  )}
+                  {isLoading ? 'Verifying…' : 'Verify and continue'}
                 </button>
-              </span>
-            </label>
 
-            {captchaSlot ? (
-              <div className="mt-4 rounded-[14px] border border-[#f2f1ec] bg-[#f5f8fc] p-2.5 lg:mt-4 lg:p-2.5">
-                <div className="flex min-h-[62px] items-center justify-center overflow-x-auto rounded-[10px] border border-[#e4e6e1] bg-white px-3.5 py-2 lg:min-h-[65px]">
-                  {captchaSlot}
-                </div>
-              </div>
-            ) : null}
+                <button
+                  type="button"
+                  className="mt-3 w-full text-center text-xs text-[#8b9995]"
+                  onClick={() => {
+                    setMfaStep(false);
+                    setMfaCode('');
+                    setError('');
+                  }}
+                  disabled={isLoading}
+                >
+                  Back to password
+                </button>
+              </>
+            ) : (
+              <>
+                <label className="mt-[18px] flex flex-col gap-[7px]">
+                  <span className="nok-field-label">Email</span>
+                  <span className="relative block">
+                    <Mail
+                      className="pointer-events-none absolute top-1/2 left-3.5 h-[15px] w-[15px] -translate-y-1/2 text-[#a5b1ad]"
+                      strokeWidth={1.7}
+                    />
+                    <input
+                      id="nok-email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="your.email@example.com"
+                      value={emailOrPhone}
+                      onChange={e => setEmailOrPhone(e.target.value)}
+                      onKeyDown={handleKeyPress}
+                      className="nok-field"
+                      disabled={isLocked || isLoading}
+                    />
+                  </span>
+                </label>
 
-            <button
-              type="button"
-              className="nok-submit"
-              onClick={() => void handleLogin()}
-              disabled={!isFormValid || isLoading}
-            >
-              {isLoading
-                ? 'Authenticating…'
-                : captchaSlot && !captchaReady
-                  ? 'Waiting for security check…'
-                  : 'Continue securely'}
-            </button>
+                <label className="mt-3.5 flex flex-col gap-[7px] lg:mt-[14px]">
+                  <span className="nok-field-label">Password</span>
+                  <span className="relative block">
+                    <Lock
+                      className="pointer-events-none absolute top-1/2 left-3.5 h-[15px] w-[15px] -translate-y-1/2 text-[#8b9995]"
+                      strokeWidth={1.7}
+                    />
+                    <input
+                      id="nok-password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      placeholder="••••••••••"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      onKeyDown={handleKeyPress}
+                      className="nok-field nok-field-password"
+                      disabled={isLocked || isLoading}
+                    />
+                    <button
+                      type="button"
+                      className="absolute top-1/2 right-3.5 -translate-y-1/2 text-[#8b9995]"
+                      onClick={() => setShowPassword(!showPassword)}
+                      disabled={isLocked || isLoading}
+                      aria-label={
+                        showPassword ? 'Hide password' : 'Show password'
+                      }
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" strokeWidth={1.7} />
+                      ) : (
+                        <Eye className="h-4 w-4" strokeWidth={1.7} />
+                      )}
+                    </button>
+                  </span>
+                </label>
+
+                {captchaSlot ? (
+                  <div className="mt-4 rounded-[14px] border border-[#f2f1ec] bg-[#f5f8fc] p-2.5 lg:mt-4 lg:p-2.5">
+                    <div className="flex min-h-[62px] items-center justify-center overflow-x-auto rounded-[10px] border border-[#e4e6e1] bg-white px-3.5 py-2 lg:min-h-[65px]">
+                      {captchaSlot}
+                    </div>
+                  </div>
+                ) : null}
+
+                <button
+                  type="button"
+                  className="nok-submit"
+                  onClick={() => void handleLogin()}
+                  disabled={!isFormValid || isLoading}
+                >
+                  {isLoading
+                    ? 'Authenticating…'
+                    : captchaSlot && !captchaReady
+                      ? 'Waiting for security check…'
+                      : 'Continue securely'}
+                </button>
+              </>
+            )}
           </div>
 
           <p className="mt-auto pt-[18px] text-center text-xs text-[#8b9995] lg:mt-[18px] lg:pt-0 lg:text-[12.5px]">

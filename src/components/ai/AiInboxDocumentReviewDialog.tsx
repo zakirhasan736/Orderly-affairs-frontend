@@ -32,6 +32,7 @@ export type AiInboxReviewDocument = {
   id: string;
   fileId?: string;
   fileName: string;
+  mimeType?: string;
   sectionId: string;
   sectionLabel: string;
   subsectionLabel: string;
@@ -157,25 +158,32 @@ export function AiInboxDocumentReviewDialog({
           document.fileId!,
         );
         if (cancelled) return;
+        const buffer = await blob.arrayBuffer();
+        if (cancelled) return;
         const titleHint = document.fileName || fileName || '';
         const mime = resolveAiPreviewMime({
           contentType: mimeType,
           blobType: blob.type,
           fileName: titleHint,
+          fallbackMime: document.mimeType,
+          bytes: buffer,
         });
-        const kind = resolveAiPreviewKind({ mime, fileName: titleHint });
+        const kind = resolveAiPreviewKind({
+          mime,
+          fileName: titleHint,
+          bytes: buffer,
+        });
         setPreviewKind(kind);
 
         if (kind === 'text') {
-          const text = await blob.text();
+          const text = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
           if (!cancelled) setTextContent(text || '(Empty text file)');
           return;
         }
 
-        const typed =
-          mime && mime !== blob.type
-            ? new Blob([await blob.arrayBuffer()], { type: mime })
-            : blob;
+        const typed = new Blob([buffer], {
+          type: mime || 'application/octet-stream',
+        });
         createdUrl = URL.createObjectURL(typed);
         if (!cancelled) setObjectUrl(createdUrl);
       } catch (err) {

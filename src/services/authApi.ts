@@ -224,6 +224,7 @@ export interface LoginResponse {
   authenticated?: boolean;
   mfa_required?: boolean;
   method?: MFAMethod;
+  methods?: MFAMethod[];
   mfa_methods?: Partial<MFAMethods>;
   otp_sent?: boolean;
   otp_error?: string;
@@ -232,6 +233,7 @@ export interface LoginResponse {
   phone?: string;
   role?: string;
   email?: string;
+  access_type?: string;
   billing_status?: string;
   requires_billing?: boolean;
 }
@@ -375,13 +377,36 @@ export const authApi = createApi({
       }),
     }),
     // NOK auth
-    nextkinLogin: builder.mutation({
+    nextkinLogin: builder.mutation<
+      LoginResponse,
+      {
+        email: string;
+        master_password: string;
+        captcha_token?: string;
+        otp_session_id?: string;
+      }
+    >({
       query: b => ({ url: '/nextkin-login', method: 'POST', body: b }),
       invalidatesTags: ['NextKinAccess'],
     }),
     nextkinLogout: builder.mutation({
       query: () => ({ url: '/nextkin-logout', method: 'POST' }),
       invalidatesTags: ['NextKinAccess'],
+    }),
+    revealNextKinPassword: builder.mutation<
+      {
+        success: boolean;
+        nextkin_id: string;
+        email?: string;
+        master_password: string;
+        message?: string;
+      },
+      string
+    >({
+      query: id => ({
+        url: `/reveal-nextkin-password/${id}`,
+        method: 'POST',
+      }),
     }),
 
     // Owner-only NOK management
@@ -596,9 +621,10 @@ export const authApi = createApi({
 export const {
   useSignupMutation,
   useLoginMutation,
-  useNextkinLoginMutation,
   useOwnerLogoutMutation,
+  useNextkinLoginMutation,
   useNextkinLogoutMutation,
+  useRevealNextKinPasswordMutation,
   useCreateNextKinMutation,
   useGetMyNextKinQuery,
   useGetPortalRolesQuery,

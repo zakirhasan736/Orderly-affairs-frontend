@@ -19,3 +19,19 @@ export async function deleteUpload(public_id: string) {
     body: JSON.stringify({ public_id }),
   });
 }
+
+/** Fresh signed Cloudinary URL for an authenticated vault attachment. */
+export async function getSignedUploadUrl(
+  public_id: string,
+  resourceType?: string,
+): Promise<{ url: string; url_expires_in?: number }> {
+  const res = await secureFetch('/uploads/signed-url', {
+    method: 'POST',
+    body: JSON.stringify({
+      public_id,
+      resource_type: resourceType,
+    }),
+  });
+  if (!res.ok) throw new Error('Could not refresh file URL');
+  return res.json();
+}

@@ -1,3 +1,11 @@
+import {
+  applyCsrfHeader,
+  bootstrapCsrfToken,
+  clearCsrfToken,
+  isCsrfFailure,
+  rememberCsrfFromResponse,
+} from '@/libs/csrf';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
 let refreshPromise: Promise<boolean> | null = null;
@@ -10,22 +18,28 @@ async function tryRefreshSession(): Promise<boolean> {
   if (!API_BASE) return false;
 
   if (!refreshPromise) {
-    refreshPromise = fetch(`${API_BASE}/auth/refresh-token`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-    })
-      .then(res => {
+    refreshPromise = (async () => {
+      await bootstrapCsrfToken();
+      const headers = new Headers({ 'Content-Type': 'application/json' });
+      applyCsrfHeader(headers, 'POST');
+      try {
+        const res = await fetch(`${API_BASE}/auth/refresh-token`, {
+          method: 'POST',
+          credentials: 'include',
+          headers,
+        });
+        rememberCsrfFromResponse(res);
         if (res.ok) {
           lastRefreshAt = Date.now();
           return true;
         }
         return false;
-      })
-      .catch(() => false)
-      .finally(() => {
-        refreshPromise = null;
-      });
+      } catch {
+        return false;
+      }
+    })().finally(() => {
+      refreshPromise = null;
+    });
   }
 
   return refreshPromise;
@@ -65,11 +79,26 @@ export async function secureFetch(
     headers.set('Content-Type', 'application/json');
   }
 
+  if (method !== 'GET' && method !== 'HEAD') {
+    await bootstrapCsrfToken();
+  }
+  applyCsrfHeader(headers, method);
+
   const res = await fetch(url, {
     ...options,
     credentials: 'include',
     headers,
   });
+  rememberCsrfFromResponse(res);
+
+  if (res.status === 403 && !retried) {
+    const bodyText = await res.clone().text().catch(() => '');
+    if (isCsrfFailure(403, bodyText) || /csrf/i.test(bodyText)) {
+      clearCsrfToken();
+      await bootstrapCsrfToken();
+      return secureFetch(path, options, true);
+    }
+  }
 
   if (res.status === 401 && !retried) {
     const refreshed = await tryRefreshSession();
@@ -137,10 +166,12 @@ export async function clearPortalSession(): Promise<void> {
 
 export async function ownerLogout(): Promise<void> {
   await secureFetch('/auth/owner-logout', { method: 'POST' });
+  clearCsrfToken();
   await clearPortalSession();
 }
 
 export async function nokLogout(): Promise<void> {
   await secureFetch('/auth/nextkin-logout', { method: 'POST' });
+  clearCsrfToken();
   await clearPortalSession();
 }

@@ -1,17 +1,22 @@
-'use client';
-import { Provider } from 'react-redux';
-import { store } from '@/store/store';
-import AppInitializer from '@/components/AppInitializer';
-import { Toaster } from '@/components/common/ui/sonner';
-import { OnboardingProvider } from '@/onboarding/components/OnboardingProvider';
+import type { Metadata } from 'next';
+import { headers } from 'next/headers';
+import AppProviders from '@/components/AppProviders';
 import '@/styles/styles.css';
 import './globals.css';
 
-export default function RootLayout({
+export const metadata: Metadata = {
+  title: 'Orderly Affairs',
+  description: 'Secure end-of-life vault and next-of-kin access',
+};
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const headerStore = await headers();
+  const nonce = headerStore.get('x-nonce') ?? undefined;
+
   return (
     <html lang="en">
       <head>
@@ -21,17 +26,15 @@ export default function RootLayout({
           href="https://fonts.gstatic.com"
           crossOrigin="anonymous"
         />
+        {/* eslint-disable-next-line @next/next/no-page-custom-fonts */}
         <link
           href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Poppins:wght@400;600&display=swap"
           rel="stylesheet"
         />
+        {nonce ? <meta property="csp-nonce" content={nonce} /> : null}
       </head>
       <body>
-        <Provider store={store}>
-          <AppInitializer />
-          <OnboardingProvider>{children}</OnboardingProvider>
-          <Toaster />
-        </Provider>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

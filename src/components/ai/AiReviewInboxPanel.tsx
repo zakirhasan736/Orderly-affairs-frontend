@@ -35,6 +35,7 @@ import {
 } from '@/utils/aiSectionReviewState';
 import {
   formatUploadRelativeShort,
+  hydrateAiUploadHistoryFromServer,
   listAiUploadHistory,
   removeAiUploadHistoryItem,
   type AiUploadHistoryItem,
@@ -511,7 +512,10 @@ export function AiReviewInboxPanel({
       setFilesLoading(true);
       try {
         const docs = await listOwnerAiDocuments();
-        if (!cancelled) setServerDocs(docs);
+        if (!cancelled) {
+          setServerDocs(docs);
+          hydrateAiUploadHistoryFromServer(docs);
+        }
       } finally {
         if (!cancelled) setFilesLoading(false);
       }
@@ -779,18 +783,25 @@ export function AiReviewInboxPanel({
     if (fileId) {
       routing?.clearAllPendingForFile(fileId);
       clearAiUploadMeta(fileId);
-      removeAiUploadHistoryItem({ fileId });
       try {
         await deleteAIDocument(fileId);
       } catch {
-        // local clear still helps
+        // still clear local UI
       }
+      removeAiUploadHistoryItem({ fileId });
     } else {
       routing?.clearPendingForSection(reviewDoc.sectionId);
     }
+    try {
+      const docs = await listOwnerAiDocuments();
+      setServerDocs(docs);
+      hydrateAiUploadHistoryFromServer(docs);
+    } catch {
+      // ignore
+    }
     setReviewTick(value => value + 1);
     setReviewDoc(null);
-    toast.success('Upload removed');
+    toast.success('Document deleted');
   }, [reviewDoc, routing]);
 
   const handleDeleteFile = useCallback(async (item: AiUploadHistoryItem) => {
@@ -798,7 +809,7 @@ export function AiReviewInboxPanel({
     const fileId = item.fileId;
     if (
       !window.confirm(
-        `Remove “${item.fileName}”? This deletes the upload from your vault activity.`,
+        `Remove “${item.fileName}”? This deletes the file from Cloudinary and your vault.`,
       )
     ) {
       return;
@@ -808,20 +819,18 @@ export function AiReviewInboxPanel({
       dismissFile(key);
       if (fileId) {
         clearAiUploadMeta(fileId);
+        const ok = await deleteAIDocument(fileId);
+        if (!ok) throw new Error('delete failed');
         removeAiUploadHistoryItem({ fileId });
-        try {
-          await deleteAIDocument(fileId);
-        } catch {
-          // keep local dismiss
-        }
       } else {
         removeAiUploadHistoryItem({ id: item.id });
       }
-      setServerDocs(prev =>
-        prev.filter(doc => String(doc.file_id) !== String(fileId || '')),
-      );
-      setStashTick(v => v + 1);
-      toast.success('Document removed');
+      const docs = await listOwnerAiDocuments();
+      setServerDocs(docs);
+      hydrateAiUploadHistoryFromServer(docs);
+      toast.success('Document deleted');
+    } catch {
+      toast.error('Could not delete document');
     } finally {
       setDeletingFileKey(null);
     }

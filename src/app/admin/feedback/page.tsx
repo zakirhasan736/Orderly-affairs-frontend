@@ -8,6 +8,7 @@ import {
   adminUpdateFeedbackStatus,
   type FeedbackItem,
 } from '@/libs/api/feedback';
+import { AdminListSkeleton } from '@/components/admin/AdminSkeletons';
 import { cn } from '@common/ui/utils';
 
 function formatTime(iso: string) {
@@ -80,6 +81,10 @@ export default function AdminFeedbackPage() {
   return (
     <div className="min-h-screen bg-[#f6f8fb] text-slate-900">
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        <div className="oa-admin-notice">
+          Product feedback from vault owners · status changes are retained for
+          ops review.
+        </div>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-semibold text-[#213D59]">
@@ -127,9 +132,7 @@ export default function AdminFeedbackPage() {
         <div className="grid gap-4 lg:grid-cols-[1.1fr_1.4fr]">
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             {loading ? (
-              <p className="px-4 py-10 text-center text-sm text-slate-500">
-                Loading…
-              </p>
+              <AdminListSkeleton rows={6} />
             ) : items.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-slate-500">
                 No feedback yet.

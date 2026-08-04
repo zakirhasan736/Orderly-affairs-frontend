@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { NextOfKinLoginPage } from '@/components/NextOfKinLoginPage';
 import { TurnstileCaptcha } from '@/components/TurnstileCaptcha';
-import { useNextkinLoginMutation } from '@/services/authApi';
+import {
+  useNextkinLoginMutation,
+  type LoginResponse,
+} from '@/services/authApi';
 import { getOtpSessionId } from '@/utils/otpSession';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import { parseAuthApiError } from '@/utils/authRateLimit';
@@ -28,40 +31,25 @@ export default function FamilyLoginPage() {
     setCaptchaResetKey(k => k + 1);
   }, []);
 
-  const handleLoginSuccess = async ({
+  const handleLoginAttempt = async ({
     email,
     password,
   }: {
     email: string;
     password: string;
-  }) => {
+  }): Promise<LoginResponse> => {
     if (!captchaReady || !captchaToken) {
       toast.error('Complete the security check before signing in');
       throw new Error('Complete the security check before signing in');
     }
 
     try {
-      const res = await nextkinLogin({
+      return await nextkinLogin({
         email,
         master_password: password,
         captcha_token: captchaToken,
         otp_session_id: getOtpSessionId(),
       }).unwrap();
-
-      if (!res.authenticated) {
-        throw new Error('Session not established');
-      }
-
-      await markPortalSession();
-
-      if (res.access_type === 'family') {
-        toast.success('Signed in to the owner dashboard');
-        router.push('/dashboard');
-        return;
-      }
-
-      toast.success('Login successful');
-      router.push('/next-kin/dashboard');
     } catch (err: unknown) {
       const parsed = parseAuthApiError(err, '');
       const message = getSafeErrorMessage(
@@ -83,20 +71,35 @@ export default function FamilyLoginPage() {
     }
   };
 
+  const handleAuthenticated = async (res: LoginResponse) => {
+    if (!res.authenticated) {
+      throw new Error('Session not established');
+    }
+    await markPortalSession();
+    if (res.access_type === 'family') {
+      toast.success('Signed in to the owner dashboard');
+      router.push('/dashboard');
+      return;
+    }
+    toast.success('Login successful');
+    router.push('/next-kin/dashboard');
+  };
+
   return (
     <NextOfKinLoginPage
-      onLoginSuccess={handleLoginSuccess}
+      onLoginSuccess={handleLoginAttempt}
+      onAuthenticated={handleAuthenticated}
       onBackToOwner={() => router.push('/login')}
       formData={{}}
       titleOverride="Family collaborator sign-in"
       subtitleOverride="Use the email invite from the kit owner. This is your own session — signing in as the owner does not open this access."
+      captchaReady={captchaReady}
       captchaSlot={
         <TurnstileCaptcha
-          key={captchaResetKey}
-          onToken={token => {
-            setCaptchaToken(token);
-            setCaptchaReady(Boolean(token));
-          }}
+          gateMode
+          onTokenChange={setCaptchaToken}
+          onReadyChange={setCaptchaReady}
+          resetKey={captchaResetKey}
         />
       }
     />

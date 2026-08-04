@@ -131,6 +131,7 @@ const completeOwnerAuth = async (
     requiresBilling?: boolean;
     billingOnly?: boolean;
     email?: string;
+    password?: string;
     onNeedsBilling?: () => void;
     onBillingOnly?: () => void;
   },
@@ -146,6 +147,11 @@ const completeOwnerAuth = async (
 
   if (!session?.authenticated || session.role !== 'owner') {
     throw new Error('Session not established');
+  }
+
+  if (options?.password) {
+    const { unlockVaultWithPassword } = await import('@/libs/e2ee/unlock');
+    await unlockVaultWithPassword(options.password);
   }
 
   dispatch(
@@ -654,14 +660,30 @@ const handleResetPassword = async () => {
   startAuthLoading('reset_password');
 
   try {
-    await resetPassword({
+    const resetResult = await resetPassword({
       email: resetEmail,
       otp: resetOtp,
       new_password: newPassword,
       captcha_token: captchaToken,
     }).unwrap();
 
-    toast.success('Password reset successfully!');
+    // If vault was unlocked in this tab, re-wrap DEK under the new password.
+    try {
+      const { isE2eeUnlocked, rewrapVaultForNewPassword } = await import(
+        '@/libs/e2ee/unlock'
+      );
+      if (isE2eeUnlocked()) {
+        await rewrapVaultForNewPassword(newPassword);
+      }
+    } catch {
+      /* rewrap best-effort */
+    }
+
+    toast.success(
+      (resetResult as { e2ee_note?: string })?.e2ee_note
+        ? 'Password reset. Sign in again to set up vault encryption.'
+        : 'Password reset successfully!',
+    );
     setRateLimitSeconds(0);
     setStep('credentials');
   } catch (err: unknown) {
@@ -939,6 +961,7 @@ const handleCredentialsSubmit = async (e: React.FormEvent) => {
 
     await completeOwnerAuth(router, dispatch, {
       email: accountEmail,
+      password,
       requiresBilling: Boolean(res.requires_billing),
       onNeedsBilling: () => {
         setError('');
@@ -1203,6 +1226,7 @@ const verifyMfaCode = useCallback(async () => {
 
     await completeOwnerAuth(router, dispatch, {
       email,
+      password,
       requiresBilling: Boolean(
         (res as { requires_billing?: boolean })?.requires_billing,
       ),
@@ -1264,6 +1288,7 @@ const verifyEmailOtpCode = useCallback(async () => {
 
     const destination = await completeOwnerAuth(router, dispatch, {
       email,
+      password,
       requiresBilling: Boolean(res.requires_billing),
       onNeedsBilling: () => {
         setError('');
@@ -1350,6 +1375,7 @@ const verifySmsOtpCode = useCallback(async () => {
 
     await completeOwnerAuth(router, dispatch, {
       email,
+      password,
       requiresBilling: Boolean(
         (res as { requires_billing?: boolean })?.requires_billing,
       ),

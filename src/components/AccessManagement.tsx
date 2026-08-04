@@ -61,10 +61,12 @@ import {
   useCreateNextKinMutation,
   useDeleteNextKinMutation,
   useGetMyNextKinQuery,
+  useRevealNextKinPasswordMutation,
   useRevokeAllNextKinAccessMutation,
   useRevokeNextKinAccessMutation,
   useUpdateNextKinMutation,
 } from '@/services/authApi';
+import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import {
   isDuplicateAccessEmail,
   validateAccessWizardStep,
@@ -83,7 +85,6 @@ import {
   useIsMobile,
 } from './MobileBottomSheet';
 import { formConfig } from '../config/formConfig';
-import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 
 /* ------------------------------------------------------------------ */
 /* Types & constants                                                   */
@@ -542,16 +543,53 @@ function WizardStepper({
 function TrustedPersonLoginPassword({
   password,
   passwordOnFile = false,
+  personId,
   className,
   compact = false,
 }: {
   password?: string;
   passwordOnFile?: boolean;
+  /** Server id — used for secure reveal when list APIs omit plaintext. */
+  personId?: string;
   className?: string;
   compact?: boolean;
 }) {
   const [visible, setVisible] = useState(false);
-  const hasPassword = Boolean(password?.trim());
+  const [revealedPassword, setRevealedPassword] = useState('');
+  const [revealing, setRevealing] = useState(false);
+  const [revealNextKinPassword] = useRevealNextKinPasswordMutation();
+  const effectivePassword = password?.trim() || revealedPassword.trim();
+  const hasPassword = Boolean(effectivePassword);
+  const canReveal = Boolean(personId) && passwordOnFile && !hasPassword;
+
+  const handleToggle = async () => {
+    if (visible) {
+      setVisible(false);
+      return;
+    }
+    if (hasPassword) {
+      setVisible(true);
+      return;
+    }
+    if (!personId) return;
+    setRevealing(true);
+    try {
+      const res = await revealNextKinPassword(personId).unwrap();
+      const pw = (res.master_password || '').trim();
+      if (!pw) {
+        toast.error('No password on file');
+        return;
+      }
+      setRevealedPassword(pw);
+      setVisible(true);
+    } catch (err: unknown) {
+      toast.error(getSafeErrorMessage(err, 'Could not reveal password'));
+    } finally {
+      setRevealing(false);
+    }
+  };
+
+  const showToggle = hasPassword || canReveal;
 
   if (compact) {
     return (
@@ -573,22 +611,25 @@ function TrustedPersonLoginPassword({
         >
           {hasPassword
             ? visible
-              ? password
-              : '•'.repeat(Math.min(password!.length, 12))
+              ? effectivePassword
+              : '•'.repeat(Math.min(effectivePassword.length, 12))
             : passwordOnFile
-              ? 'Saved on server — edit to set new'
+              ? 'Saved — tap eye to reveal'
               : 'Not set — edit to generate'}
         </span>
-        {hasPassword && (
+        {showToggle && (
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className="h-7 w-7 shrink-0 rounded-lg"
-            onClick={() => setVisible(v => !v)}
+            onClick={() => void handleToggle()}
+            disabled={revealing}
             aria-label={visible ? 'Hide password' : 'Show password'}
           >
-            {visible ? (
+            {revealing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : visible ? (
               <EyeOff className="h-3.5 w-3.5" />
             ) : (
               <Eye className="h-3.5 w-3.5" />
@@ -620,23 +661,26 @@ function TrustedPersonLoginPassword({
           >
             {hasPassword
               ? visible
-                ? password
-                : '•'.repeat(Math.min(password!.length, 14))
+                ? effectivePassword
+                : '•'.repeat(Math.min(effectivePassword.length, 14))
               : passwordOnFile
-                ? 'Saved on server — edit to set new'
+                ? 'Saved on server — tap eye to reveal securely'
                 : 'Not saved — edit and generate a password'}
           </p>
         </div>
-        {hasPassword && (
+        {showToggle && (
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className="h-9 w-9 shrink-0 rounded-xl"
-            onClick={() => setVisible(v => !v)}
+            onClick={() => void handleToggle()}
+            disabled={revealing}
             aria-label={visible ? 'Hide password' : 'Show password'}
           >
-            {visible ? (
+            {revealing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : visible ? (
               <EyeOff className="h-4 w-4" />
             ) : (
               <Eye className="h-4 w-4" />
@@ -906,7 +950,12 @@ function TrustedPersonMobileDetails({
       )}
 
       {person._id && (
-        <TrustedPersonLoginPassword password={person.master_password} passwordOnFile={person.has_master_password} compact />
+        <TrustedPersonLoginPassword
+          password={person.master_password}
+          passwordOnFile={person.has_master_password}
+          personId={person._id}
+          compact
+        />
       )}
 
       {(person.email || person.phone_number) && (
@@ -1095,6 +1144,7 @@ function TrustedPersonCard({
                 <TrustedPersonLoginPassword
                   password={person.master_password}
                   passwordOnFile={person.has_master_password}
+                  personId={person._id}
                   compact
                 />
               )}
@@ -1259,10 +1309,37 @@ export const AccessManagement = forwardRef<
   const [updateNextKin] = useUpdateNextKinMutation();
   const [deleteNextKin] = useDeleteNextKinMutation();
   const [approveNextKinAccess] = useApproveNextKinAccessMutation();
+  const [revealNextKinPassword] = useRevealNextKinPasswordMutation();
   const [revokeNextKinAccess, { isLoading: isRevokingOne }] =
     useRevokeNextKinAccessMutation();
   const [revokeAllNextKinAccess, { isLoading: isRevokingAll }] =
     useRevokeAllNextKinAccessMutation();
+
+  const ensurePersonPassword = useCallback(
+    async (index: number): Promise<string> => {
+      const person = authorizedPeople[index];
+      if (!person) return '';
+      const local = (person.master_password || '').trim();
+      if (local) return local;
+      if (!person._id || !person.has_master_password) return '';
+      try {
+        const res = await revealNextKinPassword(person._id).unwrap();
+        const pw = (res.master_password || '').trim();
+        if (pw) {
+          setAuthorizedPeople(prev =>
+            prev.map((p, i) =>
+              i === index ? { ...p, master_password: pw } : p,
+            ),
+          );
+        }
+        return pw;
+      } catch (err: unknown) {
+        toast.error(getSafeErrorMessage(err, 'Could not load password for card'));
+        return '';
+      }
+    },
+    [authorizedPeople, revealNextKinPassword],
+  );
 
   useEffect(() => {
     if (!data) return;
@@ -1290,6 +1367,7 @@ export const AccessManagement = forwardRef<
             : [],
           immediate_access: !!nk.immediate_access,
           nok_letter_received: !!nk.nok_letter_received,
+          // Keep session-local password after create/reveal; list APIs omit it.
           master_password:
             apiPassword || previous?.master_password?.trim() || '',
           has_master_password: !!(
@@ -1307,6 +1385,11 @@ export const AccessManagement = forwardRef<
       return [...fromApi, ...unsaved];
     });
   }, [data]);
+
+  useEffect(() => {
+    if (cardPreviewIndex === null) return;
+    void ensurePersonPassword(cardPreviewIndex);
+  }, [cardPreviewIndex, ensurePersonPassword]);
 
   const sectionRegistry = useMemo(() => buildSectionRegistry(), []);
 
@@ -1607,6 +1690,28 @@ export const AccessManagement = forwardRef<
         } else {
           toast.success(`Updated ${draft.full_name}`);
         }
+        if (passwordChanged && draft._id && draft.master_password?.trim()) {
+          try {
+            const { wrapDekForNokPassword, isE2eeUnlocked } = await import(
+              '@/libs/e2ee/crypto'
+            );
+            const { postE2eeNokWrap } = await import('@/libs/e2ee/vaultApi');
+            if (isE2eeUnlocked()) {
+              const wrap = await wrapDekForNokPassword(
+                draft.master_password.trim(),
+              );
+              await postE2eeNokWrap({ nok_user_id: draft._id, ...wrap });
+            } else {
+              toast.message(
+                'Sign in again to unlock the vault, then re-save this person so they can open E2EE sections.',
+              );
+            }
+          } catch {
+            toast.error(
+              'Saved person, but E2EE key share failed. Re-save their password while your vault is unlocked.',
+            );
+          }
+        }
       } else {
         const res =
           (await createNextKin(savePayload).unwrap()) as CreateNextKinResponseWithId;
@@ -1621,6 +1726,28 @@ export const AccessManagement = forwardRef<
         setAuthorizedPeople(prev => [...prev, saved]);
         setInviteSuccessImmediate(Boolean(draft.immediate_access));
         setInviteSuccessName(draft.full_name || 'them');
+        const nokId = saved._id;
+        const nokPw = (saved.master_password || '').trim();
+        if (nokId && nokPw) {
+          try {
+            const { wrapDekForNokPassword, isE2eeUnlocked } = await import(
+              '@/libs/e2ee/crypto'
+            );
+            const { postE2eeNokWrap } = await import('@/libs/e2ee/vaultApi');
+            if (isE2eeUnlocked()) {
+              const wrap = await wrapDekForNokPassword(nokPw);
+              await postE2eeNokWrap({ nok_user_id: nokId, ...wrap });
+            } else {
+              toast.message(
+                'Unlock your vault (sign in with password) then edit this person to share E2EE access.',
+              );
+            }
+          } catch {
+            toast.error(
+              'Person saved, but E2EE key share failed. Edit and re-save their password with vault unlocked.',
+            );
+          }
+        }
       }
       refetch();
       closeWizard();

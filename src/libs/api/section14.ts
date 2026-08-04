@@ -1,18 +1,12 @@
 import { secureFetch } from '@/libs/secureFetch';
+import { getVaultSection, saveVaultSection } from '@/libs/e2ee/vaultApi';
 
 export async function getSection14() {
-  const res = await secureFetch('/sections/section14-investment-accounts');
-  if (!res.ok) throw new Error('Failed to load Section 14');
-  return res.json();
+  return getVaultSection('/sections/section14-investment-accounts');
 }
 
 export async function saveSection14(payload: any) {
-  const res = await secureFetch('/sections/section14-investment-accounts', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to save Section 14');
-  return res.json();
+  return saveVaultSection('/sections/section14-investment-accounts', payload);
 }
 
 export async function deleteSection14() {

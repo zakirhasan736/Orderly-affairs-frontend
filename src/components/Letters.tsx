@@ -60,6 +60,7 @@ import {
   deleteMessageMedia,
   deleteUploadedMessageMedia,
   getMessages,
+  refreshMessageMediaUrl,
   uploadMessageMedia,
 } from '@/libs/api/lettersOfNaxtKinMessage';
 import {
@@ -213,13 +214,34 @@ function MessageMediaPreview({
   media: LetterMedia;
   className?: string;
 }) {
+  const [src, setSrc] = useState(media.url || '');
+
+  useEffect(() => {
+    let cancelled = false;
+    setSrc(media.url || '');
+
+    const refresh = async () => {
+      if (!media.public_id) return;
+      const fresh = await refreshMessageMediaUrl(
+        media.public_id,
+        media.type || (messageType === 'audio' ? 'video' : messageType),
+      );
+      if (!cancelled && fresh) setSrc(fresh);
+    };
+    void refresh();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [media.public_id, media.url, media.type, messageType]);
+
   if (messageType === 'audio') {
     return (
       <audio
         controls
         playsInline
         preload="metadata"
-        src={toPlayableMediaUrl(media.url, 'audio')}
+        src={toPlayableMediaUrl(src, 'audio')}
         className={className ?? 'w-full'}
       />
     );
@@ -228,7 +250,7 @@ function MessageMediaPreview({
   if (isImageMedia(media)) {
     return (
       <img
-        src={media.url}
+        src={src}
         alt="Attached photo"
         className={className ?? 'h-44 w-full rounded-xl object-cover'}
       />
@@ -240,7 +262,7 @@ function MessageMediaPreview({
       controls
       playsInline
       preload="metadata"
-      src={toPlayableMediaUrl(media.url, 'video')}
+      src={toPlayableMediaUrl(src, 'video')}
       className={className ?? 'h-44 w-full rounded-xl bg-black object-cover'}
     />
   );
@@ -770,9 +792,11 @@ export function Letters({
 
     const currentDate = new Date().toLocaleDateString();
 
-    const content =
+    const contentHtml =
       letter.messageType === 'letter'
-        ? letter.content || ''
+        ? `<p>${escapeHtml(stripHtml(letter.content) || '')
+            .split('\n')
+            .join('<br/>')}</p>`
         : `<p>${escapeHtml(letter.content || 'Media message')}</p>`;
 
     printWindow.document.write(`
@@ -823,8 +847,8 @@ export function Letters({
             <h1>${escapeHtml(letter.title || 'Personal Message')}</h1>
             <div class="meta">To: ${escapeHtml(letter.recipient || 'Recipient')}</div>
           </div>
-          <div class="content">${content}</div>
-          <div class="footer">Printed from Orderly Affairs on ${currentDate}</div>
+          <div class="content">${contentHtml}</div>
+          <div class="footer">Printed from Orderly Affairs on ${escapeHtml(currentDate)}</div>
         </body>
       </html>
     `);

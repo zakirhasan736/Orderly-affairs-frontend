@@ -1,13 +1,14 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { useGetKitForNokQuery } from '@/services/kitApi';
 import { useGetMyNextKinAccessQuery } from '@/services/authApi';
 import { EnhancedSectionView } from '@/components/EnhancedSectionView';
 import { isHiddenFromNokDashboard } from '@/config/nokConfig';
 import { nokLogout, fetchSession } from '@/libs/secureFetch';
+import { SessionTimeoutGuard } from '@/components/SessionTimeoutGuard';
 
 function SectionSkeleton() {
   return (
@@ -33,6 +34,7 @@ function SectionSkeleton() {
 export default function NextKinSectionPage() {
   const router = useRouter();
   const { sectionId } = useParams<{ sectionId: string }>();
+  const [accessLevel, setAccessLevel] = useState<string | undefined>();
 
   const { data: access } = useGetMyNextKinAccessQuery();
   const { data: kit, isLoading: kitLoading } = useGetKitForNokQuery();
@@ -43,7 +45,9 @@ export default function NextKinSectionPage() {
       if (cancelled) return;
       if (!session.authenticated || session.role !== 'nextkin') {
         router.replace('/next-kin');
+        return;
       }
+      setAccessLevel(session.access_level);
     });
     return () => {
       cancelled = true;
@@ -56,26 +60,43 @@ export default function NextKinSectionPage() {
     }
   }, [sectionId, router]);
 
+  const fullKit = useMemo(() => {
+    const level = String(accessLevel || '').trim();
+    if (
+      level === 'Area-Specific Access' ||
+      level === 'Section-Specific Access'
+    ) {
+      return false;
+    }
+    return true;
+  }, [accessLevel]);
+
+  const sessionSeconds = fullKit ? 5 * 60 : 10 * 60;
+  const idleMs = fullKit ? 3.5 * 60 * 1000 : 8 * 60 * 1000;
+
   if ((kitLoading && !kit) || !kit) {
     return <SectionSkeleton />;
   }
 
   return (
-    <EnhancedSectionView
-      formData={{}}
-      sectionId={sectionId}
-      nokData={access?.nextkin ?? {}}
-      kit={kit}
-      onBack={() => router.push('/next-kin/dashboard')}
-      onLogout={async () => {
-        try {
-          await nokLogout();
-        } catch {}
-        router.replace('/next-kin');
-      }}
-      onOwnerLetterAccess={() => router.push('/next-kin/letter')}
-      onDeliverMessages={() => router.push('/next-kin/messages')}
-      sessionTime={15 * 60}
-    />
+    <>
+      <SessionTimeoutGuard idleMs={idleMs} warnSeconds={45} />
+      <EnhancedSectionView
+        formData={{}}
+        sectionId={sectionId}
+        nokData={access?.nextkin ?? {}}
+        kit={kit}
+        onBack={() => router.push('/next-kin/dashboard')}
+        onLogout={async () => {
+          try {
+            await nokLogout();
+          } catch {}
+          router.replace('/next-kin');
+        }}
+        onOwnerLetterAccess={() => router.push('/next-kin/letter')}
+        onDeliverMessages={() => router.push('/next-kin/messages')}
+        sessionTime={sessionSeconds}
+      />
+    </>
   );
 }

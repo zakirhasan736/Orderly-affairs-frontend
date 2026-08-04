@@ -2,66 +2,129 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
- * Edge UX guard only.
+ * Edge UX guard + Content-Security-Policy with per-request nonce.
  *
  * Real auth cookies are set by the API host (api.*). Those often are NOT
- * visible to portal middleware, so after login the old middleware bounced
- * /dashboard → /. Client AuthWatcher validates via GET /auth/session.
- *
- * Optional portal marker cookie: oa_portal_session (set after successful session).
+ * visible to portal middleware. Client AuthWatcher validates via GET /auth/session.
  */
-const PORTAL_SESSION_COOKIE = 'oa_portal_session';
+function buildCsp(nonce: string): string {
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+  let apiOrigin = '';
+  try {
+    if (apiBase) apiOrigin = new URL(apiBase).origin;
+  } catch {
+    apiOrigin = '';
+  }
 
-function hasOwnerCue(req: NextRequest): boolean {
-  return Boolean(
-    req.cookies.get('auth_token')?.value ||
-      req.cookies.get(PORTAL_SESSION_COOKIE)?.value,
-  );
+  const connectSrc = [
+    "'self'",
+    apiOrigin,
+    'https://challenges.cloudflare.com',
+    'https://api.stripe.com',
+    'https://res.cloudinary.com',
+    'https://api.cloudinary.com',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  // nonce + strict-dynamic: modern browsers ignore 'unsafe-inline' when a nonce
+  // is present. Keep host allowlists for older browsers / third-party loaders.
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com https://js.stripe.com`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: blob: https:",
+    "media-src 'self' blob: data: https:",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    `connect-src ${connectSrc}`,
+    "frame-src 'self' blob: data: https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "worker-src 'self' blob:",
+    "base-uri 'self'",
+    "form-action 'self'",
+    'upgrade-insecure-requests',
+  ].join('; ');
 }
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-nonce', nonce);
+
+  const applySecurity = (res: NextResponse) => {
+    res.headers.set('x-nonce', nonce);
+    res.headers.set('Content-Security-Policy', buildCsp(nonce));
+    res.headers.set('X-Content-Type-Options', 'nosniff');
+    res.headers.set('X-Frame-Options', 'DENY');
+    res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    return res;
+  };
 
   // Logged-in cue on login page → leave routing to the client.
-  // Owners still finishing plan/trial/payment must stay on checkout; only the
-  // session API knows requires_billing, so middleware must not force /dashboard.
   if (pathname === '/' || pathname.startsWith('/login')) {
-    return NextResponse.next();
+    return applySecurity(
+      NextResponse.next({
+        request: { headers: requestHeaders },
+      }),
+    );
   }
 
   if (pathname === '/next-kin') {
     if (req.cookies.get('nok_auth_token')?.value) {
-      return NextResponse.redirect(new URL('/next-kin/dashboard', req.url));
+      return applySecurity(
+        NextResponse.redirect(new URL('/next-kin/dashboard', req.url)),
+      );
     }
-    return NextResponse.next();
+    return applySecurity(
+      NextResponse.next({
+        request: { headers: requestHeaders },
+      }),
+    );
   }
 
   // /dashboard: NEVER hard-redirect to login here.
-  // Missing portal cookies used to send users in a loop after MFA/login.
-  // AuthWatcher + dashboard hydrate call the API with credentials instead.
   if (pathname.startsWith('/dashboard')) {
-    return NextResponse.next();
+    return applySecurity(
+      NextResponse.next({
+        request: { headers: requestHeaders },
+      }),
+    );
   }
 
   if (pathname.startsWith('/next-kin/')) {
-    return NextResponse.next();
+    return applySecurity(
+      NextResponse.next({
+        request: { headers: requestHeaders },
+      }),
+    );
   }
 
-  // Admin support inbox — auth checked client-side via API (role: admin).
   if (pathname.startsWith('/admin')) {
-    return NextResponse.next();
+    return applySecurity(
+      NextResponse.next({
+        request: { headers: requestHeaders },
+      }),
+    );
   }
 
-  return NextResponse.next();
+  return applySecurity(
+    NextResponse.next({
+      request: { headers: requestHeaders },
+    }),
+  );
 }
 
 export const config = {
   matcher: [
-    '/',
-    '/login',
-    '/dashboard/:path*',
-    '/next-kin',
-    '/next-kin/:path*',
-    '/admin/:path*',
+    /*
+     * Match all paths except static assets / image optimizer.
+     * Needed so CSP nonce applies site-wide, not only auth routes.
+     */
+    {
+      source: '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    },
   ],
 };

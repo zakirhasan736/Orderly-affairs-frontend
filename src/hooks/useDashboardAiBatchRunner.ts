@@ -27,6 +27,7 @@ import { markAiSectionFilled } from '@/utils/aiSectionFillGuard';
 import { markAiAutofillDoneForSection } from '@/utils/aiAutofillDoneSections';
 import {
   linkAiUploadHistorySections,
+  removeReplacedAiUploadFileIds,
   upsertAiUploadHistory,
 } from '@/utils/aiUploadHistory';
 import { toAiUserFacingMessage } from '@/utils/aiUserFacingError';
@@ -718,6 +719,9 @@ export function useDashboardAiBatchRunner() {
       });
 
       const uploaded = await uploadAIDocument(job.file);
+      if (Array.isArray(uploaded.replaced_file_ids) && uploaded.replaced_file_ids.length) {
+        removeReplacedAiUploadFileIds(uploaded.replaced_file_ids.map(String));
+      }
       buildUploadedAiFile(uploaded, job.file, {
         sectionId: 'overview',
         source: 'overview',

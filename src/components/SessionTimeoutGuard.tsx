@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@common/ui/utils';
 import { useLogout } from '@/libs/logoutHandler';
 
-const IDLE_MS = 14 * 60 * 1000; // warn after 14 min idle
+const DEFAULT_IDLE_MS = 14 * 60 * 1000; // owner: warn after 14 min idle
 const WARN_SECONDS = 60;
 const ACTIVITY_EVENTS = [
   'mousedown',
@@ -26,20 +26,36 @@ function formatCountdown(totalSeconds: number) {
 /**
  * Idle session guard for authenticated vault areas.
  * After idle, shows a branded countdown; then auto-logout.
+ *
+ * NOK Full Kit tokens expire in 5 minutes — use a tighter idle window so the
+ * UI signs out before the JWT dies mid-form.
  */
 export function SessionTimeoutGuard({
   enabled = true,
+  idleMs = DEFAULT_IDLE_MS,
+  warnSeconds = WARN_SECONDS,
 }: {
   enabled?: boolean;
+  /** Milliseconds of idle time before the warning dialog. */
+  idleMs?: number;
+  /** Countdown seconds shown in the warning dialog. */
+  warnSeconds?: number;
 }) {
   const logout = useLogout();
   const [warningOpen, setWarningOpen] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(WARN_SECONDS);
+  const [secondsLeft, setSecondsLeft] = useState(warnSeconds);
 
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const warningOpenRef = useRef(false);
   const loggingOutRef = useRef(false);
+  const idleMsRef = useRef(idleMs);
+  const warnSecondsRef = useRef(warnSeconds);
+
+  useEffect(() => {
+    idleMsRef.current = idleMs;
+    warnSecondsRef.current = warnSeconds;
+  }, [idleMs, warnSeconds]);
 
   const clearIdleTimer = useCallback(() => {
     if (idleTimerRef.current) {
@@ -73,7 +89,8 @@ export function SessionTimeoutGuard({
     if (warningOpenRef.current || loggingOutRef.current) return;
     warningOpenRef.current = true;
     setWarningOpen(true);
-    setSecondsLeft(WARN_SECONDS);
+    const warn = warnSecondsRef.current;
+    setSecondsLeft(warn);
     clearCountdown();
     countdownRef.current = setInterval(() => {
       setSecondsLeft(prev => {
@@ -92,14 +109,14 @@ export function SessionTimeoutGuard({
     clearIdleTimer();
     idleTimerRef.current = setTimeout(() => {
       startWarning();
-    }, IDLE_MS);
+    }, idleMsRef.current);
   }, [clearIdleTimer, enabled, startWarning]);
 
   const staySignedIn = useCallback(() => {
     clearCountdown();
     warningOpenRef.current = false;
     setWarningOpen(false);
-    setSecondsLeft(WARN_SECONDS);
+    setSecondsLeft(warnSecondsRef.current);
     armIdleTimer();
   }, [armIdleTimer, clearCountdown]);
 
@@ -140,14 +157,12 @@ export function SessionTimeoutGuard({
       });
       document.removeEventListener('visibilitychange', onActivity);
     };
-  }, [armIdleTimer, clearCountdown, clearIdleTimer, enabled]);
+  }, [armIdleTimer, clearCountdown, clearIdleTimer, enabled, idleMs, warnSeconds]);
 
   if (!warningOpen) return null;
 
-  const progressPct = Math.max(
-    0,
-    Math.min(100, (secondsLeft / WARN_SECONDS) * 100),
-  );
+  const warn = warnSecondsRef.current;
+  const progressPct = Math.max(0, Math.min(100, (secondsLeft / warn) * 100));
 
   return (
     <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-[rgba(33,61,89,0.05)] p-4 sm:p-6">
@@ -167,7 +182,7 @@ export function SessionTimeoutGuard({
           id="session-timeout-title"
           className="mt-3 mb-0 text-[17px] font-semibold text-[#213D59]"
         >
-          We&apos;ll sign you out in {WARN_SECONDS} seconds
+          We&apos;ll sign you out in {warn} seconds
         </h3>
         <p className="mt-2.5 mb-0 text-[13.5px] leading-relaxed text-[#5c6b66]">
           For safety on shared computers. Everything you&apos;ve typed is

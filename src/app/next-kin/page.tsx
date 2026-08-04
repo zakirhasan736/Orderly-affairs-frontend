@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { NextOfKinLoginPage } from '@/components/NextOfKinLoginPage';
 import { TurnstileCaptcha } from '@/components/TurnstileCaptcha';
-import { useNextkinLoginMutation } from '@/services/authApi';
+import {
+  useNextkinLoginMutation,
+  type LoginResponse,
+} from '@/services/authApi';
 import { getOtpSessionId } from '@/utils/otpSession';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import { parseAuthApiError } from '@/utils/authRateLimit';
@@ -24,47 +27,32 @@ export default function NextKinLoginPageWrapper() {
     setCaptchaResetKey(k => k + 1);
   }, []);
 
-  const handleLoginSuccess = async ({
+  const handleLoginAttempt = async ({
     email,
     password,
   }: {
     email: string;
     password: string;
-  }) => {
+  }): Promise<LoginResponse> => {
     if (!captchaReady || !captchaToken) {
       toast.error('Complete the security check before signing in');
       throw new Error('Complete the security check before signing in');
     }
 
     try {
-      const res = await nextkinLogin({
+      return await nextkinLogin({
         email,
         master_password: password,
         captcha_token: captchaToken,
         otp_session_id: getOtpSessionId(),
       }).unwrap();
-
-      if (!res.authenticated) {
-        throw new Error('Session not established');
-      }
-
-      toast.success('Login successful');
-      if ((res as { access_type?: string }).access_type === 'family') {
-        await markPortalSession();
-        router.push('/dashboard');
-        return;
-      }
-      router.push('/next-kin/dashboard');
     } catch (err: unknown) {
       const parsed = parseAuthApiError(err, '');
       const message = getSafeErrorMessage(
         err,
         'Login failed. Check your email and password.',
       );
-
-      // Always mint a fresh Turnstile token after an attempt (tokens are single-use).
       refreshCaptcha();
-
       if (
         parsed.status === 400 &&
         /captcha|security check/i.test(parsed.message || message)
@@ -79,9 +67,24 @@ export default function NextKinLoginPageWrapper() {
     }
   };
 
+  const handleAuthenticated = async (res: LoginResponse) => {
+    if (!res.authenticated) {
+      throw new Error('Session not established');
+    }
+    // password held on NextOfKinLoginPage — unlock via session event
+    toast.success('Login successful');
+    if (res.access_type === 'family') {
+      await markPortalSession();
+      router.push('/dashboard');
+      return;
+    }
+    router.push('/next-kin/dashboard');
+  };
+
   return (
     <NextOfKinLoginPage
-      onLoginSuccess={handleLoginSuccess}
+      onLoginSuccess={handleLoginAttempt}
+      onAuthenticated={handleAuthenticated}
       onBackToOwner={() => router.push('/dashboard')}
       formData={{}}
       captchaReady={captchaReady}

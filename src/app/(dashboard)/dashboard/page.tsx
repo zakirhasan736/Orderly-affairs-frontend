@@ -1006,37 +1006,16 @@ export default function DashboardPage() {
     async (loginData: { email: string; password: string }) => {
       if (!nokCaptchaReady || !nokCaptchaToken) {
         toast.error('Complete the security check before signing in');
-        return;
+        throw new Error('Complete the security check before signing in');
       }
 
       try {
-        const result = await nextkinLogin({
+        return await nextkinLogin({
           email: loginData.email,
           master_password: loginData.password,
           captcha_token: nokCaptchaToken,
           otp_session_id: getOtpSessionId(),
         }).unwrap();
-
-        if (result.authenticated) {
-          const session = await fetchSession();
-          if (session.role === 'nextkin') {
-            setCurrentNOK({
-              email: session.email || '',
-              owner_id: session.owner_id || '',
-            });
-            setAppMode('nok_dashboard');
-            setActiveSection('dashboard');
-            router.replace('/dashboard');
-            toast.success(`Welcome back, ${session.email}!`);
-          } else {
-            toast.error('Invalid role in session.');
-            setAppMode('nok_login');
-            refreshNokCaptcha();
-          }
-        } else {
-          toast.error('Session was not established.');
-          refreshNokCaptcha();
-        }
       } catch (error: unknown) {
         const parsed = parseAuthApiError(error, '');
         refreshNokCaptcha();
@@ -1055,9 +1034,36 @@ export default function DashboardPage() {
             ),
           );
         }
+        throw error;
       }
     },
-    [nextkinLogin, router, nokCaptchaToken, nokCaptchaReady, refreshNokCaptcha],
+    [nextkinLogin, nokCaptchaToken, nokCaptchaReady, refreshNokCaptcha],
+  );
+
+  const handleNokAuthenticated = useCallback(
+    async (result: { authenticated?: boolean; access_type?: string }) => {
+      if (!result.authenticated) {
+        toast.error('Session was not established.');
+        refreshNokCaptcha();
+        return;
+      }
+      const session = await fetchSession();
+      if (session.role === 'nextkin') {
+        setCurrentNOK({
+          email: session.email || '',
+          owner_id: session.owner_id || '',
+        });
+        setAppMode('nok_dashboard');
+        setActiveSection('dashboard');
+        router.replace('/dashboard');
+        toast.success(`Welcome back, ${session.email}!`);
+      } else {
+        toast.error('Invalid role in session.');
+        setAppMode('nok_login');
+        refreshNokCaptcha();
+      }
+    },
+    [router, refreshNokCaptcha],
   );
   const handleOwnerApproval = useCallback(async () => {
     try {
