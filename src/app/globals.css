@@ -2778,7 +2778,7 @@ html {
   line-height: 1;
 }
 
-/* Family Viewer — readable fields, no mutate chrome */
+/* Family Viewer - readable fields, no mutate chrome */
 [data-oa-family-readonly='true'] [data-oa-mutate] {
   display: none !important;
 }
