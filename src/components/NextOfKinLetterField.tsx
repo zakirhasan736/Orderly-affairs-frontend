@@ -67,6 +67,7 @@ import {
   type NextKinAccessResponse,
   useGetMyNextKinQuery,
 } from '@/services/authApi';
+import { useFamilyAcl } from '@/contexts/FamilyAclContext';
 
 type LetterData = Partial<NOKLetter & NOKLetterIn>;
 
@@ -162,6 +163,7 @@ function LetterSelectableCard({
   description,
   icon: Icon,
   iconClassName,
+  disabled = false,
 }: {
   selected: boolean;
   onSelect: () => void;
@@ -169,18 +171,25 @@ function LetterSelectableCard({
   description: string;
   icon: React.ElementType;
   iconClassName?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="radio"
       aria-checked={selected}
-      onClick={onSelect}
+      disabled={disabled}
+      data-oa-mutate={disabled ? undefined : true}
+      onClick={() => {
+        if (disabled) return;
+        onSelect();
+      }}
       className={cn(
         'flex w-full min-h-[88px] flex-col items-start gap-2 rounded-2xl border-2 p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         selected
           ? 'border-primary bg-primary/5 shadow-sm'
           : 'border-border bg-background hover:border-primary/40',
+        disabled && 'cursor-default opacity-90 hover:border-border',
       )}
     >
       <div className="flex w-full items-start justify-between gap-2">
@@ -333,12 +342,14 @@ function DeliveryTimingSelector({
   onSetSpecificDate,
   onDateChange,
   isMobile,
+  disabled = false,
 }: {
   letterDate?: string | null;
   onSetUponDeath: () => void;
   onSetSpecificDate: () => void;
   onDateChange: (value: string | undefined) => void;
   isMobile: boolean;
+  disabled?: boolean;
 }) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const isUponDeath = !letterDate;
@@ -349,6 +360,7 @@ function DeliveryTimingSelector({
       <div className="grid gap-3 sm:grid-cols-2">
         <LetterSelectableCard
           selected={isUponDeath}
+          disabled={disabled}
           onSelect={onSetUponDeath}
           title="Hold for passing"
           description="Keep the letter on file — portal access still waits until after you've passed."
@@ -357,6 +369,7 @@ function DeliveryTimingSelector({
         />
         <LetterSelectableCard
           selected={!isUponDeath}
+          disabled={disabled}
           onSelect={onSetSpecificDate}
           title="Schedule email"
           description="Pick a future date — Orderly Affairs emails it automatically then."
@@ -371,8 +384,9 @@ function DeliveryTimingSelector({
             <Button
               type="button"
               variant="outline"
+              disabled={disabled}
               className={cn('h-auto w-full justify-start rounded-2xl px-4 py-3', MIN_TOUCH)}
-              onClick={() => setCalendarOpen(true)}
+              onClick={() => !disabled && setCalendarOpen(true)}
             >
               <span className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <CalendarIcon className="h-5 w-5" />
@@ -561,6 +575,7 @@ export function NextOfKinLetterField({
   recipientName,
   ownerName = null,
 }: NextOfKinLetterFieldProps) {
+  const { isReadOnly } = useFamilyAcl();
   const isMobile = useIsMobile();
   const [wizardStep, setWizardStep] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -610,12 +625,15 @@ export function NextOfKinLetterField({
       mergeAccessManagementAutofill(base, selectedPerson, ownerName),
     );
     setLocalData(merged);
-    onChange(merged);
+    if (!isReadOnly) {
+      onChange(merged);
+    }
     hydratedRef.current = true;
-  }, [serverData, isError, selectedPerson, ownerName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [serverData, isError, selectedPerson, ownerName, isReadOnly]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!hydratedRef.current) return;
+    if (isReadOnly) return;
 
     setLocalData(prev => {
       const merged = applyNokLetterTemplateDefaults(
@@ -629,7 +647,7 @@ export function NextOfKinLetterField({
       onChange(merged);
       return merged;
     });
-  }, [selectedPerson, ownerName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedPerson, ownerName, isReadOnly]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!data || hydratedRef.current) return;
@@ -647,6 +665,7 @@ export function NextOfKinLetterField({
       return;
     }
 
+    if (isReadOnly) return;
     if (!selectedNokId) return;
     if (!hydratedRef.current) return;
     if (isFetching) return;
@@ -699,6 +718,7 @@ export function NextOfKinLetterField({
     field: K,
     value: LetterData[K],
   ) => {
+    if (isReadOnly) return;
     const updated = { ...localData, [field]: value };
     setLocalData(updated);
     onChange(updated);
@@ -841,6 +861,10 @@ export function NextOfKinLetterField({
   };
 
   const handleSendNow = async () => {
+    if (isReadOnly) {
+      toast.error('Your family role is view-only.');
+      return;
+    }
     if (!isValidEmail(localData.nok_email)) {
       toast.error(
         'Add a valid Next of Kin email in Access Management before sending.',
@@ -871,6 +895,10 @@ export function NextOfKinLetterField({
   };
 
   const handleSchedule = async () => {
+    if (isReadOnly) {
+      toast.error('Your family role is view-only.');
+      return;
+    }
     if (!localData.letter_date) {
       toast.error('Pick a future delivery date first.');
       setDeliveryAction('schedule');
@@ -969,6 +997,7 @@ export function NextOfKinLetterField({
             <DeliveryTimingSelector
               letterDate={localData.letter_date}
               isMobile={isMobile}
+              disabled={isReadOnly}
               onSetUponDeath={() =>
                 handleFieldChange('letter_date', null as any)
               }
@@ -994,7 +1023,7 @@ export function NextOfKinLetterField({
                 description="Recipient name."
                 icon={<UserRound className="h-4 w-4" />}
               >
-                <Input
+                <Input readOnly={isReadOnly}
                   value={localData.letter_to || ''}
                   onChange={e =>
                     handleFieldChange('letter_to', e.target.value as any)
@@ -1009,7 +1038,7 @@ export function NextOfKinLetterField({
                 description="Opening greeting."
                 icon={<Mail className="h-4 w-4" />}
               >
-                <Input
+                <Input readOnly={isReadOnly}
                   value={
                     localData.letter_greeting || DEFAULTS.letter_greeting
                   }
@@ -1033,7 +1062,7 @@ export function NextOfKinLetterField({
               'Write the heartfelt opening and kit description.',
             )}
             <FieldBlock label="Opening Message">
-              <Textarea
+              <Textarea readOnly={isReadOnly}
                 value={localData.letter_opening || DEFAULTS.letter_opening}
                 onChange={e =>
                   handleFieldChange('letter_opening', e.target.value as any)
@@ -1043,7 +1072,7 @@ export function NextOfKinLetterField({
               />
             </FieldBlock>
             <FieldBlock label="Kit Description">
-              <Textarea
+              <Textarea readOnly={isReadOnly}
                 value={localData.kit_description || DEFAULTS.kit_description}
                 onChange={e =>
                   handleFieldChange('kit_description', e.target.value as any)
@@ -1066,7 +1095,7 @@ export function NextOfKinLetterField({
                 label="Access URL"
                 icon={<ShieldCheck className="h-4 w-4" />}
               >
-                <Input
+                <Input readOnly={isReadOnly}
                   value={localData.access_url || DEFAULTS.access_url}
                   onChange={e =>
                     handleFieldChange('access_url', e.target.value as any)
@@ -1079,7 +1108,7 @@ export function NextOfKinLetterField({
                 description="Auto-filled from Access Management."
                 icon={<KeyRound className="h-4 w-4" />}
               >
-                <Input
+                <Input readOnly={isReadOnly}
                   value={localData.password_card_location || ''}
                   readOnly
                   placeholder="Will auto-populate"
@@ -1088,7 +1117,7 @@ export function NextOfKinLetterField({
               </FieldBlock>
             </div>
             <FieldBlock label="Login Credentials Information">
-              <Textarea
+              <Textarea readOnly={isReadOnly}
                 value={loginCredentialsText}
                 onChange={e =>
                   handleFieldChange(
@@ -1105,7 +1134,7 @@ export function NextOfKinLetterField({
                 label="Next of Kin Email"
                 icon={<Mail className="h-4 w-4" />}
               >
-                <Input
+                <Input readOnly={isReadOnly}
                   value={localData.nok_email || ''}
                   readOnly
                   placeholder="Will auto-populate"
@@ -1116,7 +1145,7 @@ export function NextOfKinLetterField({
                 label="Next of Kin Phone"
                 icon={<Users className="h-4 w-4" />}
               >
-                <Input
+                <Input readOnly={isReadOnly}
                   value={localData.nok_phone || ''}
                   readOnly
                   placeholder="Will auto-populate"
@@ -1125,7 +1154,7 @@ export function NextOfKinLetterField({
               </FieldBlock>
             </div>
             <FieldBlock label="Accessible Sections">
-              <Textarea
+              <Textarea readOnly={isReadOnly}
                 value={
                   localData.accessible_sections ||
                   DEFAULTS.accessible_sections
@@ -1153,7 +1182,7 @@ export function NextOfKinLetterField({
               label="Key Bag Information"
               icon={<KeyRound className="h-4 w-4" />}
             >
-              <Textarea
+              <Textarea readOnly={isReadOnly}
                 value={localData.key_bag_info || DEFAULTS.key_bag_info}
                 onChange={e =>
                   handleFieldChange('key_bag_info', e.target.value as any)
@@ -1167,7 +1196,7 @@ export function NextOfKinLetterField({
               description="Auto-filled from Access Management."
               icon={<MapPin className="h-4 w-4" />}
             >
-              <Input
+              <Input readOnly={isReadOnly}
                 value={localData.key_bag_location || ''}
                 readOnly
                 placeholder="Will auto-populate"
@@ -1178,7 +1207,7 @@ export function NextOfKinLetterField({
               label="Documents Bag Information"
               icon={<FileText className="h-4 w-4" />}
             >
-              <Textarea
+              <Textarea readOnly={isReadOnly}
                 value={
                   localData.documents_bag_info || DEFAULTS.documents_bag_info
                 }
@@ -1197,7 +1226,7 @@ export function NextOfKinLetterField({
               description="Auto-filled from Access Management."
               icon={<MapPin className="h-4 w-4" />}
             >
-              <Input
+              <Input readOnly={isReadOnly}
                 value={localData.documents_bag_location || ''}
                 readOnly
                 placeholder="Will auto-populate"
@@ -1214,7 +1243,7 @@ export function NextOfKinLetterField({
               'Finish your note, then choose how to share the letter.',
             )}
             <FieldBlock label="Incomplete Kit Message">
-              <Textarea
+              <Textarea readOnly={isReadOnly}
                 value={
                   localData.incomplete_kit_message ||
                   DEFAULTS.incomplete_kit_message
@@ -1230,7 +1259,7 @@ export function NextOfKinLetterField({
               />
             </FieldBlock>
             <FieldBlock label="Closing Message">
-              <Textarea
+              <Textarea readOnly={isReadOnly}
                 value={localData.closing_message || DEFAULTS.closing_message}
                 onChange={e =>
                   handleFieldChange('closing_message', e.target.value as any)
@@ -1240,7 +1269,7 @@ export function NextOfKinLetterField({
               />
             </FieldBlock>
             <FieldBlock label="Closing line">
-              <Input
+              <Input readOnly={isReadOnly}
                 value={
                   localData.letter_signature || DEFAULTS.letter_signature
                 }
@@ -1252,7 +1281,7 @@ export function NextOfKinLetterField({
               />
             </FieldBlock>
             <FieldBlock label="Your name (signature)">
-              <Input
+              <Input readOnly={isReadOnly}
                 value={String(localData.signer_name || ownerName || '').trim()}
                 onChange={e =>
                   handleFieldChange('signer_name', e.target.value as any)
@@ -1275,6 +1304,7 @@ export function NextOfKinLetterField({
               <div className="grid gap-2.5">
                 <LetterSelectableCard
                   selected={deliveryAction === 'export'}
+                  disabled={isReadOnly}
                   onSelect={() => setDeliveryAction('export')}
                   title="Print & mail it yourself"
                   description="Download a copy to print and send physically."
@@ -1283,6 +1313,7 @@ export function NextOfKinLetterField({
                 />
                 <LetterSelectableCard
                   selected={deliveryAction === 'send_now'}
+                  disabled={isReadOnly}
                   onSelect={() => setDeliveryAction('send_now')}
                   title="Send it now"
                   description="Email it through the portal right away so they know the letter exists."
@@ -1291,6 +1322,7 @@ export function NextOfKinLetterField({
                 />
                 <LetterSelectableCard
                   selected={deliveryAction === 'schedule'}
+                  disabled={isReadOnly}
                   onSelect={() => setDeliveryAction('schedule')}
                   title="Schedule for later"
                   description={
@@ -1406,9 +1438,25 @@ export function NextOfKinLetterField({
           Next
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
+      ) : isReadOnly ? (
+        <Button
+          type="button"
+          data-oa-view-ok
+          variant="outline"
+          onClick={() => setPreviewOpen(true)}
+          className={cn(
+            'rounded-2xl',
+            MIN_TOUCH,
+            compactSheet ? 'flex-[1.4]' : isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
+          )}
+        >
+          <Eye className="mr-2 h-4 w-4" />
+          View letter
+        </Button>
       ) : (
         <Button
           type="button"
+          data-oa-mutate
           onClick={() => void handleDeliveryAction()}
           disabled={deliveryBusy || isSaving || isSendingNow}
           className={cn(
@@ -1499,15 +1547,28 @@ export function NextOfKinLetterField({
         {!isLastStep ? (
           <Button
             type="button"
+            data-oa-view-ok
             onClick={goToNextStep}
             className={cn('rounded-2xl', MIN_TOUCH, 'w-full sm:w-auto')}
           >
             Next
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
+        ) : isReadOnly ? (
+          <Button
+            type="button"
+            data-oa-view-ok
+            variant="outline"
+            onClick={() => setPreviewOpen(true)}
+            className={cn('rounded-2xl', MIN_TOUCH, 'w-full sm:w-auto')}
+          >
+            <Eye className="mr-2 h-4 w-4" />
+            View letter
+          </Button>
         ) : (
           <Button
             type="button"
+            data-oa-mutate
             onClick={() => void handleDeliveryAction()}
             disabled={deliveryBusy || isSaving || isSendingNow}
             className={cn('rounded-2xl', MIN_TOUCH, 'w-full sm:w-auto')}
@@ -1541,13 +1602,20 @@ export function NextOfKinLetterField({
           : 'mx-auto w-full max-w-5xl space-y-5',
       )}
       data-field-type="NextOfKinLetter"
+      data-oa-family-readonly={isReadOnly ? 'true' : undefined}
     >
+      {isReadOnly ? (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          View-only — your family role can read this letter but cannot edit or
+          send it.
+        </div>
+      ) : null}
       {!embeddedInSheet && (
       <div className="rounded-[1.75rem] border border-border/60 bg-gradient-to-br from-background via-background to-muted/40 p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-              {isFetching || isSaving ? (
+              {isFetching || (!isReadOnly && isSaving) ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <FileText className="h-5 w-5" />
@@ -1564,7 +1632,13 @@ export function NextOfKinLetterField({
                   variant="outline"
                   className="rounded-full border-primary/20 bg-primary/5 px-3 py-1 text-primary"
                 >
-                  {isFetching ? 'Loading' : isSaving ? 'Saving' : 'Auto-saved'}
+                  {isFetching
+                    ? 'Loading'
+                    : isReadOnly
+                      ? 'View only'
+                      : isSaving
+                        ? 'Saving'
+                        : 'Auto-saved'}
                 </Badge>
               </div>
 
@@ -1769,7 +1843,15 @@ export function NextOfKinLetterField({
               transition={isMobile ? LETTER_SHEET_SPRING : { duration: 0.2 }}
               className={cn(compactSheet ? 'space-y-4' : 'space-y-6')}
             >
-              {renderWizardStepContent()}
+              <fieldset
+                disabled={isReadOnly}
+                className="min-w-0 space-y-inherit border-0 p-0 disabled:opacity-[0.98] [&_button]:cursor-default"
+              >
+                <legend className="sr-only">
+                  {isReadOnly ? 'View-only letter' : 'Edit letter'}
+                </legend>
+                {renderWizardStepContent()}
+              </fieldset>
             </motion.div>
           </AnimatePresence>
         </div>

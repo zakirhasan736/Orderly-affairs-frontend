@@ -446,6 +446,8 @@ export function hydrateAiUploadHistoryFromServer(
     original_filename?: string;
     mime_type?: string;
     status?: string;
+    filled?: boolean;
+    consumed_sections?: string[];
     created_at?: string | null;
     updated_at?: string | null;
     section?: string | null;
@@ -459,7 +461,8 @@ export function hydrateAiUploadHistoryFromServer(
       status === 'processing' ||
       status === 'queued' ||
       status === 'extracting' ||
-      status === 'classifying'
+      status === 'classifying' ||
+      status === 'starting'
     );
   });
 
@@ -478,11 +481,25 @@ export function hydrateAiUploadHistoryFromServer(
       doc.created_at || doc.updated_at || new Date().toISOString();
     const updatedAt =
       doc.updated_at || doc.created_at || new Date().toISOString();
+    const rawStatus = String(doc.status || '').trim().toLowerCase();
+    const filled =
+      Boolean(doc.filled) ||
+      (Array.isArray(doc.consumed_sections) && doc.consumed_sections.length > 0);
+    const doneStatuses = new Set([
+      'ready',
+      'done',
+      'complete',
+      'completed',
+      'filled',
+    ]);
+    const status =
+      filled || doneStatuses.has(rawStatus) || !rawStatus ? 'done' : rawStatus;
+
     serverItems.push({
       id: `server:${fileId}`,
       fileName,
-      status:
-        doc.status === 'ready' || !doc.status ? 'done' : String(doc.status),
+      status,
+      progress: status === 'done' ? 100 : undefined,
       createdAt,
       updatedAt,
       fileId,
@@ -493,14 +510,29 @@ export function hydrateAiUploadHistoryFromServer(
     });
   }
 
-  // Drop in-flight rows whose fileId already appears on the server list.
+  // Drop in-flight rows that already exist on the server (by fileId or same file name).
   const serverIds = new Set(
     serverItems.map(item => item.fileId).filter(Boolean) as string[],
   );
-  const keepInFlight = inFlight.filter(
-    item => !item.fileId || !serverIds.has(item.fileId),
+  const serverNames = new Set(
+    serverItems.map(item => normalizeFileName(item.fileName)),
   );
+  const keepInFlight = inFlight.filter(item => {
+    if (item.fileId && serverIds.has(item.fileId)) return false;
+    if (serverNames.has(normalizeFileName(item.fileName))) return false;
+    // Drop ghost "processing" rows older than 30 minutes with no live file id.
+    const updated = Date.parse(item.updatedAt || item.createdAt || '');
+    if (
+      !item.fileId &&
+      Number.isFinite(updated) &&
+      Date.now() - updated > 30 * 60 * 1000
+    ) {
+      return false;
+    }
+    return true;
+  });
 
+  // Prefer server (authoritative) rows; keep truly-live in-flight only.
   writeHistory([...keepInFlight, ...serverItems]);
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('orderly-ai-upload-history'));

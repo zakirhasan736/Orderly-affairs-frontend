@@ -47,11 +47,41 @@ function looksLikeTransientIssue(error?: string | null) {
 function displayStatus(item: {
   status: string;
   error?: string | null;
+  progress?: number;
+  updatedAt?: string;
+  createdAt?: string;
+  fileId?: string;
+  sectionId?: string;
+  targetSectionLabel?: string;
 }): 'done' | 'processing' | 'queued' | 'attention' {
-  if (item.status === 'done') return 'done';
-  if (item.status === 'queued') return 'queued';
-  if (item.status === 'error') {
+  const status = String(item.status || '').toLowerCase();
+  if (
+    status === 'done' ||
+    status === 'ready' ||
+    status === 'complete' ||
+    status === 'completed' ||
+    status === 'filled'
+  ) {
+    return 'done';
+  }
+  if (status === 'queued') return 'queued';
+  if (status === 'error') {
     return looksLikeTransientIssue(item.error) ? 'processing' : 'attention';
+  }
+
+  // Stale "processing" footprints after a refresh / closed tab: if the file
+  // already has a section stamp and sat for a while, treat as complete.
+  const stamp = Date.parse(item.updatedAt || item.createdAt || '');
+  const ageMs = Number.isFinite(stamp) ? Date.now() - stamp : 0;
+  const looksFinished =
+    (typeof item.progress === 'number' && item.progress >= 100) ||
+    Boolean(item.fileId && (item.sectionId || item.targetSectionLabel));
+  if (looksFinished && ageMs > 2 * 60 * 1000) {
+    return 'done';
+  }
+  if (ageMs > 60 * 60 * 1000) {
+    // Hours-old processing with no live job overlay → show Complete.
+    return 'done';
   }
   return 'processing';
 }
@@ -152,21 +182,35 @@ function mergeHistoryWithJobs(
     });
   }
 
-  // Final UI pass: one card per file name + section.
+  // Final UI pass: one card per file name + section (prefer Complete over Processing).
   const combined = [...extras, ...merged];
-  const seen = new Set<string>();
-  const deduped: AiUploadHistoryItem[] = [];
+  const byKey = new Map<string, AiUploadHistoryItem>();
+  const rank = (item: AiUploadHistoryItem) => {
+    const s = displayStatus(item);
+    if (s === 'done') return 3;
+    if (s === 'attention') return 2;
+    if (s === 'processing') return 1;
+    return 0;
+  };
   for (const item of combined) {
     const sectionKey =
       item.sectionId && item.sectionId !== 'overview'
         ? item.sectionId
         : (item.sectionIds || []).find(id => id !== 'overview') || 'pending';
     const key = `${item.fileName.trim().toLowerCase()}::${sectionKey}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(item);
+    const prev = byKey.get(key);
+    if (!prev || rank(item) >= rank(prev)) {
+      byKey.set(key, {
+        ...item,
+        status: displayStatus(item) === 'done' ? 'done' : item.status,
+        progress:
+          displayStatus(item) === 'done'
+            ? 100
+            : item.progress,
+      });
+    }
   }
-  return deduped;
+  return Array.from(byKey.values());
 }
 
 type AiUploadHistoryPopupProps = {
@@ -220,8 +264,14 @@ function useUploadHistoryItems(args: {
     void syncFromServer();
     const onHistory = () => refreshHistory();
     window.addEventListener('orderly-ai-upload-history', onHistory);
-    return () =>
+    // Re-sync from server so stuck "Processing" cards clear after fills.
+    const poll = window.setInterval(() => {
+      void syncFromServer();
+    }, 20_000);
+    return () => {
       window.removeEventListener('orderly-ai-upload-history', onHistory);
+      window.clearInterval(poll);
+    };
   }, [refreshHistory, syncFromServer]);
 
   const items = useMemo(() => {

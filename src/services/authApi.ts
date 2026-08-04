@@ -128,6 +128,29 @@ export interface PortalRoleOption {
   can_view_vault_settings?: boolean;
 }
 
+export interface FamilyRoleAreaEntry {
+  access_level: 'Full Dashboard Access' | 'Area-Specific Access' | string;
+  authorized_sections: string[];
+  portal_role?: string;
+  portal_role_label?: string;
+}
+
+export interface FamilyRoleAreasResponse {
+  roles: Record<string, FamilyRoleAreaEntry>;
+}
+
+export interface FamilyRoleAreasUpdatePayload {
+  roles: Record<string, FamilyRoleAreaEntry>;
+  apply_to_members?: boolean;
+}
+
+export interface FamilyRoleAreasUpdateResponse {
+  message: string;
+  roles: Record<string, FamilyRoleAreaEntry>;
+  updated_roles: string[];
+  members_updated: number;
+}
+
 export interface SectionFootprintActor {
   user_id?: string;
   full_name?: string;
@@ -432,6 +455,21 @@ export const authApi = createApi({
     getPortalRoles: builder.query<{ roles: PortalRoleOption[] }, void>({
       query: () => ({ url: '/portal-roles', method: 'GET' }),
     }),
+    getFamilyRoleAreas: builder.query<FamilyRoleAreasResponse, void>({
+      query: () => ({ url: '/family-role-areas', method: 'GET' }),
+      providesTags: ['Family'],
+    }),
+    updateFamilyRoleAreas: builder.mutation<
+      FamilyRoleAreasUpdateResponse,
+      FamilyRoleAreasUpdatePayload
+    >({
+      query: body => ({
+        url: '/family-role-areas',
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: ['Family'],
+    }),
     getSectionFootprints: builder.query<
       {
         latest: SectionFootprintLatest[];
@@ -636,6 +674,8 @@ export const {
   useCreateNextKinMutation,
   useGetMyNextKinQuery,
   useGetPortalRolesQuery,
+  useGetFamilyRoleAreasQuery,
+  useUpdateFamilyRoleAreasMutation,
   useGetSectionFootprintsQuery,
   useCreateFamilyMemberMutation,
   useGetMyFamilyQuery,

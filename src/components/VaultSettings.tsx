@@ -6,12 +6,14 @@ import {
   ChevronRight,
   Mail,
   MessageSquare,
+  Settings2,
   ShieldCheck,
   Smartphone,
   Users,
   X,
 } from 'lucide-react';
 import { FamilyAccessManagement } from '@/components/vault/FamilyAccessManagement';
+import { FamilyRoleAreaDefaultsDialog } from '@/components/vault/FamilyRoleAreaDefaultsDialog';
 import { fetchSession } from '@/libs/secureFetch';
 import { toast } from 'sonner';
 import { Button } from '@common/ui/button';
@@ -203,6 +205,7 @@ const VaultSettings = () => {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [showDeletePanel, setShowDeletePanel] = useState(false);
+  const [familyRoleAreasOpen, setFamilyRoleAreasOpen] = useState(false);
   const autoEmailVerifyKey = useRef('');
   const autoAuthenticatorVerifyKey = useRef('');
   const autoSmsVerifyKey = useRef('');
@@ -1340,12 +1343,25 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                 <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-white/75 sm:text-sm">
                   Invite up to 5 family collaborators, mark vault areas in a
                   popup table, then choose their portal role at the bottom of
-                  the invite form. Separate from Next of Kin (Section 2).
+                  the invite form. Use the settings control to set global areas
+                  per role (Viewer → Super Admin). Separate from Next of Kin
+                  (Section 2).
                 </p>
               </div>
-              <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ring-1 ring-white/20">
-                <Users className="h-3.5 w-3.5" />
-                Access
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFamilyRoleAreasOpen(true)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white ring-1 ring-white/25 transition hover:bg-white/25"
+                  aria-label="Manage global role access areas"
+                  title="Global role access areas"
+                >
+                  <Settings2 className="h-[18px] w-[18px]" />
+                </button>
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ring-1 ring-white/20">
+                  <Users className="h-3.5 w-3.5" />
+                  Access
+                </div>
               </div>
             </div>
           </div>
@@ -1353,6 +1369,11 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
           <div className="space-y-4 p-3 sm:p-5 md:p-6">
             <FamilyAccessManagement />
           </div>
+
+          <FamilyRoleAreaDefaultsDialog
+            open={familyRoleAreasOpen}
+            onOpenChange={setFamilyRoleAreasOpen}
+          />
         </section>
       )}
 

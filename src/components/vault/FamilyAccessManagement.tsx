@@ -25,17 +25,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/common/ui/dialog';
-import { formConfig } from '@/config/formConfig';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import {
   useCreateFamilyMemberMutation,
   useDeleteFamilyMemberMutation,
+  useGetFamilyRoleAreasQuery,
   useGetMyFamilyQuery,
   useGetPortalRolesQuery,
   useUpdateFamilyMemberMutation,
   type FamilyMemberResponse,
 } from '@/services/authApi';
 import { SectionFootprintsPanel } from '@/components/vault/SectionFootprintsPanel';
+import {
+  getFamilyAccessAreaRows,
+  type FamilyAccessLevel,
+} from '@/utils/familyAccessAreas';
 
 const MAX_FAMILY = 5;
 
@@ -84,7 +88,7 @@ type Draft = {
   email: string;
   relationship: string;
   portal_role: string;
-  access_level: 'Full Dashboard Access' | 'Area-Specific Access';
+  access_level: FamilyAccessLevel;
   authorized_sections: string[];
   master_password: string;
 };
@@ -121,6 +125,7 @@ function generatePassword(length = 14) {
 export function FamilyAccessManagement() {
   const { data, isLoading, refetch, isFetching } = useGetMyFamilyQuery();
   const { data: rolesData } = useGetPortalRolesQuery();
+  const { data: roleAreasData } = useGetFamilyRoleAreasQuery();
   const [createFamily, { isLoading: creating }] =
     useCreateFamilyMemberMutation();
   const [updateFamily, { isLoading: updating }] =
@@ -135,63 +140,30 @@ export function FamilyAccessManagement() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [areasOpen, setAreasOpen] = useState(false);
   const [areaDraft, setAreaDraft] = useState<string[]>([]);
-  const [areaMode, setAreaMode] = useState<
-    'Full Dashboard Access' | 'Area-Specific Access'
-  >('Area-Specific Access');
+  const [areaMode, setAreaMode] = useState<FamilyAccessLevel>(
+    'Area-Specific Access',
+  );
 
-  const areaRows = useMemo<AreaRow[]>(() => {
-    const special: AreaRow[] = [
-      {
-        id: 'overview',
-        title: 'Dashboard overview',
-        group: 'Dashboard',
-        hint: 'Overview snapshot + document drag & drop zone',
-      },
-      {
-        id: 'section2_nextkin',
-        title: 'Access management (Next of Kin)',
-        group: 'People & letters',
-        hint: 'Section 2 — approve / manage Next of Kin',
-      },
-      {
-        id: '3',
-        title: 'Letter of next of kin',
-        group: 'People & letters',
-        hint: 'Section 3 — NOK letters',
-      },
-      {
-        id: '4',
-        title: 'Personal messages',
-        group: 'People & letters',
-        hint: 'Section 4 — letters, audio, video messages',
-      },
-      {
-        id: 'billing',
-        title: 'Billing & subscription',
-        group: 'Account',
-        hint: 'View billing status (payment changes stay owner-only)',
-      },
-      {
-        id: 'vault_settings',
-        title: 'Vault Settings (roles & security)',
-        group: 'Account',
-        hint: 'Family role management area in Vault Settings',
-      },
-    ];
+  const areaRows = useMemo<AreaRow[]>(() => getFamilyAccessAreaRows(), []);
 
-    const vault = formConfig.chunks.flatMap(chunk =>
-      chunk.sections
-        .filter(section => !['2', '3', '4'].includes(String(section.id)))
-        .map(section => ({
-          id: String(section.id),
-          title: `${section.id}. ${section.title}`,
-          group: 'Vault sections',
-          hint: 'Section data & per-section drag/drop when role allows upload',
-        })),
-    );
-
-    return [...special, ...vault];
-  }, []);
+  const applyRoleDefaultAreas = (roleId: string): Partial<Draft> => {
+    const entry = roleAreasData?.roles?.[roleId];
+    if (!entry) {
+      return {
+        access_level: 'Full Dashboard Access',
+        authorized_sections: [],
+      };
+    }
+    const isFull =
+      entry.access_level === 'Full Dashboard Access' ||
+      entry.access_level === 'Full Kit Access';
+    return {
+      access_level: isFull ? 'Full Dashboard Access' : 'Area-Specific Access',
+      authorized_sections: isFull
+        ? []
+        : (entry.authorized_sections || []).map(String),
+    };
+  };
 
   const roleLabel = (id?: string) =>
     roles.find(r => r.id === id)?.label || id || 'Viewer';
@@ -202,7 +174,11 @@ export function FamilyAccessManagement() {
       return;
     }
     setEditingId(null);
-    setDraft({ ...emptyDraft(), master_password: generatePassword() });
+    setDraft({
+      ...emptyDraft(),
+      ...applyRoleDefaultAreas('viewer'),
+      master_password: generatePassword(),
+    });
   };
 
   const openEdit = (member: FamilyMemberResponse) => {
@@ -644,7 +620,13 @@ export function FamilyAccessManagement() {
                     className="mt-1"
                     checked={draft.portal_role === role.id}
                     onChange={() =>
-                      setDraft({ ...draft, portal_role: role.id })
+                      setDraft({
+                        ...draft,
+                        portal_role: role.id,
+                        ...(editingId
+                          ? {}
+                          : applyRoleDefaultAreas(role.id)),
+                      })
                     }
                   />
                   <span>

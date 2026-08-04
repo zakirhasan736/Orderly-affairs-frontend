@@ -38,6 +38,7 @@ import {
 } from '@/services/authApi';
 import { useGetNokLetterQuery } from '@/services/nokLetterApi';
 import { isNokLetterDelivered } from '@/utils/nokLetterPreview';
+import { useFamilyAcl } from '@/contexts/FamilyAclContext';
 
 type LetterData = Record<string, unknown>;
 
@@ -213,6 +214,7 @@ function RecipientCard({
   onOpen,
   onPreview,
   compact = false,
+  readOnly = false,
 }: {
   person: NextKinAccessResponse;
   isSelected: boolean;
@@ -220,6 +222,7 @@ function RecipientCard({
   onOpen: () => void;
   onPreview: () => void;
   compact?: boolean;
+  readOnly?: boolean;
 }) {
   const name = getDisplayName(person);
   const initials = getInitials(name);
@@ -244,6 +247,7 @@ function RecipientCard({
         <button
           type="button"
           onClick={onOpen}
+          data-oa-view-ok
           className="flex min-w-0 flex-1 items-center gap-3 p-4 text-left"
         >
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground">
@@ -261,7 +265,9 @@ function RecipientCard({
               )}
             </div>
             <p className="mt-0.5 truncate text-sm text-muted-foreground">
-              {person.email || person.phone_number || 'Tap to open letter'}
+              {person.email ||
+                person.phone_number ||
+                (readOnly ? 'Tap to view letter' : 'Tap to open letter')}
             </p>
           </div>
           <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -269,6 +275,7 @@ function RecipientCard({
         <button
           type="button"
           onClick={onPreview}
+          data-oa-view-ok
           className="flex shrink-0 items-center border-l border-border/60 px-3 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           aria-label={`Preview letter for ${name}`}
         >
@@ -349,6 +356,7 @@ function RecipientCard({
             type="button"
             variant="outline"
             size="sm"
+            data-oa-view-ok
             onClick={onPreview}
             className={actionBtn}
           >
@@ -359,11 +367,12 @@ function RecipientCard({
             type="button"
             variant="outline"
             size="sm"
+            data-oa-view-ok
             onClick={onOpen}
             className={actionBtn}
           >
             <FileText className="mr-1.5 h-3.5 w-3.5 shrink-0" />
-            Open
+            {readOnly ? 'View' : 'Open'}
           </Button>
         </div>
       </div>
@@ -377,12 +386,14 @@ function RecipientCardWithStatus({
   onOpen,
   onPreview,
   compact,
+  readOnly = false,
 }: {
   person: NextKinAccessResponse;
   isSelected: boolean;
   onOpen: () => void;
   onPreview: () => void;
   compact?: boolean;
+  readOnly?: boolean;
 }) {
   const { data: letter } = useGetNokLetterQuery({ nokId: person.id });
   const isDelivered = isNokLetterDelivered(letter);
@@ -395,6 +406,7 @@ function RecipientCardWithStatus({
       onOpen={onOpen}
       onPreview={onPreview}
       compact={compact}
+      readOnly={readOnly}
     />
   );
 }
@@ -444,8 +456,10 @@ export default function Section3NextOfKinLetter({
   ownerName = null,
 }: Props) {
   const isMobile = useIsMobile();
+  const { isReadOnly } = useFamilyAcl();
   const [letterSheetOpen, setLetterSheetOpen] = useState(false);
   const [previewNokId, setPreviewNokId] = useState<string | null>(null);
+  const [viewNokId, setViewNokId] = useState<string | null>(null);
   const { data: nextKinPeople = [], isLoading } =
     useGetMyNextKinQuery(undefined);
 
@@ -457,14 +471,15 @@ export default function Section3NextOfKinLetter({
   }, [nextKinPeople]);
 
   const selectedNokId = useMemo(() => {
+    const preferred = viewNokId || data.selected_nok_id;
     if (
-      data.selected_nok_id &&
-      letterReadyPeople.some(person => person.id === data.selected_nok_id)
+      preferred &&
+      letterReadyPeople.some(person => person.id === preferred)
     ) {
-      return data.selected_nok_id;
+      return preferred;
     }
     return letterReadyPeople[0]?.id || '';
-  }, [data.selected_nok_id, letterReadyPeople]);
+  }, [data.selected_nok_id, letterReadyPeople, viewNokId]);
 
   const selectedPerson = letterReadyPeople.find(
     person => person.id === selectedNokId,
@@ -472,6 +487,7 @@ export default function Section3NextOfKinLetter({
 
   useEffect(() => {
     if (!selectedNokId || data.selected_nok_id === selectedNokId) return;
+    if (isReadOnly) return;
 
     onChange({
       ...data,
@@ -484,9 +500,11 @@ export default function Section3NextOfKinLetter({
     data.selected_nok_id,
     data.next_of_kin_letters_by_nok,
     onChange,
+    isReadOnly,
   ]);
 
   const updateLetterData = (value: LetterData) => {
+    if (isReadOnly) return;
     if (!selectedNokId) return;
 
     onChange({
@@ -501,6 +519,10 @@ export default function Section3NextOfKinLetter({
   };
 
   const handleRecipientChange = (nokId: string) => {
+    if (isReadOnly) {
+      setViewNokId(nokId);
+      return;
+    }
     onChange({
       ...data,
       selected_nok_id: nokId,
@@ -563,12 +585,19 @@ export default function Section3NextOfKinLetter({
       </CardHeader>
 
       <CardContent className="space-y-4 p-3 sm:space-y-5 sm:p-6">
+        {isReadOnly ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            View-only — you can open and read letters, but cannot edit, send, or
+            schedule them.
+          </div>
+        ) : null}
         <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_260px] xl:grid-cols-[minmax(0,1fr)_280px] xl:gap-6">
           <div className="min-w-0 scroll-mt-6 space-y-3">
             {letterReadyPeople.length > 0 && !isLoading && (
               <p className="text-xs text-muted-foreground sm:text-sm">
-                Select a recipient and open their letter to review, customize,
-                print, or email.
+                {isReadOnly
+                  ? 'Select a recipient to view their letter.'
+                  : 'Select a recipient and open their letter to review, customize, print, or email.'}
               </p>
             )}
 
@@ -591,6 +620,7 @@ export default function Section3NextOfKinLetter({
                         onOpen={() => openLetterForRecipient(person.id)}
                         onPreview={() => openPreviewForRecipient(person.id)}
                         compact={isMobile}
+                        readOnly={isReadOnly}
                       />
                     </li>
                   );

@@ -32,6 +32,7 @@ import {
   MobileSheetHandle,
   useIsMobile,
 } from '@/components/MobileBottomSheet';
+import { useFamilyAcl } from '@/contexts/FamilyAclContext';
 
 import { Button } from '@common/ui/button';
 import { Card, CardContent } from '@common/ui/card';
@@ -292,6 +293,7 @@ export function Letters({
   embeddedInSection = false,
 }: LettersProps) {
   const isMobile = useIsMobile();
+  const { isReadOnly } = useFamilyAcl();
 
   const [letters, setLetters] = useState<Letter[]>(() => normalizeValue(value));
   const [currentLetter, setCurrentLetter] = useState<Letter | null>(null);
@@ -301,6 +303,13 @@ export function Letters({
   const [saving, setSaving] = useState(false);
   const [isDelivering, setIsDelivering] = useState(false);
   const [deletingMedia, setDeletingMedia] = useState(false);
+
+  useEffect(() => {
+    if (!isReadOnly) return;
+    if (!isWriting) return;
+    setIsWriting(false);
+    setCurrentLetter(null);
+  }, [isReadOnly, isWriting]);
 
   const [showTemplates, setShowTemplates] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -413,6 +422,10 @@ export function Letters({
   };
 
   const openNewMessage = (type: MessageType = 'letter') => {
+    if (isReadOnly) {
+      toast.error('Your family role is view-only.');
+      return;
+    }
     setDetailLetterId(null);
     setCurrentLetter({
       ...emptyLetter(),
@@ -423,6 +436,10 @@ export function Letters({
   };
 
   const useTemplate = (template: (typeof letterTemplates)[number]) => {
+    if (isReadOnly) {
+      toast.error('Your family role is view-only.');
+      return;
+    }
     setCurrentLetter({
       ...emptyLetter(),
       title: template.title,
@@ -434,6 +451,10 @@ export function Letters({
   };
 
   const createSuggestedMessage = (recipient: RecipientOption) => {
+    if (isReadOnly) {
+      toast.error('Your family role is view-only.');
+      return;
+    }
     setCurrentLetter({
       ...emptyLetter(),
       title: `Letter to ${recipient.name}`,
@@ -618,6 +639,7 @@ export function Letters({
   };
 
   const changeMessageType = (messageType: MessageType) => {
+    if (isReadOnly) return;
     if (currentLetter?.messageType !== messageType) {
       cleanupUnsavedMedia(currentLetter);
     }
@@ -663,6 +685,10 @@ export function Letters({
 
   const saveMessage = async () => {
     if (!currentLetter) return;
+    if (isReadOnly) {
+      toast.error('Your family role is view-only.');
+      return;
+    }
     if (!validateBeforeSave(currentLetter)) return;
 
     const payload = {
@@ -714,6 +740,10 @@ export function Letters({
   };
 
   const editMessage = (letter: Letter) => {
+    if (isReadOnly) {
+      openMessageDetail(letter);
+      return;
+    }
     setCurrentLetter(letter);
     setIsWriting(true);
     setDetailLetterId(null);
@@ -726,6 +756,7 @@ export function Letters({
   };
 
   const patchCurrentLetter = (patch: Partial<Letter>) => {
+    if (isReadOnly) return;
     setCurrentLetter(prev => (prev ? { ...prev, ...patch } : prev));
   };
 
@@ -735,7 +766,8 @@ export function Letters({
   );
 
   const openMessageDetail = (letter: Letter) => {
-    if (isMobile) {
+    // Viewers (and mobile): browse only — never open the editable composer.
+    if (isMobile || isReadOnly) {
       setDetailLetterId(letter.id);
       return;
     }
@@ -743,6 +775,10 @@ export function Letters({
   };
 
   const removeMessage = async (id: string) => {
+    if (isReadOnly) {
+      toast.error('Your family role is view-only.');
+      return;
+    }
     if (!confirm('Delete this message?')) return;
 
     if (id.startsWith('local-')) {
@@ -870,7 +906,14 @@ export function Letters({
           isMobile &&
           'pb-[calc(5.5rem+env(safe-area-inset-bottom))]',
       )}
+      data-oa-family-readonly={isReadOnly ? 'true' : undefined}
     >
+      {isReadOnly ? (
+        <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          View-only — browse messages here. Creating or editing requires Editor
+          or higher.
+        </div>
+      ) : null}
       {showHeader && (
         <div className="sticky top-0 z-30 border-b bg-background/90 px-4 py-3 backdrop-blur-xl sm:px-6">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
@@ -895,8 +938,8 @@ export function Letters({
               </div>
             </div>
 
-            {!isWriting && (
-              <Button type="button" size="sm" onClick={() => openNewMessage()}>
+            {!isWriting && !isReadOnly && (
+              <Button type="button" size="sm" data-oa-mutate onClick={() => openNewMessage()}>
                 <Plus className="mr-2 h-4 w-4" />
                 New
               </Button>
@@ -924,6 +967,7 @@ export function Letters({
                 letterCount={letterCount}
                 videoCount={videoCount}
                 audioCount={audioCount}
+                readOnly={isReadOnly}
                 onCreate={() => openNewMessage()}
                 onTemplates={() => setShowTemplates(prev => !prev)}
               />
@@ -933,6 +977,7 @@ export function Letters({
                 letterCount={letterCount}
                 videoCount={videoCount}
                 audioCount={audioCount}
+                readOnly={isReadOnly}
                 onCreate={() => openNewMessage()}
                 onTemplates={() => setShowTemplates(prev => !prev)}
               />
@@ -959,7 +1004,7 @@ export function Letters({
               </Card>
             )}
 
-            {!isLoading && suggestedRecipients.length > 0 && (
+            {!isLoading && !isReadOnly && suggestedRecipients.length > 0 && (
               <SuggestedPanel
                 recipients={suggestedRecipients}
                 open={showSuggestions}
@@ -969,7 +1014,7 @@ export function Letters({
               />
             )}
 
-            {showTemplates && (!embeddedInSection || !isMobile) && (
+            {showTemplates && !isReadOnly && (!embeddedInSection || !isMobile) && (
               <TemplateGrid templates={letterTemplates} onUse={useTemplate} />
             )}
 
@@ -989,6 +1034,7 @@ export function Letters({
                       onEdit={() => editMessage(letter)}
                       onDelete={() => removeMessage(letter.id)}
                       onPrint={() => printMessage(letter)}
+                      readOnly={isReadOnly}
                     />
                   ),
                 )}
@@ -1000,10 +1046,11 @@ export function Letters({
                 onCreate={() => openNewMessage()}
                 compact={embeddedInSection && isMobile}
                 embedded={embeddedInSection}
+                readOnly={isReadOnly}
               />
             )}
 
-            {isNextOfKin && (
+            {isNextOfKin && !isReadOnly && (
               <Card className="border-purple-200 bg-purple-50/70">
                 <CardContent className="p-4 sm:p-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1032,7 +1079,7 @@ export function Letters({
           </div>
         )}
 
-        {isWriting && currentLetter && !isMobile && (
+        {isWriting && currentLetter && !isMobile && !isReadOnly && (
           <MessageEditorPanel
             currentLetter={currentLetter}
             letters={letters}
@@ -1151,6 +1198,7 @@ export function Letters({
               )}
             >
               <MessageMobileActionBar
+                readOnly={isReadOnly}
                 onEdit={() => editMessage(detailLetter)}
                 onPrint={() => printMessage(detailLetter)}
                 onDelete={() => {
@@ -1163,8 +1211,8 @@ export function Letters({
         </MobileBottomSheet>
       )}
 
-      {/* Mobile editor sheet */}
-      {isMobile && isWriting && currentLetter && (
+      {/* Mobile editor sheet — never for Viewers */}
+      {isMobile && isWriting && currentLetter && !isReadOnly && (
         <MobileBottomSheet
           open={isWriting}
           onClose={() => closeEditor()}
@@ -1276,6 +1324,7 @@ function EmbeddedMessagesToolbar({
   audioCount,
   onCreate,
   onTemplates,
+  readOnly = false,
 }: {
   pendingCount: number;
   letterCount: number;
@@ -1283,6 +1332,7 @@ function EmbeddedMessagesToolbar({
   audioCount: number;
   onCreate: () => void;
   onTemplates: () => void;
+  readOnly?: boolean;
 }) {
   const total = letterCount + videoCount + audioCount;
 
@@ -1316,6 +1366,7 @@ function EmbeddedMessagesToolbar({
           />
         </div>
 
+        {!readOnly ? (
         <div className="flex shrink-0 gap-2">
         <Button
           type="button"
@@ -1330,6 +1381,7 @@ function EmbeddedMessagesToolbar({
         <Button
           type="button"
           size="sm"
+          data-oa-mutate
           onClick={onCreate}
           className="h-10 flex-1 rounded-xl sm:flex-none"
         >
@@ -1337,10 +1389,15 @@ function EmbeddedMessagesToolbar({
             New Message
           </Button>
         </div>
+        ) : (
+          <p className="text-xs font-medium text-slate-500">View only</p>
+        )}
       </div>
       {total === 0 && (
         <p className="border-t border-slate-100 px-4 py-2.5 text-center text-xs text-muted-foreground">
-          Create a letter, video, or audio message for someone you love
+          {readOnly
+            ? 'No personal messages have been created yet.'
+            : 'Create a letter, video, or audio message for someone you love'}
         </p>
       )}
     </div>
@@ -1390,6 +1447,7 @@ function HeroPanel({
   audioCount,
   onCreate,
   onTemplates,
+  readOnly = false,
 }: {
   pendingCount: number;
   letterCount: number;
@@ -1397,6 +1455,7 @@ function HeroPanel({
   audioCount: number;
   onCreate: () => void;
   onTemplates: () => void;
+  readOnly?: boolean;
 }) {
   return (
     <div className="overflow-hidden rounded-[28px] border bg-card shadow-sm">
@@ -1414,21 +1473,30 @@ function HeroPanel({
               <Badge variant="outline" className="rounded-full">
                 {pendingCount} pending
               </Badge>
+              {readOnly ? (
+                <Badge variant="outline" className="rounded-full">
+                  View only
+                </Badge>
+              ) : null}
             </div>
 
             <div>
               <h2 className="max-w-2xl text-xl font-semibold tracking-tight sm:text-2xl">
-                Create meaningful messages for loved ones
+                {readOnly
+                  ? 'Personal messages for loved ones'
+                  : 'Create meaningful messages for loved ones'}
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                Write letters, record voice notes, or upload video messages.
-                Everything stays organized by recipient and delivery timing.
+                {readOnly
+                  ? 'Browse letters, voice notes, and video messages. Editing is locked for your family role.'
+                  : 'Write letters, record voice notes, or upload video messages. Everything stays organized by recipient and delivery timing.'}
               </p>
             </div>
           </div>
 
+          {!readOnly ? (
           <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[300px]">
-            <Button type="button" size="lg" onClick={onCreate}>
+            <Button type="button" size="lg" data-oa-mutate onClick={onCreate}>
               <Plus className="mr-2 h-4 w-4" />
               Create Message
             </Button>
@@ -1443,6 +1511,7 @@ function HeroPanel({
               Templates
             </Button>
           </div>
+          ) : null}
         </div>
 
         <div className="relative mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -1633,10 +1702,12 @@ function EmptyState({
   onCreate,
   compact = false,
   embedded = false,
+  readOnly = false,
 }: {
   onCreate: () => void;
   compact?: boolean;
   embedded?: boolean;
+  readOnly?: boolean;
 }) {
   if (compact) {
     return (
@@ -1646,7 +1717,9 @@ function EmptyState({
         </div>
         <p className="mt-3 text-sm font-semibold">No messages yet</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Tap New Message below to get started.
+          {readOnly
+            ? 'Nothing has been created for you to view yet.'
+            : 'Tap New Message below to get started.'}
         </p>
       </div>
     );
@@ -1665,10 +1738,12 @@ function EmptyState({
           Write a letter, record video, or capture audio — each one is saved
           for the right person at the right time.
         </p>
-        <Button type="button" className="mt-6 rounded-xl" onClick={onCreate}>
+        {!readOnly ? (
+        <Button type="button" className="mt-6 rounded-xl" data-oa-mutate onClick={onCreate}>
           <Plus className="mr-2 h-4 w-4" />
           Create First Message
         </Button>
+        ) : null}
       </div>
     );
   }
@@ -1682,14 +1757,17 @@ function EmptyState({
 
         <h3 className="text-lg font-semibold">No messages yet</h3>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-          Create your first personal letter, video, or audio message for someone
-          important.
+          {readOnly
+            ? 'No personal messages are available to view yet.'
+            : 'Create your first personal letter, video, or audio message for someone important.'}
         </p>
 
-        <Button type="button" className="mt-5" onClick={onCreate}>
+        {!readOnly ? (
+        <Button type="button" className="mt-5" data-oa-mutate onClick={onCreate}>
           <Plus className="mr-2 h-4 w-4" />
           Create First Message
         </Button>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -1703,16 +1781,20 @@ function MessageMobileActionBar({
   onEdit,
   onPrint,
   onDelete,
+  readOnly = false,
 }: {
   onEdit: () => void;
   onPrint: () => void;
   onDelete: () => void;
+  readOnly?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-1">
+    <div className={cn('grid gap-1', readOnly ? 'grid-cols-1' : 'grid-cols-3')}>
+      {!readOnly ? (
       <Button
         type="button"
         variant="ghost"
+        data-oa-mutate
         className="h-auto min-h-[68px] flex-col gap-1.5 rounded-2xl py-2"
         onClick={onEdit}
       >
@@ -1723,9 +1805,11 @@ function MessageMobileActionBar({
           Edit
         </span>
       </Button>
+      ) : null}
       <Button
         type="button"
         variant="ghost"
+        data-oa-view-ok
         className="h-auto min-h-[68px] flex-col gap-1.5 rounded-2xl py-2"
         onClick={onPrint}
       >
@@ -1736,9 +1820,11 @@ function MessageMobileActionBar({
           Print
         </span>
       </Button>
+      {!readOnly ? (
       <Button
         type="button"
         variant="ghost"
+        data-oa-mutate
         className="h-auto min-h-[68px] flex-col gap-1.5 rounded-2xl py-2"
         onClick={onDelete}
       >
@@ -1749,6 +1835,7 @@ function MessageMobileActionBar({
           Delete
         </span>
       </Button>
+      ) : null}
     </div>
   );
 }
@@ -2754,34 +2841,41 @@ function MessageCardActionRail({
   onEdit,
   onDelete,
   onPrint,
+  readOnly = false,
 }: {
   letter: Letter;
   onEdit: () => void;
   onDelete: () => void;
   onPrint: () => void;
+  readOnly?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/60 bg-muted/20 px-4 py-3">
-      <Button type="button" variant="outline" size="sm" onClick={onEdit} className="rounded-xl">
+      {!readOnly ? (
+      <Button type="button" variant="outline" size="sm" data-oa-mutate onClick={onEdit} className="rounded-xl">
         <Edit2 className="mr-1.5 h-3.5 w-3.5" />
         Edit
       </Button>
+      ) : null}
       {letter.messageType === 'letter' && (
-        <Button type="button" variant="outline" size="sm" onClick={onPrint} className="rounded-xl">
+        <Button type="button" variant="outline" size="sm" data-oa-view-ok onClick={onPrint} className="rounded-xl">
           <Printer className="mr-1.5 h-3.5 w-3.5" />
           Print
         </Button>
       )}
+      {!readOnly ? (
       <Button
         type="button"
         variant="outline"
         size="sm"
+        data-oa-mutate
         onClick={onDelete}
         className="rounded-xl text-destructive hover:bg-accent hover:text-destructive"
       >
         <Trash2 className="mr-1.5 h-3.5 w-3.5" />
         Delete
       </Button>
+      ) : null}
     </div>
   );
 }
@@ -2791,11 +2885,13 @@ function MessageCard({
   onEdit,
   onDelete,
   onPrint,
+  readOnly = false,
 }: {
   letter: Letter;
   onEdit: () => void;
   onDelete: () => void;
   onPrint: () => void;
+  readOnly?: boolean;
 }) {
   const meta = getMessageTypeMeta(letter.messageType);
   const { Icon, shortLabel, iconBg, gradient } = meta;
@@ -2912,6 +3008,7 @@ function MessageCard({
         onEdit={onEdit}
         onDelete={onDelete}
         onPrint={onPrint}
+        readOnly={readOnly}
       />
     </article>
   );

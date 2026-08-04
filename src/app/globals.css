@@ -2782,9 +2782,25 @@ html {
 [data-oa-family-readonly='true'] [data-oa-mutate] {
   display: none !important;
 }
-[data-oa-family-readonly='true'] input:not([data-oa-view-ok]),
+[data-oa-family-readonly='true'] input:not([data-oa-view-ok]):not([type='hidden']):not([type='checkbox']):not([type='radio']),
 [data-oa-family-readonly='true'] textarea:not([data-oa-view-ok]),
 [data-oa-family-readonly='true'] select:not([data-oa-view-ok]) {
-  caret-color: transparent;
-  background-color: #f8fafc;
+  caret-color: transparent !important;
+  background-color: #f8fafc !important;
+  color: #334155 !important;
+  cursor: default !important;
+  pointer-events: none !important;
+}
+[data-oa-family-readonly='true'] [contenteditable='true']:not([data-oa-view-ok]) {
+  caret-color: transparent !important;
+  background-color: #f8fafc !important;
+  pointer-events: none !important;
+}
+[data-oa-family-readonly='true'] input[type='checkbox']:not([data-oa-view-ok]),
+[data-oa-family-readonly='true'] input[type='radio']:not([data-oa-view-ok]),
+[data-oa-family-readonly='true'] [role='checkbox']:not([data-oa-view-ok]),
+[data-oa-family-readonly='true'] [role='switch']:not([data-oa-view-ok]),
+[data-oa-family-readonly='true'] [role='combobox']:not([data-oa-view-ok]),
+[data-oa-family-readonly='true'] [data-radix-collection-item] {
+  pointer-events: none !important;
 }

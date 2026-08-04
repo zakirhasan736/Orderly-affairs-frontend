@@ -133,13 +133,16 @@ export function familyCanFetchNextKinList(
 
 export function familyCanWrite(session: FamilyDashboardSession): boolean {
   if (!session.isFamily) return true;
+  // Viewer is always non-writable, even if stale permission flags say otherwise.
+  if (familyPortalRoleId(session) === 'viewer') return false;
   return Boolean(session.permissions.can_write);
 }
 
 /** Viewer (and any family role without can_write): inspect only. */
 export function familyIsReadOnly(session: FamilyDashboardSession): boolean {
   if (!session.isFamily) return false;
-  return !familyCanWrite(session);
+  if (familyPortalRoleId(session) === 'viewer') return true;
+  return !Boolean(session.permissions.can_write);
 }
 
 export type FamilyPortalRoleId =
@@ -170,6 +173,7 @@ export function familyPortalRoleId(
 
 export function familyCanUpload(session: FamilyDashboardSession): boolean {
   if (!session.isFamily) return true;
+  if (familyPortalRoleId(session) === 'viewer') return false;
   return Boolean(session.permissions.can_upload);
 }
 

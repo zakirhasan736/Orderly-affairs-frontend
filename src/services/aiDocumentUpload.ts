@@ -43,6 +43,8 @@ export type OwnerAiDocument = {
   mime_type?: string;
   size_bytes?: number;
   status?: string;
+  filled?: boolean;
+  consumed_sections?: string[];
   created_at?: string | null;
   updated_at?: string | null;
   expires_at?: string | null;
