@@ -81,9 +81,16 @@ export default function AdminActivityPage() {
   );
 
   const forceLogout = async (u: AdminUser) => {
+    const reason = window.prompt(
+      `Force logout ${u.email}? Enter an audit reason (required).`,
+    );
+    if (!reason?.trim()) {
+      toast.error('Reason is required');
+      return;
+    }
     setBusyId(u.id);
     try {
-      await adminForceLogoutUser(u.id);
+      await adminForceLogoutUser(u.id, reason.trim());
       toast.success(`Signed out ${u.email}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Force logout failed');

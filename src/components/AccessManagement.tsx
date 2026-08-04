@@ -557,10 +557,36 @@ function TrustedPersonLoginPassword({
   const [visible, setVisible] = useState(false);
   const [revealedPassword, setRevealedPassword] = useState('');
   const [revealing, setRevealing] = useState(false);
+  const [needsStepUp, setNeedsStepUp] = useState(false);
+  const [stepUpPassword, setStepUpPassword] = useState('');
   const [revealNextKinPassword] = useRevealNextKinPasswordMutation();
   const effectivePassword = password?.trim() || revealedPassword.trim();
   const hasPassword = Boolean(effectivePassword);
   const canReveal = Boolean(personId) && passwordOnFile && !hasPassword;
+
+  const runReveal = async (accountPassword: string) => {
+    if (!personId) return;
+    setRevealing(true);
+    try {
+      const res = await revealNextKinPassword({
+        id: personId,
+        password: accountPassword,
+      }).unwrap();
+      const pw = (res.master_password || '').trim();
+      if (!pw) {
+        toast.error('No password on file');
+        return;
+      }
+      setRevealedPassword(pw);
+      setVisible(true);
+      setNeedsStepUp(false);
+      setStepUpPassword('');
+    } catch (err: unknown) {
+      toast.error(getSafeErrorMessage(err, 'Could not reveal password'));
+    } finally {
+      setRevealing(false);
+    }
+  };
 
   const handleToggle = async () => {
     if (visible) {
@@ -572,122 +598,142 @@ function TrustedPersonLoginPassword({
       return;
     }
     if (!personId) return;
-    setRevealing(true);
-    try {
-      const res = await revealNextKinPassword(personId).unwrap();
-      const pw = (res.master_password || '').trim();
-      if (!pw) {
-        toast.error('No password on file');
-        return;
-      }
-      setRevealedPassword(pw);
-      setVisible(true);
-    } catch (err: unknown) {
-      toast.error(getSafeErrorMessage(err, 'Could not reveal password'));
-    } finally {
-      setRevealing(false);
-    }
+    setNeedsStepUp(true);
   };
 
   const showToggle = hasPassword || canReveal;
 
+  const stepUpBlock = needsStepUp ? (
+    <div className="mt-2 space-y-2 rounded-xl border bg-muted/40 p-2.5">
+      <p className="text-[11px] text-muted-foreground">
+        Re-enter your account password to reveal this login.
+      </p>
+      <Input
+        type="password"
+        autoComplete="current-password"
+        value={stepUpPassword}
+        onChange={e => setStepUpPassword(e.target.value)}
+        placeholder="Your account password"
+        className="h-9"
+      />
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={revealing}
+          onClick={() => {
+            setNeedsStepUp(false);
+            setStepUpPassword('');
+          }}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          disabled={revealing || !stepUpPassword.trim()}
+          onClick={() => void runReveal(stepUpPassword.trim())}
+        >
+          {revealing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Reveal'}
+        </Button>
+      </div>
+    </div>
+  ) : null;
+
   if (compact) {
     return (
-      <div
-        className={cn(
-          'flex items-center gap-2 rounded-xl border bg-background/80 px-2.5 py-2',
-          className,
-        )}
-      >
-        <KeyRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
-          Login
-        </span>
-        <span
-          className={cn(
-            'min-w-0 flex-1 truncate font-mono text-xs tracking-wide',
-            !hasPassword && 'text-muted-foreground',
-          )}
-        >
-          {hasPassword
-            ? visible
-              ? effectivePassword
-              : '•'.repeat(Math.min(effectivePassword.length, 12))
-            : passwordOnFile
-              ? 'Saved — tap eye to reveal'
-              : 'Not set — edit to generate'}
-        </span>
-        {showToggle && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 shrink-0 rounded-lg"
-            onClick={() => void handleToggle()}
-            disabled={revealing}
-            aria-label={visible ? 'Hide password' : 'Show password'}
-          >
-            {revealing ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : visible ? (
-              <EyeOff className="h-3.5 w-3.5" />
-            ) : (
-              <Eye className="h-3.5 w-3.5" />
-            )}
-          </Button>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={cn(
-        'overflow-hidden rounded-2xl border bg-background',
-        className,
-      )}
-    >
-      <div className="flex items-start gap-3 px-3 py-3">
-        <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Login Password
-          </p>
-          <p
+      <div className={cn('space-y-1', className)}>
+        <div className="flex items-center gap-2 rounded-xl border bg-background/80 px-2.5 py-2">
+          <KeyRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
+            Login
+          </span>
+          <span
             className={cn(
-              'mt-0.5 text-sm leading-5 break-all font-mono tracking-wider',
+              'min-w-0 flex-1 truncate font-mono text-xs tracking-wide',
               !hasPassword && 'text-muted-foreground',
             )}
           >
             {hasPassword
               ? visible
                 ? effectivePassword
-                : '•'.repeat(Math.min(effectivePassword.length, 14))
+                : '•'.repeat(Math.min(effectivePassword.length, 12))
               : passwordOnFile
-                ? 'Saved on server — tap eye to reveal securely'
-                : 'Not saved — edit and generate a password'}
-          </p>
+                ? 'Saved — tap eye to reveal'
+                : 'Not set — edit to generate'}
+          </span>
+          {showToggle && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0 rounded-lg"
+              onClick={() => void handleToggle()}
+              disabled={revealing}
+              aria-label={visible ? 'Hide password' : 'Show password'}
+            >
+              {revealing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : visible ? (
+                <EyeOff className="h-3.5 w-3.5" />
+              ) : (
+                <Eye className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          )}
         </div>
-        {showToggle && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 shrink-0 rounded-xl"
-            onClick={() => void handleToggle()}
-            disabled={revealing}
-            aria-label={visible ? 'Hide password' : 'Show password'}
-          >
-            {revealing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : visible ? (
-              <EyeOff className="h-4 w-4" />
-            ) : (
-              <Eye className="h-4 w-4" />
-            )}
-          </Button>
-        )}
+        {stepUpBlock}
       </div>
+    );
+  }
+
+  return (
+    <div className={cn('space-y-1', className)}>
+      <div className="overflow-hidden rounded-2xl border bg-background">
+        <div className="flex items-start gap-3 px-3 py-3">
+          <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Login Password
+            </p>
+            <p
+              className={cn(
+                'mt-0.5 text-sm leading-5 break-all font-mono tracking-wider',
+                !hasPassword && 'text-muted-foreground',
+              )}
+            >
+              {hasPassword
+                ? visible
+                  ? effectivePassword
+                  : '•'.repeat(Math.min(effectivePassword.length, 14))
+                : passwordOnFile
+                  ? 'Saved on server — tap eye to reveal securely'
+                  : 'Not saved — edit and generate a password'}
+            </p>
+          </div>
+          {showToggle && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0 rounded-xl"
+              onClick={() => void handleToggle()}
+              disabled={revealing}
+              aria-label={visible ? 'Hide password' : 'Show password'}
+            >
+              {revealing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : visible ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+      {stepUpBlock}
     </div>
   );
 }
@@ -1322,8 +1368,18 @@ export const AccessManagement = forwardRef<
       const local = (person.master_password || '').trim();
       if (local) return local;
       if (!person._id || !person.has_master_password) return '';
+      const accountPassword = window.prompt(
+        'Re-enter your account password to load this Next-of-Kin login for the card.',
+      );
+      if (!accountPassword?.trim()) {
+        toast.error('Password required to reveal Next-of-Kin login');
+        return '';
+      }
       try {
-        const res = await revealNextKinPassword(person._id).unwrap();
+        const res = await revealNextKinPassword({
+          id: person._id,
+          password: accountPassword.trim(),
+        }).unwrap();
         const pw = (res.master_password || '').trim();
         if (pw) {
           setAuthorizedPeople(prev =>

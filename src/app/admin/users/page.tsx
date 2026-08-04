@@ -232,12 +232,19 @@ function UserDetail({
           type="button"
           className="oa-admin-btn secondary"
           disabled={busy}
-          onClick={() =>
+          onClick={() => {
+            const reason = window.prompt(
+              `Force logout ${selected.email}? Enter an audit reason (required).`,
+            );
+            if (!reason?.trim()) {
+              toast.error('Reason is required');
+              return;
+            }
             onRun(
-              () => adminForceLogoutUser(selected.id),
+              () => adminForceLogoutUser(selected.id, reason.trim()),
               'All sessions signed out',
-            )
-          }
+            );
+          }}
         >
           Send password reset / force logout
         </button>
@@ -264,14 +271,17 @@ function UserDetail({
           className="oa-admin-btn ink"
           disabled={busy}
           onClick={() => {
-            if (
-              !window.confirm(
-                `Delete ${selected.email}? This soft-deletes the owner account.`,
-              )
-            ) {
+            const reason = window.prompt(
+              `Delete ${selected.email}? Enter an audit reason (required).`,
+            );
+            if (!reason?.trim()) {
+              toast.error('Reason is required to delete an account');
               return;
             }
-            onRun(() => adminDeleteUser(selected.id), 'User deleted');
+            onRun(
+              () => adminDeleteUser(selected.id, reason.trim()),
+              'User deleted',
+            );
           }}
         >
           Delete account

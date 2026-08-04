@@ -401,11 +401,17 @@ export const authApi = createApi({
         master_password: string;
         message?: string;
       },
-      string
+      {
+        id: string;
+        password?: string;
+        mfa_challenge_token?: string;
+        step_up_token?: string;
+      }
     >({
-      query: id => ({
+      query: ({ id, ...body }) => ({
         url: `/reveal-nextkin-password/${id}`,
         method: 'POST',
+        body,
       }),
     }),
 

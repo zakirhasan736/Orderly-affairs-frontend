@@ -79,12 +79,12 @@ export default function AdminNotificationsPage() {
   const [channel, setChannel] = useState<(typeof CHANNELS)[number]>(
     'Email + in-app',
   );
-  const [subject, setSubject] = useState(CATEGORIES[0].subject);
-  const [body, setBody] = useState(CATEGORIES[0].body);
+  const [subject, setSubject] = useState<string>(CATEGORIES[0].subject);
+  const [body, setBody] = useState<string>(CATEGORIES[0].body);
   const [audience, setAudience] = useState<(typeof CATEGORIES)[number]['audience']>(
     'trial',
   );
-  const [audienceLabel, setAudienceLabel] = useState(
+  const [audienceLabel, setAudienceLabel] = useState<string>(
     CATEGORIES[0].audienceLabel,
   );
   const [counts, setCounts] = useState({ trial: 0, all: 0, active: 0, suspended: 0 });

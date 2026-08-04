@@ -47,6 +47,8 @@ export type AdminSession = {
   can_clear_rate_limits?: boolean;
   can_force_logout?: boolean;
   can_delete_users?: boolean;
+  can_manage_subscriptions?: boolean;
+  can_issue_coupons?: boolean;
   read_only?: boolean;
   full_name?: string | null;
 };
@@ -195,12 +197,16 @@ export async function adminPatchUser(
   }) as Promise<AdminUser>;
 }
 
-export async function adminDeleteUser(id: string) {
-  return adminFetch(`/admin/users/${id}`, { method: 'DELETE' });
+export async function adminDeleteUser(id: string, reason: string) {
+  const qs = `?reason=${encodeURIComponent(reason.trim())}`;
+  return adminFetch(`/admin/users/${id}${qs}`, { method: 'DELETE' });
 }
 
-export async function adminForceLogoutUser(id: string) {
-  return adminFetch(`/admin/users/${id}/force-logout`, { method: 'POST' });
+export async function adminForceLogoutUser(id: string, reason: string) {
+  return adminFetch(`/admin/users/${id}/force-logout`, {
+    method: 'POST',
+    body: JSON.stringify({ reason: reason.trim() }),
+  });
 }
 
 export async function adminGrantComp(
@@ -368,13 +374,18 @@ export async function adminBillingReport() {
   }>;
 }
 
-export async function adminClearRateLimits(email?: string) {
+export async function adminClearRateLimits(email: string, reason?: string) {
+  const trimmed = email.trim();
+  if (!trimmed) {
+    throw new Error('Email is required to clear rate limits');
+  }
   return adminFetch('/admin/billing/clear-rate-limits', {
     method: 'POST',
     body: JSON.stringify({
-      email: email || undefined,
+      email: trimmed,
       clear_auth_limits: true,
       clear_otp_logs: true,
+      reason: reason?.trim() || undefined,
     }),
   });
 }

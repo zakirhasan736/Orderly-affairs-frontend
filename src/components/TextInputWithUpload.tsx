@@ -153,9 +153,8 @@ export function TextInputWithUpload({
       toast.error('Could not open secure file link. Try again.');
       return;
     }
-    if (file.url) {
-      window.open(file.url, '_blank', 'noopener,noreferrer');
-    }
+    // Legacy rows without public_id: do not open raw URLs (may be long-lived public).
+    toast.error('This file needs re-upload for secure viewing.');
   }
 
   return (

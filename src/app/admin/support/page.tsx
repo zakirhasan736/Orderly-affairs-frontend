@@ -7,9 +7,7 @@ import {
   adminDeleteUser,
   adminForceLogoutUser,
   adminListUsers,
-  adminListStaff,
   adminPatchUser,
-  type AdminStaff,
   type AdminUser,
 } from '@/libs/api/adminApi';
 import {
@@ -62,7 +60,7 @@ const ALL_TOOLS = [
   {
     id: 'delete' as const,
     title: 'Delete account',
-    body: 'Soft-delete / revoke access (super admin).',
+    body: 'Soft-delete / revoke access (super admin · audited).',
     badge: 'Super admin',
   },
 ];
@@ -88,12 +86,10 @@ export default function AdminSupportPage() {
   );
 
   const [owners, setOwners] = useState<AdminUser[]>([]);
-  const [staff, setStaff] = useState<AdminStaff[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState('');
   const [tool, setTool] = useState<ToolId>(null);
   const [reason, setReason] = useState('');
   const [newEmail, setNewEmail] = useState('');
-  const [approver, setApprover] = useState('');
   const [busy, setBusy] = useState(false);
 
   const [threads, setThreads] = useState<SupportThread[]>([]);
@@ -114,14 +110,9 @@ export default function AdminSupportPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const [users, staffRes] = await Promise.all([
-          adminListUsers({ page: 1, page_size: 100 }),
-          adminListStaff(),
-        ]);
+        const users = await adminListUsers({ page: 1, page_size: 100 });
         setOwners(users.users || []);
         if (users.users?.[0]) setSelectedOwnerId(users.users[0].id);
-        setStaff(staffRes.staff || []);
-        if (staffRes.staff?.[0]) setApprover(staffRes.staff[0].email);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to load users');
       }
@@ -185,7 +176,7 @@ export default function AdminSupportPage() {
           throw new Error('Not allowed to unlock accounts');
         }
         if (canClearLimits) {
-          await adminClearRateLimits(selectedOwner.email);
+          await adminClearRateLimits(selectedOwner.email, reason.trim());
         }
         if (canSuspend) {
           await adminPatchUser(selectedOwner.id, {
@@ -200,7 +191,7 @@ export default function AdminSupportPage() {
         if (!canForceLogout) {
           throw new Error('Not allowed to force logout');
         }
-        await adminForceLogoutUser(selectedOwner.id);
+        await adminForceLogoutUser(selectedOwner.id, reason.trim());
         toast.success('Sessions revoked — owner must reset password on next login');
       } else if (tool === 'email') {
         if (!canEditEmail) {
@@ -220,13 +211,8 @@ export default function AdminSupportPage() {
         if (!canDelete) {
           throw new Error('Not allowed to delete users');
         }
-        if (!approver) {
-          toast.error('Pick a second approver');
-          setBusy(false);
-          return;
-        }
-        await adminDeleteUser(selectedOwner.id);
-        toast.success(`Delete started · second approver noted: ${approver}`);
+        await adminDeleteUser(selectedOwner.id, reason.trim());
+        toast.success('Account soft-deleted · action audited');
       }
       setTool(null);
       setReason('');
@@ -365,8 +351,8 @@ export default function AdminSupportPage() {
                   color: 'var(--oa-ink)',
                 }}
               >
-                Destructive. A second admin must approve before it executes; both
-                approvals are logged.
+                Destructive. Super admin only — soft-deletes the account and
+                revokes sessions. Reason is written to the audit log.
               </div>
             )}
             <div className="oa-admin-field">
@@ -397,22 +383,6 @@ export default function AdminSupportPage() {
                 placeholder="Ticket #… — identity verified…"
               />
             </div>
-            {tool === 'delete' && (
-              <div className="oa-admin-field">
-                <label>Second approver</label>
-                <select
-                  className="oa-admin-select"
-                  value={approver}
-                  onChange={e => setApprover(e.target.value)}
-                >
-                  {staff.map(s => (
-                    <option key={s.id} value={s.email}>
-                      {s.full_name || s.email} ({s.admin_role_label || s.admin_role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button
                 type="button"
