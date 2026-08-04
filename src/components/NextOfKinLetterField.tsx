@@ -1108,7 +1108,7 @@ export function NextOfKinLetterField({
                 description="Auto-filled from Access Management."
                 icon={<KeyRound className="h-4 w-4" />}
               >
-                <Input readOnly={isReadOnly}
+                <Input
                   value={localData.password_card_location || ''}
                   readOnly
                   placeholder="Will auto-populate"
@@ -1134,7 +1134,7 @@ export function NextOfKinLetterField({
                 label="Next of Kin Email"
                 icon={<Mail className="h-4 w-4" />}
               >
-                <Input readOnly={isReadOnly}
+                <Input
                   value={localData.nok_email || ''}
                   readOnly
                   placeholder="Will auto-populate"
@@ -1145,7 +1145,7 @@ export function NextOfKinLetterField({
                 label="Next of Kin Phone"
                 icon={<Users className="h-4 w-4" />}
               >
-                <Input readOnly={isReadOnly}
+                <Input
                   value={localData.nok_phone || ''}
                   readOnly
                   placeholder="Will auto-populate"
@@ -1196,7 +1196,7 @@ export function NextOfKinLetterField({
               description="Auto-filled from Access Management."
               icon={<MapPin className="h-4 w-4" />}
             >
-              <Input readOnly={isReadOnly}
+              <Input
                 value={localData.key_bag_location || ''}
                 readOnly
                 placeholder="Will auto-populate"
@@ -1226,7 +1226,7 @@ export function NextOfKinLetterField({
               description="Auto-filled from Access Management."
               icon={<MapPin className="h-4 w-4" />}
             >
-              <Input readOnly={isReadOnly}
+              <Input
                 value={localData.documents_bag_location || ''}
                 readOnly
                 placeholder="Will auto-populate"
