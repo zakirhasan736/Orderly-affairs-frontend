@@ -567,7 +567,7 @@ export function DataBindingDashboard({
           </div>
 
           {/* 2) Upload document — drop zone for Editor+; history for all family readers */}
-          {!hideDropZone && !isNextOfKin && (
+          {!uploadsDisabled && !isNextOfKin && (
             <>
               <OverviewAiUploadCard
                 jobs={batch.jobs}
@@ -580,7 +580,7 @@ export function DataBindingDashboard({
               </div>
             </>
           )}
-          {hideDropZone && !isNextOfKin && (
+          {uploadsDisabled && !isNextOfKin && (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-slate-600">
