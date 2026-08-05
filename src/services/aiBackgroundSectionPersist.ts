@@ -394,12 +394,9 @@ export async function persistPartnerStashesForFiles(args: {
       fileId: stash.file_id,
       fileName: stash.file_name,
     });
-    markAiSectionReviewed({
-      sectionId: stash.section_id,
-      fileId: stash.file_id,
-    });
+    // Keep the stash + do not mark reviewed — visiting this partner section
+    // must still open Review & fill for the new data.
     markDashboardAiPatchPersisted(stash.section_id, stash.file_id);
-    takeDashboardAiPatch(stash.section_id, stash.file_id);
     onFileDone?.(stash.file_id, stash.section_id);
     sectionIds.add(stash.section_id);
   }

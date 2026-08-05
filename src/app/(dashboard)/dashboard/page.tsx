@@ -1141,6 +1141,8 @@ export default function DashboardPage() {
 
   // When owner opens a section after overview upload: show read↔field match
   // dialog for EVERY pending document (Toyota + Honda + Jeep), not just one.
+  // Also reopen for partner sections (Main Residence, Vehicles, …) that still
+  // have unreviwed stashes after background save.
   useEffect(() => {
     sectionMatchShownRef.current = null;
   }, [activeSection]);
@@ -1155,7 +1157,13 @@ export default function DashboardPage() {
         sectionId,
         listDashboardAiPatchesForSection(sectionId),
       );
-      if (!stashes.length) return;
+      if (!stashes.length) {
+        // No unreviwed data for this section — close its dialog if open.
+        if (sectionId === activeSection) {
+          setSectionMatchReview(null);
+        }
+        return;
+      }
 
       const shownKey = `${sectionId}:${stashes
         .map(item => `${item.file_id}:${item.createdAt}`)
@@ -1185,7 +1193,7 @@ export default function DashboardPage() {
   );
 
   useEffect(() => {
-    openSectionMatchReview(activeSection);
+    openSectionMatchReview(activeSection, { force: true });
   }, [activeSection, appMode, aiPatchTick, openSectionMatchReview]);
 
   useEffect(() => {

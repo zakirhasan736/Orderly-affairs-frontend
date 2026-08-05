@@ -176,6 +176,13 @@ export function isE2eeUnlocked(): boolean {
   return _dekBytes != null && _dekBytes.byteLength === 32 && _dekKey != null;
 }
 
+let _persistSessionDek = false;
+
+/** When false, DEK stays in memory only (recommended for server-AES / shared-access mode). */
+export function setPersistSessionDek(enabled: boolean): void {
+  _persistSessionDek = enabled;
+}
+
 export function lockE2ee(): void {
   clearIdleTimers();
   if (_dekBytes) {
@@ -199,11 +206,13 @@ export async function rememberDek(dek: Uint8Array): Promise<void> {
   _dekBytes = new Uint8Array(dek);
   _dekKey = await importAesKey(_dekBytes);
   if (typeof window !== 'undefined') {
-    try {
-      sessionStorage.setItem(SESSION_DEK_KEY, b64encode(_dekBytes));
-      sessionStorage.removeItem('oa_e2ee_dek_b64');
-    } catch {
-      /* ignore quota / private mode */
+    if (_persistSessionDek) {
+      try {
+        sessionStorage.setItem(SESSION_DEK_KEY, b64encode(_dekBytes));
+        sessionStorage.removeItem('oa_e2ee_dek_b64');
+      } catch {
+        /* ignore quota / private mode */
+      }
     }
     bindActivityListeners();
     bumpIdleTimer();

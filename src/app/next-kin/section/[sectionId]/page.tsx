@@ -7,6 +7,7 @@ import { useGetKitForNokQuery } from '@/services/kitApi';
 import { useGetMyNextKinAccessQuery } from '@/services/authApi';
 import { EnhancedSectionView } from '@/components/EnhancedSectionView';
 import { isHiddenFromNokDashboard } from '@/config/nokConfig';
+import { nokCanReadSection } from '@/utils/nokSectionAccess';
 import { nokLogout, fetchSession } from '@/libs/secureFetch';
 import { SessionTimeoutGuard } from '@/components/SessionTimeoutGuard';
 import {
@@ -71,6 +72,13 @@ export default function NextKinSectionPage() {
       router.replace('/next-kin/dashboard');
     }
   }, [sectionId, router]);
+
+  useEffect(() => {
+    if (!sectionId || !access) return;
+    if (!nokCanReadSection(access, sectionId)) {
+      router.replace('/next-kin/dashboard');
+    }
+  }, [sectionId, access, router]);
 
   const fullKit = useMemo(() => {
     const level = String(accessLevel || '').trim();

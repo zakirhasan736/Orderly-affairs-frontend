@@ -52,6 +52,9 @@ export default function AuthWatcher({
       if (!session.authenticated) {
         dispatch(clearSession());
         void import('@/libs/e2ee/unlock').then(({ lockE2ee }) => lockE2ee());
+        void import('@/utils/clearSensitiveClientStorage').then(
+          ({ clearSensitiveClientStorage }) => clearSensitiveClientStorage(),
+        );
         router.replace('/');
         return;
       }
@@ -114,6 +117,9 @@ export default function AuthWatcher({
       }
       dispatch(clearSession());
       void import('@/libs/e2ee/unlock').then(({ lockE2ee }) => lockE2ee());
+      void import('@/utils/clearSensitiveClientStorage').then(
+        ({ clearSensitiveClientStorage }) => clearSensitiveClientStorage(),
+      );
       void clearPortalSession().finally(() => {
         if (portalKind === 'family') {
           router.replace('/family/login?session=expired');

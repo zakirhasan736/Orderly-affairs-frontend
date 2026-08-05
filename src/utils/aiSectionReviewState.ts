@@ -36,8 +36,9 @@ export function markAiSectionReviewed(args: {
 }) {
   if (!args.sectionId) return;
   const set = readSet();
+  // File-scoped only — reviewing one document must not hide other docs
+  // (or partner sections) from Review & fill.
   set.add(reviewKey(args.sectionId, args.fileId));
-  set.add(reviewKey(args.sectionId, null));
   writeSet(set);
 
   if (typeof window !== 'undefined') {
@@ -55,7 +56,11 @@ export function isAiSectionReviewed(
 ): boolean {
   if (!sectionId) return false;
   const set = readSet();
-  if (fileId && set.has(reviewKey(sectionId, fileId))) return true;
+  // Per-document only when fileId is known — never treat a sibling review
+  // (or legacy section-wide stamp) as dismissing this document.
+  if (fileId) {
+    return set.has(reviewKey(sectionId, fileId));
+  }
   return set.has(reviewKey(sectionId, null));
 }
 

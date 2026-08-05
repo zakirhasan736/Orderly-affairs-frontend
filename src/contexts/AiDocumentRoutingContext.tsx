@@ -11,7 +11,6 @@ import React, {
 } from 'react';
 import { toast } from 'sonner';
 import { AiGuidedNavigationCallout } from '@/components/ai/AiGuidedNavigationCallout';
-import { AiRoutingFloatingNotifications } from '@/components/ai/AiRoutingFloatingNotifications';
 import { AiSectionMismatchDialog } from '@/components/ai/AiSectionMismatchDialog';
 import {
   isAiAutofillDoneForSection,
@@ -829,7 +828,6 @@ export function AiDocumentRoutingProvider({
         onGoToSection={goToSuggestedSection}
       />
 
-      <AiRoutingFloatingNotifications />
       <AiGuidedNavigationCallout />
     </AiDocumentRoutingContext.Provider>
   );

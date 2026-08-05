@@ -7,6 +7,7 @@ import {
   nokLogout,
   ownerLogout,
 } from '@/libs/secureFetch';
+import { clearSensitiveClientStorage } from '@/utils/clearSensitiveClientStorage';
 
 const PORTAL_KIND_KEY = 'oa_portal_kind';
 
@@ -57,6 +58,8 @@ export function useLogout() {
     } catch {
       /* ignore */
     }
+
+    clearSensitiveClientStorage();
 
     try {
       if (useNokSession) {

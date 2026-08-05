@@ -4,6 +4,7 @@ import {
   isE2eeUnlocked,
   rewrapDekForNewPassword,
   setE2eeAutoLockHandler,
+  setPersistSessionDek,
   tryRestoreSessionDek,
 } from '@/libs/e2ee/crypto';
 import {
@@ -40,11 +41,15 @@ export async function unlockVaultWithPassword(
   if (!password) return empty;
 
   try {
+    const statusBefore = await fetchE2eeStatus().catch(() => null);
+    setPersistSessionDek(
+      Boolean(statusBefore?.enabled && statusBefore.client_write !== false),
+    );
+
     if (!isE2eeUnlocked()) {
       await tryRestoreSessionDek();
     }
 
-    const statusBefore = await fetchE2eeStatus().catch(() => null);
     const { created } = await unlockOrSetupE2ee(
       password,
       fetchE2eeStatus,

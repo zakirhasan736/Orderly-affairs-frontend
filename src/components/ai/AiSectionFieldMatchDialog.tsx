@@ -45,6 +45,8 @@ export type MatchReviewDocument = {
   result?: unknown;
   subsection?: string | null;
   createdAt?: number;
+  /** True when overview/background already wrote this extract into the vault. */
+  alreadyAutoFilled?: boolean;
 };
 
 type Props = {
@@ -71,7 +73,7 @@ function StatusPill({ status }: { status: 'filled' | 'available' | 'empty' }) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
         <CheckCircle2 className="h-3 w-3" />
-        Filled
+        From document
       </span>
     );
   }
@@ -86,7 +88,7 @@ function StatusPill({ status }: { status: 'filled' | 'available' | 'empty' }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
       <CircleDashed className="h-3 w-3" />
-      Empty
+      Still empty
     </span>
   );
 }
@@ -222,6 +224,7 @@ export function stashToMatchDocument(stash: StashedAiPatch): MatchReviewDocument
     result: stash.result,
     subsection: stash.subsection,
     createdAt: stash.createdAt,
+    alreadyAutoFilled: Boolean(stash.vault_persisted),
   };
 }
 
@@ -286,6 +289,9 @@ export function AiSectionFieldMatchDialog({
 
   const unfilledCount = countUnfilledAiRows(rows);
   const editableCount = countEditableEmptyRows(rows);
+  const filledFromDocCount = rows.filter(row => row.status === 'filled').length;
+  const canFillCount = rows.filter(row => row.status === 'available').length;
+  const stillEmptyCount = rows.filter(row => row.status === 'empty').length;
   const avgConfidence = averageMatchConfidence(rows);
   const sectionLabel = getAiSectionLabel(sectionId) || `Section ${sectionId}`;
   const subsectionLabel =
@@ -293,6 +299,7 @@ export function AiSectionFieldMatchDialog({
     subsection ||
     AI_SECTION_BY_ID[sectionId]?.defaultSubsection ||
     null;
+  const anyAlreadyAutoFilled = docs.some(doc => doc.alreadyAutoFilled);
 
   const dirtyEdits = useMemo(() => {
     const edits: Record<string, string> = {};
@@ -305,6 +312,8 @@ export function AiSectionFieldMatchDialog({
     });
     return edits;
   }, [drafts, rows]);
+
+  const hasDirtyEdits = Object.keys(dirtyEdits).length > 0;
 
   const handleClose = () => {
     onCloseReviewed();
@@ -362,10 +371,33 @@ export function AiSectionFieldMatchDialog({
               </DialogTitle>
               <DialogDescription className="text-slate-600">
                 {docs.length > 1
-                  ? `${docs.length} documents ready — tabs are named by vehicle/policy (Toyota, Honda, Jeep…). Same card already on file is updated only when data differs.`
-                  : 'Left: fields we read from your document. Right: this section’s form fields with match confidence.'}
+                  ? `${docs.length} documents ready — tabs are named by vehicle/policy (Toyota, Honda, Jeep…).`
+                  : 'We read your uploaded document and matched it to this section.'}{' '}
+                Fields may already be filled from that read. Review them, fill
+                what is still empty, save edits, fill all documents, or skip to
+                keep the auto-filled data.
               </DialogDescription>
             </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 rounded-xl border border-[#c5d4e8] bg-[#eef3f9] px-3 py-2.5 text-xs text-[#213D59]">
+            {anyAlreadyAutoFilled || filledFromDocCount > 0 ? (
+              <span className="font-semibold">
+                {filledFromDocCount} already filled from document
+              </span>
+            ) : (
+              <span className="font-semibold">Ready to apply document data</span>
+            )}
+            {canFillCount > 0 ? (
+              <span className="text-[#8a6a1a]">
+                · {canFillCount} can still fill
+              </span>
+            ) : null}
+            {stillEmptyCount > 0 ? (
+              <span className="text-slate-600">
+                · {stillEmptyCount} still empty
+              </span>
+            ) : null}
           </div>
 
           {docs.length > 1 ? (
@@ -383,6 +415,7 @@ export function AiSectionFieldMatchDialog({
                   )}
                 >
                   {tabLabel(doc, index, sectionId)}
+                  {doc.alreadyAutoFilled ? ' · filled' : ''}
                 </button>
               ))}
             </div>
@@ -529,10 +562,10 @@ export function AiSectionFieldMatchDialog({
         <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
           <p className="text-xs text-slate-500">
             {docs.length > 1
-              ? `Fill all applies each named document into Vehicles/Insurance cards. Same Toyota again only updates when something changed — identical data is skipped.`
+              ? 'Fill all applies each document. Skip keeps values already filled from the document read.'
               : editableCount > 0
-                ? `${editableCount} field${editableCount === 1 ? '' : 's'} can be edited here. Filled ones are locked as read-only.`
-                : 'All listed fields already have values. You can close.'}
+                ? `${editableCount} field${editableCount === 1 ? '' : 's'} can still be filled or edited. Skip keeps what the document already filled.`
+                : 'All listed fields already have document values. Skip to keep them, or update if you changed anything.'}
           </p>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             {docs.length > 0 ? (
@@ -548,11 +581,11 @@ export function AiSectionFieldMatchDialog({
                   : docs.length > 1
                     ? `Fill all ${docs.length} documents`
                     : unfilledCount > 0
-                      ? 'Fill all from AI'
-                      : 'Apply AI data'}
+                      ? 'Fill remaining from document'
+                      : 'Update from document'}
               </Button>
             ) : null}
-            {Object.keys(dirtyEdits).length > 0 && activeDoc ? (
+            {hasDirtyEdits && activeDoc ? (
               <Button
                 type="button"
                 className="rounded-xl bg-[#213D59] hover:bg-[#1a3148]"
@@ -568,9 +601,11 @@ export function AiSectionFieldMatchDialog({
               className="rounded-xl"
               onClick={handleClose}
             >
-              {Object.keys(dirtyEdits).length > 0 || unfilledCount > 0
-                ? 'Close'
-                : 'Done'}
+              {hasDirtyEdits
+                ? 'Skip without saving edits'
+                : filledFromDocCount > 0 || anyAlreadyAutoFilled
+                  ? 'Skip — keep filled data'
+                  : 'Skip'}
             </Button>
           </div>
         </DialogFooter>

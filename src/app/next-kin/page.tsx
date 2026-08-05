@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { NextOfKinLoginPage } from '@/components/NextOfKinLoginPage';
@@ -20,6 +20,14 @@ export default function NextKinLoginPageWrapper() {
   const [captchaToken, setCaptchaToken] = useState('');
   const [captchaReady, setCaptchaReady] = useState(false);
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('oa_portal_kind', 'nextkin');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const refreshCaptcha = useCallback(() => {
     setCaptchaToken('');
@@ -71,14 +79,18 @@ export default function NextKinLoginPageWrapper() {
     if (!res.authenticated) {
       throw new Error('Session not established');
     }
-    // password held on NextOfKinLoginPage — unlock via session event
+    try {
+      sessionStorage.setItem('oa_portal_kind', 'nextkin');
+    } catch {
+      /* ignore */
+    }
+    await markPortalSession();
     toast.success('Login successful');
     if (res.access_type === 'family') {
-      await markPortalSession();
-      router.push('/dashboard');
+      router.replace('/dashboard');
       return;
     }
-    router.push('/next-kin/dashboard');
+    router.replace('/next-kin/dashboard');
   };
 
   return (
