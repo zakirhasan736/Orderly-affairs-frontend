@@ -4,19 +4,16 @@ import React, { useState } from 'react';
 import { VideoRecorder } from './VideoRecorder';
 import { AudioRecorder } from './AudioRecorder';
 import { MediaModalPortal } from './MediaModalPortal';
-import { uploadMessageMedia } from '@/libs/api/lettersOfNaxtKinMessage';
+import {
+  uploadMessageMedia,
+  type MessageMediaUploadResult,
+} from '@/libs/api/lettersOfNaxtKinMessage';
 import { blobToMediaFile, validateMessageMediaSize } from '@/utils/mediaUpload';
 import { toast } from 'sonner';
 
 interface SafeMediaRecorderProps {
   type: 'video' | 'audio';
-  onUploaded: (media: {
-    url: string;
-    public_id: string;
-    type: string;
-    format?: string;
-    size?: number;
-  }) => void;
+  onUploaded: (media: MessageMediaUploadResult) => void;
   onClose: () => void;
 }
 
