@@ -148,6 +148,7 @@ import { OverviewBrowseGrid } from '@/components/ai/OverviewBrowseGrid';
 import { NextOfKinLoginPage } from '@/components/NextOfKinLoginPage';
 import { TurnstileCaptcha } from '@/components/TurnstileCaptcha';
 import { getOtpSessionId } from '@/utils/otpSession';
+import { buildWelcomeMessage } from '@/utils/welcomeMessage';
 import { OwnerNotificationModal } from '@/components/OwnerNotificationModal';
 import { EnhancedNOKDashboard } from '@/components/EnhancedNOKDashboard';
 import { EnhancedSectionView } from '@/components/EnhancedSectionView';
@@ -367,6 +368,7 @@ export default function DashboardPage() {
   } | null>(null);
   const [sectionMatchApplying, setSectionMatchApplying] = useState(false);
   const sectionMatchShownRef = useRef<string | null>(null);
+  const [aiPatchTick, setAiPatchTick] = useState(0);
   const [disabledSections, setDisabledSections] = useState<
     Record<string, boolean>
   >({});
@@ -677,6 +679,11 @@ export default function DashboardPage() {
         const { fetchE2eeStatus } = await import('@/libs/e2ee/vaultApi');
         const status = await fetchE2eeStatus();
         if (cancelled) return;
+        // Server AES mode (E2EE off): no client DEK required for family/NOK.
+        if (!status.enabled) {
+          setFamilyVaultGate('ready');
+          return;
+        }
         if (status.enabled && status.configured) {
           setFamilyVaultGate('needs_unlock');
         } else if (familyAcl.isFamily && status.enabled) {
@@ -999,6 +1006,7 @@ export default function DashboardPage() {
           setCurrentUser({
             email: session.email || '',
             full_name: session.full_name,
+            returning_user: session.returning_user,
           });
           setAppMode('owner');
           setSessionReady(true);
@@ -1015,7 +1023,11 @@ export default function DashboardPage() {
 
       if (session.authenticated && session.role === 'owner') {
         setFamilyAcl(parseFamilyDashboardSession({}));
-        setCurrentUser({ email: session.email || '' });
+        setCurrentUser({
+          email: session.email || '',
+          full_name: session.full_name,
+          returning_user: session.returning_user,
+        });
         // Do not reset activeSection here — remounts/re-hydrates must not
         // yank the owner off the section they are editing.
         setAppMode('owner');
@@ -1133,43 +1145,67 @@ export default function DashboardPage() {
     sectionMatchShownRef.current = null;
   }, [activeSection]);
 
+  const openSectionMatchReview = useCallback(
+    (sectionId: string, opts?: { force?: boolean }) => {
+      if (appMode !== 'owner') return;
+      if (!sectionId || sectionId === 'dashboard') return;
+      if (!/^\d+$/.test(sectionId)) return;
+
+      const stashes = selectMatchReviewDocuments(
+        sectionId,
+        listDashboardAiPatchesForSection(sectionId),
+      );
+      if (!stashes.length) return;
+
+      const shownKey = `${sectionId}:${stashes
+        .map(item => `${item.file_id}:${item.createdAt}`)
+        .join('|')}`;
+      if (!opts?.force && sectionMatchShownRef.current === shownKey) return;
+
+      sectionMatchShownRef.current = shownKey;
+      setSectionMatchReview({
+        sectionId,
+        documents: stashes,
+      });
+
+      const firstSub = stashes[0]?.subsection;
+      if (firstSub && sectionId === activeSection) {
+        const uiSubsection =
+          firstSub === 'vital_info'
+            ? '1A'
+            : firstSub === 'next_of_kin' ||
+                firstSub === 'executor_trustee' ||
+                firstSub === 'additional_contacts'
+              ? '1C'
+              : firstSub;
+        setActiveSubsection(uiSubsection);
+      }
+    },
+    [activeSection, appMode],
+  );
+
+  useEffect(() => {
+    openSectionMatchReview(activeSection);
+  }, [activeSection, appMode, aiPatchTick, openSectionMatchReview]);
+
   useEffect(() => {
     if (appMode !== 'owner') return;
-    if (!activeSection || activeSection === 'dashboard') return;
-    if (!/^\d+$/.test(activeSection)) return;
 
-    const stashes = selectMatchReviewDocuments(
-      activeSection,
-      listDashboardAiPatchesForSection(activeSection),
-    );
+    const onAiPatch = (event: Event) => {
+      const detail = (event as CustomEvent).detail as
+        | { sectionId?: string }
+        | undefined;
+      setAiPatchTick(tick => tick + 1);
+      if (detail?.sectionId && detail.sectionId === activeSection) {
+        sectionMatchShownRef.current = null;
+        openSectionMatchReview(detail.sectionId, { force: true });
+      }
+    };
 
-    if (!stashes.length) return;
-
-    const shownKey = `${activeSection}:${stashes
-      .map(item => `${item.file_id}:${item.createdAt}`)
-      .join('|')}`;
-    if (sectionMatchShownRef.current === shownKey) return;
-
-    sectionMatchShownRef.current = shownKey;
-    setSectionMatchReview({
-      sectionId: activeSection,
-      documents: stashes,
-    });
-
-    const firstSub = stashes[0]?.subsection;
-    if (firstSub) {
-      const uiSubsection =
-        firstSub === 'vital_info'
-          ? '1A'
-          : firstSub === 'next_of_kin' ||
-              firstSub === 'executor_trustee' ||
-              firstSub === 'additional_contacts'
-            ? '1C'
-            : firstSub;
-      setActiveSubsection(uiSubsection);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSection, appMode]);
+    window.addEventListener('orderly-ai-patch-stashed', onAiPatch);
+    return () =>
+      window.removeEventListener('orderly-ai-patch-stashed', onAiPatch);
+  }, [activeSection, appMode, openSectionMatchReview]);
 
   // Background AI saves update in-memory form without user opening the section.
   useEffect(() => {
@@ -1288,7 +1324,13 @@ export default function DashboardPage() {
         setAppMode('nok_dashboard');
         setActiveSection('dashboard');
         router.replace('/dashboard');
-        toast.success(`Welcome back, ${session.email}!`);
+        toast.success(
+          buildWelcomeMessage({
+            fullName: session.full_name,
+            email: session.email,
+            returning: session.returning_user,
+          }),
+        );
       } else {
         toast.error('Invalid role in session.');
         setAppMode('nok_login');
@@ -2657,7 +2699,7 @@ export default function DashboardPage() {
               {activeSection === 'dashboard' ? (
                 <div className="owner-dashboard-overview-area space-y-5 md:space-y-6">
                   {appMode === 'owner' && !familyAcl.isFamily && (
-                    <E2eeMigrationBanner enabled />
+                    <E2eeMigrationBanner enabled={false} />
                   )}
                   {familyAcl.isFamily && familyRoleBannerText(familyAcl) && (
                     <div className="rounded-2xl border border-teal-200/80 bg-teal-50/90 px-4 py-3 text-sm text-teal-950">
@@ -2737,6 +2779,7 @@ export default function DashboardPage() {
                       ownerName={
                         currentUser?.full_name || currentUser?.email || 'You'
                       }
+                      isReturningUser={currentUser?.returning_user !== false}
                       notices={headerNotices}
                       onNavigateToSection={sectionId => goToSection(sectionId)}
                       readOnly={
@@ -2779,6 +2822,7 @@ export default function DashboardPage() {
                       ownerName={
                         currentUser?.full_name || currentUser?.email || 'You'
                       }
+                      isReturningUser={currentUser?.returning_user !== false}
                       notices={headerNotices}
                       onNavigateToSection={sectionId => goToSection(sectionId)}
                     />
@@ -2821,7 +2865,10 @@ export default function DashboardPage() {
                     <AiSectionFieldMatchDialog
                       open={Boolean(sectionMatchReview)}
                       onOpenChange={open => {
-                        if (!open) setSectionMatchReview(null);
+                        if (!open) {
+                          setSectionMatchReview(null);
+                          sectionMatchShownRef.current = null;
+                        }
                       }}
                       sectionId={sectionMatchReview.sectionId}
                       subsection={

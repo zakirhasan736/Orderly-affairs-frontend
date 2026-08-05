@@ -270,12 +270,15 @@ export async function decryptJson<T = Record<string, unknown>>(
 
 export type E2eeStatus = {
   enabled: boolean;
+  client_write?: boolean;
   configured?: boolean;
   needs_setup?: boolean;
+  migration_unlock_available?: boolean;
   role?: string;
   salt_b64?: string;
   wrapped_dek_b64?: string;
   kdf_iterations?: number;
+  reason?: string | null;
 };
 
 /** After password login: unlock existing envelope or create a new DEK. */
@@ -291,16 +294,34 @@ export async function unlockOrSetupE2ee(
   }) => Promise<unknown>,
 ): Promise<{ created: boolean }> {
   const status = await fetchStatus();
-  if (!status.enabled) {
-    lockE2ee();
-    return { created: false };
-  }
 
   const canUnwrap =
     status.configured &&
-    !status.needs_setup &&
     status.salt_b64 &&
-    status.wrapped_dek_b64;
+    status.wrapped_dek_b64 &&
+    !status.needs_setup;
+
+  // E2EE client-write off: still unwrap an existing DEK once so leftover v3
+  // rows can be converted to server AES-256-GCM for family/NOK sharing.
+  if (!status.enabled) {
+    if (canUnwrap) {
+      try {
+        const wk = await deriveWrappingKey(
+          password,
+          status.salt_b64!,
+          status.kdf_iterations || KDF_ITERATIONS,
+        );
+        const dek = await unwrapDek(status.wrapped_dek_b64!, wk);
+        await rememberDek(dek);
+        return { created: false };
+      } catch {
+        lockE2ee();
+        return { created: false };
+      }
+    }
+    lockE2ee();
+    return { created: false };
+  }
 
   if (canUnwrap) {
     try {
@@ -321,6 +342,12 @@ export async function unlockOrSetupE2ee(
   }
 
   if (status.role === 'nextkin') {
+    lockE2ee();
+    return { created: false };
+  }
+
+  // Do not create new E2EE envelopes when client write is disabled.
+  if (status.client_write === false) {
     lockE2ee();
     return { created: false };
   }

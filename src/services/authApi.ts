@@ -259,6 +259,8 @@ export interface LoginResponse {
   role?: string;
   email?: string;
   access_type?: string;
+  full_name?: string;
+  returning_user?: boolean;
   billing_status?: string;
   requires_billing?: boolean;
 }

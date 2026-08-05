@@ -12,7 +12,8 @@ import {
 import { getOtpSessionId } from '@/utils/otpSession';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import { parseAuthApiError } from '@/utils/authRateLimit';
-import { markPortalSession } from '@/libs/secureFetch';
+import { buildWelcomeMessage } from '@/utils/welcomeMessage';
+import { fetchSession, markPortalSession } from '@/libs/secureFetch';
 
 /**
  * Family collaborator sign-in — separate cookie session from the owner.
@@ -86,12 +87,14 @@ export default function FamilyLoginPage() {
     }
     await markPortalSession();
 
-    let accessType = String(res.access_type || '').toLowerCase();
-    if (!accessType) {
-      const { fetchSession } = await import('@/libs/secureFetch');
-      const session = await fetchSession();
-      accessType = String(session.access_type || '').toLowerCase();
-    }
+    const session = await fetchSession();
+    const welcome = buildWelcomeMessage({
+      fullName: res.full_name ?? session.full_name,
+      email: res.email ?? session.email,
+      returning: res.returning_user ?? session.returning_user,
+    });
+
+    let accessType = String(res.access_type || session.access_type || '').toLowerCase();
 
     if (accessType === 'family') {
       try {
@@ -102,16 +105,16 @@ export default function FamilyLoginPage() {
       const { isE2eeUnlocked } = await import('@/libs/e2ee/unlock');
       if (!isE2eeUnlocked()) {
         toast.warning(
-          'Signed in, but vault encryption is locked. Ask the owner to re-save your family access password so encrypted sections can open.',
+          `${welcome}. Vault encryption is locked — ask the owner to re-save your family access password if sections will not open.`,
         );
       } else {
-        toast.success('Signed in to the owner dashboard');
+        toast.success(welcome);
       }
       // Soft navigate so an unlocked DEK survives into the dashboard.
       router.replace('/dashboard');
       return;
     }
-    toast.success('Login successful');
+    toast.success(welcome);
     router.replace('/next-kin/dashboard');
   };
 

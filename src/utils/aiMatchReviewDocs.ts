@@ -5,7 +5,6 @@
  */
 
 import type { StashedAiPatch } from '@/utils/aiDashboardPatchCache';
-import { isAiAutofillDoneForSection } from '@/utils/aiAutofillDoneSections';
 import { isAiSectionReviewed } from '@/utils/aiSectionReviewState';
 import { AI_SECTION_BY_ID } from '@/utils/aiSectionRegistry';
 import {
@@ -157,7 +156,6 @@ export function selectMatchReviewDocuments(
   const eligible = stashes.filter(stash => {
     if (!stash) return false;
     if (isAiSectionReviewed(sectionId, stash.file_id)) return false;
-    if (isAiAutofillDoneForSection(sectionId, stash.file_id)) return false;
     if (!stash.result && !(stash.detectedFields || []).length) return false;
     return stashHasMeaningfulSectionData(sectionId, stash);
   });

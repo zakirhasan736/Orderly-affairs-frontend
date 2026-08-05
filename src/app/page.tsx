@@ -120,6 +120,7 @@ const isValidLoginIdentifier = (value: string) => {
 const verifyTOTPCode = (code: string) => /^\d{6}$/.test(code);
 
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
+import { buildWelcomeMessage } from '@/utils/welcomeMessage';
 
 const getApiErrorMessage = (err: unknown, fallback: string) =>
   getSafeErrorMessage(err, fallback);
@@ -182,10 +183,24 @@ const completeOwnerAuth = async (
   if (billingOnly) {
     options?.onBillingOnly?.();
     goToDashboard(router);
+    toast.success(
+      buildWelcomeMessage({
+        fullName: session.full_name,
+        email: session.email ?? options?.email,
+        returning: session.returning_user,
+      }),
+    );
     return 'billing_lock';
   }
 
   goToDashboard(router);
+  toast.success(
+    buildWelcomeMessage({
+      fullName: session.full_name,
+      email: session.email ?? options?.email,
+      returning: session.returning_user,
+    }),
+  );
   return 'dashboard';
 };
 
@@ -1295,9 +1310,6 @@ const verifyEmailOtpCode = useCallback(async () => {
       },
     });
 
-    if (destination === 'dashboard') {
-      toast.success('Signed in');
-    }
   } catch (err: unknown) {
     if (
       err instanceof Error &&

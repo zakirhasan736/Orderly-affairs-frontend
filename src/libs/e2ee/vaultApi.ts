@@ -1,7 +1,6 @@
 import { secureFetch } from '@/libs/secureFetch';
 import {
   decryptJson,
-  encryptJson,
   isE2eeUnlocked,
   type E2eeStatus,
 } from '@/libs/e2ee/crypto';
@@ -100,7 +99,7 @@ const MAX_MIGRATE_PASSES = 5;
 
 /**
  * Re-save legacy (v2) sections as client E2EE (v3).
- * Loops until migration_complete (or max passes / no progress).
+ * No-op when client E2EE write is disabled (shared-access / server AES mode).
  */
 export async function migrateLegacySectionsToE2ee(): Promise<{
   migrated: number;
@@ -110,6 +109,18 @@ export async function migrateLegacySectionsToE2ee(): Promise<{
   migration_complete: boolean;
   passes: number;
 }> {
+  const status = await fetchE2eeStatus().catch(() => null);
+  if (!status?.enabled || status.client_write === false) {
+    return {
+      migrated: 0,
+      skipped: 0,
+      failed: 0,
+      legacy_remaining: 0,
+      migration_complete: true,
+      passes: 0,
+    };
+  }
+
   if (!isE2eeUnlocked()) {
     return {
       migrated: 0,
@@ -200,6 +211,66 @@ export async function migrateLegacySectionsToE2ee(): Promise<{
   };
 }
 
+/**
+ * Convert leftover client-E2EE (v3) rows to server AES-256-GCM (v2)
+ * so family/NOK can read granted sections without a browser DEK.
+ */
+export async function migrateE2eeSectionsToServerAes(): Promise<{
+  migrated: number;
+  skipped: number;
+  failed: number;
+  remaining_v3: number;
+}> {
+  if (!isE2eeUnlocked()) {
+    return { migrated: 0, skipped: 0, failed: 0, remaining_v3: -1 };
+  }
+
+  let migrated = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const path of VAULT_SECTION_PATHS) {
+    try {
+      const res = await secureFetch(path);
+      if (!res.ok) {
+        skipped += 1;
+        continue;
+      }
+      const json = await res.json();
+      if (!json || (typeof json === 'object' && !Object.keys(json).length)) {
+        skipped += 1;
+        continue;
+      }
+      if (!(json.e2ee && json.ciphertext)) {
+        skipped += 1;
+        continue;
+      }
+      const decrypted = await decryptJson(json.ciphertext);
+      const data =
+        decrypted &&
+        typeof decrypted === 'object' &&
+        !Array.isArray(decrypted) &&
+        'data' in (decrypted as Record<string, unknown>) &&
+        (decrypted as Record<string, unknown>).data &&
+        typeof (decrypted as Record<string, unknown>).data === 'object'
+          ? (decrypted as { data: unknown }).data
+          : decrypted;
+      await saveVaultSection(path, data);
+      migrated += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+
+  const after = await fetchE2eeMigrationStatus().catch(() => null);
+  return {
+    migrated,
+    skipped,
+    failed,
+    remaining_v3: after?.e2ee_v3 ?? -1,
+  };
+}
+
 export async function postE2eeNokWrap(body: {
   nok_user_id: string;
   salt_b64: string;
@@ -220,13 +291,12 @@ export async function postE2eeNokWrap(body: {
 }
 
 /**
- * Load a vault section: decrypt client-side when E2EE unlocked / server returns ciphertext.
+ * Load a vault section via server AES path.
+ * If a leftover client-E2EE (v3) row is returned and DEK is unlocked, decrypt
+ * it and re-save as server AES so family/NOK can read it.
  */
 export async function getVaultSection(legacyPath: string): Promise<any> {
-  const slug = sectionPathToSlug(legacyPath);
-  const useE2ee = isE2eeUnlocked() && slug;
-  const url = useE2ee ? `/e2ee/vault/${slug}` : legacyPath;
-  const res = await secureFetch(url);
+  const res = await secureFetch(legacyPath);
   if (!res.ok) throw new Error(`Failed to load section (${res.status})`);
   const json = await res.json();
   if (!json || (typeof json === 'object' && !Object.keys(json).length)) {
@@ -235,7 +305,7 @@ export async function getVaultSection(legacyPath: string): Promise<any> {
   if (json.e2ee && json.ciphertext) {
     if (!isE2eeUnlocked()) {
       throw new Error(
-        'Vault encryption is locked — sign in again to unlock shared sections',
+        'This section still uses legacy client encryption. Sign in once with your password to convert it for family/NOK access.',
       );
     }
     const decrypted = await decryptJson(json.ciphertext);
@@ -248,44 +318,32 @@ export async function getVaultSection(legacyPath: string): Promise<any> {
       typeof (decrypted as Record<string, unknown>).data === 'object'
         ? (decrypted as { data: unknown }).data
         : decrypted;
-    return { section_key: json.section_key, data, e2ee: true, encryption_version: 3 };
+
+    // Convert opaque v3 → server AES-256-GCM (v2) for shared access.
+    try {
+      await saveVaultSection(legacyPath, data);
+    } catch {
+      /* conversion best-effort; still return decrypted for this session */
+    }
+
+    return {
+      section_key: json.section_key,
+      data,
+      e2ee: false,
+      encryption_version: 2,
+    };
   }
   return json;
 }
 
 /**
- * Save vault section: encrypt client-side when unlocked.
+ * Save vault section with server AES-256-GCM (shared with family/NOK).
+ * Client E2EE writes are disabled for the shared-access product model.
  */
 export async function saveVaultSection(
   legacyPath: string,
   payload: unknown,
 ): Promise<any> {
-  const slug = sectionPathToSlug(legacyPath);
-  if (isE2eeUnlocked() && slug) {
-    const ciphertext = await encryptJson(payload);
-    const res = await secureFetch(`/e2ee/vault/${slug}`, {
-      method: 'POST',
-      body: JSON.stringify({ e2ee: true, ciphertext }),
-    });
-    if (!res.ok) {
-      const t = await res.text();
-      throw new Error(t || 'E2EE save failed');
-    }
-    return res.json();
-  }
-
-  // When E2EE is configured but locked, refuse legacy writes. Saving as v2
-  // then migrating on the next unlock leaves ciphertext the UI cannot read
-  // after a reload (DEK is memory-only).
-  if (slug) {
-    const status = await fetchE2eeStatus().catch(() => null);
-    if (status?.enabled && status?.configured) {
-      throw new Error(
-        'Vault encryption is locked — unlock your vault to save sections',
-      );
-    }
-  }
-
   const res = await secureFetch(legacyPath, {
     method: 'POST',
     body: JSON.stringify(payload),

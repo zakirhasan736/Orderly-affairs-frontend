@@ -123,6 +123,7 @@ export async function fetchSession(): Promise<{
   full_name?: string;
   email?: string;
   owner_id?: string;
+  returning_user?: boolean;
   billing_status?: string;
   requires_billing?: boolean;
   billing_only?: boolean;

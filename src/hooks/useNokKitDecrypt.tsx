@@ -25,9 +25,30 @@ export function useNokKitDecrypt(kitRaw: unknown) {
       '@/libs/e2ee/unlock'
     );
     await tryRestoreSessionDek();
+    const { fetchE2eeStatus, kitHasLockedE2eeSections, decryptKitSections } =
+      await import('@/libs/e2ee/vaultApi');
+    const status = await fetchE2eeStatus().catch(() => null);
+
+    // Server AES mode: kit already has plaintext `data` for v2 rows.
+    if (!status?.enabled) {
+      try {
+        if (isE2eeUnlocked() && kitHasLockedE2eeSections(raw)) {
+          const decoded = await decryptKitSections(raw);
+          return { kit: decoded, gate: 'ready' as const };
+        }
+      } catch {
+        /* fall through */
+      }
+      if (kitHasLockedE2eeSections(raw)) {
+        return {
+          kit: raw,
+          gate: isE2eeUnlocked() ? ('ready' as const) : ('needs_unlock' as const),
+        };
+      }
+      return { kit: raw, gate: 'ready' as const };
+    }
+
     if (!isE2eeUnlocked()) {
-      const { fetchE2eeStatus } = await import('@/libs/e2ee/vaultApi');
-      const status = await fetchE2eeStatus().catch(() => null);
       if (status?.enabled && status?.configured) {
         return { kit: raw, gate: 'needs_unlock' as const };
       }

@@ -63,6 +63,8 @@ interface DataBindingDashboardProps {
   afterHero?: React.ReactNode;
   ownerEmail?: string | null;
   ownerName?: string | null;
+  /** False on first-ever sign-in; true for returning owners/family. */
+  isReturningUser?: boolean;
   notices?: DashboardNotice[];
   /** Family Viewer — hide mutating overview actions. */
   readOnly?: boolean;
@@ -108,6 +110,7 @@ export function DataBindingDashboard({
   lastUpdatedBySection = {},
   ownerEmail: _ownerEmail = null,
   ownerName = null,
+  isReturningUser = true,
   notices: _notices = [],
   readOnly = false,
   uploadsDisabled = false,
@@ -133,7 +136,19 @@ export function DataBindingDashboard({
     const first = raw.split(/\s+/)[0];
     return first || null;
   }, [ownerName]);
-  const hideDropZone = uploadsDisabled;
+
+  const welcomeHeading = useMemo(() => {
+    if (welcomeName) {
+      return isReturningUser
+        ? `Welcome back, ${welcomeName}`
+        : `Welcome, ${welcomeName}`;
+    }
+    return isReturningUser ? 'Welcome back' : 'Welcome';
+  }, [welcomeName, isReturningUser]);
+
+  const welcomeSubtitle = isReturningUser
+    ? 'Pick up where you left off — upload a document or open a section below.'
+    : "Let's get your vault started — upload a document or open a section below.";
   const [activeTab, setActiveTab] = useState<PeopleTab>('access');
   const [mobileHubTab, setMobileHubTab] = useState<MobileHubTab>('people');
   const [messages, setMessages] = useState<ApiMessage[]>([]);
@@ -481,11 +496,10 @@ export function DataBindingDashboard({
         <>
           <header className="overview-welcome px-0.5">
             <h1 className="text-[1.4rem] font-semibold tracking-tight text-[#213D59] sm:text-[1.65rem]">
-              {welcomeName ? `Welcome back, ${welcomeName}` : 'Welcome back'}
+              {welcomeHeading}
             </h1>
             <p className="mt-1 max-w-xl text-sm leading-relaxed text-slate-500">
-              Pick up where you left off — upload a document or open a section
-              below.
+              {welcomeSubtitle}
             </p>
           </header>
 
