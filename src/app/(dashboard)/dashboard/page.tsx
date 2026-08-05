@@ -614,13 +614,21 @@ export default function DashboardPage() {
         '@/libs/e2ee/unlock'
       );
       setE2eeAutoLockHandler(() => {
-        if (!cancelled) {
+        if (cancelled) return;
+        void (async () => {
+          const { fetchE2eeStatus } = await import('@/libs/e2ee/vaultApi');
+          const status = await fetchE2eeStatus().catch(() => null);
+          // Server AES mode (E2EE off): idle lock must not show the unlock banner.
+          if (!status?.enabled) {
+            setFamilyVaultGate('ready');
+            return;
+          }
           setFamilyVaultGate('needs_unlock');
           sectionsPrefetchedRef.current = false;
           toast.info(
             'Vault locked for safety after inactivity. Unlock to see encrypted sections again.',
           );
-        }
+        })();
       });
       if (isE2eeUnlocked()) {
         const { fetchE2eeMigrationStatus } = await import(
@@ -656,6 +664,7 @@ export default function DashboardPage() {
   }, [appMode, familyAcl.isFamily, sessionReady]);
 
   // Owner and family need the vault DEK unlocked to read E2EE (v3) sections.
+  // When E2EE_ENABLED=false, never show the unlock banner — sections use server AES.
   useEffect(() => {
     if (!sessionReady || appMode !== 'owner') {
       setFamilyVaultGate('ready');
@@ -666,6 +675,16 @@ export default function DashboardPage() {
     (async () => {
       setFamilyVaultGate('checking');
       try {
+        const { fetchE2eeStatus } = await import('@/libs/e2ee/vaultApi');
+        const status = await fetchE2eeStatus();
+        if (cancelled) return;
+
+        // Server AES mode (E2EE off): no client DEK required.
+        if (!status.enabled) {
+          setFamilyVaultGate('ready');
+          return;
+        }
+
         const { isE2eeUnlocked, tryRestoreSessionDek } = await import(
           '@/libs/e2ee/unlock'
         );
@@ -676,24 +695,17 @@ export default function DashboardPage() {
           if (!cancelled) setFamilyVaultGate('ready');
           return;
         }
-        const { fetchE2eeStatus } = await import('@/libs/e2ee/vaultApi');
-        const status = await fetchE2eeStatus();
-        if (cancelled) return;
-        // Server AES mode (E2EE off): no client DEK required for family/NOK.
-        if (!status.enabled) {
-          setFamilyVaultGate('ready');
-          return;
-        }
-        if (status.enabled && status.configured) {
+
+        if (status.configured) {
           setFamilyVaultGate('needs_unlock');
-        } else if (familyAcl.isFamily && status.enabled) {
+        } else if (familyAcl.isFamily) {
           setFamilyVaultGate('needs_owner_wrap');
         } else {
-          // Server AES / E2EE off — legacy section GETs still work.
           setFamilyVaultGate('ready');
         }
       } catch {
-        if (!cancelled) setFamilyVaultGate('needs_unlock');
+        // Fail open when status is unknown — do not block overview with unlock UI.
+        if (!cancelled) setFamilyVaultGate('ready');
       }
     })();
 
