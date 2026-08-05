@@ -1007,14 +1007,32 @@ export default function DashboardPage() {
   useEffect(() => {
     let cancelled = false;
 
+    const applyFamilyAcl = (session: Awaited<ReturnType<typeof fetchSession>>) => {
+      const acl = parseFamilyDashboardSession(session);
+      setFamilyAcl(prev => {
+        // Avoid useless re-renders when ACL unchanged
+        if (
+          prev.isFamily === acl.isFamily &&
+          prev.accessLevel === acl.accessLevel &&
+          prev.portalRole === acl.portalRole &&
+          prev.portalRoleLabel === acl.portalRoleLabel &&
+          JSON.stringify(prev.authorizedSections) ===
+            JSON.stringify(acl.authorizedSections) &&
+          JSON.stringify(prev.permissions) === JSON.stringify(acl.permissions)
+        ) {
+          return prev;
+        }
+        return acl;
+      });
+    };
+
     const hydrate = async () => {
       const session = await fetchSession();
       if (cancelled) return;
 
       if (session.authenticated && session.role === 'nextkin') {
         if (String(session.access_type || '').toLowerCase() === 'family') {
-          const acl = parseFamilyDashboardSession(session);
-          setFamilyAcl(acl);
+          applyFamilyAcl(session);
           setCurrentUser({
             email: session.email || '',
             full_name: session.full_name,
@@ -1056,6 +1074,62 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [router]);
+
+  // Runtime ACL refresh: when owner changes role / areas, family session updates
+  // without requiring re-login (/auth/session always reads Mongo).
+  useEffect(() => {
+    if (!sessionReady || !familyAcl.isFamily) return;
+
+    let cancelled = false;
+
+    const refreshAcl = async () => {
+      const session = await fetchSession();
+      if (cancelled) return;
+      if (
+        !session.authenticated ||
+        session.role !== 'nextkin' ||
+        String(session.access_type || '').toLowerCase() !== 'family'
+      ) {
+        return;
+      }
+      const acl = parseFamilyDashboardSession(session);
+      setFamilyAcl(prev => {
+        if (
+          prev.accessLevel === acl.accessLevel &&
+          prev.portalRole === acl.portalRole &&
+          JSON.stringify(prev.authorizedSections) ===
+            JSON.stringify(acl.authorizedSections) &&
+          JSON.stringify(prev.permissions) === JSON.stringify(acl.permissions)
+        ) {
+          return prev;
+        }
+        return acl;
+      });
+    };
+
+    const onFocus = () => {
+      void refreshAcl();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshAcl();
+    };
+
+    const intervalId = window.setInterval(() => {
+      void refreshAcl();
+    }, 12_000);
+
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('orderly-family-acl-refresh', onFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('orderly-family-acl-refresh', onFocus);
+    };
+  }, [sessionReady, familyAcl.isFamily]);
 
   // Redirect family collaborators away from areas they cannot open
   useEffect(() => {

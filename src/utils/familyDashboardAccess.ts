@@ -42,7 +42,13 @@ export function parseFamilyDashboardSession(session: {
 
 export function familyHasFullDashboard(session: FamilyDashboardSession): boolean {
   if (!session.isFamily) return true;
-  const level = session.accessLevel || '';
+  const level = String(session.accessLevel || '').trim();
+  if (
+    level === 'Area-Specific Access' ||
+    level === 'Section-Specific Access'
+  ) {
+    return false;
+  }
   return (
     level === 'Full Kit Access' ||
     level === 'Full Dashboard Access' ||
@@ -192,11 +198,8 @@ function roleCap(
   if (!session.isFamily) return true;
   const role = familyPortalRoleId(session);
   const caps = FAMILY_PORTAL_ROLE_CAPS[role] || FAMILY_PORTAL_ROLE_CAPS.viewer;
-  // Role matrix is authoritative; session.permissions may only reduce.
-  const fromRole = Boolean(caps[key]);
-  const fromSession = session.permissions[key];
-  if (fromSession === false) return false;
-  return fromRole;
+  // Portal role is authoritative (matches backend resolve_dashboard_permissions).
+  return Boolean(caps[key]);
 }
 
 export function familyCanWrite(session: FamilyDashboardSession): boolean {

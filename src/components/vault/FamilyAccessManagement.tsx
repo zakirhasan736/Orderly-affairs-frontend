@@ -332,6 +332,11 @@ export function FamilyAccessManagement() {
         } else {
           toast.success('Family member updated');
         }
+        try {
+          window.dispatchEvent(new CustomEvent('orderly-family-acl-refresh'));
+        } catch {
+          /* ignore */
+        }
       } else {
         const created = await createFamily(body).unwrap();
         const memberId = String(created.id || '').trim();
