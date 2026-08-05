@@ -15,6 +15,12 @@ import {
 import { FamilyAccessManagement } from '@/components/vault/FamilyAccessManagement';
 import { FamilyRoleAreaDefaultsDialog } from '@/components/vault/FamilyRoleAreaDefaultsDialog';
 import { fetchSession } from '@/libs/secureFetch';
+import {
+  familyCanManageFamilyAccess,
+  familyCanViewBilling,
+  familyCanViewVaultSettings,
+  parseFamilyDashboardSession,
+} from '@/utils/familyDashboardAccess';
 import { toast } from 'sonner';
 import { Button } from '@common/ui/button';
 import { InlineNotice } from '@/components/common/ui/inline-notice';
@@ -143,12 +149,12 @@ const VaultSettings = () => {
         session.role === 'nextkin' &&
         String(session.access_type || '').toLowerCase() === 'family'
       ) {
-        const perms = session.dashboard_permissions || {};
+        const acl = parseFamilyDashboardSession(session);
         setFamilySession({
           isFamily: true,
-          canManageFamily: Boolean(perms.can_manage_family_access),
-          canManageBilling: Boolean(perms.can_manage_billing),
-          canViewVaultSettings: Boolean(perms.can_view_vault_settings),
+          canManageFamily: familyCanManageFamilyAccess(acl),
+          canManageBilling: familyCanViewBilling(acl),
+          canViewVaultSettings: familyCanViewVaultSettings(acl),
         });
       }
     });

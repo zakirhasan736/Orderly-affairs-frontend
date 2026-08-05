@@ -131,18 +131,82 @@ export function familyCanFetchNextKinList(
   );
 }
 
-export function familyCanWrite(session: FamilyDashboardSession): boolean {
+/** Canonical family portal role capability matrix (matches backend PORTAL_ROLES). */
+export const FAMILY_PORTAL_ROLE_CAPS: Record<
+  string,
+  {
+    can_write: boolean;
+    can_upload: boolean;
+    can_manage_family_access: boolean;
+    can_manage_nextkin: boolean;
+    can_manage_billing: boolean;
+    can_view_vault_settings: boolean;
+  }
+> = {
+  viewer: {
+    can_write: false,
+    can_upload: false,
+    can_manage_family_access: false,
+    can_manage_nextkin: false,
+    can_manage_billing: false,
+    can_view_vault_settings: false,
+  },
+  editor: {
+    can_write: true,
+    can_upload: true,
+    can_manage_family_access: false,
+    can_manage_nextkin: false,
+    can_manage_billing: false,
+    can_view_vault_settings: false,
+  },
+  portal_manager: {
+    can_write: true,
+    can_upload: true,
+    can_manage_family_access: true,
+    can_manage_nextkin: false,
+    can_manage_billing: false,
+    can_view_vault_settings: true,
+  },
+  admin: {
+    can_write: true,
+    can_upload: true,
+    can_manage_family_access: true,
+    can_manage_nextkin: true,
+    can_manage_billing: false,
+    can_view_vault_settings: true,
+  },
+  super_admin: {
+    can_write: true,
+    can_upload: true,
+    can_manage_family_access: true,
+    can_manage_nextkin: true,
+    can_manage_billing: true,
+    can_view_vault_settings: true,
+  },
+};
+
+function roleCap(
+  session: FamilyDashboardSession,
+  key: keyof (typeof FAMILY_PORTAL_ROLE_CAPS)['viewer'],
+): boolean {
   if (!session.isFamily) return true;
-  // Viewer is always non-writable, even if stale permission flags say otherwise.
-  if (familyPortalRoleId(session) === 'viewer') return false;
-  return Boolean(session.permissions.can_write);
+  const role = familyPortalRoleId(session);
+  const caps = FAMILY_PORTAL_ROLE_CAPS[role] || FAMILY_PORTAL_ROLE_CAPS.viewer;
+  // Role matrix is authoritative; session.permissions may only reduce.
+  const fromRole = Boolean(caps[key]);
+  const fromSession = session.permissions[key];
+  if (fromSession === false) return false;
+  return fromRole;
+}
+
+export function familyCanWrite(session: FamilyDashboardSession): boolean {
+  return roleCap(session, 'can_write');
 }
 
 /** Viewer (and any family role without can_write): inspect only. */
 export function familyIsReadOnly(session: FamilyDashboardSession): boolean {
   if (!session.isFamily) return false;
-  if (familyPortalRoleId(session) === 'viewer') return true;
-  return !Boolean(session.permissions.can_write);
+  return !familyCanWrite(session);
 }
 
 export type FamilyPortalRoleId =
@@ -172,9 +236,7 @@ export function familyPortalRoleId(
 }
 
 export function familyCanUpload(session: FamilyDashboardSession): boolean {
-  if (!session.isFamily) return true;
-  if (familyPortalRoleId(session) === 'viewer') return false;
-  return Boolean(session.permissions.can_upload);
+  return roleCap(session, 'can_upload');
 }
 
 /** Drag/drop on overview when they can upload and may see overview. */
@@ -199,17 +261,14 @@ export function familyCanUseSectionUploads(
 export function familyCanManageFamilyAccess(
   session: FamilyDashboardSession,
 ): boolean {
-  if (!session.isFamily) return true;
-  return Boolean(session.permissions.can_manage_family_access);
+  return roleCap(session, 'can_manage_family_access');
 }
 
 /** Super Admin may view billing status; payment mutations stay owner-only. */
 export function familyCanViewBilling(session: FamilyDashboardSession): boolean {
   if (!session.isFamily) return true;
-  return (
-    Boolean(session.permissions.can_manage_billing) &&
-    (familyHasFullDashboard(session) || familyHasArea(session, 'billing'))
-  );
+  if (!roleCap(session, 'can_manage_billing')) return false;
+  return familyHasFullDashboard(session) || familyHasArea(session, 'billing');
 }
 
 export function familyCanViewVaultSettings(
@@ -222,10 +281,10 @@ export function familyCanViewVaultSettings(
   ) {
     return false;
   }
-  return Boolean(
-    session.permissions.can_view_vault_settings ||
-      session.permissions.can_manage_family_access ||
-      session.permissions.can_manage_billing,
+  return (
+    roleCap(session, 'can_view_vault_settings') ||
+    roleCap(session, 'can_manage_family_access') ||
+    roleCap(session, 'can_manage_billing')
   );
 }
 
@@ -233,11 +292,11 @@ export function familyCanManageNextKin(
   session: FamilyDashboardSession,
 ): boolean {
   if (!session.isFamily) return true;
+  if (!roleCap(session, 'can_manage_nextkin')) return false;
   return (
-    Boolean(session.permissions.can_manage_nextkin) &&
-    (familyHasFullDashboard(session) ||
-      familyHasArea(session, 'section2_nextkin') ||
-      familyHasArea(session, '2'))
+    familyHasFullDashboard(session) ||
+    familyHasArea(session, 'section2_nextkin') ||
+    familyHasArea(session, '2')
   );
 }
 

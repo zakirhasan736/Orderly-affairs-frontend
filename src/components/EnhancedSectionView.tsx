@@ -370,6 +370,15 @@ const saveChecklist = async (items: Record<string, boolean>) => {
     owner_deceased_triggered?: boolean;
   };
 
+  // Refresh kit cache so checklist progress survives navigation.
+  try {
+    const { kitApi } = await import('@/services/kitApi');
+    const { store } = await import('@/store/store');
+    store.dispatch(kitApi.util.invalidateTags(['Kit']));
+  } catch {
+    /* store may be unavailable in isolated tests */
+  }
+
   if (data.death_signals_ready) {
     toast.message(
       'Passing-related checklist items recorded. Use Report Passing on the dashboard to confirm before any letters or access are released.',
@@ -807,9 +816,10 @@ const sectionHasData = useMemo(() => {
             </div>
 
             <p className="rounded-2xl bg-amber-50 px-4 py-3 text-[12px] leading-5 text-amber-900 ring-1 ring-amber-200/80">
-              Checking two or more &quot;Passing signal&quot; items records
-              death-related progress. Confirm on the dashboard before letters
-              and access are released.
+              You can check and update these action items anytime. Vault section
+              details above are view-only. Checking two or more &quot;Passing
+              signal&quot; items records death-related progress — confirm on the
+              dashboard before letters and access are released.
             </p>
 
             <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/80">
