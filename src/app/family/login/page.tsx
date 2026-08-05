@@ -107,12 +107,12 @@ export default function FamilyLoginPage() {
       } else {
         toast.success('Signed in to the owner dashboard');
       }
-      // Full navigation so AuthWatcher re-runs with the new cookie session.
-      window.location.assign('/dashboard');
+      // Soft navigate so an unlocked DEK survives into the dashboard.
+      router.replace('/dashboard');
       return;
     }
     toast.success('Login successful');
-    window.location.assign('/next-kin/dashboard');
+    router.replace('/next-kin/dashboard');
   };
 
   return (

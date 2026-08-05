@@ -12,6 +12,10 @@ import { nokLogout, fetchSession } from '@/libs/secureFetch';
 import { HelpAssistantProvider } from '@/components/help/HelpAssistantContext';
 import { HelpAssistantHost } from '@/components/help/HelpAssistantHost';
 import { SessionTimeoutGuard } from '@/components/SessionTimeoutGuard';
+import {
+  NokVaultUnlockBanner,
+  useNokKitDecrypt,
+} from '@/hooks/useNokKitDecrypt';
 
 export default function NextKinDashboardPage() {
   const router = useRouter();
@@ -27,28 +31,15 @@ export default function NextKinDashboardPage() {
   } = useGetMyNextKinAccessQuery();
 
   const { data: kitRaw, isLoading: kitLoading } = useGetKitForNokQuery();
-  const [kit, setKit] = useState<any>(null);
+  const {
+    kit,
+    vaultGate,
+    unlockPassword,
+    setUnlockPassword,
+    unlockBusy,
+    handleUnlock,
+  } = useNokKitDecrypt(kitRaw);
   const [nextkinLogout] = useNextkinLogoutMutation();
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!kitRaw) {
-        setKit(null);
-        return;
-      }
-      try {
-        const { decryptKitSections } = await import('@/libs/e2ee/vaultApi');
-        const decoded = await decryptKitSections(kitRaw);
-        if (!cancelled) setKit(decoded);
-      } catch {
-        if (!cancelled) setKit(kitRaw);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [kitRaw]);
 
   useEffect(() => {
     fetchSession().then(session => {
@@ -118,13 +109,22 @@ export default function NextKinDashboardPage() {
     );
   }
 
-  if (isLoading || kitLoading) {
+  if (isLoading || kitLoading || vaultGate === 'checking') {
     return <div>Loading dashboard…</div>;
   }
 
   return (
     <HelpAssistantProvider>
       <SessionTimeoutGuard idleMs={idleMs} warnSeconds={45} />
+      <div className="px-4 pt-4">
+        <NokVaultUnlockBanner
+          vaultGate={vaultGate}
+          unlockPassword={unlockPassword}
+          setUnlockPassword={setUnlockPassword}
+          unlockBusy={unlockBusy}
+          onUnlock={() => void handleUnlock()}
+        />
+      </div>
       <EnhancedNOKDashboard
         nokData={access.nextkin}
         kit={kit}

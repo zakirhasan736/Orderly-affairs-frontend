@@ -326,6 +326,10 @@ export async function persistAllPendingStashesForSection(args: {
       sectionId: stash.section_id,
       fileId: stash.file_id,
     });
+    const { markDashboardAiPatchPersisted } = await import(
+      '@/utils/aiDashboardPatchCache'
+    );
+    markDashboardAiPatchPersisted(stash.section_id, stash.file_id);
     takeDashboardAiPatch(stash.section_id, stash.file_id);
     onFileDone?.(stash.file_id, stash.section_id);
     sectionIds.add(stash.section_id);
@@ -355,7 +359,7 @@ export async function persistPartnerStashesForFiles(args: {
     return { ok: true, saved: 0, failed: 0, sectionIds: [] };
   }
 
-  const { listDashboardAiPatches } = await import(
+  const { listDashboardAiPatches, markDashboardAiPatchPersisted } = await import(
     '@/utils/aiDashboardPatchCache'
   );
   const partners = listDashboardAiPatches()
@@ -394,6 +398,7 @@ export async function persistPartnerStashesForFiles(args: {
       sectionId: stash.section_id,
       fileId: stash.file_id,
     });
+    markDashboardAiPatchPersisted(stash.section_id, stash.file_id);
     takeDashboardAiPatch(stash.section_id, stash.file_id);
     onFileDone?.(stash.file_id, stash.section_id);
     sectionIds.add(stash.section_id);

@@ -55,6 +55,7 @@ import {
   stashToMatchDocument,
 } from '@/components/ai/AiSectionFieldMatchDialog';
 import {
+  hasUnpersistedDashboardAiPatches,
   listDashboardAiPatchesForSection,
   takeDashboardAiPatch,
   type StashedAiPatch,
@@ -436,7 +437,9 @@ export default function DashboardPage() {
         return;
       }
 
-      if (listDashboardAiPatchesForSection(sectionId).length) {
+      // Never clobber a just-applied AI autofill that is not yet on the vault.
+      // Persisted stashes must not block GET — otherwise remounts look empty.
+      if (hasUnpersistedDashboardAiPatches(sectionId)) {
         return;
       }
 
@@ -484,11 +487,12 @@ export default function DashboardPage() {
       return;
     }
 
-    // Wait for family vault unlock when a wrap exists; still prefetch if the
-    // owner never shared a wrap (legacy v2 rows can still load).
+    // Wait for vault unlock when E2EE is configured (owner after hard refresh,
+    // or family before the shared DEK is unlocked).
     if (
-      familyAcl.isFamily &&
-      (familyVaultGate === 'checking' || familyVaultGate === 'needs_unlock')
+      familyVaultGate === 'checking' ||
+      familyVaultGate === 'needs_unlock' ||
+      familyVaultGate === 'needs_owner_wrap'
     ) {
       return;
     }
@@ -609,8 +613,10 @@ export default function DashboardPage() {
       );
       setE2eeAutoLockHandler(() => {
         if (!cancelled) {
+          setFamilyVaultGate('needs_unlock');
+          sectionsPrefetchedRef.current = false;
           toast.info(
-            'Vault locked for safety after inactivity. Sign in again to unlock encrypted sections.',
+            'Vault locked for safety after inactivity. Unlock to see encrypted sections again.',
           );
         }
       });
@@ -647,13 +653,9 @@ export default function DashboardPage() {
     };
   }, [appMode, familyAcl.isFamily, sessionReady]);
 
-  // Family collaborators need the shared vault DEK to see owner E2EE sections.
+  // Owner and family need the vault DEK unlocked to read E2EE (v3) sections.
   useEffect(() => {
     if (!sessionReady || appMode !== 'owner') {
-      setFamilyVaultGate('ready');
-      return;
-    }
-    if (!familyAcl.isFamily) {
       setFamilyVaultGate('ready');
       return;
     }
@@ -662,7 +664,12 @@ export default function DashboardPage() {
     (async () => {
       setFamilyVaultGate('checking');
       try {
-        const { isE2eeUnlocked } = await import('@/libs/e2ee/unlock');
+        const { isE2eeUnlocked, tryRestoreSessionDek } = await import(
+          '@/libs/e2ee/unlock'
+        );
+        if (!isE2eeUnlocked()) {
+          await tryRestoreSessionDek();
+        }
         if (isE2eeUnlocked()) {
           if (!cancelled) setFamilyVaultGate('ready');
           return;
@@ -672,7 +679,7 @@ export default function DashboardPage() {
         if (cancelled) return;
         if (status.enabled && status.configured) {
           setFamilyVaultGate('needs_unlock');
-        } else if (status.enabled) {
+        } else if (familyAcl.isFamily && status.enabled) {
           setFamilyVaultGate('needs_owner_wrap');
         } else {
           // Server AES / E2EE off — legacy section GETs still work.
@@ -691,7 +698,11 @@ export default function DashboardPage() {
   const handleFamilyVaultUnlock = useCallback(async () => {
     const pw = familyUnlockPassword.trim();
     if (!pw) {
-      toast.error('Enter your family login password to unlock the vault');
+      toast.error(
+        familyAcl.isFamily
+          ? 'Enter your family login password to unlock the vault'
+          : 'Enter your account password to unlock the vault',
+      );
       return;
     }
     setFamilyUnlockBusy(true);
@@ -702,16 +713,24 @@ export default function DashboardPage() {
       await unlockVaultWithPassword(pw);
       if (!isE2eeUnlocked()) {
         toast.error(
-          'Could not unlock encrypted sections. Ask the owner to edit your family access and re-save your password while their vault is unlocked.',
+          familyAcl.isFamily
+            ? 'Could not unlock encrypted sections. Ask the owner to edit your family access and re-save your password while their vault is unlocked.'
+            : 'Could not unlock encrypted sections. Check your password and try again.',
         );
-        setFamilyVaultGate('needs_owner_wrap');
+        if (familyAcl.isFamily) {
+          setFamilyVaultGate('needs_owner_wrap');
+        }
         return;
       }
       setFamilyUnlockPassword('');
       setFamilyVaultGate('ready');
       sectionsPrefetchedRef.current = false;
       setVaultPrefetchKey(k => k + 1);
-      toast.success('Vault unlocked — loading owner sections');
+      toast.success(
+        familyAcl.isFamily
+          ? 'Vault unlocked — loading owner sections'
+          : 'Vault unlocked — loading your sections',
+      );
     } catch (err) {
       toast.error(
         getSafeErrorMessage(err, 'Could not unlock the shared vault'),
@@ -719,7 +738,7 @@ export default function DashboardPage() {
     } finally {
       setFamilyUnlockBusy(false);
     }
-  }, [familyUnlockPassword]);
+  }, [familyUnlockPassword, familyAcl.isFamily]);
 
   // Section 3 letters are stored per next-of-kin via a separate API.
   useEffect(() => {
@@ -770,6 +789,14 @@ export default function DashboardPage() {
     if (appMode !== 'owner') return;
 
     if (
+      familyVaultGate === 'checking' ||
+      familyVaultGate === 'needs_unlock' ||
+      familyVaultGate === 'needs_owner_wrap'
+    ) {
+      return;
+    }
+
+    if (
       ![
         '1',
         '5',
@@ -798,7 +825,7 @@ export default function DashboardPage() {
       return;
     }
 
-    if (listDashboardAiPatchesForSection(activeSection).length) {
+    if (hasUnpersistedDashboardAiPatches(activeSection)) {
       return;
     }
 
@@ -839,7 +866,7 @@ export default function DashboardPage() {
       .catch(err =>
         console.error(`Failed to refresh Section ${activeSection}`, err),
       );
-  }, [activeSection, appMode, recordLoadedSection]);
+  }, [activeSection, appMode, recordLoadedSection, familyVaultGate]);
 
   // Timer refs for cleanup
   const autoSaveRef = useRef<NodeJS.Timeout | null>(null);
@@ -906,12 +933,33 @@ export default function DashboardPage() {
           return;
         }
 
+        const { isE2eeUnlocked, tryRestoreSessionDek } = await import(
+          '@/libs/e2ee/unlock'
+        );
+        if (!isE2eeUnlocked()) {
+          await tryRestoreSessionDek();
+        }
+        if (!isE2eeUnlocked()) {
+          const { fetchE2eeStatus } = await import('@/libs/e2ee/vaultApi');
+          const status = await fetchE2eeStatus().catch(() => null);
+          if (status?.enabled && status?.configured) {
+            setFamilyVaultGate('needs_unlock');
+            toast.error(
+              'Vault locked — unlock encryption to auto-save this section.',
+            );
+            return;
+          }
+        }
+
         await sectionSaveMap[activeSection](sectionData);
 
         sectionLoadedSnapshotRef.current[activeSection] = serialized;
         setLastSaved(new Date());
       } catch (err) {
         console.error('Auto-save failed:', err);
+        toast.error(
+          getSafeErrorMessage(err, 'Could not auto-save. Unlock vault and retry.'),
+        );
       } finally {
         setAutoSaving(false);
       }
@@ -2622,7 +2670,7 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   )}
-                  {familyAcl.isFamily &&
+                  {(familyAcl.isFamily || appMode === 'owner') &&
                     (familyVaultGate === 'needs_unlock' ||
                       familyVaultGate === 'needs_owner_wrap') && (
                       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950">
@@ -2632,7 +2680,9 @@ export default function DashboardPage() {
                         <p className="mt-1 text-amber-900/80">
                           {familyVaultGate === 'needs_owner_wrap'
                             ? 'The owner has not shared the vault encryption key with your account yet. Ask them to open Vault Settings → Family access, edit your invite, enter your password, and save while their vault is unlocked.'
-                            : 'Enter the same password you used to sign in to unlock the owner’s completed sections and progress.'}
+                            : familyAcl.isFamily
+                              ? 'Enter the same password you used to sign in to unlock the owner’s completed sections and progress.'
+                              : 'Enter your account password to unlock Vehicles, Insurance, and other encrypted sections. Without unlock they look empty even when saved.'}
                         </p>
                         {familyVaultGate === 'needs_unlock' && (
                           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -2649,7 +2699,11 @@ export default function DashboardPage() {
                                   void handleFamilyVaultUnlock();
                                 }
                               }}
-                              placeholder="Family login password"
+                              placeholder={
+                                familyAcl.isFamily
+                                  ? 'Family login password'
+                                  : 'Account password'
+                              }
                               className="h-10 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-amber-400 sm:max-w-xs"
                             />
                             <Button

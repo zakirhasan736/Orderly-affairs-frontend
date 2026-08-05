@@ -4,6 +4,7 @@ import {
   isE2eeUnlocked,
   rewrapDekForNewPassword,
   setE2eeAutoLockHandler,
+  tryRestoreSessionDek,
 } from '@/libs/e2ee/crypto';
 import {
   fetchE2eeStatus,
@@ -36,6 +37,11 @@ export async function unlockVaultWithPassword(
   if (!password) return empty;
 
   try {
+    // Prefer an already-unlocked / same-tab restored DEK when possible.
+    if (!isE2eeUnlocked()) {
+      await tryRestoreSessionDek();
+    }
+
     const { created } = await unlockOrSetupE2ee(
       password,
       fetchE2eeStatus,
@@ -97,4 +103,5 @@ export {
   isE2eeUnlocked,
   setE2eeAutoLockHandler,
   migrateLegacySectionsToE2ee,
+  tryRestoreSessionDek,
 };

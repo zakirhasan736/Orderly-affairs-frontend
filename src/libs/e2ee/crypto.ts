@@ -5,11 +5,13 @@
  * AES-256-GCM is used for both legacy server v2 and client v3 — the difference
  * is key custody (server key vs browser DEK), not cipher strength.
  *
- * DEK material is held in module memory only (not sessionStorage). Idle and
- * hidden-tab timers auto-lock to shrink the XSS-while-unlocked window.
+ * DEK is held in memory while unlocked. A tab-scoped sessionStorage copy
+ * restores after soft/hard reload in the same tab so vault sections stay
+ * readable after login. Cleared on idle lock, hidden-tab lock, and logout.
  */
 
 const META_KEY = 'oa_e2ee_meta';
+const SESSION_DEK_KEY = 'oa_e2ee_session_dek';
 const KDF_ITERATIONS = 310_000;
 const IDLE_LOCK_MS = 20 * 60 * 1000;
 const HIDDEN_LOCK_MS = 2 * 60 * 1000;
@@ -183,6 +185,7 @@ export function lockE2ee(): void {
   _dekKey = null;
   if (typeof window !== 'undefined') {
     try {
+      sessionStorage.removeItem(SESSION_DEK_KEY);
       sessionStorage.removeItem('oa_e2ee_dek_b64');
       sessionStorage.removeItem(META_KEY);
     } catch {
@@ -197,12 +200,37 @@ export async function rememberDek(dek: Uint8Array): Promise<void> {
   _dekKey = await importAesKey(_dekBytes);
   if (typeof window !== 'undefined') {
     try {
+      sessionStorage.setItem(SESSION_DEK_KEY, b64encode(_dekBytes));
       sessionStorage.removeItem('oa_e2ee_dek_b64');
     } catch {
-      /* ignore */
+      /* ignore quota / private mode */
     }
     bindActivityListeners();
     bumpIdleTimer();
+  }
+}
+
+/** Restore DEK after a same-tab reload (login soft-nav / refresh). */
+export async function tryRestoreSessionDek(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  if (isE2eeUnlocked()) return true;
+  try {
+    const raw = sessionStorage.getItem(SESSION_DEK_KEY);
+    if (!raw) return false;
+    const dek = b64decode(raw);
+    if (dek.byteLength !== 32) {
+      sessionStorage.removeItem(SESSION_DEK_KEY);
+      return false;
+    }
+    await rememberDek(dek);
+    return isE2eeUnlocked();
+  } catch {
+    try {
+      sessionStorage.removeItem(SESSION_DEK_KEY);
+    } catch {
+      /* ignore */
+    }
+    return false;
   }
 }
 

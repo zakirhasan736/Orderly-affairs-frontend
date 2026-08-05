@@ -9,6 +9,10 @@ import { EnhancedSectionView } from '@/components/EnhancedSectionView';
 import { isHiddenFromNokDashboard } from '@/config/nokConfig';
 import { nokLogout, fetchSession } from '@/libs/secureFetch';
 import { SessionTimeoutGuard } from '@/components/SessionTimeoutGuard';
+import {
+  NokVaultUnlockBanner,
+  useNokKitDecrypt,
+} from '@/hooks/useNokKitDecrypt';
 
 function SectionSkeleton() {
   return (
@@ -37,7 +41,15 @@ export default function NextKinSectionPage() {
   const [accessLevel, setAccessLevel] = useState<string | undefined>();
 
   const { data: access } = useGetMyNextKinAccessQuery();
-  const { data: kit, isLoading: kitLoading } = useGetKitForNokQuery();
+  const { data: kitRaw, isLoading: kitLoading } = useGetKitForNokQuery();
+  const {
+    kit,
+    vaultGate,
+    unlockPassword,
+    setUnlockPassword,
+    unlockBusy,
+    handleUnlock,
+  } = useNokKitDecrypt(kitRaw);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,13 +86,22 @@ export default function NextKinSectionPage() {
   const sessionSeconds = fullKit ? 5 * 60 : 10 * 60;
   const idleMs = fullKit ? 3.5 * 60 * 1000 : 8 * 60 * 1000;
 
-  if ((kitLoading && !kit) || !kit) {
+  if ((kitLoading && !kit) || !kit || vaultGate === 'checking') {
     return <SectionSkeleton />;
   }
 
   return (
     <>
       <SessionTimeoutGuard idleMs={idleMs} warnSeconds={45} />
+      <div className="bg-[#f6f8fb] px-4 pt-4">
+        <NokVaultUnlockBanner
+          vaultGate={vaultGate}
+          unlockPassword={unlockPassword}
+          setUnlockPassword={setUnlockPassword}
+          unlockBusy={unlockBusy}
+          onUnlock={() => void handleUnlock()}
+        />
+      </div>
       <EnhancedSectionView
         formData={{}}
         sectionId={sectionId}
@@ -89,6 +110,8 @@ export default function NextKinSectionPage() {
         onBack={() => router.push('/next-kin/dashboard')}
         onLogout={async () => {
           try {
+            const { lockE2ee } = await import('@/libs/e2ee/unlock');
+            lockE2ee();
             await nokLogout();
           } catch {}
           router.replace('/next-kin');

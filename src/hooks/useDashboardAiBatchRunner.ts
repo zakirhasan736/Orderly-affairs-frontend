@@ -14,7 +14,10 @@ import {
   AI_SECTION_BY_ID,
   AI_SECTION_BY_KEY,
 } from '@/utils/aiSectionRegistry';
-import { stashDashboardAiPatch } from '@/utils/aiDashboardPatchCache';
+import {
+  stashDashboardAiPatch,
+  markDashboardAiPatchPersisted,
+} from '@/utils/aiDashboardPatchCache';
 import {
   aiPatchHasValues,
   unwrapAiAutofillPatch,
@@ -103,7 +106,7 @@ async function stashAndPersist(args: {
     sectionIds: [args.sectionId],
   });
 
-  // Overview review inbox: hold the vault write until the owner Accepts.
+  // Stash-only path (rare): keep review badge without vault write.
   if (!persistNow) {
     args.onFilled?.({
       file_id: args.file_id,
@@ -125,6 +128,7 @@ async function stashAndPersist(args: {
   });
 
   if (persistResult.ok) {
+    markDashboardAiPatchPersisted(args.sectionId, args.file_id);
     markAiSectionFilled(args.sectionId);
     markAiAutofillDoneForSection({
       sectionId: args.sectionId,
@@ -136,6 +140,31 @@ async function stashAndPersist(args: {
       sectionId: args.sectionId,
       fileName: args.fileName,
     });
+  } else {
+    // Keep a pending_accept stash so Accept can retry after vault unlock.
+    stashDashboardAiPatch({
+      file_id: args.file_id,
+      section_id: args.sectionId,
+      section_key: args.sectionKey,
+      subsection: args.subsection || null,
+      result: args.result,
+      patch: unwrapAiAutofillPatch(args.result),
+      detectedFields: args.detectedFields,
+      document_summary: args.documentSummary,
+      file_name: args.fileName,
+      createdAt: Date.now(),
+      pending_accept: true,
+      vault_persisted: false,
+    });
+    args.onFilled?.({
+      file_id: args.file_id,
+      sectionId: args.sectionId,
+      fileName: args.fileName,
+    });
+    console.warn(
+      'AI vault save deferred (will retry on Accept):',
+      persistResult.error,
+    );
   }
 
   return persistResult;
@@ -232,7 +261,7 @@ async function fillPartnerSectionsFast(args: {
             section: partnerKey,
           }),
           documentSummary: summaryFallback,
-          persistNow: false,
+          persistNow: true,
           onFilled: () => notifySectionFilled(partnerMeta.id),
         });
         routing?.queueRoutedSectionsSilently(
@@ -272,6 +301,7 @@ async function fillPartnerSectionsFast(args: {
           file_id,
           subsection: partnerMeta.defaultSubsection || null,
           use_routed_cache: true,
+          // Server cannot merge E2EE v3 ciphertext — client persists immediately.
           defer_persist: true,
           field_catalog: catalogForSection(partnerKey, null),
         }),
@@ -309,7 +339,7 @@ async function fillPartnerSectionsFast(args: {
             section: partnerKey,
           }),
           documentSummary: summary,
-          persistNow: false,
+          persistNow: true,
           onFilled: () => notifySectionFilled(partnerMeta.id),
         }),
         30000,
@@ -667,7 +697,7 @@ export function useDashboardAiBatchRunner() {
                 sectionKey,
               ),
               documentSummary,
-              persistNow: false,
+              persistNow: true,
               onFilled: () => notifySectionFilled(sectionId),
             }),
             35000,
@@ -701,6 +731,7 @@ export function useDashboardAiBatchRunner() {
             file_id,
             subsection: subsection || null,
             use_routed_cache: true,
+            // Server cannot merge E2EE v3 ciphertext — client persists immediately.
             defer_persist: true,
             field_catalog: catalogForSection(sectionKey, null),
           }),
@@ -725,7 +756,7 @@ export function useDashboardAiBatchRunner() {
             result: filled.result,
             detectedFields: factsFromFill(filled),
             documentSummary: filled.document_summary || documentSummary,
-            persistNow: false,
+            persistNow: true,
             onFilled: () => notifySectionFilled(sectionId),
           }),
           35000,

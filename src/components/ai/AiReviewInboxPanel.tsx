@@ -689,6 +689,20 @@ export function AiReviewInboxPanel({
 
         await ensureFreshSession();
 
+        const { isE2eeUnlocked } = await import('@/libs/e2ee/unlock');
+        const { fetchE2eeStatus } = await import('@/libs/e2ee/vaultApi');
+        const e2eeStatus = await fetchE2eeStatus().catch(() => null);
+        if (
+          e2eeStatus?.enabled &&
+          e2eeStatus?.configured &&
+          !isE2eeUnlocked()
+        ) {
+          toast.error(
+            'Vault is locked. Unlock encryption on the overview, then Accept again to save.',
+          );
+          return;
+        }
+
         // Accept one vehicle/insurance alert → save ALL pending docs for that
         // section (Toyota + Honda + Jeep), then partner extracts on those files.
         const clearedFiles = new Set<string>();

@@ -1747,26 +1747,29 @@ export const AccessManagement = forwardRef<
           toast.success(`Updated ${draft.full_name}`);
         }
         if (passwordChanged && draft._id && draft.master_password?.trim()) {
-          try {
-            const { wrapDekForNokPassword, isE2eeUnlocked } = await import(
-              '@/libs/e2ee/crypto'
-            );
-            const { postE2eeNokWrap } = await import('@/libs/e2ee/vaultApi');
-            if (isE2eeUnlocked()) {
-              const wrap = await wrapDekForNokPassword(
-                draft.master_password.trim(),
-              );
-              await postE2eeNokWrap({ nok_user_id: draft._id, ...wrap });
-            } else {
-              toast.message(
-                'Sign in again to unlock the vault, then re-save this person so they can open E2EE sections.',
-              );
-            }
-          } catch {
+          const { shareVaultDekWithCollaborator } = await import(
+            '@/libs/e2ee/shareVaultDek'
+          );
+          const share = await shareVaultDekWithCollaborator({
+            collaboratorId: draft._id,
+            password: draft.master_password.trim(),
+            requireUnlocked: true,
+          });
+          if (!share.ok) {
             toast.error(
-              'Saved person, but E2EE key share failed. Re-save their password while your vault is unlocked.',
+              share.reason === 'locked'
+                ? 'Saved person, but unlock your vault and re-save their password so they can open encrypted sections.'
+                : 'Saved person, but vault key share failed. Re-save their password while your vault is unlocked.',
             );
           }
+        } else if (draft._id && draft.master_password?.trim()) {
+          const { shareVaultDekWithCollaborator } = await import(
+            '@/libs/e2ee/shareVaultDek'
+          );
+          await shareVaultDekWithCollaborator({
+            collaboratorId: draft._id,
+            password: draft.master_password.trim(),
+          });
         }
       } else {
         const res =
@@ -1785,22 +1788,19 @@ export const AccessManagement = forwardRef<
         const nokId = saved._id;
         const nokPw = (saved.master_password || '').trim();
         if (nokId && nokPw) {
-          try {
-            const { wrapDekForNokPassword, isE2eeUnlocked } = await import(
-              '@/libs/e2ee/crypto'
-            );
-            const { postE2eeNokWrap } = await import('@/libs/e2ee/vaultApi');
-            if (isE2eeUnlocked()) {
-              const wrap = await wrapDekForNokPassword(nokPw);
-              await postE2eeNokWrap({ nok_user_id: nokId, ...wrap });
-            } else {
-              toast.message(
-                'Unlock your vault (sign in with password) then edit this person to share E2EE access.',
-              );
-            }
-          } catch {
+          const { shareVaultDekWithCollaborator } = await import(
+            '@/libs/e2ee/shareVaultDek'
+          );
+          const share = await shareVaultDekWithCollaborator({
+            collaboratorId: nokId,
+            password: nokPw,
+            requireUnlocked: true,
+          });
+          if (!share.ok) {
             toast.error(
-              'Person saved, but E2EE key share failed. Edit and re-save their password with vault unlocked.',
+              share.reason === 'locked'
+                ? 'Invite created, but unlock your vault then edit this person to share encrypted section access.'
+                : 'Person saved, but vault key share failed. Edit and re-save their password with vault unlocked.',
             );
           }
         }

@@ -190,11 +190,9 @@ const completeOwnerAuth = async (
 };
 
 const goToDashboard = (router: ReturnType<typeof useRouter>) => {
-  // Full navigation so middleware/cookies settle after Set-Cookie from API
-  if (typeof window !== 'undefined') {
-    window.location.assign('/dashboard');
-    return;
-  }
+  // Soft navigate so the in-memory vault DEK (unlocked during login) survives.
+  // Session cookies are already confirmed via fetchSession before this runs —
+  // a full page reload would wipe the DEK and make E2EE sections look empty.
   router.replace('/dashboard');
 };
 

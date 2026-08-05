@@ -288,59 +288,78 @@ export function FamilyAccessManagement() {
     };
 
     try {
+      const { ownerVaultMustBeUnlockedForShare, shareVaultDekWithCollaborator } =
+        await import('@/libs/e2ee/shareVaultDek');
+
+      if (await ownerVaultMustBeUnlockedForShare()) {
+        toast.error(
+          'Unlock your vault first (re-enter your account password on the overview), then save again so this person can open encrypted sections.',
+        );
+        return;
+      }
+
+      const existing = editingId
+        ? members.find(m => m.id === editingId)
+        : null;
+      const wrapMissing = existing?.e2ee_wrap_configured === false;
+      const pw = draft.master_password.trim();
+      if (editingId && wrapMissing && !pw) {
+        toast.error(
+          'Vault key not shared yet. Enter their login password in this form and save so they can see your section data.',
+        );
+        return;
+      }
+
       if (editingId) {
         await updateFamily({ id: editingId, body }).unwrap();
-        const pw = draft.master_password.trim();
         if (pw) {
-          try {
-            const { wrapDekForNokPassword, isE2eeUnlocked } = await import(
-              '@/libs/e2ee/crypto'
-            );
-            const { postE2eeNokWrap } = await import('@/libs/e2ee/vaultApi');
-            if (isE2eeUnlocked()) {
-              const wrap = await wrapDekForNokPassword(pw);
-              await postE2eeNokWrap({ nok_user_id: editingId, ...wrap });
-            } else {
-              toast.message(
-                'Family member updated. Unlock your vault (re-sign in), then set their password again so they can open encrypted sections.',
-              );
-            }
-          } catch {
+          const share = await shareVaultDekWithCollaborator({
+            collaboratorId: editingId,
+            password: pw,
+            requireUnlocked: true,
+          });
+          if (!share.ok) {
             toast.error(
-              'Saved family member, but vault key share failed. Re-save their password while your vault is unlocked.',
+              share.reason === 'locked'
+                ? 'Saved, but vault is locked — unlock and re-save their password to share encrypted sections.'
+                : 'Saved family member, but vault key share failed. Re-save their password while your vault is unlocked.',
             );
+          } else if (share.shared) {
+            toast.success('Family member updated — vault access shared');
+          } else {
+            toast.success('Family member updated');
           }
+        } else {
+          toast.success('Family member updated');
         }
-        toast.success('Family member updated');
       } else {
         const created = await createFamily(body).unwrap();
         const memberId = String(created.id || '').trim();
-        const pw =
+        const createdPw =
           (created.master_password || '').trim() ||
           draft.master_password.trim();
-        if (memberId && pw) {
-          try {
-            const { wrapDekForNokPassword, isE2eeUnlocked } = await import(
-              '@/libs/e2ee/crypto'
-            );
-            const { postE2eeNokWrap } = await import('@/libs/e2ee/vaultApi');
-            if (isE2eeUnlocked()) {
-              const wrap = await wrapDekForNokPassword(pw);
-              await postE2eeNokWrap({ nok_user_id: memberId, ...wrap });
-            } else {
-              toast.message(
-                'Invite sent. Unlock your vault then edit this person and re-save their password so encrypted sections open for them.',
-              );
-            }
-          } catch {
+        if (memberId && createdPw) {
+          const share = await shareVaultDekWithCollaborator({
+            collaboratorId: memberId,
+            password: createdPw,
+            requireUnlocked: true,
+          });
+          if (!share.ok) {
             toast.error(
-              'Invite sent, but vault key share failed. Edit them and re-save the password while your vault is unlocked.',
+              share.reason === 'locked'
+                ? 'Invite sent, but unlock your vault and edit them to share encrypted section access.'
+                : 'Invite sent, but vault key share failed. Edit them and re-save the password while unlocked.',
+            );
+          } else {
+            toast.success(
+              'Invite sent — they can sign in and see granted areas',
             );
           }
+        } else {
+          toast.success(
+            'Invite sent — they get a separate dashboard login (not the owner session)',
+          );
         }
-        toast.success(
-          'Invite sent — they get a separate dashboard login (not the owner session)',
-        );
       }
       closeForm();
     } catch (error) {

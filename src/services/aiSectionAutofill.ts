@@ -10,6 +10,7 @@ import { autofillSectionFromDocument } from '@/services/aiAutofill';
 import {
   peekDashboardAiPatch,
   takeDashboardAiPatch,
+  markDashboardAiPatchPersisted,
 } from '@/utils/aiDashboardPatchCache';
 import {
   aiPatchHasValues,
@@ -20,6 +21,8 @@ import {
   isAiAutofillDoneForSection,
   markAiAutofillDoneForSection,
 } from '@/utils/aiAutofillDoneSections';
+import { persistAiResultToSectionBackground } from '@/services/aiBackgroundSectionPersist';
+import { ensureFreshSession } from '@/libs/secureFetch';
 
 type RunAiAutofillArgs = {
   sectionKey: string;
@@ -120,6 +123,27 @@ export async function runAiSectionAutofill({
             document_deleted: false,
           };
 
+          // Stash may only have been review-local — always write vault now.
+          if (!stashed.vault_persisted) {
+            try {
+              await ensureFreshSession();
+              const saved = await persistAiResultToSectionBackground({
+                sectionId,
+                sectionKey,
+                result: stashed.result,
+                subsection,
+              });
+              if (saved.ok) {
+                markDashboardAiPatchPersisted(
+                  sectionId,
+                  stashed.file_id || file_id,
+                );
+              }
+            } catch (persistErr) {
+              console.warn('Section stash vault save failed', persistErr);
+            }
+          }
+
           markAiSectionFilled(sectionId);
           markAiAutofillDoneForSection({
             sectionId,
@@ -149,6 +173,8 @@ export async function runAiSectionAutofill({
       section: sectionKey,
       file_id,
       subsection,
+      // Client writes E2EE ciphertext; server AES merge cannot touch v3 rows.
+      defer_persist: true,
       use_routed_cache: shouldUseRoutedCache(
         sectionId,
         file_id,
@@ -170,6 +196,21 @@ export async function runAiSectionAutofill({
         return [...byKey.values()];
       })(),
     });
+
+    try {
+      await ensureFreshSession();
+      const saved = await persistAiResultToSectionBackground({
+        sectionId,
+        sectionKey,
+        result: json.result,
+        subsection,
+      });
+      if (!saved.ok) {
+        console.warn('Section AI vault save failed:', saved.error);
+      }
+    } catch (persistErr) {
+      console.warn('Section AI vault save failed', persistErr);
+    }
 
     markAiSectionFilled(sectionId);
     markAiAutofillDoneForSection({

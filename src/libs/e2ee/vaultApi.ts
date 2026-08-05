@@ -273,6 +273,19 @@ export async function saveVaultSection(
     }
     return res.json();
   }
+
+  // When E2EE is configured but locked, refuse legacy writes. Saving as v2
+  // then migrating on the next unlock leaves ciphertext the UI cannot read
+  // after a reload (DEK is memory-only).
+  if (slug) {
+    const status = await fetchE2eeStatus().catch(() => null);
+    if (status?.enabled && status?.configured) {
+      throw new Error(
+        'Vault encryption is locked — unlock your vault to save sections',
+      );
+    }
+  }
+
   const res = await secureFetch(legacyPath, {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -281,11 +294,36 @@ export async function saveVaultSection(
   return res.json();
 }
 
+/** True when kit still has undecrypted E2EE section payloads. */
+export function kitHasLockedE2eeSections(kit: {
+  sections?: Array<{ e2ee?: boolean; ciphertext?: string; data?: unknown }>;
+}): boolean {
+  return Boolean(
+    kit?.sections?.some(
+      s =>
+        s?.e2ee &&
+        typeof s?.ciphertext === 'string' &&
+        s.ciphertext &&
+        (s.data == null ||
+          (typeof s.data === 'object' &&
+            !Array.isArray(s.data) &&
+            Object.keys(s.data as object).length === 0)),
+    ),
+  );
+}
+
 /** Decrypt kit.sections[] entries that are E2EE ciphertext. */
 export async function decryptKitSections<T extends { sections?: any[] }>(
   kit: T,
 ): Promise<T> {
-  if (!kit?.sections?.length || !isE2eeUnlocked()) return kit;
+  if (!kit?.sections?.length) return kit;
+  const hasCipher = kit.sections.some(
+    (s: any) => s?.e2ee && typeof s?.ciphertext === 'string' && s.ciphertext,
+  );
+  if (hasCipher && !isE2eeUnlocked()) {
+    throw new Error('VAULT_LOCKED');
+  }
+  if (!isE2eeUnlocked()) return kit;
   const sections = await Promise.all(
     kit.sections.map(async (s: any) => {
       if (s?.e2ee && s?.ciphertext) {

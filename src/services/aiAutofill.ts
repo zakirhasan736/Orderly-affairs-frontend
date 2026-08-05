@@ -17,7 +17,7 @@ export async function autofillSectionFromDocument(payload: {
   subsection?: string | null;
   use_routed_cache?: boolean;
   classify_only?: boolean;
-  /** Overview inbox: extract but wait for Accept before vault save. */
+  /** Client always writes vault ciphertext; server AES merge is skipped for E2EE. */
   defer_persist?: boolean;
   field_catalog?: Array<{
     key: string;
@@ -36,7 +36,7 @@ export async function autofillSectionFromDocument(payload: {
       subsection: payload.subsection || null,
       use_routed_cache: payload.use_routed_cache ?? false,
       classify_only: payload.classify_only ?? false,
-      defer_persist: payload.defer_persist ?? false,
+      defer_persist: payload.defer_persist ?? true,
       field_catalog: payload.field_catalog || null,
     }),
   });

@@ -28,6 +28,8 @@ export type StashedAiPatch = {
    * Overview inbox: stashed for review — not written to the vault until Accept.
    */
   pending_accept?: boolean;
+  /** True after a successful client vault write for this stash. */
+  vault_persisted?: boolean;
 };
 
 /** One stash slot per document × section so batch uploads never overwrite. */
@@ -176,6 +178,30 @@ export function listDashboardAiPatchesForSection(
   sectionId: string,
 ): StashedAiPatch[] {
   return entriesForSection(sectionId);
+}
+
+/** True when a section still has AI fills that have not hit the vault yet. */
+export function hasUnpersistedDashboardAiPatches(sectionId: string): boolean {
+  return listDashboardAiPatchesForSection(sectionId).some(
+    entry => !entry.vault_persisted,
+  );
+}
+
+export function markDashboardAiPatchPersisted(
+  sectionId: string,
+  fileId?: string | null,
+): void {
+  const map = readMap();
+  const sid = String(sectionId || '').trim();
+  if (!sid) return;
+  let changed = false;
+  Object.entries(map).forEach(([key, entry]) => {
+    if (!entry || entry.section_id !== sid) return;
+    if (fileId && entry.file_id && entry.file_id !== fileId) return;
+    map[key] = { ...entry, vault_persisted: true, pending_accept: false };
+    changed = true;
+  });
+  if (changed) writeMap(map);
 }
 
 export function listDashboardAiPatches(): StashedAiPatch[] {
