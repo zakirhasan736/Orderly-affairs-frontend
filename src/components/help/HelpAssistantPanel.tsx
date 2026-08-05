@@ -69,18 +69,26 @@ function SuggestionRail({
     startX: number;
     scrollLeft: number;
     moved: boolean;
-  }>({ active: false, startX: 0, scrollLeft: 0, moved: false });
+    pointerId: number | null;
+  }>({
+    active: false,
+    startX: 0,
+    scrollLeft: 0,
+    moved: false,
+    pointerId: null,
+  });
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    // Don't start scroll-drag from a chip — that eats the tap-to-send click.
-    if ((event.target as HTMLElement | null)?.closest('button')) return;
+    if (disabled) return;
     const el = railRef.current;
     if (!el) return;
+    // Allow drag-scroll starting on chips or empty rail space.
     dragRef.current = {
       active: true,
       startX: event.clientX,
       scrollLeft: el.scrollLeft,
       moved: false,
+      pointerId: event.pointerId,
     };
     el.setPointerCapture(event.pointerId);
   };
@@ -90,8 +98,11 @@ function SuggestionRail({
     const drag = dragRef.current;
     if (!el || !drag.active) return;
     const delta = event.clientX - drag.startX;
-    if (Math.abs(delta) > 8) drag.moved = true;
-    el.scrollLeft = drag.scrollLeft - delta;
+    if (Math.abs(delta) > 6) drag.moved = true;
+    if (drag.moved) {
+      el.scrollLeft = drag.scrollLeft - delta;
+      event.preventDefault();
+    }
   };
 
   const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -100,12 +111,13 @@ function SuggestionRail({
       el.releasePointerCapture(event.pointerId);
     }
     dragRef.current.active = false;
+    dragRef.current.pointerId = null;
   };
 
   return (
     <div className="mb-2">
       <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-        Suggested replies — tap to send
+        Suggested replies — drag to browse, tap to fill
       </p>
       <div
         ref={railRef}
@@ -113,18 +125,18 @@ function SuggestionRail({
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        className="flex cursor-grab gap-1.5 overflow-x-auto pb-1 active:cursor-grabbing touch-pan-x [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex cursor-grab gap-1.5 overflow-x-auto pb-1 select-none active:cursor-grabbing touch-pan-x [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {chips.map(chip => (
           <button
             key={chip}
             type="button"
             disabled={disabled}
-            onPointerDown={event => event.stopPropagation()}
             onClick={event => {
               event.preventDefault();
               event.stopPropagation();
-              if (disabled) return;
+              // Ignore click after a horizontal drag-scroll.
+              if (dragRef.current.moved || disabled) return;
               onPick(chip);
             }}
             className="shrink-0 rounded-full border border-[#c4b5fd]/50 bg-white/90 px-3 py-1.5 text-[11px] font-semibold text-[#4338ca] shadow-sm backdrop-blur transition hover:border-[#7c3aed]/40 hover:bg-[#f5f3ff] disabled:opacity-50"
@@ -385,6 +397,7 @@ export function HelpAssistantPanel({
   const [emailBody, setEmailBody] = useState('');
   const [emailSending, setEmailSending] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
   const canPortal = typeof document !== 'undefined';
 
   useEffect(() => {
@@ -507,15 +520,21 @@ export function HelpAssistantPanel({
     setDraft('');
   };
 
-  const sendSuggestedReply = (chip: string) => {
+  const fillSuggestedReply = (chip: string) => {
     const text = chip.trim();
     if (!text || isTyping) return;
     setDraft(text);
-    // Put text in the composer first, then send as a user message.
-    window.setTimeout(() => {
-      sendMessage(text);
-      setDraft('');
-    }, 40);
+    window.requestAnimationFrame(() => {
+      const input = chatInputRef.current;
+      if (!input) return;
+      input.focus();
+      const end = text.length;
+      try {
+        input.setSelectionRange(end, end);
+      } catch {
+        // ignore — some browsers restrict selection on type=text mid-render
+      }
+    });
   };
 
   const stopListening = () => {
@@ -823,7 +842,7 @@ export function HelpAssistantPanel({
                     key={message.id}
                     message={message}
                     onAction={runAction}
-                    onSuggest={chip => sendSuggestedReply(chip)}
+                    onSuggest={chip => fillSuggestedReply(chip)}
                     isStreaming={streamingMessageId === message.id}
                     showInlineSuggestions={
                       index === lastAssistantIndex && !isTyping
@@ -968,11 +987,12 @@ export function HelpAssistantPanel({
             <SuggestionRail
               chips={suggestionChips}
               disabled={isTyping}
-              onPick={sendSuggestedReply}
+              onPick={fillSuggestedReply}
             />
             <form onSubmit={submitChat}>
               <div className="flex items-center gap-2 rounded-full border border-white/80 bg-white/95 px-2 py-1.5 shadow-[0_12px_40px_rgba(30,27,75,0.12)] backdrop-blur">
                 <input
+                  ref={chatInputRef}
                   value={draft}
                   onChange={event => setDraft(event.target.value)}
                   placeholder={

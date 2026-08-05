@@ -26,6 +26,12 @@ import { toast } from 'sonner';
 import { useNokSessionTimer } from '@/hooks/useNokSessionTimer';
 import { NokBottomNav } from '@/components/nok/NokBottomNav';
 import { cn } from '@common/ui/utils';
+import {
+  isVaultUploadField,
+  vaultFieldHasDisplayContent,
+  vaultFieldPlainText,
+  vaultUploadFiles,
+} from '@/utils/vaultFieldDisplay';
 interface Subsection {
   id: string;
   title: string;
@@ -470,6 +476,7 @@ const sectionHasData = useMemo(() => {
 
   const renderValue = (value: unknown): React.ReactNode => {
     if (value == null || value === '') return null;
+
     if (typeof value === 'string' || typeof value === 'number') {
       return (
         <span className="text-[14px] leading-6 text-[#213D59]">
@@ -477,6 +484,49 @@ const sectionHasData = useMemo(() => {
         </span>
       );
     }
+
+    // Upload / document fields: show text + attachments, never raw JSON
+    if (isVaultUploadField(value)) {
+      const text = vaultFieldPlainText(value);
+      const files = vaultUploadFiles(value);
+      if (!text && files.length === 0) return null;
+      return (
+        <div className="space-y-1.5">
+          {text ? (
+            <span className="text-[14px] leading-6 text-[#213D59]">{text}</span>
+          ) : null}
+          {files.length > 0 ? (
+            <ul className="space-y-1">
+              {files.map((file, i) => {
+                const href = file.secure_url || file.url;
+                const label =
+                  file.name ||
+                  file.original_filename ||
+                  file.public_id ||
+                  `Attachment ${i + 1}`;
+                return (
+                  <li key={`${label}-${i}`}>
+                    {href ? (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[13px] font-medium text-teal-700 underline-offset-2 hover:underline"
+                      >
+                        {label}
+                      </a>
+                    ) : (
+                      <span className="text-[13px] text-slate-600">{label}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+        </div>
+      );
+    }
+
     if (Array.isArray(value)) {
       return (
         <div className="mt-1 space-y-2">
@@ -488,12 +538,14 @@ const sectionHasData = useMemo(() => {
               {typeof item === 'object' && item !== null
                 ? Object.entries(item as Record<string, unknown>).map(
                     ([k, v]) =>
-                      v ? (
+                      vaultFieldHasDisplayContent(v) ? (
                         <div key={k} className="py-0.5 text-[13px]">
                           <span className="font-medium text-slate-500">
                             {formatFieldLabel(k)}:{' '}
                           </span>
-                          <span className="text-[#213D59]">{String(v)}</span>
+                          <span className="text-[#213D59]">
+                            {renderValue(v)}
+                          </span>
                         </div>
                       ) : null,
                   )
@@ -503,13 +555,26 @@ const sectionHasData = useMemo(() => {
         </div>
       );
     }
+
     if (typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>).filter(
+        ([, v]) => vaultFieldHasDisplayContent(v),
+      );
+      if (!entries.length) return null;
       return (
-        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-[12px] text-slate-700">
-          {JSON.stringify(value, null, 2)}
-        </pre>
+        <div className="mt-1 space-y-1.5">
+          {entries.map(([k, v]) => (
+            <div key={k} className="text-[13px]">
+              <span className="font-medium text-slate-500">
+                {formatFieldLabel(k)}:{' '}
+              </span>
+              <span className="text-[#213D59]">{renderValue(v)}</span>
+            </div>
+          ))}
+        </div>
       );
     }
+
     return (
       <span className="text-[14px] text-[#213D59]">{String(value)}</span>
     );
