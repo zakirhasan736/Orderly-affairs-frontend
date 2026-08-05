@@ -46,6 +46,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 
 /* ============================================================
    REPEATABLE SECTION FACTORY
@@ -855,7 +856,13 @@ export default function Section19AssetsValuables({
 
             {items.map((item, index) => {
               const itemScope = `${subsection}:${index}` as UploadScope;
-              const itemLabel = `${config.itemLabel} #${index + 1}`;
+              const itemLabel = getItemDisplayLabel(
+                '19',
+                subsection,
+                item || {},
+                index,
+                config.itemLabel,
+              );
               const topicProps = getTopicCardProps(
                 subsection,
                 index,

@@ -50,6 +50,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import {
   applyExtractedArrayWithDedup,
   buildUpsertAutofillNotice,
@@ -1271,7 +1272,13 @@ export default function Section20LegalDocumentsRecords({
 
             {documents.map((item, index) => {
               const itemScope = `20C:${index}` as UploadScope;
-              const itemLabel = `${SECTION_20C.itemLabel} #${index + 1}`;
+              const itemLabel = getItemDisplayLabel(
+                '20',
+                '20C',
+                item || {},
+                index,
+                SECTION_20C.itemLabel,
+              );
               const topicProps = getTopicCardProps('20C', index, activeTopicId);
 
               return (

@@ -1,11 +1,28 @@
 /**
  * Client-side E2EE for vault sections.
  * DEK never leaves the browser in plaintext. Server stores wrapped DEK only.
+ *
+ * AES-256-GCM is used for both legacy server v2 and client v3 — the difference
+ * is key custody (server key vs browser DEK), not cipher strength.
+ *
+ * DEK material is held in module memory only (not sessionStorage). Idle and
+ * hidden-tab timers auto-lock to shrink the XSS-while-unlocked window.
  */
 
-const SESSION_KEY = 'oa_e2ee_dek_b64';
 const META_KEY = 'oa_e2ee_meta';
 const KDF_ITERATIONS = 310_000;
+const IDLE_LOCK_MS = 20 * 60 * 1000;
+const HIDDEN_LOCK_MS = 2 * 60 * 1000;
+
+/** In-tab only — cleared on lock / logout / full page reload. */
+let _dekBytes: Uint8Array | null = null;
+/** Non-extractable key for encrypt/decrypt (XSS cannot export raw bits easily). */
+let _dekKey: CryptoKey | null = null;
+
+let _idleTimer: ReturnType<typeof setTimeout> | null = null;
+let _hiddenTimer: ReturnType<typeof setTimeout> | null = null;
+let _activityBound = false;
+let _onAutoLock: (() => void) | null = null;
 
 function b64encode(buf: ArrayBuffer | Uint8Array): string {
   const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
@@ -32,6 +49,60 @@ async function importAesKey(raw: ArrayBuffer | Uint8Array): Promise<CryptoKey> {
     'encrypt',
     'decrypt',
   ]);
+}
+
+function clearIdleTimers(): void {
+  if (_idleTimer) {
+    clearTimeout(_idleTimer);
+    _idleTimer = null;
+  }
+  if (_hiddenTimer) {
+    clearTimeout(_hiddenTimer);
+    _hiddenTimer = null;
+  }
+}
+
+function bumpIdleTimer(): void {
+  if (!_dekBytes || typeof window === 'undefined') return;
+  if (_idleTimer) clearTimeout(_idleTimer);
+  _idleTimer = setTimeout(() => {
+    lockE2ee();
+    _onAutoLock?.();
+  }, IDLE_LOCK_MS);
+}
+
+function onVisibilityChange(): void {
+  if (typeof document === 'undefined') return;
+  if (document.visibilityState === 'hidden') {
+    if (_hiddenTimer) clearTimeout(_hiddenTimer);
+    _hiddenTimer = setTimeout(() => {
+      if (document.visibilityState === 'hidden') {
+        lockE2ee();
+        _onAutoLock?.();
+      }
+    }, HIDDEN_LOCK_MS);
+  } else {
+    if (_hiddenTimer) {
+      clearTimeout(_hiddenTimer);
+      _hiddenTimer = null;
+    }
+    bumpIdleTimer();
+  }
+}
+
+function bindActivityListeners(): void {
+  if (typeof window === 'undefined' || _activityBound) return;
+  _activityBound = true;
+  const bump = () => bumpIdleTimer();
+  window.addEventListener('pointerdown', bump, { passive: true });
+  window.addEventListener('keydown', bump, { passive: true });
+  window.addEventListener('scroll', bump, { passive: true });
+  document.addEventListener('visibilitychange', onVisibilityChange);
+}
+
+/** Optional UI hook when idle/hidden auto-lock fires. */
+export function setE2eeAutoLockHandler(handler: (() => void) | null): void {
+  _onAutoLock = handler;
 }
 
 export async function deriveWrappingKey(
@@ -100,32 +171,53 @@ export async function unwrapDek(
 
 export function isE2eeUnlocked(): boolean {
   if (typeof window === 'undefined') return false;
-  return Boolean(sessionStorage.getItem(SESSION_KEY));
+  return _dekBytes != null && _dekBytes.byteLength === 32 && _dekKey != null;
 }
 
 export function lockE2ee(): void {
-  if (typeof window === 'undefined') return;
-  sessionStorage.removeItem(SESSION_KEY);
-  sessionStorage.removeItem(META_KEY);
+  clearIdleTimers();
+  if (_dekBytes) {
+    _dekBytes.fill(0);
+    _dekBytes = null;
+  }
+  _dekKey = null;
+  if (typeof window !== 'undefined') {
+    try {
+      sessionStorage.removeItem('oa_e2ee_dek_b64');
+      sessionStorage.removeItem(META_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
-export function rememberDek(dek: Uint8Array): void {
-  sessionStorage.setItem(SESSION_KEY, b64encode(dek));
+export async function rememberDek(dek: Uint8Array): Promise<void> {
+  if (_dekBytes) _dekBytes.fill(0);
+  _dekBytes = new Uint8Array(dek);
+  _dekKey = await importAesKey(_dekBytes);
+  if (typeof window !== 'undefined') {
+    try {
+      sessionStorage.removeItem('oa_e2ee_dek_b64');
+    } catch {
+      /* ignore */
+    }
+    bindActivityListeners();
+    bumpIdleTimer();
+  }
 }
 
+/** Copy of raw DEK for wrap/rewrap only — prefer encryptJson/decryptJson otherwise. */
 export function loadDekBytes(): Uint8Array | null {
-  const b64 = sessionStorage.getItem(SESSION_KEY);
-  if (!b64) return null;
-  return b64decode(b64);
+  if (!_dekBytes || _dekBytes.byteLength !== 32) return null;
+  return new Uint8Array(_dekBytes);
 }
 
 export async function encryptJson(plaintext: unknown): Promise<string> {
-  const dek = loadDekBytes();
-  if (!dek) throw new Error('Vault locked — sign in again to unlock E2EE');
-  const key = await importAesKey(dek);
+  if (!_dekKey) throw new Error('Vault locked — sign in again to unlock E2EE');
+  bumpIdleTimer();
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const data = new TextEncoder().encode(JSON.stringify(plaintext ?? {}));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data);
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, _dekKey, data);
   const packed = new Uint8Array(iv.length + ct.byteLength);
   packed.set(iv, 0);
   packed.set(new Uint8Array(ct), iv.length);
@@ -135,15 +227,14 @@ export async function encryptJson(plaintext: unknown): Promise<string> {
 export async function decryptJson<T = Record<string, unknown>>(
   ciphertextB64: string,
 ): Promise<T> {
-  const dek = loadDekBytes();
-  if (!dek) throw new Error('Vault locked — sign in again to unlock E2EE');
-  const key = await importAesKey(dek);
+  if (!_dekKey) throw new Error('Vault locked — sign in again to unlock E2EE');
+  bumpIdleTimer();
   const packed = b64decode(ciphertextB64);
   const iv = packed.slice(0, 12);
   const ct = packed.slice(12);
   const raw = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv },
-    key,
+    _dekKey,
     ct,
   );
   return JSON.parse(new TextDecoder().decode(raw)) as T;
@@ -191,7 +282,7 @@ export async function unlockOrSetupE2ee(
         status.kdf_iterations || KDF_ITERATIONS,
       );
       const dek = await unwrapDek(status.wrapped_dek_b64!, wk);
-      rememberDek(dek);
+      await rememberDek(dek);
       return { created: false };
     } catch {
       lockE2ee();
@@ -201,7 +292,6 @@ export async function unlockOrSetupE2ee(
     }
   }
 
-  // Next-of-Kin cannot create an owner envelope — wait for owner nok-wrap.
   if (status.role === 'nextkin') {
     lockE2ee();
     return { created: false };
@@ -219,13 +309,10 @@ export async function unlockOrSetupE2ee(
     kdf_iterations: KDF_ITERATIONS,
     wrap_alg: 'AES-GCM',
   });
-  rememberDek(dek);
+  await rememberDek(dek);
   return { created: true };
 }
 
-/**
- * Re-wrap the in-session DEK under a new password (password change while unlocked).
- */
 export async function rewrapDekForNewPassword(newPassword: string): Promise<{
   salt_b64: string;
   wrapped_dek_b64: string;
@@ -248,7 +335,6 @@ export async function rewrapDekForNewPassword(newPassword: string): Promise<{
   };
 }
 
-/** Wrap current DEK for a NOK using their master password. */
 export async function wrapDekForNokPassword(nokPassword: string): Promise<{
   salt_b64: string;
   wrapped_dek_b64: string;
@@ -271,4 +357,4 @@ export async function wrapDekForNokPassword(nokPassword: string): Promise<{
   };
 }
 
-export { KDF_ITERATIONS, b64encode, b64decode };
+export { KDF_ITERATIONS, b64encode, b64decode, IDLE_LOCK_MS, HIDDEN_LOCK_MS };

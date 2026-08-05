@@ -18,13 +18,14 @@ import {
   hydrateAiUploadHistoryFromServer,
   listAiUploadHistory,
   removeAiUploadHistoryItem,
+  collapseDuplicates,
   type AiUploadHistoryItem,
 } from '@/utils/aiUploadHistory';
 import { clearAiUploadMeta } from '@/utils/aiDocumentUploadUi';
 import {
   deleteAIDocument,
-  listOwnerAiDocuments,
 } from '@/services/aiDocumentUpload';
+import { useListOwnerAiDocumentsQuery } from '@/services/aiDocumentsApi';
 import type { DashboardAiJob } from '@/hooks/useDashboardAiBatchRunner';
 import { toast } from 'sonner';
 import { AiDocumentPreviewDialog } from '@/components/ai/AiDocumentPreviewDialog';
@@ -210,7 +211,7 @@ function mergeHistoryWithJobs(
       });
     }
   }
-  return Array.from(byKey.values());
+  return collapseDuplicates(Array.from(byKey.values()));
 }
 
 type AiUploadHistoryPopupProps = {
@@ -249,30 +250,38 @@ function useUploadHistoryItems(args: {
     );
   }, [sectionId, source]);
 
+  // RTK Query caches GET /ai/documents — reopen popup / poll won't spam the API.
+  const { data: serverDocs, refetch } = useListOwnerAiDocumentsQuery(undefined, {
+    pollingInterval: 45_000,
+    refetchOnMountOrArgChange: 60,
+    refetchOnFocus: false,
+    refetchOnReconnect: true,
+  });
+
+  useEffect(() => {
+    if (!serverDocs) return;
+    hydrateAiUploadHistoryFromServer(serverDocs);
+    refreshHistory();
+  }, [serverDocs, refreshHistory]);
+
+  useEffect(() => {
+    refreshHistory();
+    const onHistory = () => refreshHistory();
+    window.addEventListener('orderly-ai-upload-history', onHistory);
+    return () => {
+      window.removeEventListener('orderly-ai-upload-history', onHistory);
+    };
+  }, [refreshHistory]);
+
   const syncFromServer = useCallback(async () => {
     try {
-      const docs = await listOwnerAiDocuments();
-      hydrateAiUploadHistoryFromServer(docs);
+      await refetch();
     } catch {
       // keep in-memory list
     } finally {
       refreshHistory();
     }
-  }, [refreshHistory]);
-
-  useEffect(() => {
-    void syncFromServer();
-    const onHistory = () => refreshHistory();
-    window.addEventListener('orderly-ai-upload-history', onHistory);
-    // Re-sync from server so stuck "Processing" cards clear after fills.
-    const poll = window.setInterval(() => {
-      void syncFromServer();
-    }, 20_000);
-    return () => {
-      window.removeEventListener('orderly-ai-upload-history', onHistory);
-      window.clearInterval(poll);
-    };
-  }, [refreshHistory, syncFromServer]);
+  }, [refetch, refreshHistory]);
 
   const items = useMemo(() => {
     const merged = mergeHistoryWithJobs(history, jobs);
@@ -714,6 +723,7 @@ export function AiUploadHistoryPopup({
                         <AiUploadHistoryThumb
                           fileId={item.fileId}
                           fileName={item.fileName}
+                          mimeType={item.mimeType}
                         />
 
                         {isLive ? (

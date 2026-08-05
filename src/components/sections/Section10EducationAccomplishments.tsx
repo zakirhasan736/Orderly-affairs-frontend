@@ -51,6 +51,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { educationEntriesAreDuplicates } from '@/utils/aiItemDedup';
 
@@ -534,7 +535,13 @@ export default function Section10EducationAccomplishments({
 
           {educationItems.map((item, index) => {
             const itemScope = `education:${index}` as UploadScope;
-            const itemLabel = `${SECTION_10A.itemLabel} #${index + 1}`;
+            const itemLabel = getItemDisplayLabel(
+              '10',
+              '10A',
+              item || {},
+              index,
+              SECTION_10A.itemLabel,
+            );
             const topicProps = getTopicCardProps('10A', index, activeTopicId);
 
             return (

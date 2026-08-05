@@ -155,7 +155,7 @@ import { OwnerLetterModal } from '@/components/OwnerLetterModal';
 import { MessagesDeliveryModal } from '@/components/MessagesDeliveryModal';
 // import { AccessManagementTest } from '@/components/AccessManagementTest';
 import { DataBindingDashboard } from '@/components/DataBindingDashboard';
-import { MFATestComponent } from '@/components/MFATestComponent';
+import { E2eeMigrationBanner } from '@/components/vault/E2eeMigrationBanner';
 import { hasDoveTag } from '@/config/nokConfig';
 import {
   useNextkinLoginMutation,
@@ -598,6 +598,54 @@ export default function DashboardPage() {
         .catch(err => console.error('Failed to load Section 4 messages', err));
     }
   }, [appMode, sessionReady, familyAcl, recordLoadedSection, vaultPrefetchKey, familyVaultGate]);
+
+  // Owner unlock toast for migration progress + idle auto-lock notice.
+  useEffect(() => {
+    if (appMode !== 'owner' || familyAcl.isFamily || !sessionReady) return;
+    let cancelled = false;
+    (async () => {
+      const { setE2eeAutoLockHandler, isE2eeUnlocked } = await import(
+        '@/libs/e2ee/unlock'
+      );
+      setE2eeAutoLockHandler(() => {
+        if (!cancelled) {
+          toast.info(
+            'Vault locked for safety after inactivity. Sign in again to unlock encrypted sections.',
+          );
+        }
+      });
+      if (isE2eeUnlocked()) {
+        const { fetchE2eeMigrationStatus } = await import(
+          '@/libs/e2ee/vaultApi'
+        );
+        const status = await fetchE2eeMigrationStatus().catch(() => null);
+        if (
+          !cancelled &&
+          status?.enabled &&
+          (status.legacy_v2 || 0) > 0 &&
+          isE2eeUnlocked()
+        ) {
+          const { migrateLegacySectionsToE2ee } = await import(
+            '@/libs/e2ee/unlock'
+          );
+          const result = await migrateLegacySectionsToE2ee();
+          if (!cancelled && result.migrated > 0) {
+            toast.success(
+              result.migration_complete
+                ? `Upgraded ${result.migrated} section(s) to end-to-end encryption`
+                : `Upgraded ${result.migrated} section(s); ${result.legacy_remaining} still need migration`,
+            );
+          }
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      void import('@/libs/e2ee/unlock').then(({ setE2eeAutoLockHandler }) =>
+        setE2eeAutoLockHandler(null),
+      );
+    };
+  }, [appMode, familyAcl.isFamily, sessionReady]);
 
   // Family collaborators need the shared vault DEK to see owner E2EE sections.
   useEffect(() => {
@@ -2560,6 +2608,9 @@ export default function DashboardPage() {
             <div className="mx-auto w-full max-w-[1480px] px-4 py-4 sm:px-5 md:px-6 md:py-6 lg:px-8 xl:px-10">
               {activeSection === 'dashboard' ? (
                 <div className="owner-dashboard-overview-area space-y-5 md:space-y-6">
+                  {appMode === 'owner' && !familyAcl.isFamily && (
+                    <E2eeMigrationBanner enabled />
+                  )}
                   {familyAcl.isFamily && familyRoleBannerText(familyAcl) && (
                     <div className="rounded-2xl border border-teal-200/80 bg-teal-50/90 px-4 py-3 text-sm text-teal-950">
                       <span className="font-semibold">

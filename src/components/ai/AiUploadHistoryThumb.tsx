@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { FileText, FileType2, ImageIcon, Loader2 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
-import { fetchAiDocumentPreviewBlob } from '@/services/aiDocumentUpload';
+import { fetchAiDocumentPreviewBlobCached } from '@/utils/aiDocumentPreviewCache';
 import {
   resolveAiPreviewKind,
   resolveAiPreviewMime,
@@ -17,7 +17,7 @@ type AiUploadHistoryThumbProps = {
 };
 
 /**
- * Document thumbnail for overview history cards (preview image or type placeholder).
+ * Document thumbnail for overview history cards (image or first-page PDF).
  */
 export function AiUploadHistoryThumb({
   fileId,
@@ -29,6 +29,7 @@ export function AiUploadHistoryThumb({
   const [mimeType, setMimeType] = useState<string>(mimeHint || '');
   const [loading, setLoading] = useState(Boolean(fileId));
   const [failed, setFailed] = useState(false);
+  const [previewKind, setPreviewKind] = useState<'image' | 'pdf' | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,6 +44,7 @@ export function AiUploadHistoryThumb({
 
       setLoading(true);
       setFailed(false);
+      setPreviewKind(null);
       setObjectUrl(prev => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
@@ -50,7 +52,7 @@ export function AiUploadHistoryThumb({
 
       try {
         const { blob, mimeType: fetchedMime, fileName: fetchedName } =
-          await fetchAiDocumentPreviewBlob(fileId);
+          await fetchAiDocumentPreviewBlobCached(fileId);
         if (cancelled) return;
 
         const buffer = await blob.arrayBuffer();
@@ -76,6 +78,14 @@ export function AiUploadHistoryThumb({
           createdUrl = URL.createObjectURL(
             new Blob([buffer], { type: mime || 'image/png' }),
           );
+          setPreviewKind('image');
+          setObjectUrl(createdUrl);
+        } else if (kind === 'pdf') {
+          // Blob URL + embed shows page 1 on the card (same bytes as click preview).
+          createdUrl = URL.createObjectURL(
+            new Blob([buffer], { type: 'application/pdf' }),
+          );
+          setPreviewKind('pdf');
           setObjectUrl(createdUrl);
         } else {
           setObjectUrl(null);
@@ -117,13 +127,29 @@ export function AiUploadHistoryThumb({
         <div className="flex h-full items-center justify-center bg-[#f4f6f8]">
           <Loader2 className="h-5 w-5 animate-spin text-[#213D59]/50" />
         </div>
-      ) : objectUrl && !failed ? (
+      ) : objectUrl && !failed && previewKind === 'image' ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={objectUrl}
           alt=""
           className="h-full w-full object-cover object-top"
         />
+      ) : objectUrl && !failed && previewKind === 'pdf' ? (
+        <div className="relative h-full w-full overflow-hidden bg-[#f4f6f8]">
+          <object
+            data={`${objectUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+            type="application/pdf"
+            className="pointer-events-none absolute left-0 top-0 h-[160%] w-full origin-top scale-[1.02]"
+            aria-hidden
+          >
+            <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-b from-[#eef3f9] to-white">
+              <FileType2 className="h-10 w-10 text-[#213D59]/70" />
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5a6b80]">
+                PDF
+              </p>
+            </div>
+          </object>
+        </div>
       ) : (
         <div
           className={cn(

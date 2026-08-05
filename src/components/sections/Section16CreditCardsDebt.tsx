@@ -49,6 +49,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import {
   type FieldGroup,
   buildFieldMap,
@@ -918,7 +919,13 @@ export default function Section16CreditCardsDebt({
 
             {items.map((item, index) => {
               const itemScope = `${subsection}:${index}` as UploadScope;
-              const itemLabel = `${config.itemLabel} #${index + 1}`;
+              const itemLabel = getItemDisplayLabel(
+                '16',
+                subsection,
+                item || {},
+                index,
+                config.itemLabel,
+              );
               const topicProps = getTopicCardProps(
                 subsection,
                 index,

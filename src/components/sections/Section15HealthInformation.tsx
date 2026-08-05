@@ -53,6 +53,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import {
   type FieldGroup,
   buildFieldMap,
@@ -1037,7 +1038,13 @@ export default function Section15HealthInformation({
 
             {providers.map((provider, index) => {
               const itemScope = `15B:${index}` as UploadScope;
-              const itemLabel = `${SECTION_15B.itemLabel} #${index + 1}`;
+              const itemLabel = getItemDisplayLabel(
+                '15',
+                '15B',
+                provider || {},
+                index,
+                SECTION_15B.itemLabel,
+              );
               const topicProps = getTopicCardProps('15B', index, activeTopicId);
 
               return (

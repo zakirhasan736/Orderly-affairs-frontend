@@ -50,6 +50,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { investmentAccountsAreDuplicates } from '@/utils/aiItemDedup';
 import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
@@ -587,7 +588,13 @@ export default function Section14InvestmentAccounts({
 
             {accounts.map((account, index) => {
               const itemScope = `account:${index}` as UploadScope;
-              const itemLabel = `${SECTION_14A.itemLabel} #${index + 1}`;
+              const itemLabel = getItemDisplayLabel(
+              '14',
+              '14A',
+              account || {},
+              index,
+              SECTION_14A.itemLabel,
+            );
               const topicProps = getTopicCardProps('14A', index, activeTopicId);
 
               return (

@@ -2,92 +2,22 @@ import { validateMessageMediaSize } from '@/utils/mediaUpload';
 import { secureFetch } from '@/libs/secureFetch';
 import { readSafeErrorMessage } from '@/utils/sanitizeApiError';
 
-type MessageMediaUploadSignature = {
-  signature: string;
-  timestamp: number;
-  api_key: string;
-  cloud_name: string;
-  folder: string;
-  resource_type: string;
-  type?: string;
-  access_mode?: string;
-  max_bytes: number;
-};
-
-type CloudinaryUploadResult = {
-  secure_url: string;
-  public_id: string;
-  resource_type: string;
-  format?: string;
-  bytes?: number;
-};
-
 export type MessageMediaUploadResult = {
   url: string;
-  public_id: string;
+  public_id?: string;
+  s3_key?: string;
+  s3_bucket?: string;
+  storage?: string;
   type: string;
   format?: string;
   size?: number;
   access_mode?: string;
+  mime_type?: string;
+  folder_uuid?: string;
 };
 
 async function readErrorMessage(res: Response, fallback: string) {
   return readSafeErrorMessage(res, fallback);
-}
-
-function resolveResourceType(file: File | Blob): 'video' | 'image' {
-  const mime = file.type || '';
-  const name = file instanceof File ? file.name : '';
-  if (
-    mime.startsWith('image/') ||
-    /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(name)
-  ) {
-    return 'image';
-  }
-  // Cloudinary stores audio under the video resource type.
-  return 'video';
-}
-
-async function getMessageMediaUploadSignature(
-  fileSize: number,
-  resourceType: 'video' | 'image' = 'video',
-): Promise<MessageMediaUploadSignature> {
-  let res: Response;
-  try {
-    res = await secureFetch(
-      `/message/media/signature?file_size=${fileSize}&resource_type=${resourceType}`,
-    );
-  } catch {
-    throw new Error(
-      'Could not reach the server to prepare media upload. Check your connection and try again.',
-    );
-  }
-
-  if (!res.ok) {
-    throw new Error(await readErrorMessage(res, 'Could not prepare media upload'));
-  }
-
-  return res.json();
-}
-
-async function getMessageMediaSignedUrl(
-  publicId: string,
-  resourceType?: string,
-): Promise<string | null> {
-  try {
-    const res = await secureFetch('/message/media/signed-url', {
-      method: 'POST',
-      body: JSON.stringify({
-        public_id: publicId,
-        resource_type: resourceType,
-      }),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { url?: string };
-    return data.url || null;
-  } catch {
-    return null;
-  }
 }
 
 async function uploadMessageMediaViaApi(
@@ -124,77 +54,41 @@ async function uploadMessageMediaViaApi(
   const result = (await res.json()) as MessageMediaUploadResult;
   return {
     url: result.url,
-    public_id: result.public_id,
+    public_id: result.public_id || result.s3_key,
+    s3_key: result.s3_key,
+    s3_bucket: result.s3_bucket,
+    storage: result.storage || (result.s3_key ? 's3' : 'cloudinary'),
     type: result.type,
     format: result.format,
     size: result.size,
-    access_mode: result.access_mode || 'authenticated',
+    mime_type: result.mime_type,
+    folder_uuid: result.folder_uuid,
+    access_mode: result.access_mode || 'private',
   };
 }
 
-async function uploadMessageMediaToCloudinary(
-  file: File | Blob,
-  signature: MessageMediaUploadSignature,
-): Promise<MessageMediaUploadResult> {
-  if (!signature.cloud_name || !signature.api_key || !signature.signature) {
-    throw new Error('Media upload is not configured. Please try again later.');
-  }
-
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('api_key', signature.api_key);
-  formData.append('timestamp', String(signature.timestamp));
-  formData.append('signature', signature.signature);
-  formData.append('folder', signature.folder);
-  formData.append('type', signature.type || 'authenticated');
-  formData.append('access_mode', signature.access_mode || 'authenticated');
-
-  const uploadUrl = `https://api.cloudinary.com/v1_1/${signature.cloud_name}/${signature.resource_type}/upload`;
-
-  let res: Response;
+async function getMessageMediaSignedUrl(
+  publicId?: string,
+  resourceType?: string,
+  opts?: { s3_key?: string; storage?: string; s3_bucket?: string },
+): Promise<string | null> {
   try {
-    res = await fetch(uploadUrl, {
+    const res = await secureFetch('/message/media/signed-url', {
       method: 'POST',
-      body: formData,
+      body: JSON.stringify({
+        public_id: publicId,
+        s3_key: opts?.s3_key,
+        storage: opts?.storage,
+        s3_bucket: opts?.s3_bucket,
+        resource_type: resourceType,
+      }),
     });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { url?: string };
+    return data.url || null;
   } catch {
-    // CSP / network / blocked api.cloudinary.com — fall back to API proxy.
-    throw new Error('CLOUDINARY_DIRECT_BLOCKED');
+    return null;
   }
-
-  if (!res.ok) {
-    let detail = 'Could not save media. Please try again.';
-    try {
-      const payload = (await res.json()) as {
-        error?: { message?: string };
-        message?: string;
-      };
-      detail = payload?.error?.message || payload?.message || detail;
-    } catch {
-      // ignore parse errors
-    }
-    throw new Error(detail);
-  }
-
-  const result = (await res.json()) as CloudinaryUploadResult;
-  const signed = await getMessageMediaSignedUrl(
-    result.public_id,
-    result.resource_type,
-  );
-  if (!signed) {
-    throw new Error(
-      'Upload saved but secure preview URL could not be created. Please retry.',
-    );
-  }
-
-  return {
-    url: signed,
-    public_id: result.public_id,
-    type: result.resource_type,
-    format: result.format,
-    size: result.bytes,
-    access_mode: 'authenticated',
-  };
 }
 
 export async function createMessage(payload: any) {
@@ -252,47 +146,21 @@ export async function uploadMessageMedia(
     );
   }
 
-  const resourceType = resolveResourceType(file);
-
-  try {
-    const signature = await getMessageMediaUploadSignature(
-      file.size,
-      resourceType,
-    );
-    return await uploadMessageMediaToCloudinary(file, signature);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '';
-    // Direct Cloudinary blocked (CSP) or signature/network issues → API proxy.
-    if (
-      message === 'CLOUDINARY_DIRECT_BLOCKED' ||
-      /failed to fetch|networkerror|load failed|csp/i.test(message)
-    ) {
-      return uploadMessageMediaViaApi(file);
-    }
-    // Prefer clear errors; still try proxy once for generic prepare failures.
-    if (/prepare media upload|reach the server/i.test(message)) {
-      try {
-        return await uploadMessageMediaViaApi(file);
-      } catch {
-        throw error instanceof Error
-          ? error
-          : new Error('Could not upload media. Please try again.');
-      }
-    }
-    throw error instanceof Error
-      ? error
-      : new Error('Could not upload media. Please try again.');
-  }
+  // All new message media goes through the API → S3 path.
+  return uploadMessageMediaViaApi(file);
 }
 
 export async function deleteUploadedMessageMedia(
-  publicId: string,
+  publicId?: string,
   resourceType?: string,
+  opts?: { s3_key?: string; storage?: string },
 ) {
   const res = await secureFetch('/message/media/delete', {
     method: 'POST',
     body: JSON.stringify({
       public_id: publicId,
+      s3_key: opts?.s3_key,
+      storage: opts?.storage,
       resource_type: resourceType,
     }),
   });
@@ -305,10 +173,11 @@ export async function deleteUploadedMessageMedia(
   return res.json();
 }
 
-/** Refresh a signed playback URL for authenticated message media. */
+/** Refresh a signed / presigned playback URL for message media. */
 export async function refreshMessageMediaUrl(
-  publicId: string,
+  publicId?: string,
   resourceType?: string,
+  opts?: { s3_key?: string; storage?: string; s3_bucket?: string },
 ): Promise<string | null> {
-  return getMessageMediaSignedUrl(publicId, resourceType);
+  return getMessageMediaSignedUrl(publicId, resourceType, opts);
 }

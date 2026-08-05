@@ -263,6 +263,27 @@ describe('aiItemDedup', () => {
         model: 'Camry',
       }),
     ).toBe(false);
+    expect(
+      isJunkVehicleCard({
+        make: 'Jeep',
+        model: 'Wrangler',
+        year: '2019',
+      }),
+    ).toBe(false);
+    // Policy-only bridge / date rows must not become vehicle subsections.
+    expect(
+      isJunkVehicleCard({
+        make: 'TO.01/08',
+        insurance_policy: 'POL-12345',
+        insurance_company: 'Geico',
+      }),
+    ).toBe(true);
+    expect(
+      isJunkVehicleCard({
+        insurance_policy: 'POL-12345',
+        insurance_company: 'Geico',
+      }),
+    ).toBe(true);
   });
 
   it('match review popup keeps only meaningful insurance docs', () => {

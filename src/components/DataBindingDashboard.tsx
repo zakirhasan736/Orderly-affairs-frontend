@@ -107,7 +107,7 @@ export function DataBindingDashboard({
   sectionProgressById = {},
   lastUpdatedBySection = {},
   ownerEmail: _ownerEmail = null,
-  ownerName: _ownerName = null,
+  ownerName = null,
   notices: _notices = [],
   readOnly = false,
   uploadsDisabled = false,
@@ -117,8 +117,22 @@ export function DataBindingDashboard({
   showMessages = true,
 }: DataBindingDashboardProps) {
   void _ownerEmail;
-  void _ownerName;
   void _notices;
+  const welcomeName = useMemo(() => {
+    const raw = String(ownerName || '').trim();
+    if (!raw) return null;
+    if (raw.includes('@')) {
+      const local = raw
+        .split('@')[0]
+        ?.replace(/[._+-]+/g, ' ')
+        .trim();
+      const first = local?.split(/\s+/)[0];
+      if (!first) return null;
+      return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+    }
+    const first = raw.split(/\s+/)[0];
+    return first || null;
+  }, [ownerName]);
   const hideDropZone = uploadsDisabled;
   const [activeTab, setActiveTab] = useState<PeopleTab>('access');
   const [mobileHubTab, setMobileHubTab] = useState<MobileHubTab>('people');
@@ -251,19 +265,8 @@ export function DataBindingDashboard({
           });
         });
 
-      const partnerKey = job.targetSectionKey;
-      if (partnerKey) {
-        const forced =
-          partnerKey === 'vehicles'
-            ? ['insurance_policies']
-            : partnerKey === 'insurance_policies'
-              ? ['vehicles']
-              : [];
-        forced.forEach(key => {
-          const meta = AI_SECTION_BY_KEY[key];
-          if (meta) add(meta.id, { label: meta.label });
-        });
-      }
+      // Only list sections that actually have stashed extracts or real pending
+      // routing — do NOT force Vehicles↔Insurance badges (false "matched").
 
       return {
         id: job.id,
@@ -476,6 +479,16 @@ export function DataBindingDashboard({
     <div className="space-y-4 sm:space-y-6">
       {!isNextOfKin && (
         <>
+          <header className="overview-welcome px-0.5">
+            <h1 className="text-[1.4rem] font-semibold tracking-tight text-[#213D59] sm:text-[1.65rem]">
+              {welcomeName ? `Welcome back, ${welcomeName}` : 'Welcome back'}
+            </h1>
+            <p className="mt-1 max-w-xl text-sm leading-relaxed text-slate-500">
+              Pick up where you left off — upload a document or open a section
+              below.
+            </p>
+          </header>
+
           <OverviewAlertRow
             alerts={expiryAlerts}
             onOpenSection={onNavigateToSection}

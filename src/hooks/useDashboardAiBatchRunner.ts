@@ -15,7 +15,10 @@ import {
   AI_SECTION_BY_KEY,
 } from '@/utils/aiSectionRegistry';
 import { stashDashboardAiPatch } from '@/utils/aiDashboardPatchCache';
-import { unwrapAiAutofillPatch } from '@/utils/aiPatchNormalizer';
+import {
+  aiPatchHasValues,
+  unwrapAiAutofillPatch,
+} from '@/utils/aiPatchNormalizer';
 import {
   flattenDetectedFactsFromPatch,
   type DetectedFact,
@@ -32,17 +35,15 @@ import {
 } from '@/utils/aiUploadHistory';
 import { toAiUserFacingMessage } from '@/utils/aiUserFacingError';
 
-/** Always also fill related sections in background when one of the pair is targeted. */
+/** Always also fill related sections when one of the pair is targeted. */
 const FORCE_BACKGROUND_PARTNERS: Record<string, string[]> = {
   // Vehicles docs always carry policy fields → fill Insurance.
-  // Insurance → Vehicles only when classifier/additional_sections marks auto
-  // (handled via additionalSections / partnerResults below — not forced here).
   vehicles: ['insurance_policies'],
+  // Insurance → Vehicles only via classifier additional_sections (auto docs).
   health_information: ['insurance_policies'],
   employment_business: ['banking_financial_accounts'],
   banking_financial_accounts: ['investment_accounts'],
   investment_accounts: ['banking_financial_accounts'],
-  // Home docs may also carry a homeowners policy — not the reverse for auto cards.
   main_residence: ['insurance_policies'],
   legal_documents_records: ['estate_planning_final_wishes'],
   estate_planning_final_wishes: ['legal_documents_records'],
@@ -207,10 +208,56 @@ async function fillPartnerSectionsFast(args: {
   });
 
   // Sequential: full document → related section A (catalog map) → B → …
-  // Never persist a thin partner seed as the final section fill.
+  // Prefer a full extract; fall back to insurance→vehicles cross-seed so
+  // "New data" still appears when the partner LLM returns empty.
   for (const partnerKey of partnerList) {
     const partnerMeta = AI_SECTION_BY_KEY[partnerKey];
     if (!partnerMeta) continue;
+
+    const seedHint = partnerResults?.[partnerKey];
+    const summaryFallback = documentSummary;
+
+    // Stash seed immediately so Vehicles badges before the slower partner extract.
+    if (seedHint && aiPatchHasValues(unwrapAiAutofillPatch(seedHint))) {
+      try {
+        await stashAndPersist({
+          file_id,
+          fileName,
+          sectionId: partnerMeta.id,
+          sectionKey: partnerKey,
+          subsection: partnerMeta.defaultSubsection || null,
+          result: seedHint,
+          detectedFields: factsFromFill({
+            result: seedHint,
+            section: partnerKey,
+          }),
+          documentSummary: summaryFallback,
+          persistNow: false,
+          onFilled: () => notifySectionFilled(partnerMeta.id),
+        });
+        routing?.queueRoutedSectionsSilently(
+          {
+            code: 'section_mismatch',
+            message: 'Partner section seeded',
+            requested_section: sectionKey,
+            suggested_section: partnerKey,
+            suggested_section_id: partnerMeta.id,
+            suggested_section_label: partnerMeta.label,
+            suggested_subsection: partnerMeta.defaultSubsection,
+            document_summary: summaryFallback,
+            file_id,
+            mime_type,
+            additional_sections: [],
+          },
+          {
+            currentSectionId: 'dashboard',
+            navigateIntent: 'review',
+          },
+        );
+      } catch (seedError) {
+        console.warn('Partner seed stash failed', partnerKey, seedError);
+      }
+    }
 
     try {
       await ensureFreshSession();
@@ -232,15 +279,22 @@ async function fillPartnerSectionsFast(args: {
         `Partner fill ${partnerKey}`,
       );
 
-      const seedHint = partnerResults?.[partnerKey];
       let result = partnerFilled.result;
-      // If API returned a full extract, keep it. Seed hints only merge when
-      // the extract is somehow empty.
-      if (!result && seedHint) {
+      const extractPatch = unwrapAiAutofillPatch(result);
+      // Empty / missing extract → keep the cross-seed bridge.
+      if (!aiPatchHasValues(extractPatch) && seedHint) {
         result = seedHint;
       }
 
-      const summary = partnerFilled.document_summary || documentSummary;
+      if (!aiPatchHasValues(unwrapAiAutofillPatch(result))) {
+        console.warn(
+          'Partner fill produced no values; skipping empty stash',
+          partnerKey,
+        );
+        continue;
+      }
+
+      const summary = partnerFilled.document_summary || summaryFallback;
 
       await withTimeout(
         stashAndPersist({
@@ -287,6 +341,7 @@ async function fillPartnerSectionsFast(args: {
         partnerKey,
         partnerError,
       );
+      // Seed stash (if any) already queued — leave it for Accept / New data.
     }
   }
 
@@ -448,6 +503,27 @@ export function useDashboardAiBatchRunner() {
         extractMethod,
       } = args;
 
+      // Stamp vault section ids immediately so each matching section's document
+      // popup lists this overview upload (keys → ids handled in history utils).
+      linkAiUploadHistorySections({
+        fileId: file_id,
+        fileName,
+        sectionIds: [
+          sectionId,
+          ...(additionalSections || []).flatMap(
+            (item: {
+              section_id?: string;
+              section_key?: string;
+            }) => [
+              item?.section_id,
+              item?.section_key
+                ? AI_SECTION_BY_KEY[item.section_key]?.id
+                : undefined,
+            ],
+          ),
+        ],
+      });
+
       const notifySectionFilled = (filledSectionId: string) => {
         routing?.handleAutofillSuccess({
           file_id,
@@ -538,27 +614,33 @@ export function useDashboardAiBatchRunner() {
         });
       };
 
-      const runPartnersInBackground = (opts: {
+      const runPartnersThenFinish = async (opts: {
         documentSummary?: string;
         additionalSections?: any[];
         partnerResults?: Record<string, unknown>;
+        donePatch?: Record<string, unknown>;
       }) => {
-        void fillPartnerSectionsFast({
-          jobId,
-          file_id,
-          fileName,
-          mime_type,
-          sectionKey,
-          documentSummary: opts.documentSummary || documentSummary,
-          additionalSections:
-            opts.additionalSections || additionalSections || [],
-          partnerResults: opts.partnerResults,
-          patchJob,
-          notifySectionFilled,
-          routing,
-        }).catch(err => {
-          console.warn('Background partner fill failed', err);
-        });
+        // Await partners BEFORE marking done so Accept finds Vehicles stash
+        // when Insurance was primary (auto docs).
+        try {
+          await fillPartnerSectionsFast({
+            jobId,
+            file_id,
+            fileName,
+            mime_type,
+            sectionKey,
+            documentSummary: opts.documentSummary || documentSummary,
+            additionalSections:
+              opts.additionalSections || additionalSections || [],
+            partnerResults: opts.partnerResults,
+            patchJob,
+            notifySectionFilled,
+            routing,
+          });
+        } catch (err) {
+          console.warn('Partner fill failed', err);
+        }
+        markPrimaryDone(opts.donePatch);
       };
 
       if (alreadyExtracted && extractedResult) {
@@ -598,8 +680,7 @@ export function useDashboardAiBatchRunner() {
         }
 
         queueReviewForFilledSections({ documentSummary, additionalSections });
-        markPrimaryDone();
-        runPartnersInBackground({ documentSummary, additionalSections });
+        await runPartnersThenFinish({ documentSummary, additionalSections });
         return;
       }
 
@@ -666,21 +747,21 @@ export function useDashboardAiBatchRunner() {
               ? 'cache'
               : readSource;
 
-        markPrimaryDone({
-          documentSummary: filled.document_summary || documentSummary,
-          readSource: filledRead,
-          extractMethod:
-            typeof filled.extract_method === 'string'
-              ? filled.extract_method
-              : extractMethod,
-        });
-        runPartnersInBackground({
+        await runPartnersThenFinish({
           documentSummary: filled.document_summary || documentSummary,
           additionalSections:
             filled.additional_sections || additionalSections || [],
           partnerResults: (
             filled as { partner_results?: Record<string, unknown> }
           ).partner_results,
+          donePatch: {
+            documentSummary: filled.document_summary || documentSummary,
+            readSource: filledRead,
+            extractMethod:
+              typeof filled.extract_method === 'string'
+                ? filled.extract_method
+                : extractMethod,
+          },
         });
       } catch (fillError) {
         if (fillError instanceof AiDocumentMismatchError) {

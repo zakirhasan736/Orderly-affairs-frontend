@@ -94,10 +94,19 @@ interface LettersProps {
 
 interface LetterMedia {
   url: string;
-  public_id: string;
+  public_id?: string;
+  s3_key?: string;
+  s3_bucket?: string;
+  storage?: string;
   type: string;
   format?: string;
   size?: number;
+  mime_type?: string;
+}
+
+function mediaAssetId(media?: LetterMedia | null): string {
+  if (!media) return '';
+  return String(media.s3_key || media.public_id || '').trim();
 }
 
 interface Letter {
@@ -222,10 +231,15 @@ function MessageMediaPreview({
     setSrc(media.url || '');
 
     const refresh = async () => {
-      if (!media.public_id) return;
+      if (!mediaAssetId(media)) return;
       const fresh = await refreshMessageMediaUrl(
         media.public_id,
         media.type || (messageType === 'audio' ? 'video' : messageType),
+        {
+          s3_key: media.s3_key,
+          storage: media.storage,
+          s3_bucket: media.s3_bucket,
+        },
       );
       if (!cancelled && fresh) setSrc(fresh);
     };
@@ -234,7 +248,15 @@ function MessageMediaPreview({
     return () => {
       cancelled = true;
     };
-  }, [media.public_id, media.url, media.type, messageType]);
+  }, [
+    media.public_id,
+    media.s3_key,
+    media.s3_bucket,
+    media.storage,
+    media.url,
+    media.type,
+    messageType,
+  ]);
 
   if (messageType === 'audio') {
     return (
@@ -472,9 +494,12 @@ export function Letters({
     letters.find(item => item.id === letter?.id)?.media;
 
   const deleteStandaloneMedia = async (media?: LetterMedia) => {
-    if (!media?.public_id) return;
+    if (!mediaAssetId(media)) return;
 
-    await deleteUploadedMessageMedia(media.public_id, media.type);
+    await deleteUploadedMessageMedia(media?.public_id, media?.type, {
+      s3_key: media?.s3_key,
+      storage: media?.storage,
+    });
   };
 
   const cleanupUnsavedMedia = (letter?: Letter | null) => {
@@ -482,8 +507,8 @@ export function Letters({
     const savedMedia = getSavedMediaForLetter(letter);
 
     if (
-      currentMedia?.public_id &&
-      currentMedia.public_id !== savedMedia?.public_id
+      mediaAssetId(currentMedia) &&
+      mediaAssetId(currentMedia) !== mediaAssetId(savedMedia)
     ) {
       void deleteStandaloneMedia(currentMedia).catch(error => {
         console.error('Failed to delete unsaved message media:', error);
@@ -585,8 +610,8 @@ export function Letters({
     const media = currentLetter.media;
     const savedMedia = getSavedMediaForLetter(currentLetter);
     const isSavedAttachment =
-      Boolean(savedMedia?.public_id) &&
-      savedMedia?.public_id === media.public_id;
+      Boolean(mediaAssetId(savedMedia)) &&
+      mediaAssetId(savedMedia) === mediaAssetId(media);
 
     try {
       setDeletingMedia(true);

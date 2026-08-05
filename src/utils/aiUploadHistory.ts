@@ -1,3 +1,8 @@
+import {
+  AI_SECTION_BY_ID,
+  AI_SECTION_BY_KEY,
+} from '@/utils/aiSectionRegistry';
+
 export type AiUploadHistoryItem = {
   id: string;
   fileName: string;
@@ -9,6 +14,8 @@ export type AiUploadHistoryItem = {
   fileId?: string;
   /** MIME type from server (helps image / PDF / text preview). */
   mimeType?: string;
+  /** SHA-256 of file bytes when known — used to replace same document. */
+  contentHash?: string;
   /** Primary section stamp ("5") or "overview". */
   sectionId?: string;
   /** All section ids this upload relates to (primary + partners). */
@@ -39,7 +46,42 @@ function normalizeFileName(name: string): string {
   return String(name || '')
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, ' ');
+    .replace(/\.[a-z0-9]{1,8}$/i, '')
+    .replace(/[\s._-]*\(\d+\)$/g, '')
+    .replace(/[\s._-]*(copy)$/g, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Map API section keys (insurance_policies) or ids (7) → vault section id ("7").
+ * Section popups filter by numeric ids; Mongo stores routed_section keys.
+ */
+export function toVaultSectionId(
+  raw: string | null | undefined,
+): string | null {
+  const value = String(raw || '').trim();
+  if (!value || value === 'overview') return null;
+  if (AI_SECTION_BY_ID[value]) return value;
+  if (AI_SECTION_BY_KEY[value]) return AI_SECTION_BY_KEY[value].id;
+  // "7A" / "12B" → parent section id
+  const parent = value.match(/^(\d+)/)?.[1];
+  if (parent && AI_SECTION_BY_ID[parent]) return parent;
+  return null;
+}
+
+function collectVaultSectionIds(
+  ...groups: Array<Array<string | null | undefined> | undefined>
+): string[] {
+  const set = new Set<string>();
+  for (const group of groups) {
+    for (const raw of group || []) {
+      const id = toVaultSectionId(raw);
+      if (id) set.add(id);
+    }
+  }
+  return Array.from(set);
 }
 
 function normalizeItem(raw: any): AiUploadHistoryItem | null {
@@ -76,6 +118,10 @@ function normalizeItem(raw: any): AiUploadHistoryItem | null {
       raw.mimeType || raw.mime_type
         ? String(raw.mimeType || raw.mime_type)
         : undefined,
+    contentHash:
+      raw.contentHash || raw.content_hash
+        ? String(raw.contentHash || raw.content_hash)
+        : undefined,
     sectionId,
     sectionIds,
     targetSectionLabel: raw.targetSectionLabel
@@ -93,11 +139,23 @@ function normalizeItem(raw: any): AiUploadHistoryItem | null {
  * Same document + same topic/section = one footprint.
  * Used so re-uploading Auto_Insurance for Vehicles replaces the old card.
  */
-function sameDocumentTopic(
-  a: Pick<AiUploadHistoryItem, 'fileName' | 'sectionId' | 'sectionIds' | 'source'>,
-  b: Pick<AiUploadHistoryItem, 'fileName' | 'sectionId' | 'sectionIds' | 'source'>,
+export function sameDocumentTopic(
+  a: Pick<
+    AiUploadHistoryItem,
+    'fileName' | 'sectionId' | 'sectionIds' | 'source' | 'contentHash'
+  >,
+  b: Pick<
+    AiUploadHistoryItem,
+    'fileName' | 'sectionId' | 'sectionIds' | 'source' | 'contentHash'
+  >,
 ): boolean {
-  if (normalizeFileName(a.fileName) !== normalizeFileName(b.fileName)) {
+  const aHash = String(a.contentHash || '').trim();
+  const bHash = String(b.contentHash || '').trim();
+  const sameBytes = Boolean(aHash && bHash && aHash === bHash);
+  const sameName =
+    normalizeFileName(a.fileName) === normalizeFileName(b.fileName);
+
+  if (!sameBytes && !sameName) {
     return false;
   }
 
@@ -121,6 +179,9 @@ function sameDocumentTopic(
     ].map(String),
   );
 
+  // Exact same file bytes → one card regardless of section stamps.
+  if (sameBytes) return true;
+
   // Both still pending classification — same filename counts as same topic.
   if (aSections.size === 0 && bSections.size === 0) return true;
 
@@ -132,11 +193,15 @@ function sameDocumentTopic(
   // One pending + one classified: still same file being processed.
   if (aSections.size === 0 || bSections.size === 0) return true;
 
+  // Overview re-upload of the same filename should replace prior overview cards
+  // even when prior stamps span partner sections (vehicles + insurance).
+  if (aSource === 'overview' && bSource === 'overview') return true;
+
   return false;
 }
 
 /** Keep newest row per document+topic; drop older duplicates from localStorage. */
-function collapseDuplicates(items: AiUploadHistoryItem[]): AiUploadHistoryItem[] {
+export function collapseDuplicates(items: AiUploadHistoryItem[]): AiUploadHistoryItem[] {
   const sorted = [...items].sort((a, b) =>
     String(b.updatedAt).localeCompare(String(a.updatedAt)),
   );
@@ -201,9 +266,14 @@ function itemMatchesSection(
   item: AiUploadHistoryItem,
   sectionId: string,
 ): boolean {
-  const want = String(sectionId);
+  const want = toVaultSectionId(sectionId) || String(sectionId);
+  const primary = toVaultSectionId(item.sectionId);
+  if (primary && primary === want) return true;
   if (String(item.sectionId || '') === want) return true;
-  return (item.sectionIds || []).some(id => String(id) === want);
+  return (item.sectionIds || []).some(id => {
+    const normalized = toVaultSectionId(id);
+    return normalized === want || String(id) === want;
+  });
 }
 
 export function listAiUploadHistory(filter?: {
@@ -232,17 +302,7 @@ function mergeSectionIds(
   nextSectionId?: string,
   extra?: string[],
 ): string[] {
-  const set = new Set<string>();
-  for (const id of prev || []) {
-    if (id) set.add(String(id));
-  }
-  for (const id of extra || []) {
-    if (id) set.add(String(id));
-  }
-  if (nextSectionId && nextSectionId !== 'overview') {
-    set.add(String(nextSectionId));
-  }
-  return Array.from(set);
+  return collectVaultSectionIds(prev, [nextSectionId], extra);
 }
 
 /**
@@ -264,7 +324,7 @@ export function upsertAiUploadHistory(
 
   const incomingSection =
     item.sectionId != null && String(item.sectionId).trim()
-      ? String(item.sectionId)
+      ? toVaultSectionId(item.sectionId) || String(item.sectionId).trim()
       : undefined;
 
   // Prefer same id; otherwise same fileName + section/topic.
@@ -275,6 +335,7 @@ export function upsertAiUploadHistory(
       sectionId: incomingSection,
       sectionIds: item.sectionIds,
       source: item.source,
+      contentHash: item.contentHash,
     }),
   );
   const prev = prevById || prevByTopic;
@@ -283,7 +344,7 @@ export function upsertAiUploadHistory(
     incomingSection && incomingSection !== 'overview'
       ? incomingSection
       : prev?.sectionId && prev.sectionId !== 'overview'
-        ? prev.sectionId
+        ? toVaultSectionId(prev.sectionId) || prev.sectionId
         : incomingSection || prev?.sectionId;
 
   const sectionIds = mergeSectionIds(
@@ -309,6 +370,7 @@ export function upsertAiUploadHistory(
         ? item.fileId
         : item.fileId || prev?.fileId,
     mimeType: item.mimeType || prev?.mimeType,
+    contentHash: item.contentHash || prev?.contentHash,
     sectionId: preservedSectionId,
     sectionIds,
     targetSectionLabel: item.targetSectionLabel ?? prev?.targetSectionLabel,
@@ -359,6 +421,8 @@ export function bindAiUploadHistoryFileId(args: {
   fileId: string;
   sectionId?: string | null;
   source?: 'overview' | 'section';
+  mimeType?: string;
+  contentHash?: string;
 }) {
   if (!args.fileName || !args.fileId) return;
   const existing = readHistory();
@@ -368,6 +432,7 @@ export function bindAiUploadHistoryFileId(args: {
       fileName: args.fileName,
       sectionId: args.sectionId || undefined,
       source: args.source,
+      contentHash: args.contentHash,
     }),
   );
   if (!match) return;
@@ -375,6 +440,8 @@ export function bindAiUploadHistoryFileId(args: {
   upsertAiUploadHistory({
     ...match,
     fileId: args.fileId,
+    mimeType: args.mimeType || match.mimeType,
+    contentHash: args.contentHash || match.contentHash,
     updatedAt: now,
     createdAt: now,
   });
@@ -448,12 +515,19 @@ export function hydrateAiUploadHistoryFromServer(
     status?: string;
     filled?: boolean;
     consumed_sections?: string[];
+    pending_sections?: string[];
     created_at?: string | null;
     updated_at?: string | null;
     section?: string | null;
+    content_hash?: string | null;
   }>,
 ): AiUploadHistoryItem[] {
   const existing = readHistory();
+  const existingByFileId = new Map(
+    existing
+      .filter(item => item.fileId)
+      .map(item => [String(item.fileId), item] as const),
+  );
   const inFlight = existing.filter(item => {
     const status = String(item.status || '').toLowerCase();
     return (
@@ -462,7 +536,11 @@ export function hydrateAiUploadHistoryFromServer(
       status === 'queued' ||
       status === 'extracting' ||
       status === 'classifying' ||
-      status === 'starting'
+      status === 'starting' ||
+      status === 'reading' ||
+      status === 'routing' ||
+      status === 'filling' ||
+      status === 'almost'
     );
   });
 
@@ -473,10 +551,20 @@ export function hydrateAiUploadHistoryFromServer(
     const fileName = String(
       doc.original_filename || doc.name || 'Uploaded document',
     );
-    const section =
-      doc.section != null && String(doc.section).trim()
-        ? String(doc.section).trim()
-        : undefined;
+    const prev = existingByFileId.get(fileId);
+    const sectionIds = collectVaultSectionIds(
+      [doc.section],
+      doc.consumed_sections,
+      doc.pending_sections,
+      prev?.sectionIds,
+      prev?.sectionId ? [prev.sectionId] : undefined,
+    );
+    const primarySection =
+      toVaultSectionId(doc.section) ||
+      sectionIds[0] ||
+      (prev?.sectionId && prev.sectionId !== 'overview'
+        ? toVaultSectionId(prev.sectionId) || prev.sectionId
+        : undefined);
     const createdAt =
       doc.created_at || doc.updated_at || new Date().toISOString();
     const updatedAt =
@@ -504,9 +592,15 @@ export function hydrateAiUploadHistoryFromServer(
       updatedAt,
       fileId,
       mimeType: doc.mime_type || undefined,
-      sectionId: section,
-      sectionIds: section ? [section] : [],
-      source: section ? 'section' : 'overview',
+      contentHash: doc.content_hash || undefined,
+      sectionId: primarySection,
+      sectionIds,
+      source: prev?.source === 'section' ? 'section' : 'overview',
+      targetSectionLabel:
+        prev?.targetSectionLabel ||
+        (primarySection && AI_SECTION_BY_ID[primarySection]
+          ? AI_SECTION_BY_ID[primarySection].label
+          : undefined),
     });
   }
 

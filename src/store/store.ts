@@ -7,6 +7,7 @@ import { kitApi } from '@/services/kitApi';
 import { nokLetterApi } from '@/services/nokLetterApi';
 import { billingApi } from '@/services/billingApi';
 import { tourApi } from '@/services/onboardingApi';
+import { aiDocumentsApi } from '@/services/aiDocumentsApi';
 export const store = configureStore({
   reducer: {
     auth: authReducer,
@@ -15,6 +16,7 @@ export const store = configureStore({
     [billingApi.reducerPath]: billingApi.reducer,
     [nokLetterApi.reducerPath]: nokLetterApi.reducer,
     [tourApi.reducerPath]: tourApi.reducer,
+    [aiDocumentsApi.reducerPath]: aiDocumentsApi.reducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware()
@@ -22,7 +24,8 @@ export const store = configureStore({
       .concat(kitApi.middleware)
       .concat(billingApi.middleware)
       .concat(nokLetterApi.middleware)
-      .concat(tourApi.middleware),
+      .concat(tourApi.middleware)
+      .concat(aiDocumentsApi.middleware),
 });
 
 setupListeners(store.dispatch);

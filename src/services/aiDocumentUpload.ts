@@ -2,6 +2,9 @@
 
 import { secureFetch } from '@/libs/secureFetch';
 import { resolveApiBaseUrl } from '@/libs/apiBase';
+import { store } from '@/store/store';
+import { aiDocumentsApi } from '@/services/aiDocumentsApi';
+import { invalidateAiDocumentPreviewCache } from '@/utils/aiDocumentPreviewCache';
 
 const ALLOWED_TYPES = [
   'application/pdf',
@@ -44,6 +47,7 @@ export type OwnerAiDocument = {
   status?: string;
   filled?: boolean;
   consumed_sections?: string[];
+  pending_sections?: string[];
   created_at?: string | null;
   updated_at?: string | null;
   expires_at?: string | null;
@@ -52,6 +56,7 @@ export type OwnerAiDocument = {
   section?: string;
   storage?: string;
   public_id?: string;
+  content_hash?: string;
 };
 
 export async function uploadAIDocument(
@@ -102,7 +107,19 @@ export async function uploadAIDocument(
     throw new Error(json?.detail || 'Document upload failed');
   }
 
+  if (Array.isArray(json?.replaced_file_ids)) {
+    for (const id of json.replaced_file_ids) {
+      invalidateAiDocumentPreviewCache(String(id));
+    }
+  }
+  invalidateOwnerAiDocumentsCache();
+
   return json;
+}
+
+/** Invalidate RTK document list after upload / delete / replace. */
+export function invalidateOwnerAiDocumentsCache() {
+  store.dispatch(aiDocumentsApi.util.invalidateTags(['AiDocuments']));
 }
 
 export async function listOwnerAiDocuments(): Promise<OwnerAiDocument[]> {
@@ -195,7 +212,12 @@ export async function deleteAIDocument(fileId: string): Promise<boolean> {
     const res = await secureFetch(`/ai/document/${encodeURIComponent(fileId)}`, {
       method: 'DELETE',
     });
-    return res.ok || res.status === 404;
+    const ok = res.ok || res.status === 404;
+    if (ok) {
+      invalidateAiDocumentPreviewCache(fileId);
+      invalidateOwnerAiDocumentsCache();
+    }
+    return ok;
   } catch {
     return false;
   }

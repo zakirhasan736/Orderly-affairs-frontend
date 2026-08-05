@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/common/ui/dialog';
-import { fetchAiDocumentPreviewBlob } from '@/services/aiDocumentUpload';
+import { fetchAiDocumentPreviewBlobCached } from '@/utils/aiDocumentPreviewCache';
 import { getReadableAiDocumentType } from '@/utils/aiDocumentUploadUi';
 import { resolveAiPreviewKind, resolveAiPreviewMime } from '@/utils/aiPreviewKind';
 import { cn } from '@common/ui/utils';
@@ -67,7 +67,7 @@ export function AiDocumentPreviewDialog({
 
       try {
         const { blob, mimeType: fetchedMime, fileName: fetchedName } =
-          await fetchAiDocumentPreviewBlob(fileId);
+          await fetchAiDocumentPreviewBlobCached(fileId);
         if (cancelled) return;
 
         const buffer = await blob.arrayBuffer();

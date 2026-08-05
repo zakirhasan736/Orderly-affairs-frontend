@@ -38,6 +38,7 @@ import {
   hydrateAiUploadHistoryFromServer,
   listAiUploadHistory,
   removeAiUploadHistoryItem,
+  collapseDuplicates,
   type AiUploadHistoryItem,
 } from '@/utils/aiUploadHistory';
 import { toast } from 'sonner';
@@ -227,6 +228,7 @@ function mergeInboxFiles(args: {
       updatedAt: doc.updated_at || doc.created_at || new Date().toISOString(),
       fileId,
       mimeType: doc.mime_type || undefined,
+      contentHash: doc.content_hash || undefined,
       sectionId: section,
       sectionIds: section ? [section] : [],
       targetSectionLabel: section ? getAiSectionLabel(section) : undefined,
@@ -234,7 +236,7 @@ function mergeInboxFiles(args: {
     });
   }
 
-  return Array.from(byKey.values())
+  return collapseDuplicates(Array.from(byKey.values()))
     .filter(item => Boolean(String(item.fileId || '').trim()))
     .sort((a, b) => {
       const aTime = Date.parse(a.updatedAt || a.createdAt) || 0;
@@ -706,6 +708,13 @@ export function AiReviewInboxPanel({
           return;
         }
 
+        if (flush.saved === 0) {
+          toast.error(
+            'Nothing ready to save yet. Wait until extraction finishes, then Accept again.',
+          );
+          return;
+        }
+
         const partners = await persistPartnerStashesForFiles({
           fileIds: [...clearedFiles],
           excludeSectionId: row.sectionId,
@@ -714,8 +723,25 @@ export function AiReviewInboxPanel({
           },
         });
 
+        // Clear pending only for sections we actually wrote. Keep partner
+        // pending badges if their stash was not ready yet.
+        const savedSectionIds = new Set([
+          ...(flush.sectionIds || []),
+          ...(partners.sectionIds || []),
+          row.sectionId,
+        ]);
         clearedFiles.forEach(fileId => {
-          routing?.clearAllPendingForFile(fileId);
+          const remainingPartners = listDashboardAiPatches().filter(
+            p =>
+              p.file_id === fileId &&
+              p.section_id !== row.sectionId &&
+              !savedSectionIds.has(p.section_id),
+          );
+          if (remainingPartners.length === 0) {
+            routing?.clearAllPendingForFile(fileId);
+          } else {
+            routing?.clearPendingForSection(row.sectionId);
+          }
         });
         if (!clearedFiles.size) {
           routing?.clearPendingForSection(row.sectionId);

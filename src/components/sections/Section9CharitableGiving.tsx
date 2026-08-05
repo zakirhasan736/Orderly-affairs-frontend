@@ -42,6 +42,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { namedItemsAreDuplicates } from '@/utils/aiItemDedup';
 
@@ -523,7 +524,13 @@ const createEmptyCharity = () => createEmptyItemFromFields(SECTION_9A.fields);
 
           {charities.map((charity, index) => {
             const itemScope = `charity:${index}` as UploadScope;
-            const itemLabel = `${SECTION_9A.itemLabel} #${index + 1}`;
+            const itemLabel = getItemDisplayLabel(
+              '9',
+              '9A',
+              charity || {},
+              index,
+              SECTION_9A.itemLabel,
+            );
             const topicProps = getTopicCardProps('9A', index, activeTopicId);
 
             return (

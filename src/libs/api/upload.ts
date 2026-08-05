@@ -20,7 +20,7 @@ export async function deleteUpload(public_id: string) {
   });
 }
 
-/** Fresh signed Cloudinary URL for an authenticated vault attachment. */
+/** Fresh presigned S3 (or legacy Cloudinary) URL for a vault attachment. */
 export async function getSignedUploadUrl(
   public_id: string,
   resourceType?: string,

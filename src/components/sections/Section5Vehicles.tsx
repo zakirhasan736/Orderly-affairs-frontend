@@ -27,7 +27,6 @@ import {
   mergeAiPatchWithDefaults,
 } from '@/utils/aiPatchNormalizer';
 import { isJunkVehicleCard, vehiclesAreDuplicates } from '@/utils/aiItemDedup';
-import { describeAutofillItem } from '@/utils/aiMultiItemAutofill';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
@@ -45,6 +44,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -564,16 +564,13 @@ export default function Section5Vehicles({
 
           {vehicles.map((vehicle, index) => {
             const itemScope = `vehicle:${index}` as UploadScope;
-            const named = describeAutofillItem(vehicle || {}, [
-              'make',
-              'model',
-              'year',
-              'vin',
-            ]);
-            const itemLabel =
-              named && named !== 'Entry'
-                ? named
-                : `${SECTION_5.itemLabel} #${index + 1}`;
+            const itemLabel = getItemDisplayLabel(
+              '5',
+              '5A',
+              vehicle || {},
+              index,
+              SECTION_5.itemLabel,
+            );
             const topicProps = getTopicCardProps('5A', index, activeTopicId);
 
             return (

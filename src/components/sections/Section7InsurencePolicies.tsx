@@ -44,6 +44,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { insurancePoliciesAreDuplicates, collapseInsurancePolicies } from '@/utils/aiItemDedup';
 
@@ -651,7 +652,13 @@ export default function Section7InsurancePolicies({
 
           {policies.map((policy, index) => {
             const itemScope = `policy:${index}` as UploadScope;
-            const itemLabel = `${SECTION_7A.itemLabel} #${index + 1}`;
+            const itemLabel = getItemDisplayLabel(
+              '7',
+              '7A',
+              policy || {},
+              index,
+              SECTION_7A.itemLabel,
+            );
             const topicProps = getTopicCardProps('7A', index, activeTopicId);
 
             return (

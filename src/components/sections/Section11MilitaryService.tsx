@@ -49,6 +49,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { militaryServicePeriodsAreDuplicates, collapseMilitaryServicePeriods } from '@/utils/aiItemDedup';
 import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
@@ -580,7 +581,13 @@ export default function Section11MilitaryService({
 
           {servicePeriods.map((item, index) => {
             const itemScope = `service:${index}` as UploadScope;
-            const itemLabel = `${SECTION_11A.itemLabel} #${index + 1}`;
+            const itemLabel = getItemDisplayLabel(
+              '11',
+              '11A',
+              item || {},
+              index,
+              SECTION_11A.itemLabel,
+            );
             const topicProps = getTopicCardProps('11A', index, activeTopicId);
 
             return (

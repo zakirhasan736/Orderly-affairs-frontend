@@ -337,6 +337,27 @@ export function getTopicElementId(topicId: string) {
   return `vault-topic-${topicId.replace(/:/g, '-')}`;
 }
 
+/**
+ * Accordion / card title for a multi-item subsection — same labels as the
+ * left sidebar dynamic topics (e.g. "State Farm · Vehicle", "Jeep · Wrangler").
+ */
+export function getItemDisplayLabel(
+  sectionId: string,
+  subsectionId: string,
+  item: Record<string, unknown> | null | undefined,
+  index: number,
+  fallbackPrefix?: string,
+): string {
+  const record =
+    item && typeof item === 'object' && !Array.isArray(item) ? item : {};
+  const config = SUBSECTION_TOPIC_CONFIG[sectionId]?.[subsectionId];
+  if (config) {
+    return config.getLabel(record, index);
+  }
+  const prefix = fallbackPrefix || 'Item';
+  return `${prefix} #${index + 1}`;
+}
+
 export function findDynamicTopic(
   sectionId: string,
   sectionData: Record<string, unknown> | undefined,

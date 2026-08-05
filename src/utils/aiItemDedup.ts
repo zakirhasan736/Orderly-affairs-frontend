@@ -111,10 +111,30 @@ export function isJunkVehicleCard(item: Record<string, unknown>): boolean {
   const vin = extractDisplayText(item.vin).replace(/\s+/g, '');
   const plate = extractDisplayText(item.license_plate);
 
-  if (vin && vin.length >= 11) return false;
-  if (VEHICLE_MAKE_BRAND_RE.test(make) || VEHICLE_MAKE_BRAND_RE.test(model)) {
-    return false;
+  // Date / OCR garbage always junk — even if policy fields were copied onto the row.
+  if (
+    DATEISH_VEHICLE_TITLE_RE.test(make) ||
+    DATEISH_VEHICLE_TITLE_RE.test(model) ||
+    DATEISH_VEHICLE_TITLE_RE.test(`${make} ${model}`.trim())
+  ) {
+    return true;
   }
+  if (DATE_LIKE_RE.test(make) && !VEHICLE_MAKE_BRAND_RE.test(make)) {
+    return true;
+  }
+  if (
+    DATE_LIKE_RE.test(year) &&
+    !/^(19|20)\d{2}$/.test(year) &&
+    !VEHICLE_MAKE_BRAND_RE.test(make) &&
+    !vin
+  ) {
+    return true;
+  }
+
+  const hasNamedMake = VEHICLE_MAKE_BRAND_RE.test(make);
+  const hasNamedModel = VEHICLE_MAKE_BRAND_RE.test(model);
+  if (hasNamedMake || hasNamedModel) return false;
+  if (vin && vin.length >= 11) return false;
   if (
     /^(19|20)\d{2}$/.test(year) &&
     make.length >= 3 &&
@@ -127,16 +147,11 @@ export function isJunkVehicleCard(item: Record<string, unknown>): boolean {
     return false;
   }
 
-  if (
-    DATEISH_VEHICLE_TITLE_RE.test(make) ||
-    DATEISH_VEHICLE_TITLE_RE.test(model) ||
-    DATEISH_VEHICLE_TITLE_RE.test(`${make} ${model}`.trim())
-  ) {
+  const bits = [make, model, year, plate].filter(Boolean);
+  if (!bits.length) {
+    // Insurance-only bridge (no YMM/VIN/plate) — do not create a vehicle subsection.
     return true;
   }
-
-  const bits = [make, model, year, plate].filter(Boolean);
-  if (!bits.length) return true;
 
   if (
     bits.every(
@@ -154,7 +169,8 @@ export function isJunkVehicleCard(item: Record<string, unknown>): boolean {
     return true;
   }
 
-  return false;
+  // Unnamed / thin rows without a brand → hide from accordion + sidebar.
+  return true;
 }
 
 export function vehiclesAreDuplicates(

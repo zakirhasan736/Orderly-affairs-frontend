@@ -63,6 +63,7 @@ export function buildUploadedAiFile(
     name?: string;
     original_filename?: string;
     updated_at?: string;
+    content_hash?: string;
   },
   file?: File | null,
   extras?: AiUploadMeta & {
@@ -90,6 +91,8 @@ export function buildUploadedAiFile(
       fileId: record.file_id,
       sectionId: extras?.sectionId,
       source: extras?.source,
+      mimeType: uploaded.mime_type,
+      contentHash: uploaded.content_hash,
     });
   }
 

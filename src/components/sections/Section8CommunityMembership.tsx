@@ -42,6 +42,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { namedItemsAreDuplicates } from '@/utils/aiItemDedup';
 
@@ -489,7 +490,13 @@ export default function Section8CommunityMembership({
 
           {groups.map((group, index) => {
             const itemScope = `group:${index}` as UploadScope;
-            const itemLabel = `${SECTION_8A.itemLabel} #${index + 1}`;
+            const itemLabel = getItemDisplayLabel(
+              '8',
+              '8A',
+              group || {},
+              index,
+              SECTION_8A.itemLabel,
+            );
             const topicProps = getTopicCardProps('8A', index, activeTopicId);
 
             return (

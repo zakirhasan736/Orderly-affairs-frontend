@@ -24,7 +24,9 @@ function formatClock(seconds: number) {
 }
 
 function canSeeNavItem(href: string, areas: string[] | undefined): boolean {
-  if (!areas || areas.includes('*')) return true;
+  // Fail closed: no areas → no nav (except when super '*' is granted).
+  if (!areas || areas.length === 0) return false;
+  if (areas.includes('*')) return true;
   if (href === '/admin' || href === '/admin/') return areas.includes('overview');
   const part = href.replace(/^\/admin\/?/, '').split('/')[0];
   const map: Record<string, string> = {
@@ -45,7 +47,7 @@ function canSeeNavItem(href: string, areas: string[] | undefined): boolean {
     backups: 'backups',
   };
   const area = map[part];
-  if (!area) return true;
+  if (!area) return false;
   return areas.includes(area);
 }
 

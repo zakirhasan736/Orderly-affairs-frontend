@@ -56,6 +56,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import { VaultFillProgressChip } from '@/components/vault/VaultFillProgressChip';
 import {
   applyExtractedArrayWithDedup,
@@ -1024,7 +1025,13 @@ export default function Section12BankingFinancialAccounts({
 
             {items.map((item, index) => {
               const itemScope = `${subsection}:${index}` as UploadScope;
-              const itemLabel = `${config.itemLabel} #${index + 1}`;
+              const itemLabel = getItemDisplayLabel(
+                '12',
+                subsection,
+                item || {},
+                index,
+                config.itemLabel,
+              );
               const topicProps = getTopicCardProps(
                 subsection,
                 index,

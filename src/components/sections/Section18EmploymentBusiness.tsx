@@ -46,6 +46,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 
 /* ============================================================
    SECTION 18A — CURRENT EMPLOYMENT
@@ -1091,6 +1092,13 @@ export default function Section18EmploymentBusiness({
                 index,
                 activeTopicId,
               );
+              const itemLabel = getItemDisplayLabel(
+                '18',
+                subsection,
+                item || {},
+                index,
+                section.itemLabel,
+              );
 
               return (
                 <Card
@@ -1102,7 +1110,7 @@ export default function Section18EmploymentBusiness({
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="font-semibold text-slate-900">
-                          {section.itemLabel} #{index + 1}
+                          {itemLabel}
                         </p>
                         <p className="text-sm text-slate-500">
                           Upload a document here to autofill only this card.

@@ -51,6 +51,7 @@ export default function AuthWatcher({
 
       if (!session.authenticated) {
         dispatch(clearSession());
+        void import('@/libs/e2ee/unlock').then(({ lockE2ee }) => lockE2ee());
         router.replace('/');
         return;
       }
@@ -112,6 +113,7 @@ export default function AuthWatcher({
         /* ignore */
       }
       dispatch(clearSession());
+      void import('@/libs/e2ee/unlock').then(({ lockE2ee }) => lockE2ee());
       void clearPortalSession().finally(() => {
         if (portalKind === 'family') {
           router.replace('/family/login?session=expired');

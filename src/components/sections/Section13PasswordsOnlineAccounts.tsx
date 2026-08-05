@@ -49,6 +49,7 @@ import {
   getTopicCardProps,
   useScrollToVaultTopic,
 } from '@/utils/vaultTopicNavigation';
+import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { onlineAccountsAreDuplicates } from '@/utils/aiItemDedup';
 import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
@@ -748,7 +749,13 @@ export default function Section13PasswordsOnlineAccounts({
 
             {accounts.map((account, index) => {
               const itemScope = `account:${index}` as UploadScope;
-              const itemLabel = `${SECTION_13A.itemLabel} #${index + 1}`;
+              const itemLabel = getItemDisplayLabel(
+              '13',
+              '13A',
+              account || {},
+              index,
+              SECTION_13A.itemLabel,
+            );
               const topicProps = getTopicCardProps('13A', index, activeTopicId);
 
               return (

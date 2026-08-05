@@ -43,10 +43,21 @@ function buildCsp(nonce: string): string {
     'https://challenges.cloudflare.com',
     'https://api.stripe.com',
     'https://res.cloudinary.com',
-    'https://api.cloudinary.com',
+    'https://orderly-affairs-s3-storage.s3.us-east-1.amazonaws.com',
+    'https://orderly-affairs-s3-storage.s3.amazonaws.com',
   ]
     .filter(Boolean)
     .join(' ');
+
+  // Prefer bucket/CDN hosts over broad https: for media (legacy Cloudinary + S3).
+  const mediaHosts = [
+    "'self'",
+    'blob:',
+    'data:',
+    'https://res.cloudinary.com',
+    'https://orderly-affairs-s3-storage.s3.us-east-1.amazonaws.com',
+    'https://orderly-affairs-s3-storage.s3.amazonaws.com',
+  ].join(' ');
 
   // nonce + strict-dynamic: modern browsers ignore 'unsafe-inline' when a nonce
   // is present. Keep host allowlists for older browsers / third-party loaders.
@@ -54,8 +65,8 @@ function buildCsp(nonce: string): string {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com https://js.stripe.com`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "img-src 'self' data: blob: https:",
-    "media-src 'self' blob: data: https:",
+    `img-src ${mediaHosts}`,
+    `media-src ${mediaHosts}`,
     "font-src 'self' data: https://fonts.gstatic.com",
     `connect-src ${connectSrc}`,
     "frame-src 'self' blob: data: https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com",
