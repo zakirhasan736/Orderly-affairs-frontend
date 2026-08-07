@@ -26,6 +26,10 @@ import {
 import { VaultProgressPercentMark } from '@/components/vault/VaultFillProgressChip';
 import { useVaultFillGaps } from '@/components/vault/VaultFillGapsContext';
 import type { VaultSection } from '@/utils/vaultNavigation';
+import {
+  formatVaultSectionTitle,
+  formatVaultSubsectionTitle,
+} from '@/utils/vaultNavigation';
 import { BRAND_LOGO } from '@/constants/brand';
 
 function parseTopicProgressRef(topicId: string): {
@@ -606,7 +610,7 @@ export function VaultSidebarNavigation({
                           hasDoveTag(section.id)) && (
                           <span className="mr-1">🕊️</span>
                         )}
-                        {section.id}. {section.title}
+                        {formatVaultSectionTitle(section)}
                       </span>
                       {disabledSections[section.id] && (
                         <span className="text-[10px] font-semibold text-white/45">
@@ -697,7 +701,10 @@ export function VaultSidebarNavigation({
                                   hasDoveTag(section.id, subsection.id)) && (
                                   <span className="mr-1">🕊️</span>
                                 )}
-                                {subsection.id}. {subsection.title}
+                                {formatVaultSubsectionTitle(
+                                  section.id,
+                                  subsection,
+                                )}
                               </span>
                               {subsectionProgress.total > 0 ? (
                                 <VaultProgressPercentMark
@@ -740,8 +747,11 @@ export function VaultSidebarNavigation({
                                       itemIndex,
                                       title:
                                         typeof itemIndex === 'number'
-                                          ? `${subsection.id}. ${subsection.title} · Item ${itemIndex + 1}`
-                                          : `${subsection.id}. ${subsection.title}`,
+                                          ? `${formatVaultSubsectionTitle(section.id, subsection)} · Item ${itemIndex + 1}`
+                                          : formatVaultSubsectionTitle(
+                                              section.id,
+                                              subsection,
+                                            ),
                                     });
                                   }}
                                   onMouseDown={event => event.stopPropagation()}

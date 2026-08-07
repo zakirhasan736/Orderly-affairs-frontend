@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@common/ui/card';
 import { Badge } from '@common/ui/badge';
 import { Check, X, Clock, User, Shield, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
 
 interface OwnerNotificationModalProps {
   nokData: any;
@@ -44,30 +45,10 @@ export const OwnerNotificationModal: React.FC<OwnerNotificationModalProps> = ({
   };
 
   const getSectionNames = (sectionIds: string[]) => {
-    const sectionMap: Record<string, string> = {
-      '1': 'Vital Information',
-      '2': 'Vehicles',
-      '3': 'Documents',
-      '4': 'Home & Residence',
-      '5': 'Insurance Policies',
-      '6': 'Memberships',
-      '7': 'Charitable Donations',
-      '8': 'Education & Achievements',
-      '9': 'Military Service',
-      '10': 'Bank Accounts',
-      '11': 'Passwords & Online Accounts',
-      '12': 'Investments',
-      '13': 'Health Information',
-      '14': 'Credit Cards & Debts',
-      '15': 'Family & Friends',
-      '16': 'Employment History',
-      '17': 'Assets & Valuables',
-      '18': 'Legal Documents',
-      '19': 'Tax Information',
-      '20': 'Estate Planning'
-    };
-
-    return sectionIds.map(id => sectionMap[id] || `Section ${id}`);
+    return sectionIds.map(id => {
+      const section = VAULT_NAVIGATION.find(s => s.id === id);
+      return section?.title || `Section ${id}`;
+    });
   };
 
   return (

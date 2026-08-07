@@ -1,4 +1,5 @@
-export const MESSAGE_MEDIA_MAX_BYTES = 150 * 1024 * 1024; // 150 MB
+/** 0 = no app-level size cap (nginx / vault quota may still apply). */
+export const MESSAGE_MEDIA_MAX_BYTES = 0;
 
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'm4v'];
 const AUDIO_EXTENSIONS = ['mp3', 'm4a', 'wav', 'webm', 'aac', 'ogg'];
@@ -141,9 +142,12 @@ export function formatMediaFileSize(size?: number) {
 }
 
 export function validateMessageMediaSize(size: number) {
-  if (size > MESSAGE_MEDIA_MAX_BYTES) {
+  if (!size || size <= 0) {
+    throw new Error('Recording is empty. Please try again.');
+  }
+  if (MESSAGE_MEDIA_MAX_BYTES > 0 && size > MESSAGE_MEDIA_MAX_BYTES) {
     throw new Error(
-      `Recording is too large (${formatMediaFileSize(size)}). Maximum size is 150 MB.`,
+      `Recording is too large (${formatMediaFileSize(size)}). Maximum size is ${formatMediaFileSize(MESSAGE_MEDIA_MAX_BYTES)}.`,
     );
   }
 }

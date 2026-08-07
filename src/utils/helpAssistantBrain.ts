@@ -2,7 +2,7 @@
  * Orderly Affairs help assistant — vault-aware replies for owners.
  */
 
-import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
+import { VAULT_NAVIGATION, getVaultSectionDisplayNumber } from '@/utils/vaultNavigation';
 import {
   getSectionProgress,
   listIncompleteFieldsForSection,
@@ -881,7 +881,7 @@ function respondToHelpMessageUnsafe(
     return withFollowUps(
       {
         role: 'assistant',
-        text: `${section.title} — that’s section ${section.id} in your vault.\n\n${section.blurb}\n\nWould you like me to open it, check empty fields, help you fill it, or start a short vault tour?`,
+        text: `${section.title} — that’s section ${getVaultSectionDisplayNumber(section.id)} in your vault.\n\n${section.blurb}\n\nWould you like me to open it, check empty fields, help you fill it, or start a short vault tour?`,
         actions: [
           { type: 'navigate', sectionId: section.id, label: section.title },
           { type: 'show_empty', sectionId: section.id, label: section.title },

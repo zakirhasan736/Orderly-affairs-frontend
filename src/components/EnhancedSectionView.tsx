@@ -15,6 +15,9 @@ import {
 import { Checkbox } from '@common/ui/checkbox';
 import { formConfig } from '../config/formConfig';
 import {
+  formatVaultSectionTitle,
+} from '@/utils/vaultNavigation';
+import {
   getNOKSectionConfig,
   hasChecklist,
   hasDoveTag,
@@ -618,7 +621,7 @@ const sectionHasData = useMemo(() => {
           <div className="min-w-0 flex-1 pt-0.5">
             <h1 className="text-[15px] font-bold leading-snug tracking-tight text-[#213D59] sm:text-[17px]">
               {sectionHasDove ? '🕊️ ' : ''}
-              {section.id}. {section.title}
+              {formatVaultSectionTitle(section)}
             </h1>
             {sectionHasChecklist ? (
               <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600">

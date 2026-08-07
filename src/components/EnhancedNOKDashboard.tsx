@@ -41,6 +41,10 @@ import {
 } from 'lucide-react';
 import { formConfig } from '../config/formConfig';
 import {
+  formatVaultSectionTitle,
+  VAULT_NAVIGATION,
+} from '@/utils/vaultNavigation';
+import {
   hasChecklist,
   hasDoveTag,
   isHiddenFromNokDashboard,
@@ -230,10 +234,16 @@ export function EnhancedNOKDashboard({
         }
       : undefined;
 
-  const allSections = useMemo(
-    () => formConfig.chunks.flatMap(chunk => chunk.sections),
-    [],
-  );
+  const allSections = useMemo(() => {
+    const order = new Map(VAULT_NAVIGATION.map((s, i) => [s.id, i]));
+    return formConfig.chunks
+      .flatMap(chunk => chunk.sections)
+      .slice()
+      .sort(
+        (a, b) =>
+          (order.get(String(a.id)) ?? 999) - (order.get(String(b.id)) ?? 999),
+      );
+  }, []);
 
   const allowedIds = useMemo(() => {
     if (!effectiveAccess) return new Set<string>();
@@ -1138,7 +1148,7 @@ export function EnhancedNOKDashboard({
                                 </span>
                                 <span className="min-w-0 flex-1">
                                   <span className="block truncate text-[13px] font-semibold text-[#213D59]">
-                                    {section.id}. {section.title}
+                                    {formatVaultSectionTitle(section)}
                                   </span>
                                   <span className="text-[11px] text-slate-400">
                                     {isOpening
@@ -1196,7 +1206,7 @@ export function EnhancedNOKDashboard({
                                 </span>
                                 <span className="min-w-0 flex-1">
                                   <span className="block truncate text-[13px] font-semibold text-[#213D59]">
-                                    {section.id}. {section.title}
+                                    {formatVaultSectionTitle(section)}
                                   </span>
                                   <span className="mt-0.5 block text-[11px] text-slate-400">
                                     {isOpening

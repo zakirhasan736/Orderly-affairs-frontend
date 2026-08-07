@@ -47,6 +47,12 @@ const nextConfig: NextConfig = {
     : {}),
   experimental: {
     turbopackFileSystemCacheForDev: true,
+    // Large personal-message recordings proxy through /oa-api rewrites.
+    proxyClientMaxBodySize: '5gb',
+    middlewareClientMaxBodySize: '5gb',
+  },
+  serverActions: {
+    bodySizeLimit: '5gb',
   },
   async rewrites() {
     const dest = apiProxyDestination();

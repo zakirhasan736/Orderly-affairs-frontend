@@ -87,7 +87,7 @@ async function uploadMessageMediaViaApi(
       const text = await res.clone().text().catch(() => '');
       if (/request entity too large|413/i.test(text) || !text.trim().startsWith('{')) {
         throw new Error(
-          'Recording is too large for the server upload limit. Ask support to raise nginx client_max_body_size to at least 160m, or record a shorter clip.',
+          'Upload blocked by the server proxy (nginx 413). On the VPS set client_max_body_size 0; in both portal and API nginx configs, then: sudo nginx -t && sudo systemctl reload nginx',
         );
       }
     }

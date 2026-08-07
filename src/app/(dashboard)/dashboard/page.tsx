@@ -12,6 +12,12 @@ import { useOnboarding } from '@/onboarding/components/OnboardingProvider';
 import { deleteUpload } from '@/libs/api/upload';
 import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
 import {
+  formatVaultSectionTitle,
+  formatVaultSubsectionTitle,
+  getVaultSectionDisplayNumber,
+  getVaultSubsectionDisplayId,
+} from '@/utils/vaultNavigation';
+import {
   findDynamicTopic,
   getTopicElementId,
 } from '@/utils/dynamicVaultTopics';
@@ -1710,14 +1716,14 @@ export default function DashboardPage() {
         );
 
         if (activeTopic) {
-          return `${sub.id}. ${sub.title} · ${activeTopic.label}`;
+          return `${formatVaultSubsectionTitle(section.id, sub)} · ${activeTopic.label}`;
         }
 
-        return `${sub.id}. ${sub.title}`;
+        return formatVaultSubsectionTitle(section.id, sub);
       }
     }
 
-    return `${section.id}. ${section.title}`;
+    return formatVaultSectionTitle(section);
   }, [activeSection, activeSubsection, activeTopicId, allSections, formData]);
   // Only jump to the overview when entering owner mode from another mode
   // (e.g. NOK → owner). Do not reset when owner mode is already active.
@@ -2282,7 +2288,7 @@ export default function DashboardPage() {
       if (!isComplete) {
         return {
           id: section.id,
-          title: `${section.id}. ${section.title}`,
+          title: formatVaultSectionTitle(section),
         };
       }
     }
@@ -3312,11 +3318,15 @@ export default function DashboardPage() {
                         <div className="min-w-0 flex-1">
                           <div className="mb-3 flex flex-wrap items-center gap-2">
                             <span className="rounded-full bg-[#213D59] px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-white">
-                              Section {currentSection.id}
+                              Section{' '}
+                              {getVaultSectionDisplayNumber(currentSection.id)}
                             </span>
                             {activeSubsection && (
                               <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-500">
-                                {activeSubsection}
+                                {getVaultSubsectionDisplayId(
+                                  currentSection.id,
+                                  activeSubsection,
+                                )}
                               </span>
                             )}
                           </div>

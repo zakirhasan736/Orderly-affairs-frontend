@@ -145,11 +145,13 @@ describe('mediaUpload (personal messages)', () => {
     expect(formatMediaFileSize(2 * 1024 * 1024)).toBe('2.00 MB');
   });
 
-  it('validates max size and infers content types', () => {
+  it('validates empty size and allows unlimited when max is 0', () => {
     expect(() => validateMessageMediaSize(1000)).not.toThrow();
+    expect(() => validateMessageMediaSize(0)).toThrow(/empty/i);
     expect(() =>
-      validateMessageMediaSize(MESSAGE_MEDIA_MAX_BYTES + 1),
-    ).toThrow(/150 MB/i);
+      validateMessageMediaSize(500 * 1024 * 1024),
+    ).not.toThrow();
+    expect(MESSAGE_MEDIA_MAX_BYTES).toBe(0);
     expect(inferMediaContentType('clip.mp4')).toBe('video/mp4');
     expect(inferMediaContentType('voice.m4a', 'audio/mp4')).toBe('audio/mp4');
   });

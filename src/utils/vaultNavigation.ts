@@ -13,6 +13,10 @@ export interface VaultSection {
   hasObituaryTag?: boolean;
 }
 
+/**
+ * Sidebar / product order. Internal `id` values stay stable for API, DB, and
+ * ACL (Family remains `"17"`). Use display helpers below for user-facing numbers.
+ */
 export const VAULT_NAVIGATION: VaultSection[] = [
   {
     id: '0',
@@ -163,3 +167,32 @@ export const VAULT_NAVIGATION: VaultSection[] = [
     ],
   },
 ];
+
+/** User-facing section number from nav order (Family after Vital → `2`, not `17`). */
+export function getVaultSectionDisplayNumber(sectionId: string): string {
+  const idx = VAULT_NAVIGATION.findIndex(s => s.id === sectionId);
+  return idx >= 0 ? String(idx) : sectionId;
+}
+
+/** User-facing subsection id (`17A` under Family → `2A`). */
+export function getVaultSubsectionDisplayId(
+  sectionId: string,
+  subsectionId: string,
+): string {
+  const display = getVaultSectionDisplayNumber(sectionId);
+  const suffix = String(subsectionId || '').replace(/^\d+/, '');
+  return suffix ? `${display}${suffix}` : display;
+}
+
+export function formatVaultSectionTitle(
+  section: Pick<VaultSection, 'id' | 'title'>,
+): string {
+  return `${getVaultSectionDisplayNumber(section.id)}. ${section.title}`;
+}
+
+export function formatVaultSubsectionTitle(
+  sectionId: string,
+  subsection: Pick<VaultSubsection, 'id' | 'title'>,
+): string {
+  return `${getVaultSubsectionDisplayId(sectionId, subsection.id)}. ${subsection.title}`;
+}

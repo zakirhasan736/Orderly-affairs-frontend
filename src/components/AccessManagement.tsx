@@ -85,6 +85,11 @@ import {
   useIsMobile,
 } from './MobileBottomSheet';
 import { formConfig } from '../config/formConfig';
+import {
+  formatVaultSectionTitle,
+  formatVaultSubsectionTitle,
+  VAULT_NAVIGATION,
+} from '@/utils/vaultNavigation';
 
 /* ------------------------------------------------------------------ */
 /* Types & constants                                                   */
@@ -138,6 +143,7 @@ type SectionRegistryItem = {
 
 function buildSectionRegistry(): SectionRegistryItem[] {
   const items: SectionRegistryItem[] = [];
+  const order = new Map(VAULT_NAVIGATION.map((s, i) => [s.id, i]));
 
   formConfig.chunks.forEach(chunk => {
     chunk.sections.forEach(section => {
@@ -153,6 +159,10 @@ function buildSectionRegistry(): SectionRegistryItem[] {
       });
     });
   });
+
+  items.sort(
+    (a, b) => (order.get(a.id) ?? 999) - (order.get(b.id) ?? 999),
+  );
 
   return items;
 }
@@ -1455,14 +1465,14 @@ export const AccessManagement = forwardRef<
     sectionRegistry.forEach(section => {
       options.push({
         id: section.id,
-        label: `${section.id}. ${section.title}`,
+        label: formatVaultSectionTitle(section),
         isSubsection: false,
       });
 
       section.subsections.forEach(sub => {
         options.push({
           id: sub.id,
-          label: `${sub.id}. ${sub.title}`,
+          label: formatVaultSubsectionTitle(section.id, sub),
           isSubsection: true,
         });
       });
@@ -2291,7 +2301,7 @@ export const AccessManagement = forwardRef<
                                         className="h-4 w-4"
                                       />
                                       <span className="min-w-0 flex-1 text-sm font-semibold">
-                                        {section.id}. {section.title}
+                                        {formatVaultSectionTitle(section)}
                                       </span>
                                     </label>
 
@@ -2316,7 +2326,10 @@ export const AccessManagement = forwardRef<
                                               className="h-4 w-4"
                                             />
                                             <span className="min-w-0 flex-1 text-sm text-muted-foreground">
-                                              {sub.id}. {sub.title}
+                                              {formatVaultSubsectionTitle(
+                                                section.id,
+                                                sub,
+                                              )}
                                             </span>
                                           </label>
                                         ))}

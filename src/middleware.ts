@@ -152,11 +152,12 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all paths except static assets / image optimizer.
-     * Needed so CSP nonce applies site-wide, not only auth routes.
+     * Match page routes for CSP nonce. Skip /oa-api so large media uploads
+     * stream through the rewrite without Edge body buffering.
      */
     {
-      source: '/((?!_next/static|_next/image|favicon.ico|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+      source:
+        '/((?!_next/static|_next/image|favicon.ico|sw\\.js|oa-api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
     },
   ],
 };

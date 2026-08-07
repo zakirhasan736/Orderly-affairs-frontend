@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { formatVaultSectionTitle, VAULT_NAVIGATION } from '@/utils/vaultNavigation';
 import { Button } from '@common/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@common/ui/card';
 import { Badge } from '@common/ui/badge';
@@ -104,10 +105,16 @@ export const NextOfKinLandingPage: React.FC<NextOfKinLandingPageProps> = ({
   };
 
   // Get all sections and filter based on access rights
-  const allSections = useMemo(() => 
-    formConfig.chunks.flatMap(chunk => chunk.sections), 
-    []
-  );
+  const allSections = useMemo(() => {
+    const order = new Map(VAULT_NAVIGATION.map((s, i) => [s.id, i]));
+    return formConfig.chunks
+      .flatMap(chunk => chunk.sections)
+      .slice()
+      .sort(
+        (a, b) =>
+          (order.get(String(a.id)) ?? 999) - (order.get(String(b.id)) ?? 999),
+      );
+  }, []);
 
   const authorizedSections = useMemo(() => {
     if (nokData.access_level === 'Full Kit Access') {
@@ -285,7 +292,7 @@ export const NextOfKinLandingPage: React.FC<NextOfKinLandingPageProps> = ({
                           </div>
                           <div className="flex-1 min-w-0">
                             <h3 className="font-medium">
-                              {section.id}. {section.title}
+                              {formatVaultSectionTitle(section)}
                             </h3>
                             <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                               {section.description ||
