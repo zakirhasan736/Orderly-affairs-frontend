@@ -29,9 +29,9 @@ export function getSectionUploadFieldLabels(
 ): Map<string, string> {
   const map = new Map<string, string>();
   if (!sectionId) return map;
-  const section = (formConfig.sections || []).find(
-    s => String(s.id) === String(sectionId),
-  );
+  const section = (formConfig.chunks || [])
+    .flatMap(chunk => chunk.sections || [])
+    .find(s => String(s.id) === String(sectionId));
   if (!section) return map;
 
   for (const sub of section.subsections || []) {
@@ -139,13 +139,15 @@ export function collectSectionFieldUploads(
 /** True when section form data has at least one attached file. */
 export function sectionDataHasFieldUploads(
   sectionData: Record<string, unknown> | null | undefined,
+  sectionId?: string | null,
 ): boolean {
-  return collectSectionFieldUploads(sectionData).length > 0;
+  return collectSectionFieldUploads(sectionData, sectionId).length > 0;
 }
 
 /** Count attached files under section form data. */
 export function countSectionFieldUploads(
   sectionData: Record<string, unknown> | null | undefined,
+  sectionId?: string | null,
 ): number {
-  return collectSectionFieldUploads(sectionData).length;
+  return collectSectionFieldUploads(sectionData, sectionId).length;
 }
