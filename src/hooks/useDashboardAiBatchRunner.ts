@@ -37,6 +37,7 @@ import {
   upsertAiUploadHistory,
 } from '@/utils/aiUploadHistory';
 import { toAiUserFacingMessage } from '@/utils/aiUserFacingError';
+// Person/section approval happens in AiOverviewReadMatchDialog after stash.
 
 /** Always also fill related sections when one of the pair is targeted. */
 const FORCE_BACKGROUND_PARTNERS: Record<string, string[]> = {
@@ -44,6 +45,8 @@ const FORCE_BACKGROUND_PARTNERS: Record<string, string[]> = {
   vehicles: ['insurance_policies'],
   // Insurance → Vehicles only via classifier additional_sections (auto docs).
   health_information: ['insurance_policies'],
+  // Health cards often classify as insurance first — also fill Health.
+  insurance_policies: ['health_information'],
   employment_business: ['banking_financial_accounts'],
   banking_financial_accounts: ['investment_accounts'],
   investment_accounts: ['banking_financial_accounts'],
@@ -261,7 +264,7 @@ async function fillPartnerSectionsFast(args: {
             section: partnerKey,
           }),
           documentSummary: summaryFallback,
-          persistNow: true,
+          persistNow: false,
           onFilled: () => notifySectionFilled(partnerMeta.id),
         });
         routing?.queueRoutedSectionsSilently(
@@ -339,7 +342,7 @@ async function fillPartnerSectionsFast(args: {
             section: partnerKey,
           }),
           documentSummary: summary,
-          persistNow: true,
+          persistNow: false,
           onFilled: () => notifySectionFilled(partnerMeta.id),
         }),
         30000,
@@ -684,6 +687,7 @@ export function useDashboardAiBatchRunner() {
         });
 
         try {
+          // Stash for dashboard Review & fill — ask person/sections there, not mid-batch.
           await withTimeout(
             stashAndPersist({
               file_id,
@@ -697,7 +701,7 @@ export function useDashboardAiBatchRunner() {
                 sectionKey,
               ),
               documentSummary,
-              persistNow: true,
+              persistNow: false,
               onFilled: () => notifySectionFilled(sectionId),
             }),
             35000,
@@ -746,6 +750,9 @@ export function useDashboardAiBatchRunner() {
           activeFillSectionId: sectionId,
         });
 
+        const summaryForReview = filled.document_summary || documentSummary;
+
+        // Stash for dashboard Review & fill — person/section choices happen there.
         await withTimeout(
           stashAndPersist({
             file_id,
@@ -755,8 +762,8 @@ export function useDashboardAiBatchRunner() {
             subsection,
             result: filled.result,
             detectedFields: factsFromFill(filled),
-            documentSummary: filled.document_summary || documentSummary,
-            persistNow: true,
+            documentSummary: summaryForReview,
+            persistNow: false,
             onFilled: () => notifySectionFilled(sectionId),
           }),
           35000,
@@ -764,7 +771,7 @@ export function useDashboardAiBatchRunner() {
         );
 
         queueReviewForFilledSections({
-          documentSummary: filled.document_summary || documentSummary,
+          documentSummary: summaryForReview,
           additionalSections:
             filled.additional_sections || additionalSections || [],
         });

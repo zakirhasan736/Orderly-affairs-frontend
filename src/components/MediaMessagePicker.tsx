@@ -72,8 +72,9 @@ export function MediaMessagePicker({
 
   const startPhotoCapture = () => {
     if (onTakePhoto) {
-      onClose();
+      // Open capture first so the parent editor stays mounted, then dismiss picker.
       onTakePhoto();
+      onClose();
       return;
     }
 
@@ -81,8 +82,10 @@ export function MediaMessagePicker({
   };
 
   const startRecording = () => {
-    onClose();
+    // Open recorder first — closing the picker first can race with the parent
+    // Sheet dismissing and wipe both overlays before the recorder mounts.
     onRecord();
+    onClose();
   };
 
   return (

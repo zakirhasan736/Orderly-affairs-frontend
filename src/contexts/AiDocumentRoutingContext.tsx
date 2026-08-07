@@ -11,6 +11,7 @@ import React, {
 } from 'react';
 import { toast } from 'sonner';
 import { AiGuidedNavigationCallout } from '@/components/ai/AiGuidedNavigationCallout';
+import { AiIdentityPersonChooserDialog } from '@/components/ai/AiIdentityPersonChooserDialog';
 import { AiSectionMismatchDialog } from '@/components/ai/AiSectionMismatchDialog';
 import {
   isAiAutofillDoneForSection,
@@ -827,6 +828,8 @@ export function AiDocumentRoutingProvider({
         onStayHere={closeMismatchDialog}
         onGoToSection={goToSuggestedSection}
       />
+
+      <AiIdentityPersonChooserDialog />
 
       <AiGuidedNavigationCallout />
     </AiDocumentRoutingContext.Provider>

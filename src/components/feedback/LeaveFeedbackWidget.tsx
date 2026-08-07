@@ -22,12 +22,14 @@ import {
 } from '@/components/common/ui/dialog';
 import { Button } from '@/components/common/ui/button';
 import { cn } from '@common/ui/utils';
+import { useIsMobile } from '@/components/MobileBottomSheet';
 import { uploadFile, deleteUpload } from '@/libs/api/upload';
 import {
   submitFeedback,
   type FeedbackAttachment,
   type FeedbackCategory,
 } from '@/libs/api/feedback';
+import { useOptionalHelpAssistant } from '@/components/help/HelpAssistantContext';
 
 const CATEGORIES: {
   id: FeedbackCategory;
@@ -69,9 +71,18 @@ const RATINGS = [
   { value: 5, label: 'Love it' },
 ] as const;
 
+export const OPEN_LEAVE_FEEDBACK_EVENT = 'orderly-open-feedback';
+
+export function openLeaveFeedback() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(OPEN_LEAVE_FEEDBACK_EVENT));
+}
+
 type PendingShot = FeedbackAttachment & { previewUrl?: string };
 
 export function LeaveFeedbackWidget() {
+  const help = useOptionalHelpAssistant();
+  const isMobile = useIsMobile();
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<FeedbackCategory>('idea');
@@ -87,6 +98,24 @@ export function LeaveFeedbackWidget() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener(OPEN_LEAVE_FEEDBACK_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_LEAVE_FEEDBACK_EVENT, onOpen);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (open) {
+      document.body.dataset.oaFeedbackOpen = '1';
+    } else {
+      delete document.body.dataset.oaFeedbackOpen;
+    }
+    return () => {
+      delete document.body.dataset.oaFeedbackOpen;
+    };
+  }, [open]);
 
   const pagePath = useMemo(() => {
     if (typeof window === 'undefined') return '/dashboard';
@@ -208,52 +237,78 @@ export function LeaveFeedbackWidget() {
 
   if (!mounted) return null;
 
+  const showTriggers = !open && !help?.open;
+
   return (
     <>
-      {createPortal(
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label="Leave feedback"
-          className={cn(
-            'fixed top-1/2 right-0 z-[95] -translate-y-1/2',
-            'flex items-center gap-2 rounded-l-lg rounded-r-none',
-            'bg-[#213D59] px-2.5 py-3 text-white shadow-lg',
-            'ring-1 ring-black/10 transition',
-            'hover:bg-[#00305C] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2B5A8C]',
-            open && 'pointer-events-none opacity-0',
-          )}
-        >
-          <span
-            className="select-none text-[11px] font-semibold tracking-[0.14em]"
-            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-          >
-            LEAVE FEEDBACK
-          </span>
-        </button>,
-        document.body,
-      )}
+      {showTriggers
+        ? createPortal(
+            isMobile ? (
+              /* Mobile only: bottom icon FAB above Contact Support */
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                aria-label="Leave feedback"
+                title="Leave feedback"
+                className={cn(
+                  'fixed z-[90] flex h-[31px] w-[31px] items-center justify-center rounded-full bg-[#2B5A8C] text-white shadow-lg ring-2 ring-white/90 transition hover:bg-[#213D59] active:scale-95',
+                  'right-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+31px+0.5rem)]',
+                )}
+              >
+                <MessageSquarePlus className="h-[13px] w-[13px]" />
+              </button>
+            ) : (
+              /* Desktop only: vertical right-edge tab */
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                aria-label="Leave feedback"
+                className={cn(
+                  'fixed top-1/2 right-0 z-[95] flex -translate-y-1/2',
+                  'items-center gap-2 rounded-l-lg rounded-r-none',
+                  'bg-[#213D59] px-2.5 py-3 text-white shadow-lg',
+                  'ring-1 ring-black/10 transition',
+                  'hover:bg-[#00305C] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2B5A8C]',
+                )}
+              >
+                <span
+                  className="text-[11px] font-semibold tracking-[0.14em]"
+                  style={{
+                    writingMode: 'vertical-rl',
+                    transform: 'rotate(180deg)',
+                  }}
+                >
+                  LEAVE FEEDBACK
+                </span>
+              </button>
+            ),
+            document.body,
+          )
+        : null}
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent
           className={cn(
-            'flex max-h-[min(92dvh,44rem)] w-[min(100vw-1.25rem,40rem)] flex-col gap-0 overflow-hidden border-slate-200/90 p-0 shadow-2xl',
-            'sm:max-w-[40rem]',
+            'flex flex-col gap-0 overflow-hidden border-slate-200/90 bg-white p-0 shadow-2xl',
+            // Mobile: bottom sheet, compact
+            'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:max-h-[min(90dvh,calc(100dvh-env(safe-area-inset-bottom)))] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-2xl max-sm:rounded-b-none max-sm:pb-[env(safe-area-inset-bottom)]',
+            // Desktop: centered card
+            'sm:max-h-[min(88dvh,40rem)] sm:w-[min(100vw-2rem,34rem)] sm:max-w-[34rem] sm:rounded-2xl',
           )}
         >
           {sent ? (
-            <div className="flex flex-1 flex-col items-center justify-center px-8 py-12 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-8 ring-emerald-50/60">
-                <CheckCircle2 className="h-8 w-8" />
+            <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center sm:px-8 sm:py-12">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-4 ring-emerald-50/60 sm:mb-4 sm:h-14 sm:w-14">
+                <CheckCircle2 className="h-6 w-6 sm:h-7 sm:w-7" />
               </div>
-              <h3 className="text-xl font-semibold tracking-tight text-[#213D59]">
-                Thanks for helping us improve
+              <h3 className="text-lg font-semibold tracking-tight text-[#213D59] sm:text-xl">
+                Thanks — sent
               </h3>
-              <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-600">
-                Your note is with our team. We read every submission.
+              <p className="mt-1.5 text-sm text-slate-500">
+                We read every note.
               </p>
               <Button
-                className="mt-8 h-11 min-w-[8.5rem] rounded-full bg-[#213D59] px-6 hover:bg-[#00305C]"
+                className="mt-6 h-10 min-w-[7.5rem] rounded-full bg-[#213D59] px-5 hover:bg-[#00305C]"
                 onClick={() => handleOpenChange(false)}
               >
                 Close
@@ -261,28 +316,26 @@ export function LeaveFeedbackWidget() {
             </div>
           ) : (
             <>
-              {/* Sticky header */}
-              <DialogHeader className="shrink-0 space-y-1.5 border-b border-slate-100 bg-gradient-to-b from-[#f7f9fc] to-white px-6 pb-4 pt-5 pr-12 text-left sm:px-7 sm:pt-6">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2B5A8C]">
+              <div className="flex shrink-0 justify-center pt-2.5 sm:hidden" aria-hidden>
+                <div className="h-1 w-10 rounded-full bg-slate-300/90" />
+              </div>
+
+              <DialogHeader className="shrink-0 space-y-0 border-b border-slate-100 px-4 pb-3 pt-2 text-left sm:px-5 sm:pb-3.5 sm:pt-4">
+                <DialogTitle className="pr-8 text-base font-semibold tracking-tight text-[#213D59] sm:text-lg">
                   Leave feedback
-                </p>
-                <DialogTitle className="text-[1.35rem] font-semibold tracking-tight text-[#213D59] sm:text-2xl">
-                  What Would You Change?
                 </DialogTitle>
-                <DialogDescription className="text-[13.5px] leading-relaxed text-slate-600">
-                  Tell us what would make Orderly Affairs clearer, faster, or
-                  more useful. Screenshots help a lot.
+                <DialogDescription className="sr-only">
+                  Share an idea, bug, or note about Orderly Affairs.
                 </DialogDescription>
               </DialogHeader>
 
-              {/* Scrollable body only */}
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5 sm:px-7">
-                <div className="space-y-6">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3.5 sm:px-5 sm:py-4">
+                <div className="space-y-4 sm:space-y-5">
                   <section>
-                    <p className="mb-2.5 text-[12px] font-semibold text-slate-700">
-                      1. What kind of feedback?
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Type
                     </p>
-                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                    <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
                       {CATEGORIES.map(item => {
                         const Icon = item.icon;
                         const active = category === item.id;
@@ -290,9 +343,10 @@ export function LeaveFeedbackWidget() {
                           <button
                             key={item.id}
                             type="button"
+                            title={item.hint}
                             onClick={() => setCategory(item.id)}
                             className={cn(
-                              'rounded-xl border px-3 py-3 text-left transition',
+                              'flex flex-col items-center gap-1 rounded-xl border px-1.5 py-2.5 transition sm:py-3',
                               active
                                 ? 'border-[#213D59] bg-[#213D59] text-white shadow-sm'
                                 : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50',
@@ -300,20 +354,12 @@ export function LeaveFeedbackWidget() {
                           >
                             <Icon
                               className={cn(
-                                'mb-2 h-4.5 w-4.5 h-[18px] w-[18px]',
+                                'h-4 w-4',
                                 active ? 'text-white' : 'text-[#213D59]',
                               )}
                             />
-                            <span className="block text-sm font-semibold">
+                            <span className="text-[11px] font-semibold leading-none sm:text-xs">
                               {item.label}
-                            </span>
-                            <span
-                              className={cn(
-                                'mt-0.5 block text-[11px] leading-snug',
-                                active ? 'text-white/80' : 'text-slate-500',
-                              )}
-                            >
-                              {item.hint}
                             </span>
                           </button>
                         );
@@ -322,13 +368,10 @@ export function LeaveFeedbackWidget() {
                   </section>
 
                   <section>
-                    <p className="mb-2.5 text-[12px] font-semibold text-slate-700">
-                      2. How does this feel?{' '}
-                      <span className="font-normal text-slate-400">
-                        Optional
-                      </span>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Feeling <span className="font-normal normal-case tracking-normal text-slate-400">· optional</span>
                     </p>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-1.5">
                       {RATINGS.map(item => {
                         const active = rating === item.value;
                         return (
@@ -341,7 +384,7 @@ export function LeaveFeedbackWidget() {
                               )
                             }
                             className={cn(
-                              'rounded-full border px-3.5 py-2 text-[12.5px] font-medium transition',
+                              'rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition sm:px-3 sm:text-xs',
                               active
                                 ? 'border-[#213D59] bg-[#213D59] text-white'
                                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
@@ -354,15 +397,15 @@ export function LeaveFeedbackWidget() {
                     </div>
                   </section>
 
-                  <section className="space-y-4">
+                  <section className="space-y-3">
                     <div>
                       <label
                         htmlFor="feedback-subject"
-                        className="mb-1.5 block text-[12px] font-semibold text-slate-700"
+                        className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
                       >
-                        3. Short title{' '}
-                        <span className="font-normal text-slate-400">
-                          Optional
+                        Title{' '}
+                        <span className="font-normal normal-case tracking-normal text-slate-400">
+                          · optional
                         </span>
                       </label>
                       <input
@@ -370,19 +413,19 @@ export function LeaveFeedbackWidget() {
                         value={subject}
                         onChange={e => setSubject(e.target.value)}
                         maxLength={200}
-                        placeholder="e.g. Hard to find next-of-kin letter preview"
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 outline-none ring-[#213D59]/15 placeholder:text-slate-400 focus:border-[#213D59] focus:ring-2"
+                        placeholder="Short summary"
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none ring-[#213D59]/15 placeholder:text-slate-400 focus:border-[#213D59] focus:ring-2"
                       />
                     </div>
 
                     <div>
                       <label
                         htmlFor="feedback-message"
-                        className="mb-1.5 block text-[12px] font-semibold text-slate-700"
+                        className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
                       >
-                        4. Your feedback{' '}
-                        <span className="font-normal text-rose-500">
-                          Required
+                        Details{' '}
+                        <span className="font-normal normal-case tracking-normal text-rose-500">
+                          · required
                         </span>
                       </label>
                       <textarea
@@ -390,28 +433,21 @@ export function LeaveFeedbackWidget() {
                         value={message}
                         onChange={e => setMessage(e.target.value)}
                         maxLength={4000}
-                        rows={4}
-                        placeholder="What would you change, and why? Be specific — steps, section names, or what you expected."
-                        className="min-h-[7.5rem] w-full resize-y rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm leading-relaxed text-slate-900 outline-none ring-[#213D59]/15 placeholder:text-slate-400 focus:border-[#213D59] focus:ring-2"
+                        rows={3}
+                        placeholder="What should we change?"
+                        className="min-h-[5.5rem] w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-slate-900 outline-none ring-[#213D59]/15 placeholder:text-slate-400 focus:border-[#213D59] focus:ring-2 sm:min-h-[6.5rem]"
                       />
-                      <div className="mt-1.5 flex items-center justify-between gap-3">
-                        <p className="text-[11px] text-slate-400">
-                          {message.trim().length < 8
-                            ? 'Add at least a short sentence to send.'
-                            : 'Looks good — you can send when ready.'}
-                        </p>
-                        <p className="shrink-0 text-[11px] tabular-nums text-slate-400">
-                          {message.trim().length}/4000
-                        </p>
-                      </div>
+                      <p className="mt-1 text-right text-[10px] tabular-nums text-slate-400">
+                        {message.trim().length}/4000
+                      </p>
                     </div>
                   </section>
 
                   <section>
-                    <p className="mb-1.5 text-[12px] font-semibold text-slate-700">
-                      5. Screenshot{' '}
-                      <span className="font-normal text-slate-400">
-                        Optional · up to 3
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Screenshot{' '}
+                      <span className="font-normal normal-case tracking-normal text-slate-400">
+                        · optional
                       </span>
                     </p>
                     <input
@@ -427,7 +463,7 @@ export function LeaveFeedbackWidget() {
                       disabled={uploading || attachments.length >= 3}
                       onClick={() => fileInputRef.current?.click()}
                       className={cn(
-                        'flex w-full items-center justify-center gap-2.5 rounded-xl border border-dashed border-slate-300 bg-[#f8fafc] px-4 py-4 text-sm font-medium text-slate-600 transition',
+                        'flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-[#f8fafc] px-3 py-3 text-xs font-medium text-slate-600 transition sm:text-sm',
                         'hover:border-[#213D59]/40 hover:bg-[#213D59]/[0.03]',
                         'disabled:cursor-not-allowed disabled:opacity-60',
                       )}
@@ -440,57 +476,54 @@ export function LeaveFeedbackWidget() {
                       ) : (
                         <>
                           <ImagePlus className="h-4 w-4 text-[#213D59]" />
-                          Attach a screenshot
+                          Add screenshot
+                          {attachments.length > 0
+                            ? ` (${attachments.length}/3)`
+                            : ''}
                         </>
                       )}
                     </button>
 
                     {attachments.length > 0 ? (
-                      <ul className="mt-3 grid grid-cols-3 gap-2.5">
+                      <ul className="mt-2.5 grid grid-cols-3 gap-2">
                         {attachments.map((item, index) => (
                           <li
                             key={`${item.public_id || item.url}-${index}`}
-                            className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+                            className="group relative overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={item.previewUrl || item.url}
                               alt={item.name || 'Screenshot'}
-                              className="h-24 w-full object-cover"
+                              className="h-20 w-full object-cover"
                             />
                             <button
                               type="button"
                               onClick={() => void removeAttachment(index)}
-                              className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1 text-white transition hover:bg-black"
+                              className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white transition hover:bg-black"
                               aria-label="Remove screenshot"
                             >
-                              <X className="h-3.5 w-3.5" />
+                              <X className="h-3 w-3" />
                             </button>
                           </li>
                         ))}
                       </ul>
                     ) : null}
-
-                    <p className="mt-3 truncate text-[11px] text-slate-400">
-                      Sending from {pagePath}
-                    </p>
                   </section>
                 </div>
               </div>
 
-              {/* Sticky floating footer — always visible */}
               <div
                 className={cn(
-                  'shrink-0 border-t border-slate-200/90 bg-white/95 px-6 py-3.5 backdrop-blur-md sm:px-7',
-                  'pb-[max(0.875rem,env(safe-area-inset-bottom))]',
-                  'shadow-[0_-8px_24px_rgba(15,23,42,0.06)]',
+                  'shrink-0 border-t border-slate-200/90 bg-white px-4 py-3 sm:px-5',
+                  'pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-3.5',
                 )}
               >
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-2">
                   <Button
                     type="button"
                     variant="ghost"
-                    className="h-11 rounded-full px-4 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    className="h-10 rounded-full px-3 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                     onClick={() => handleOpenChange(false)}
                     disabled={submitting}
                   >
@@ -499,7 +532,7 @@ export function LeaveFeedbackWidget() {
                   <Button
                     type="button"
                     className={cn(
-                      'h-11 min-w-[9.5rem] rounded-full px-6 font-semibold shadow-sm',
+                      'h-10 min-w-[8.5rem] rounded-full px-5 text-sm font-semibold shadow-sm',
                       canSend
                         ? 'bg-[#213D59] hover:bg-[#00305C]'
                         : 'bg-slate-300 text-white hover:bg-slate-300',
@@ -513,7 +546,7 @@ export function LeaveFeedbackWidget() {
                         Sending…
                       </>
                     ) : (
-                      'Send feedback'
+                      'Send'
                     )}
                   </Button>
                 </div>

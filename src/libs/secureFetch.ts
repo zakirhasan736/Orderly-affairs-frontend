@@ -130,6 +130,10 @@ export async function fetchSession(): Promise<{
   auto_renew?: boolean;
   trial_mode?: string | null;
   lock_message?: string | null;
+  vault_push?: {
+    state?: 'active' | 'paused' | 'off' | string;
+    collaborators_enabled?: boolean;
+  };
 }> {
   if (!resolveApiBaseUrl()) return { authenticated: false };
 

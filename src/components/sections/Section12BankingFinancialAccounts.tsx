@@ -197,7 +197,7 @@ const SECTION_12A = {
 
 const SECTION_12B = {
   subsectionId: '12B',
-  title: '12B- Digital payment app',
+  title: 'Digital Payment Apps',
   itemLabel: 'Digital Payment Account',
   fields: [
     {

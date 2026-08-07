@@ -179,6 +179,24 @@ const MULTI_GROUP_TOPIC_CONFIG: Record<
   Record<string, MultiGroupTopicSource[]>
 > = {
   '1': {
+    '1B': [
+      {
+        groupKey: 'next_of_kin',
+        fallbackPrefix: 'Next of Kin',
+        labelFields: ['contact_name', 'relationship'],
+      },
+      {
+        groupKey: 'executor_trustee',
+        fallbackPrefix: 'Executor / Trustee',
+        labelFields: ['contact_name', 'role_title'],
+      },
+      {
+        groupKey: 'additional_contacts',
+        fallbackPrefix: 'Additional Contact',
+        labelFields: ['contact_name', 'role_title'],
+      },
+    ],
+    // Legacy nav id — same contact groups as 1B
     '1C': [
       {
         groupKey: 'next_of_kin',

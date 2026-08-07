@@ -16,11 +16,16 @@ import {
   NokVaultUnlockBanner,
   useNokKitDecrypt,
 } from '@/hooks/useNokKitDecrypt';
+import { CollaboratorPushOptInBanner } from '@/components/vault/CollaboratorPushOptInBanner';
+import { buildExpiryNotices } from '@/utils/dashboardNotifications';
+import { maybePushReminderNotices } from '@/utils/browserPushNotifications';
+import { nokCanReadSection } from '@/utils/nokSectionAccess';
 
 export default function NextKinDashboardPage() {
   const router = useRouter();
   const [sessionReady, setSessionReady] = useState(false);
   const [accessLevel, setAccessLevel] = useState<string | undefined>();
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [showOwnerLetter, setShowOwnerLetter] = useState(false);
   const [showMessagesModal, setShowMessagesModal] = useState(false);
 
@@ -48,6 +53,7 @@ export default function NextKinDashboardPage() {
         return;
       }
       setAccessLevel(session.access_level);
+      setSessionEmail(session.email || null);
       setSessionReady(true);
     });
   }, [router]);
@@ -63,9 +69,36 @@ export default function NextKinDashboardPage() {
     return true;
   }, [accessLevel]);
 
-  // Full Kit JWT = 5 min; section JWT = 10 min. Warn before token dies.
   const sessionSeconds = fullKit ? 5 * 60 : 10 * 60;
   const idleMs = fullKit ? 3.5 * 60 * 1000 : 8 * 60 * 1000;
+
+  const nokNotices = useMemo(() => {
+    if (!kit || typeof kit !== 'object') return [];
+    const formData =
+      (kit as { sections?: Record<string, unknown> }).sections ||
+      (kit as Record<string, unknown>);
+    return buildExpiryNotices(formData as Record<string, unknown>).filter(
+      notice =>
+        !notice.sectionId ||
+        !access ||
+        nokCanReadSection(access, notice.sectionId),
+    );
+  }, [kit, access]);
+
+  useEffect(() => {
+    if (!access?.immediate_access) return;
+    const allowed =
+      access.authorized_sections === 'all' || access.full_access
+        ? ('all' as const)
+        : Array.isArray(access.authorized_sections)
+          ? access.authorized_sections.map(String)
+          : [];
+    maybePushReminderNotices(nokNotices, {
+      activeSection: 'nok-home',
+      homeSectionId: 'nok-home',
+      allowedSectionIds: allowed,
+    });
+  }, [nokNotices, access]);
 
   if (!sessionReady) return null;
 
@@ -116,7 +149,7 @@ export default function NextKinDashboardPage() {
   return (
     <HelpAssistantProvider>
       <SessionTimeoutGuard idleMs={idleMs} warnSeconds={45} />
-      <div className="px-4 pt-4">
+      <div className="space-y-3 px-4 pt-4">
         <NokVaultUnlockBanner
           vaultGate={vaultGate}
           unlockPassword={unlockPassword}
@@ -124,6 +157,16 @@ export default function NextKinDashboardPage() {
           unlockBusy={unlockBusy}
           onUnlock={() => void handleUnlock()}
         />
+        {access.immediate_access ? (
+          <CollaboratorPushOptInBanner
+            ownerId={access.owner_id}
+            email={sessionEmail || access.nextkin?.email}
+            collaboratorsEnabled={Boolean(
+              access.vault_push?.collaborators_enabled,
+            )}
+            audienceLabel="sections you can open"
+          />
+        ) : null}
       </div>
       <EnhancedNOKDashboard
         nokData={access.nextkin}

@@ -91,6 +91,10 @@ export interface NextKinAccessResponse {
   nok_letter_received?: boolean;
   owner_id: string;
   owner?: NextKinOwnerSummary;
+  vault_push?: {
+    state: 'active' | 'paused' | 'off';
+    collaborators_enabled: boolean;
+  };
   nextkin: {
     id: string;
     email: string;
@@ -303,7 +307,7 @@ export const authApi = createApi({
       extraOptions,
     );
   },
-  tagTypes: ['NextKin', 'NextKinAccess', 'Family'],
+  tagTypes: ['NextKin', 'NextKinAccess', 'Family', 'NotificationPrefs'],
   endpoints: builder => ({
     // Owner auth
     signup: builder.mutation({
@@ -652,6 +656,74 @@ export const authApi = createApi({
       query: () => ({ url: '/nextkin-access', method: 'GET' }),
       providesTags: ['NextKinAccess'],
     }),
+    getNotificationPreferences: builder.query<
+      {
+        in_app_enabled: boolean;
+        email_reminders_enabled: boolean;
+        push_state: 'active' | 'paused' | 'off';
+        push_for_collaborators: boolean;
+        vault_push?: {
+          state: 'active' | 'paused' | 'off';
+          collaborators_enabled: boolean;
+        };
+      },
+      void
+    >({
+      query: () => ({ url: '/notification-preferences', method: 'GET' }),
+      providesTags: ['NotificationPrefs'],
+    }),
+    updateNotificationPreferences: builder.mutation<
+      {
+        in_app_enabled: boolean;
+        email_reminders_enabled: boolean;
+        push_state: 'active' | 'paused' | 'off';
+        push_for_collaborators: boolean;
+        vault_push?: {
+          state: 'active' | 'paused' | 'off';
+          collaborators_enabled: boolean;
+        };
+      },
+      {
+        in_app_enabled?: boolean;
+        email_reminders_enabled?: boolean;
+        push_state?: 'active' | 'paused' | 'off';
+        push_for_collaborators?: boolean;
+      }
+    >({
+      query: body => ({
+        url: '/notification-preferences',
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: ['NotificationPrefs'],
+    }),
+    getVapidPublicKey: builder.query<
+      { configured: boolean; publicKey: string | null; message?: string },
+      void
+    >({
+      query: () => ({ url: '/vapid-public-key', method: 'GET' }),
+    }),
+    pushSubscribe: builder.mutation<
+      { ok: boolean; message?: string },
+      {
+        endpoint: string;
+        keys: { p256dh: string; auth: string };
+        user_agent?: string;
+      }
+    >({
+      query: body => ({
+        url: '/push-subscribe',
+        method: 'POST',
+        body,
+      }),
+    }),
+    pushUnsubscribe: builder.mutation<{ ok: boolean }, { endpoint: string }>({
+      query: body => ({
+        url: '/push-unsubscribe',
+        method: 'POST',
+        body,
+      }),
+    }),
     reportOwnerDeceased: builder.mutation<
       ReportOwnerDeceasedResponse,
       { master_password: string; confirm: boolean }
@@ -698,6 +770,11 @@ export const {
   useRevokeAllNextKinAccessMutation,
   useApproveAllNextKinAccessMutation,
   useGetMyNextKinAccessQuery,
+  useGetNotificationPreferencesQuery,
+  useUpdateNotificationPreferencesMutation,
+  useGetVapidPublicKeyQuery,
+  usePushSubscribeMutation,
+  usePushUnsubscribeMutation,
   useReportOwnerDeceasedMutation,
   useRequestPasswordResetMutation,
   useResetPasswordMutation,

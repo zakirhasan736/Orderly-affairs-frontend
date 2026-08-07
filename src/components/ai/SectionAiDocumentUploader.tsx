@@ -25,7 +25,7 @@ import {
   isAiAutofillDoneForSection,
 } from '@/utils/aiAutofillDoneSections';
 import { toAiUserFacingMessage } from '@/utils/aiUserFacingError';
-import { useAiActiveSectionId, useAiActiveSubsectionId } from '@/contexts/AiActiveSectionContext';
+import { useAiActiveSectionId, useAiActiveSubsectionId, useAiActiveSectionData } from '@/contexts/AiActiveSectionContext';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import { useFamilyAcl } from '@/contexts/FamilyAclContext';
 import {
@@ -102,6 +102,7 @@ export function SectionAiDocumentUploader({
   const [doneTick, setDoneTick] = useState(0);
   const activeSectionId = useAiActiveSectionId();
   const activeSubsectionId = useAiActiveSubsectionId();
+  const activeSectionData = useAiActiveSectionData();
   const aiRouting = useOptionalAiDocumentRouting();
   const resolvedSectionId = sectionId || activeSectionId || undefined;
   const resolvedSubsectionId = subsectionId || activeSubsectionId || undefined;

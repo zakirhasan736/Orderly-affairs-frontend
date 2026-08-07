@@ -23,12 +23,15 @@ import {
 } from '@/utils/aiAutofillDoneSections';
 import { persistAiResultToSectionBackground } from '@/services/aiBackgroundSectionPersist';
 import { ensureFreshSession } from '@/libs/secureFetch';
+import { gateUploadedDocumentPerson } from '@/utils/aiDocumentPersonGate';
+import { AI_SECTION_BY_ID } from '@/utils/aiSectionRegistry';
 
 type RunAiAutofillArgs = {
   sectionKey: string;
   sectionId: string;
   file_id: string;
   mime_type?: string;
+  fileName?: string | null;
   subsection?: string | null;
   uploadScope?: string;
   useRoutedCache?: boolean;
@@ -82,6 +85,7 @@ export async function runAiSectionAutofill({
   sectionId,
   file_id,
   mime_type,
+  fileName,
   subsection,
   uploadScope = 'full',
   useRoutedCache,
@@ -105,6 +109,97 @@ export async function runAiSectionAutofill({
       };
     }
 
+    const persistRoutedResult = async (args: {
+      result: unknown;
+      documentSummary?: string;
+      sourceFileName?: string | null;
+    }) => {
+      const gated = await gateUploadedDocumentPerson({
+        sectionId,
+        sectionKey,
+        subsection,
+        sectionLabel: AI_SECTION_BY_ID[sectionId]?.label,
+        result: args.result,
+        documentSummary: args.documentSummary,
+        fileName: args.sourceFileName || fileName,
+      });
+
+      if (gated.skipped) {
+        return {
+          result: { patch: {} },
+          document_summary:
+            'Skipped — choose whose ID this is later if you still want it filled.',
+          additional_sections: undefined,
+          section_previews: undefined,
+          document_deleted: false,
+          identity_skipped: true,
+          routed_section_id: undefined as string | undefined,
+        };
+      }
+
+      const target = gated.target;
+      const routedAway = target.sectionId !== sectionId;
+
+      try {
+        await ensureFreshSession();
+        const saved = await persistAiResultToSectionBackground({
+          sectionId: target.sectionId,
+          sectionKey: target.sectionKey,
+          result: target.result,
+          subsection: target.subsection,
+        });
+        if (saved.ok) {
+          markDashboardAiPatchPersisted(target.sectionId, file_id);
+          markAiSectionFilled(target.sectionId);
+          markAiAutofillDoneForSection({
+            sectionId: target.sectionId,
+            fileId: file_id,
+            fileName: args.sourceFileName || fileName || undefined,
+          });
+        } else {
+          console.warn('Section AI vault save failed:', saved.error);
+        }
+      } catch (persistErr) {
+        console.warn('Section AI vault save failed', persistErr);
+      }
+
+      aiRouting?.handleAutofillSuccess({
+        file_id,
+        mime_type: mime_type || 'application/pdf',
+        currentSectionId: target.sectionId,
+        uploadScope: routedAway ? 'full' : uploadScope,
+        additional_sections: undefined,
+        section_previews: undefined,
+        document_summary: args.documentSummary,
+        document_deleted: false,
+        deferAdditionalDialog: true,
+      });
+
+      // If the user chose spouse/dependent, don't also paint vital fields here.
+      if (routedAway) {
+        return {
+          result: { patch: {} },
+          document_summary:
+            args.documentSummary ||
+            `Saved to ${target.sectionLabel || 'Family & Relationships'} instead of this section.`,
+          additional_sections: undefined,
+          section_previews: undefined,
+          document_deleted: false,
+          identity_routed: true,
+          routed_section_id: target.sectionId,
+        };
+      }
+
+      return {
+        result: target.result,
+        document_summary: args.documentSummary,
+        additional_sections: undefined,
+        section_previews: undefined,
+        document_deleted: false,
+        routed_section_id: target.sectionId,
+      };
+    };
+
     const peeked = peekDashboardAiPatch(sectionId, file_id);
     // Prefer temp-stored extraction for this exact document × section.
     if (
@@ -115,33 +210,12 @@ export async function runAiSectionAutofill({
       if (aiPatchHasValues(stashedPatch)) {
         const stashed = takeDashboardAiPatch(sectionId, peeked.file_id || file_id);
         if (stashed) {
-          const json = {
-            result: stashed.result as any,
-            document_summary: stashed.document_summary,
-            additional_sections: undefined,
-            section_previews: undefined,
-            document_deleted: false,
-          };
-
-          // Stash may only have been review-local — always write vault now.
           if (!stashed.vault_persisted) {
-            try {
-              await ensureFreshSession();
-              const saved = await persistAiResultToSectionBackground({
-                sectionId,
-                sectionKey,
-                result: stashed.result,
-                subsection,
-              });
-              if (saved.ok) {
-                markDashboardAiPatchPersisted(
-                  sectionId,
-                  stashed.file_id || file_id,
-                );
-              }
-            } catch (persistErr) {
-              console.warn('Section stash vault save failed', persistErr);
-            }
+            return persistRoutedResult({
+              result: stashed.result,
+              documentSummary: stashed.document_summary,
+              sourceFileName: stashed.file_name,
+            });
           }
 
           markAiSectionFilled(sectionId);
@@ -162,7 +236,13 @@ export async function runAiSectionAutofill({
             deferAdditionalDialog: true,
           });
 
-          return json;
+          return {
+            result: stashed.result as any,
+            document_summary: stashed.document_summary,
+            additional_sections: undefined,
+            section_previews: undefined,
+            document_deleted: false,
+          };
         }
       }
       // Empty stash — drop it and try a live extraction.
@@ -197,39 +277,17 @@ export async function runAiSectionAutofill({
       })(),
     });
 
-    try {
-      await ensureFreshSession();
-      const saved = await persistAiResultToSectionBackground({
-        sectionId,
-        sectionKey,
-        result: json.result,
-        subsection,
-      });
-      if (!saved.ok) {
-        console.warn('Section AI vault save failed:', saved.error);
-      }
-    } catch (persistErr) {
-      console.warn('Section AI vault save failed', persistErr);
-    }
-
-    markAiSectionFilled(sectionId);
-    markAiAutofillDoneForSection({
-      sectionId,
-      fileId: file_id,
+    const routed = await persistRoutedResult({
+      result: json.result,
+      documentSummary: json.document_summary,
     });
-    aiRouting?.handleAutofillSuccess({
-      file_id,
-      mime_type: mime_type || 'application/pdf',
-      currentSectionId: sectionId,
-      uploadScope,
+
+    return {
+      ...routed,
       additional_sections: json.additional_sections,
       section_previews: json.section_previews,
-      document_summary: json.document_summary,
       document_deleted: json.document_deleted,
-      deferAdditionalDialog: true,
-    });
-
-    return json;
+    };
   } catch (error) {
     if (error instanceof AiDocumentMismatchError) {
       aiRouting?.handleMismatch(error.detail, {

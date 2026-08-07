@@ -124,7 +124,7 @@ const getSubsectionData = (subsectionId: string) => {
       return sectionData.vital_info;
     }
 
-    if (subsectionId === '1C') {
+    if (subsectionId === '1B' || subsectionId === '1C') {
       return {
         next_of_kin: sectionData.next_of_kin,
         executor_trustee: sectionData.executor_trustee,

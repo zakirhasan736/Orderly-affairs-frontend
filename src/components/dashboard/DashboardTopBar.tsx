@@ -82,6 +82,7 @@ type DashboardTopBarProps = {
   notices?: DashboardNotice[];
   onNoticeSelect?: (notice: DashboardNotice) => void;
   onOpenReviewInbox?: () => void;
+  onOpenNotificationSettings?: () => void;
   className?: string;
 };
 
@@ -98,6 +99,7 @@ export function DashboardTopBar({
   notices = [],
   onNoticeSelect,
   onOpenReviewInbox,
+  onOpenNotificationSettings,
   className,
 }: DashboardTopBarProps) {
   return (
@@ -164,7 +166,7 @@ export function DashboardTopBar({
           <NotificationBell
             notices={notices}
             onSelect={notice => onNoticeSelect?.(notice)}
-            onOpenSettings={onAccountInfo}
+            onOpenSettings={onOpenNotificationSettings || onAccountInfo}
             onOpenReviewInbox={onOpenReviewInbox}
             buttonClassName="h-10 w-10 border border-slate-200 bg-white shadow-sm"
           />
@@ -237,6 +239,7 @@ type MobileTopBarProps = {
   notices?: DashboardNotice[];
   onNoticeSelect?: (notice: DashboardNotice) => void;
   onOpenReviewInbox?: () => void;
+  onOpenNotificationSettings?: () => void;
 };
 
 export function MobileTopBar({
@@ -252,6 +255,7 @@ export function MobileTopBar({
   notices = [],
   onNoticeSelect,
   onOpenReviewInbox,
+  onOpenNotificationSettings,
 }: MobileTopBarProps) {
   const pct =
     typeof progressPercent === 'number' && Number.isFinite(progressPercent)
@@ -297,7 +301,7 @@ export function MobileTopBar({
           <NotificationBell
             notices={notices}
             onSelect={notice => onNoticeSelect?.(notice)}
-            onOpenSettings={onAccountClick}
+            onOpenSettings={onOpenNotificationSettings || onAccountClick}
             onOpenReviewInbox={onOpenReviewInbox}
           />
           <button

@@ -42,7 +42,7 @@ export const ownerTour: OwnerTourStep[] = [
     ensureSection: 'dashboard',
     title: 'Vault by category',
     description:
-      'Browse the vault in short groups — Family, Finance, Property, Passwords, Insurance, Healthcare, Legal, Work, Identity, and Community. Tap a category to see its sections, then open any section to fill it. Same sections as the sidebar, just easier to scan.',
+      'Browse the vault in short groups — Finance, Property, Passwords, Insurance, Healthcare, Identity, Work, Community, then Family and Legal. Tap a category to see its sections, then open any section to fill it. Same sections as the sidebar, just easier to scan.',
   },
   {
     section: 'Tasks',
@@ -50,7 +50,7 @@ export const ownerTour: OwnerTourStep[] = [
     ensureSection: 'dashboard',
     title: 'Continue where it matters',
     description:
-      'These cards group the highest-impact work — letters for loved ones, money & property, and everyday life details. Open any card to fill that section, or review what AI already drafted from a document.',
+      'These cards group everyday vault work first — money & property, documents, and life details — with letters and final wishes for loved ones at the bottom. Open any card to fill that section, or review what AI already drafted from a document.',
   },
   {
     section: 'People',

@@ -621,7 +621,7 @@ interface Props {
   onChange?: (data: any) => void;
 
   /**
-   * Dashboard may pass "1A" / "1C".
+   * Dashboard may pass "1A" / "1B" (legacy "1C" still accepted).
    * This component also supports direct keys:
    * "vital_info", "next_of_kin", "executor_trustee", "additional_contacts".
    */
@@ -940,6 +940,21 @@ const [uploadedFiles, setUploadedFiles] = useState<
         });
 
       if (!json) return;
+
+      if ((json as { identity_skipped?: boolean }).identity_skipped) {
+        setAiNotice(
+          'Skipped this ID fill. Upload again if you want to choose where it belongs.',
+        );
+        return;
+      }
+
+      if ((json as { identity_routed?: boolean }).identity_routed) {
+        setAiNotice(
+          json.document_summary ||
+            'Saved this ID under Family & Relationships instead of Vital Information.',
+        );
+        return;
+      }
 
       const patch = unwrapAiAutofillPatch(json?.result);
 
@@ -1331,9 +1346,9 @@ const [uploadedFiles, setUploadedFiles] = useState<
       )}
 
       {contactGroupsToRender.length > 0 && (
-        <Card id="subsection-1C" className="border-slate-200 shadow-sm">
+        <Card id="subsection-1B" className="border-slate-200 shadow-sm">
           <CardHeader>
-            <CardTitle>1C. Key Contacts</CardTitle>
+            <CardTitle>1B. Key Contacts</CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-8">
@@ -1385,7 +1400,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
                     const itemScope = `${groupKey}:${index}` as UploadScope;
                     const itemLabel = getContactItemLabel(group, item, index);
                     const topicProps = getTopicCardProps(
-                      '1C',
+                      '1B',
                       index,
                       activeTopicId,
                       groupKey,

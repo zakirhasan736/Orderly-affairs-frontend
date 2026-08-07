@@ -6,6 +6,8 @@
 import { formConfig } from '@/config/formConfig';
 import type { FieldDefinition, Subsection } from '@/types/formTypes';
 import { NOK_LETTER_DEFAULTS } from '@/utils/nokLetterPreview';
+import { countSectionFieldUploads } from '@/utils/sectionFieldUploads';
+import { listAiUploadHistory } from '@/utils/aiUploadHistory';
 
 export type SectionProgress = {
   percent: number;
@@ -34,6 +36,11 @@ export type SectionProgressContext = {
   /** Latest API letter for the selected / first NOK (may include metadata only). */
   dashboardNokLetter?: Record<string, unknown> | null;
   disabledSections?: Record<string, boolean>;
+  /**
+   * AI vault documents linked to each section id (from upload history).
+   * Used so a section shows partial progress when docs exist but fields are empty.
+   */
+  sectionAiDocumentCounts?: Record<string, number>;
 };
 
 const EMPTY: SectionProgress = {
@@ -96,6 +103,41 @@ function result(filled: number, total: number): SectionProgress {
     percent,
     complete: filled >= total,
   };
+}
+
+/**
+ * When related documents exist but field fill is still 0%, credit one "started"
+ * slot so the sidebar shows a partial ring instead of an empty circle.
+ */
+function withDocumentStartedBoost(
+  progress: SectionProgress,
+  documentCount: number,
+): SectionProgress {
+  if (documentCount <= 0 || progress.complete || progress.percent > 0) {
+    return progress;
+  }
+  const total = Math.max(progress.total, 1);
+  return result(1, total);
+}
+
+function countDocumentsForSection(
+  sectionId: string,
+  sectionData: Record<string, unknown> | undefined,
+  ctx: SectionProgressContext,
+): number {
+  const fieldDocs = countSectionFieldUploads(sectionData, sectionId);
+  const fromCtx = ctx.sectionAiDocumentCounts?.[sectionId];
+  if (typeof fromCtx === 'number') {
+    return fieldDocs + Math.max(0, fromCtx);
+  }
+  try {
+    const aiDocs = listAiUploadHistory({ sectionId }).filter(
+      item => item.status !== 'failed',
+    ).length;
+    return fieldDocs + aiDocs;
+  } catch {
+    return fieldDocs;
+  }
 }
 
 export function isMeaningfulFilled(value: unknown): boolean {
@@ -553,9 +595,11 @@ export function getSectionProgress(
     );
   }
 
-  return getFormConfigSectionProgress(
-    sectionId,
-    formData[sectionId] as Record<string, unknown> | undefined,
+  const sectionData = formData[sectionId] as Record<string, unknown> | undefined;
+  const progress = getFormConfigSectionProgress(sectionId, sectionData);
+  return withDocumentStartedBoost(
+    progress,
+    countDocumentsForSection(sectionId, sectionData, ctx),
   );
 }
 

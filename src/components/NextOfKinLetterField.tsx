@@ -44,6 +44,7 @@ import { toast } from 'sonner';
 import {
   applyNokLetterTemplateDefaults,
   buildNokLetterPreviewText,
+  mergeNokLetterAutofill,
   NOK_LETTER_DEFAULTS,
 } from '@/utils/nokLetterPreview';
 
@@ -484,19 +485,9 @@ function mergeAccessManagementAutofill(
   person?: NextKinAccessResponse | null,
   ownerName?: string | null,
 ): LetterData {
-  const next: LetterData = person
-    ? {
-        ...letter,
-        letter_to: person.full_name || letter.letter_to,
-        nok_email: person.email || letter.nok_email,
-        nok_phone: person.phone_number || letter.nok_phone,
-        password_card_location:
-          person.card_storage_location || letter.password_card_location,
-        key_bag_location: person.key_bag_location || letter.key_bag_location,
-        documents_bag_location:
-          person.documents_bag_location || letter.documents_bag_location,
-      }
-    : { ...letter };
+  const next: LetterData = {
+    ...mergeNokLetterAutofill(letter as any, person),
+  };
 
   if (!String(next.signer_name || '').trim()) {
     const resolved = String(ownerName || '').trim();
@@ -1035,7 +1026,7 @@ export function NextOfKinLetterField({
 
               <FieldBlock
                 label="Greeting"
-                description="Opening greeting."
+                description="Word only (e.g. Dear) — the recipient name is added automatically."
                 icon={<Mail className="h-4 w-4" />}
               >
                 <Input readOnly={isReadOnly}
@@ -1048,6 +1039,7 @@ export function NextOfKinLetterField({
                       e.target.value as any,
                     )
                   }
+                  placeholder="Dear"
                   className="h-12 rounded-2xl"
                 />
               </FieldBlock>

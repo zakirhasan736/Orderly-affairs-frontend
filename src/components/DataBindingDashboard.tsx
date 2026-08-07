@@ -33,14 +33,23 @@ import { AiUploadSupportedSectionsHint } from './ai/AiUploadSupportedSectionsHin
 import { AiUploadHistoryPopup } from './ai/AiUploadHistoryPopup';
 import { useDashboardAiBatch } from '@/contexts/DashboardAiBatchContext';
 import { AiOverviewReadMatchDialog } from './ai/AiOverviewReadMatchDialog';
-import type { OverviewDocumentReview } from './ai/AiOverviewReadMatchDialog';
+import type {
+  OverviewApprovePayload,
+  OverviewDocumentReview,
+} from './ai/AiOverviewReadMatchDialog';
 import {
   listDashboardAiPatches,
 } from '@/utils/aiDashboardPatchCache';
 import { getAiSectionLabel, AI_SECTION_BY_KEY } from '@/utils/aiSectionRegistry';
+import {
+  approveOverviewAiDocuments,
+  detectOverviewPersonPrompt,
+} from '@/utils/approveOverviewAiDocuments';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
   collectOverviewExpiryAlerts,
+  isOverviewUrgentAlert,
+  OVERVIEW_REMINDER_HORIZON_DAYS,
   OVERVIEW_URGENT_WITHIN_DAYS,
   type OverviewExpiryAlert,
 } from '@/utils/overviewExpiryAlerts';
@@ -156,6 +165,7 @@ export function DataBindingDashboard({
   const batch = useDashboardAiBatch();
   const routing = useOptionalAiDocumentRouting();
   const [overviewReviewOpen, setOverviewReviewOpen] = useState(false);
+  const [approvingOverview, setApprovingOverview] = useState(false);
   const [stashTick, setStashTick] = useState(0);
   const batchReviewShownRef = useRef(false);
   const prevWorkingRef = useRef(false);
@@ -283,14 +293,25 @@ export function DataBindingDashboard({
       // Only list sections that actually have stashed extracts or real pending
       // routing — do NOT force Vehicles↔Insurance badges (false "matched").
 
+      const person = detectOverviewPersonPrompt({
+        fileId,
+        fileName: job.fileName,
+        documentSummary: job.documentSummary,
+        sectionId: job.targetSectionId,
+      });
+
       return {
         id: job.id,
+        fileId,
         fileName: job.fileName,
         documentSummary: job.documentSummary,
         facts,
         matchedSections: Array.from(byId.values()),
         readSource: job.readSource,
         extractMethod: job.extractMethod,
+        needsPersonChoice: person.needsPersonChoice,
+        personPromptKind: person.personPromptKind,
+        personName: person.personName,
       };
     });
   }, [doneJobs, routing?.pendingUploads, stashTick]);
@@ -299,7 +320,24 @@ export function DataBindingDashboard({
   const overviewDialogOpen =
     overviewReviewOpen && overviewDocuments.length > 0;
 
+  // Same horizon as the notification bell / Review inbox dues tab.
   const expiryAlerts = useMemo(
+    () =>
+      collectOverviewExpiryAlerts(formDataProp, {
+        limit: 40,
+        withinDays: OVERVIEW_REMINDER_HORIZON_DAYS,
+      }),
+    [formDataProp],
+  );
+
+  const urgentExpiryAlerts = useMemo(
+    () =>
+      expiryAlerts.filter(alert => isOverviewUrgentAlert(alert.daysUntil)),
+    [expiryAlerts],
+  );
+
+  // Compact overview pills stay focused on the next two weeks.
+  const overviewStripAlerts = useMemo(
     () =>
       collectOverviewExpiryAlerts(formDataProp, {
         limit: 4,
@@ -504,7 +542,7 @@ export function DataBindingDashboard({
           </header>
 
           <OverviewAlertRow
-            alerts={expiryAlerts}
+            alerts={overviewStripAlerts}
             onOpenSection={onNavigateToSection}
           />
 
@@ -540,13 +578,23 @@ export function DataBindingDashboard({
                   <AlarmClock className="h-4 w-4" />
                 )
               }
-              accent={expiryAlerts.length > 0 ? 'amber' : 'emerald'}
+              accent={
+                urgentExpiryAlerts.length > 0
+                  ? 'amber'
+                  : expiryAlerts.length > 0
+                    ? 'sky'
+                    : 'emerald'
+              }
               value={String(expiryAlerts.length)}
-              label={expiryAlerts.length === 1 ? 'Reminder due' : 'Reminders due'}
+              label={
+                expiryAlerts.length === 1 ? 'Reminder due' : 'Reminders due'
+              }
               detail={
-                expiryAlerts.length > 0
-                  ? 'Review dates in Alerts'
-                  : 'Nothing urgent'
+                urgentExpiryAlerts.length > 0
+                  ? `${urgentExpiryAlerts.length} within 2 weeks`
+                  : expiryAlerts.length > 0
+                    ? 'Upcoming in the next year'
+                    : 'Nothing coming up'
               }
               action={expiryAlerts.length > 0 ? 'Review' : 'All clear'}
               onClick={() => openReviewInbox('dues')}
@@ -608,6 +656,17 @@ export function DataBindingDashboard({
             onOpenChange={setOverviewReviewOpen}
             documents={overviewDocuments}
             onOpenSection={onNavigateToSection}
+            approving={approvingOverview}
+            onApproveFill={async (payload: OverviewApprovePayload) => {
+              setApprovingOverview(true);
+              try {
+                await approveOverviewAiDocuments(payload);
+                setOverviewReviewOpen(false);
+                setStashTick(value => value + 1);
+              } finally {
+                setApprovingOverview(false);
+              }
+            }}
           />
 
           {/* Continue where you left off slider (+ desktop grids) */}

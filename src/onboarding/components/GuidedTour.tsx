@@ -58,13 +58,9 @@ export const GuidedTour = ({
       return;
     }
 
-    // Allow layout to paint after section switch before spotlight measures.
-    setReady(false);
-    const timer = window.setTimeout(
-      () => setReady(true),
-      ensureSection ? 180 : 40,
-    );
-    return () => window.clearTimeout(timer);
+    // Section is correct — mount overlay. SpotlightOverlay hides the tooltip
+    // until the target has finished scrolling into place (avoids mid-scroll flicker).
+    setReady(true);
   }, [activeSection, setActiveSection, step]);
 
   const finish = useCallback(async () => {

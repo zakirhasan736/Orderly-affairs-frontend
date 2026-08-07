@@ -4,6 +4,7 @@
 
 import {
   collectOverviewExpiryAlerts,
+  OVERVIEW_REMINDER_HORIZON_DAYS,
   type OverviewExpiryAlert,
 } from '@/utils/overviewExpiryAlerts';
 
@@ -126,13 +127,21 @@ function daysBetween(iso?: string | null): number | null {
 export function buildExpiryNotices(
   formData: Record<string, unknown> | null | undefined,
 ): DashboardNotice[] {
-  const alerts = collectOverviewExpiryAlerts(formData);
+  const alerts = collectOverviewExpiryAlerts(formData, {
+    limit: 40,
+    withinDays: OVERVIEW_REMINDER_HORIZON_DAYS,
+  });
   return alerts.map((alert: OverviewExpiryAlert) => ({
     id: `expiry-${alert.id}`,
     category: 'reminder' as const,
     title: alert.label || 'Expiry reminder',
     body: alert.text,
-    tone: alert.tone === 'critical' ? 'critical' : 'warn',
+    tone:
+      alert.tone === 'critical'
+        ? 'critical'
+        : alert.tone === 'ok' || alert.tone === 'info'
+          ? 'info'
+          : 'warn',
     sectionId: alert.sectionId,
     at: Date.parse(alert.expiryIso) || Date.now(),
   }));
@@ -162,7 +171,7 @@ export function buildBillingNotices(billing: {
       });
     } else if (daysLeft <= 9) {
       items.push({
-        id: `billing-trial-${daysLeft}`,
+        id: 'billing-trial-ending',
         category: 'billing',
         title: 'Trial ending soon',
         body:
@@ -222,7 +231,7 @@ export function buildMessageNotices(
   if (pendingCount <= 0) return [];
   return [
     {
-      id: 'messages-pending',
+      id: `messages-pending-${pendingCount}`,
       category: 'message',
       title: 'Personal messages',
       body: `${pendingCount} draft message${pendingCount === 1 ? '' : 's'} waiting in Messages.`,
@@ -251,7 +260,7 @@ export function buildEventNotices(opts: {
   }
   if (opts.supportUnread && opts.supportUnread > 0) {
     items.push({
-      id: 'event-support',
+      id: `event-support-${opts.supportUnread}`,
       category: 'notice',
       title: 'Support reply',
       body: `You have ${opts.supportUnread} new live support message${opts.supportUnread === 1 ? '' : 's'}.`,

@@ -49,15 +49,35 @@ export function applyNokLetterTemplateDefaults(
   };
 }
 
+/** Collapse "Amber Amber Furst" → "Amber Furst". */
+export function dedupeConsecutiveNameWords(name: string): string {
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length < 2) return parts.join(' ');
+  const out: string[] = [];
+  for (const part of parts) {
+    const prev = out[out.length - 1];
+    if (prev && prev.toLowerCase() === part.toLowerCase()) continue;
+    out.push(part);
+  }
+  return out.join(' ');
+}
+
 export function mergeNokLetterAutofill(
   letter: NokLetterData,
   person?: NextKinAccessResponse | null,
 ): NokLetterData {
   if (!person) return letter;
 
+  const resolvedTo = dedupeConsecutiveNameWords(
+    String(person.full_name || letter.letter_to || '').trim(),
+  );
+
   return {
     ...letter,
-    letter_to: person.full_name || letter.letter_to,
+    letter_to: resolvedTo || letter.letter_to,
     nok_email: person.email || letter.nok_email,
     nok_phone: person.phone_number || letter.nok_phone,
     password_card_location:
@@ -78,6 +98,55 @@ export function resolveNokLetterSignerName(
   const fromOwner = String(ownerName || '').trim();
   if (fromOwner) return fromOwner;
   return '[Your name]';
+}
+
+/**
+ * Build "Dear Amber Furst," without duplicating a first name that was already
+ * typed into the greeting field (e.g. greeting "Dear Amber" + to "Amber Furst").
+ */
+export function formatNokLetterSalutation(
+  greeting?: string | null,
+  letterTo?: string | null,
+): string {
+  const rawGreeting = String(
+    greeting || NOK_LETTER_DEFAULTS.letter_greeting,
+  ).trim();
+  const rawTo = dedupeConsecutiveNameWords(
+    String(letterTo || '').trim() || '[Next of Kin Name]',
+  );
+
+  const withComma = (value: string) =>
+    value.endsWith(',') ? value : `${value},`;
+
+  const greetingLower = rawGreeting.toLowerCase();
+  const toLower = rawTo.toLowerCase();
+
+  // Greeting already includes the full recipient name.
+  if (
+    greetingLower === toLower ||
+    greetingLower.endsWith(` ${toLower}`) ||
+    greetingLower.endsWith(toLower)
+  ) {
+    return withComma(rawGreeting);
+  }
+
+  const firstName = rawTo.split(/\s+/)[0] || '';
+  if (firstName && firstName.toLowerCase() !== toLower) {
+    const firstLower = firstName.toLowerCase();
+    // "Dear Amber" + "Amber Furst" → "Dear Amber Furst"
+    if (
+      greetingLower === firstLower ||
+      greetingLower.endsWith(` ${firstLower}`)
+    ) {
+      const withoutFirst = rawGreeting
+        .slice(0, rawGreeting.length - firstName.length)
+        .trimEnd();
+      const base = withoutFirst || NOK_LETTER_DEFAULTS.letter_greeting;
+      return withComma(`${base} ${rawTo}`);
+    }
+  }
+
+  return withComma(`${rawGreeting} ${rawTo}`);
 }
 
 export function buildNokLetterPreviewText(
@@ -108,12 +177,14 @@ export function buildNokLetterPreviewText(
     : 'Upon Death';
 
   const signer = resolveNokLetterSignerName(data, ownerName);
+  const salutation = formatNokLetterSalutation(
+    data.letter_greeting,
+    data.letter_to,
+  );
 
   return `${date}
 
-${data.letter_greeting || NOK_LETTER_DEFAULTS.letter_greeting} ${
-    data.letter_to || '[Next of Kin Name]'
-  },
+${salutation}
 
 ${data.letter_opening || NOK_LETTER_DEFAULTS.letter_opening}
 

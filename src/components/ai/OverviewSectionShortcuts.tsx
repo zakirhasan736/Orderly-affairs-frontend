@@ -13,12 +13,6 @@ const SHORTCUT_GROUPS: Array<{
   sectionIds: string[];
 }> = [
   {
-    id: 'loved-ones',
-    label: 'Loved ones',
-    hint: 'Access, letters, messages, family',
-    sectionIds: ['2', '3', '4', '17', '21'],
-  },
-  {
     id: 'money',
     label: 'Money & property',
     hint: 'Home, banks, insurance, assets',
@@ -27,14 +21,20 @@ const SHORTCUT_GROUPS: Array<{
   {
     id: 'docs',
     label: 'Documents & identity',
-    hint: 'Vital info, passwords, legal',
-    sectionIds: ['1', '13', '15', '18', '20'],
+    hint: 'Vital info, family, passwords, legal',
+    sectionIds: ['1', '17', '13', '15', '18', '20'],
   },
   {
     id: 'life',
     label: 'Life & community',
     hint: 'Memberships, giving, education',
     sectionIds: ['8', '9', '10', '11'],
+  },
+  {
+    id: 'loved-ones',
+    label: 'Loved ones',
+    hint: 'Access, letters, messages, estate',
+    sectionIds: ['2', '3', '4', '21'],
   },
 ];
 

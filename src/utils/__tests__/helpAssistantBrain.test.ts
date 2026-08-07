@@ -115,4 +115,36 @@ describe('helpAssistantBrain intent routing', () => {
     );
     expect(reply.text).toMatch(/Letter to Next of Kin|section 3/i);
   });
+
+  it('locates a marriage certificate from vault fields', () => {
+    const reply = respondToHelpMessage("where's my marriage certificate", {
+      formData: {
+        '20': {
+          '20A': {
+            marriage_certificate: {
+              text: 'Safe deposit box 12',
+              files: [{ name: 'marriage-cert.pdf' }],
+            },
+          },
+        },
+      },
+      currentSectionId: '1',
+    });
+    expect(reply.text).toMatch(/Marriage Certificate/i);
+    expect(reply.text).toMatch(/marriage-cert\.pdf|Safe deposit box 12/i);
+    expect(reply.text).not.toMatch(/Try naming a section/i);
+    expect(reply.actions?.some(a => a.type === 'navigate' && a.sectionId === '20')).toBe(
+      true,
+    );
+  });
+
+  it('points to Legal Documents when marriage certificate is missing', () => {
+    const reply = respondToHelpMessage("where's my marriage certificate", {
+      formData: { '20': { '20A': {} } },
+      currentSectionId: '1',
+    });
+    expect(reply.text).toMatch(/don't see|don’t see|Legal Documents/i);
+    expect(reply.text).toMatch(/Marriage Certificate/i);
+    expect(reply.text).not.toMatch(/Try naming a section/i);
+  });
 });

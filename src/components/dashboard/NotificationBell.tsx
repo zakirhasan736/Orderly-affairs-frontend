@@ -247,6 +247,17 @@ export function NotificationBell({
     onSelect(notice);
   };
 
+  // Opening the tray counts as seeing the list — clear the badge so it
+  // does not stick after the user has reviewed notifications.
+  useEffect(() => {
+    if (!open) return;
+    const ids = visibleNotices.map(notice => notice.id);
+    if (ids.length === 0) return;
+    const unreadIds = ids.filter(id => !getReadNoticeIds().has(id));
+    if (unreadIds.length === 0) return;
+    markAllNoticesRead(ids);
+  }, [open, visibleNotices]);
+
   const highlightId = useMemo(() => {
     const firstUrgent = visibleNotices.find(
       n =>
@@ -345,26 +356,45 @@ export function NotificationBell({
       </div>
       {desktopList}
       <div className="border-t border-[#7688a1] px-5 py-3">
-        <button
-          type="button"
-          onMouseDown={stopAction}
-          onClick={event => {
-            runNoticeAction(event, () => {
-              close();
-              onOpenSettings?.();
-            });
-          }}
-          className="text-[13.5px] font-medium text-[#2b5a8c] no-underline transition hover:underline"
-        >
-          Notification settings
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {onOpenReviewInbox ? (
+            <button
+              type="button"
+              onMouseDown={stopAction}
+              onClick={event => {
+                runNoticeAction(event, () => {
+                  close();
+                  onOpenReviewInbox();
+                });
+              }}
+              className="text-[13.5px] font-medium text-[#2b5a8c] no-underline transition hover:underline"
+            >
+              Open review inbox
+            </button>
+          ) : (
+            <span />
+          )}
+          <button
+            type="button"
+            onMouseDown={stopAction}
+            onClick={event => {
+              runNoticeAction(event, () => {
+                close();
+                onOpenSettings?.();
+              });
+            }}
+            className="text-[13.5px] font-medium text-[#2b5a8c] no-underline transition hover:underline"
+          >
+            Notification settings
+          </button>
+        </div>
       </div>
     </>
   );
 
   /* ---------- Mobile full-screen (exact design) ---------- */
   const mobileList = (
-    <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain px-4 pb-6 pt-4 [-webkit-overflow-scrolling:touch]">
+    <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain px-4 pb-3 pt-4 [-webkit-overflow-scrolling:touch]">
       {visibleNotices.length === 0 ? (
         <div className="rounded-[14px] border border-[#7688a1] bg-white px-4 py-10 text-center text-sm text-[#5a6b80]">
           You’re all caught up.
@@ -460,6 +490,40 @@ export function NotificationBell({
         {markAllButton}
       </header>
       {mobileList}
+      <div className="shrink-0 border-t border-[#7688a1] bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {onOpenReviewInbox ? (
+            <button
+              type="button"
+              onMouseDown={stopAction}
+              onClick={event => {
+                runNoticeAction(event, () => {
+                  close();
+                  onOpenReviewInbox();
+                });
+              }}
+              className="text-[13.5px] font-medium text-[#2b5a8c] no-underline transition hover:underline"
+            >
+              Open review inbox
+            </button>
+          ) : (
+            <span />
+          )}
+          <button
+            type="button"
+            onMouseDown={stopAction}
+            onClick={event => {
+              runNoticeAction(event, () => {
+                close();
+                onOpenSettings?.();
+              });
+            }}
+            className="text-[13.5px] font-medium text-[#2b5a8c] no-underline transition hover:underline"
+          >
+            Notification settings
+          </button>
+        </div>
+      </div>
     </>
   );
 
@@ -518,11 +582,6 @@ export function NotificationBell({
         type="button"
         onClick={event => {
           event.stopPropagation();
-          if (onOpenReviewInbox) {
-            setOpen(false);
-            onOpenReviewInbox();
-            return;
-          }
           setOpen(prev => !prev);
         }}
         className={cn(

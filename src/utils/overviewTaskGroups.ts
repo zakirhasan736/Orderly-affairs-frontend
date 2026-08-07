@@ -17,41 +17,6 @@ export type OverviewTaskGroup = {
 
 export const OVERVIEW_TASK_GROUPS: OverviewTaskGroup[] = [
   {
-    id: 'loved-ones',
-    title: 'For your loved ones',
-    tag: 'HEART',
-    cards: [
-      {
-        id: 'nok-letter',
-        sectionId: '3',
-        title: 'Letter to Next of Kin',
-        description: 'A first note for the people you trust most.',
-        tag: 'HEART',
-      },
-      {
-        id: 'final-wishes',
-        sectionId: '21',
-        title: 'Record my final wishes',
-        description: 'Funeral, burial, and estate planning details.',
-        tag: 'HEART',
-      },
-      {
-        id: 'messages',
-        sectionId: '4',
-        title: 'Leave personal messages',
-        description: 'Letters, audio, or video for specific people.',
-        tag: 'HEART',
-      },
-      {
-        id: 'will-location',
-        sectionId: '20',
-        title: 'Where is my will?',
-        description: 'Legal documents and where to find them.',
-        tag: 'HEART',
-      },
-    ],
-  },
-  {
     id: 'money',
     title: 'Money & property',
     tag: 'MONEY',
@@ -153,6 +118,42 @@ export const OVERVIEW_TASK_GROUPS: OverviewTaskGroup[] = [
         title: 'Charitable giving',
         description: 'Organizations and donation preferences.',
         tag: 'LIFE',
+      },
+    ],
+  },
+  // After-passing / legacy planning — last so daily-use groups come first.
+  {
+    id: 'loved-ones',
+    title: 'For your loved ones',
+    tag: 'HEART',
+    cards: [
+      {
+        id: 'nok-letter',
+        sectionId: '3',
+        title: 'Letter to Next of Kin',
+        description: 'A first note for the people you trust most.',
+        tag: 'HEART',
+      },
+      {
+        id: 'final-wishes',
+        sectionId: '21',
+        title: 'Record my final wishes',
+        description: 'Funeral, burial, and estate planning details.',
+        tag: 'HEART',
+      },
+      {
+        id: 'messages',
+        sectionId: '4',
+        title: 'Leave personal messages',
+        description: 'Letters, audio, or video for specific people.',
+        tag: 'HEART',
+      },
+      {
+        id: 'will-location',
+        sectionId: '20',
+        title: 'Where is my will?',
+        description: 'Legal documents and where to find them.',
+        tag: 'HEART',
       },
     ],
   },

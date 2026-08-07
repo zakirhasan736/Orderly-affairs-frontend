@@ -40,9 +40,11 @@ const INSTRUCTION_BLOCKS: InstructionBlock[] = [
     eyebrow: 'Start here',
     icon: HeartHandshake,
     colorClass: 'from-rose-500/15 to-orange-500/10 text-rose-600',
-    content: `Thank you for your support of our small business. This kit is built for two moments in life: gathering and organizing your family's important day to day information, and preparing something clear and thoughtful for your next of kin in case of an emergency. Whether you're a family getting your household in order or an older adult putting together a plan for loved ones to lean on later, this kit gives you an easy framework to gather, organize, and communicate what matters.
+    content: `Welcome to Orderly Affairs. Your Vault is built to make everyday life easier to manage: all your household's important information, accounts, passwords, insurance, contacts, the stuff you're always digging for, kept in one organized place. And because life is unpredictable, it also doubles as something clear and ready for your next of kin if they ever need it.
 
-This isn't just about paperwork. It's about peace of mind now, and about making things easier for whoever needs this information, especially if they're navigating a hard moment. Each section walks you through a different area of life (financial, legal, personal, or practical) with simple instructions. Some parts are quick, like listing your vehicles. Others, like estate plans, take more careful thought.`,
+Maybe you're a family tired of hunting for the Wi-Fi password or forgetting when the car insurance renews. Your Vault gives you one simple framework to gather what matters and keep it current. Down the line, that same information becomes exactly what a spouse, adult child, or next of kin would need if they ever had to step in.
+
+This isn't just paperwork. It's what makes ordinary weeks run smoother today, and it happens to be a gift for whoever picks up the pieces later. Each section covers a different part of life: financial, legal, personal, and practical, with plain instructions to walk you through it. Some sections take five minutes, like listing your vehicles. Others, like your estate plans, deserve real time and thought. Go at whatever pace fits your life right now.`,
   },
   {
     id: 'go_at_your_pace',
@@ -51,24 +53,26 @@ This isn't just about paperwork. It's about peace of mind now, and about making 
     eyebrow: 'No pressure',
     icon: BookOpenText,
     colorClass: 'from-blue-500/15 to-cyan-500/10 text-blue-600',
-    content: `As you fill it out, think about who will use this: a spouse organizing shared finances, a parent handing this to an adult child, or a next of kin who may not know where everything is or what you'd want. Your care and clarity here will guide them, whoever they are.
+    content: `As you build out your Vault, think about the people who'll actually open it day to day: you, your spouse, maybe a kid old enough to grab the Wi-Fi password without asking. Keep it current the way you'd keep any household reference up to date, because that's mostly what it is.
 
-This kit is a gift, not just for the future but for right now: it offers control, comfort, and peace of mind today, for your family and for whoever comes after.`,
+The side benefit is real, though. If a next of kin ever had to step in unexpectedly, the same information that saves you five minutes on a Tuesday is exactly what would save them from starting at zero. You don't have to build it for that moment specifically. Just keep things accurate and it takes care of itself.`,
   },
   {
     id: 'subsection-1C',
-    title: 'A few things to keep in mind',
+    title: 'Reminders',
     shortTitle: 'Reminders',
     eyebrow: 'Important notes',
     icon: ClipboardList,
     colorClass: 'from-amber-500/15 to-yellow-500/10 text-amber-600',
-    content: `• This isn't about getting everything perfect. It's about making sure your life is understandable and accessible.
+    content: `A few things to keep in mind as you go:
 
-• Life changes. So should your kit. Come back to it from time to time—when you move, get a new pet, sell a car, or update your will.
+• Your Vault doesn't need to be perfect. The goal is that your life is understandable and easy to find your way through, not flawless.
 
-• Keep it in one place. Let someone you trust know where to find it.
+• Life changes, so revisit your Vault when it does: a move, a new pet, a car you sold, a will you updated. A few minutes every so often keeps it accurate.
 
-• And most importantly, remember this is not a legal document. Please consult with an attorney when drafting your will, designating beneficiaries, or making binding decisions.`,
+• Keep your Vault in one place, and make sure someone you trust actually knows how to access it. A perfectly organized Vault nobody can find or open does nobody any good.
+
+• This is not a legal document. For anything binding, like your will, beneficiary designations, or other legal decisions, talk to an attorney.`,
   },
   {
     id: 'copyright_legal_notice',

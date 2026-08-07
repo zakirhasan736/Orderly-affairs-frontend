@@ -23,18 +23,31 @@ export function blobToMediaFile(blob: Blob, kind: 'video' | 'audio'): File {
     mimeType = kind === 'video' ? 'video/webm' : 'audio/webm';
   }
 
-  const rawExt = mimeType.split('/')[1]?.split(';')[0]?.trim().toLowerCase();
+  // Strip codec parameters for stable extensions + Content-Type.
+  let baseMime = mimeType.split(';')[0].trim().toLowerCase() || mimeType;
+
+  // Some browsers label mic-only MediaRecorder blobs as video/webm.
+  if (kind === 'audio' && baseMime.startsWith('video/')) {
+    baseMime = baseMime.replace(/^video\//, 'audio/');
+  }
+  if (kind === 'video' && baseMime.startsWith('audio/')) {
+    baseMime = baseMime.replace(/^audio\//, 'video/');
+  }
+
+  const rawExt = baseMime.split('/')[1]?.trim().toLowerCase();
   const ext =
     rawExt && rawExt !== 'octet-stream'
       ? rawExt === 'quicktime'
         ? 'mov'
-        : rawExt
-      : kind === 'video'
-        ? 'webm'
-        : 'webm';
+        : rawExt === 'mpeg'
+          ? kind === 'audio'
+            ? 'mp3'
+            : 'mp4'
+          : rawExt
+      : 'webm';
 
   return new File([blob], `${kind}-message-${Date.now()}.${ext}`, {
-    type: mimeType,
+    type: baseMime,
   });
 }
 

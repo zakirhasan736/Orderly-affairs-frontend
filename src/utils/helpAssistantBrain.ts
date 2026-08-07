@@ -7,6 +7,11 @@ import {
   getSectionProgress,
   listIncompleteFieldsForSection,
 } from '@/utils/sectionCompletion';
+import {
+  collectVaultDocumentHits,
+  formatDocumentLocateReply,
+  isLocateDocumentIntent,
+} from '@/utils/helpAssistantDocuments';
 
 export const SUPPORT_EMAIL =
   (typeof process !== 'undefined' &&
@@ -192,6 +197,12 @@ function findSection(query: string) {
         'my will',
         'attorney',
         'lawyer',
+        'marriage certificate',
+        'birth certificate',
+        'divorce decree',
+        'passport',
+        "driver's license",
+        'drivers license',
       ],
     },
     { id: '21', words: ['estate planning', 'final wishes', 'funeral', 'burial'] },
@@ -618,6 +629,45 @@ function respondToHelpMessageUnsafe(
         actions: [{ type: 'tour' }],
       },
       ['Upload a document', 'Open Vehicles', 'Email support'],
+    );
+  }
+
+  if (isLocateDocumentIntent(lower)) {
+    const hits = collectVaultDocumentHits(lower, ctx?.formData);
+    const located = formatDocumentLocateReply(hits);
+    return withFollowUps(
+      {
+        role: 'assistant',
+        text: located.text,
+        actions: [
+          {
+            type: 'navigate',
+            sectionId: located.primarySectionId,
+            label: located.primaryLabel,
+          },
+          { type: 'upload' },
+          ...(located.found
+            ? []
+            : ([
+                {
+                  type: 'fill_section' as const,
+                  sectionId: located.primarySectionId,
+                  label: located.primaryLabel,
+                },
+              ] as const)),
+        ],
+      },
+      located.found
+        ? [
+            `Open ${located.primaryLabel}`,
+            'Upload another document',
+            'Email support',
+          ]
+        : [
+            `Open ${located.primaryLabel}`,
+            'Upload a document',
+            'Email support',
+          ],
     );
   }
 

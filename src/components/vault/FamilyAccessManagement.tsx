@@ -425,16 +425,16 @@ export function FamilyAccessManagement() {
         </span>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <p className="text-sm text-slate-600">
           {members.length} / {MAX_FAMILY} family members
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="rounded-xl"
+            className="min-h-10 flex-1 rounded-xl sm:min-h-0 sm:flex-none"
             onClick={() => refetch()}
             disabled={isFetching}
           >
@@ -446,7 +446,7 @@ export function FamilyAccessManagement() {
           <Button
             type="button"
             size="sm"
-            className="rounded-xl"
+            className="min-h-10 flex-1 rounded-xl sm:min-h-0 sm:flex-none"
             onClick={openAdd}
             disabled={members.length >= MAX_FAMILY}
           >
@@ -478,31 +478,33 @@ export function FamilyAccessManagement() {
           {members.map(member => (
             <li
               key={member.id}
-              className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-3"
+              className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-3 sm:flex-row sm:items-start"
             >
-              <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00305C] text-sm font-semibold text-white">
-                {(member.full_name || member.email || '?')
-                  .slice(0, 1)
-                  .toUpperCase()}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-slate-900">
-                  {member.full_name || member.email}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-slate-500">
-                  {member.relationship} · {roleLabel(member.portal_role)} ·{' '}
-                  {member.access_level === 'Full Kit Access'
-                    ? 'Full dashboard'
-                    : `${(member.authorized_sections || []).length} areas`}
-                  {member.e2ee_wrap_configured === false
-                    ? ' · Vault key not shared'
-                    : ''}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-slate-400">
-                  {member.email}
-                </p>
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00305C] text-sm font-semibold text-white">
+                  {(member.full_name || member.email || '?')
+                    .slice(0, 1)
+                    .toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-slate-900">
+                    {member.full_name || member.email}
+                  </p>
+                  <p className="mt-0.5 text-xs leading-snug text-slate-500 sm:truncate">
+                    {member.relationship} · {roleLabel(member.portal_role)} ·{' '}
+                    {member.access_level === 'Full Kit Access'
+                      ? 'Full dashboard'
+                      : `${(member.authorized_sections || []).length} areas`}
+                    {member.e2ee_wrap_configured === false
+                      ? ' · Vault key not shared'
+                      : ''}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-slate-400">
+                    {member.email}
+                  </p>
+                </div>
               </div>
-              <div className="flex shrink-0 gap-1">
+              <div className="flex shrink-0 gap-1 self-end sm:self-start">
                 <Button
                   type="button"
                   variant="ghost"
@@ -598,7 +600,7 @@ export function FamilyAccessManagement() {
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-900">
                   Owner vault access areas
@@ -614,7 +616,7 @@ export function FamilyAccessManagement() {
               </div>
               <Button
                 type="button"
-                className="rounded-xl"
+                className="h-11 w-full rounded-xl sm:h-10 sm:w-auto"
                 onClick={openAreasPopup}
               >
                 <LayoutGrid className="mr-1.5 h-4 w-4" />

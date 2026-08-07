@@ -34,6 +34,13 @@ import {
   markAiSectionReviewed,
 } from '@/utils/aiSectionReviewState';
 import {
+  flushQueuedAiAccepts,
+  queueAiAccept,
+} from '@/utils/aiQueuedAccept';
+import { gateUploadedDocumentPerson } from '@/utils/aiDocumentPersonGate';
+import { isIdentityDocumentCandidate } from '@/utils/aiIdentityDocument';
+import { isHealthInsuranceCardCandidate } from '@/utils/aiInsuranceDocument';
+import {
   formatUploadRelativeShort,
   hydrateAiUploadHistoryFromServer,
   listAiUploadHistory,
@@ -57,6 +64,7 @@ import { applyEditedFactsToStash } from '@/utils/aiReviewAcceptSave';
 import {
   persistAllPendingStashesForSection,
   persistPartnerStashesForFiles,
+  persistAiResultToSectionBackground,
 } from '@/services/aiBackgroundSectionPersist';
 import { ensureFreshSession } from '@/libs/secureFetch';
 import { flattenDetectedFactsFromPatch } from '@/utils/aiSemanticFieldMatch';
@@ -481,7 +489,24 @@ export function AiReviewInboxPanel({
   } | null>(null);
 
   useEffect(() => {
-    const onStash = () => setStashTick(value => value + 1);
+    const onStash = () => {
+      setStashTick(value => value + 1);
+      void flushQueuedAiAccepts().then(result => {
+        if (result.flushed <= 0) return;
+        result.clearedFiles.forEach(fileId => {
+          routing?.clearAllPendingForFile(fileId);
+        });
+        result.sectionIds.forEach(sectionId => {
+          routing?.clearPendingForSection(sectionId);
+        });
+        setReviewTick(value => value + 1);
+        toast.success(
+          result.flushed > 1
+            ? `Saved ${result.flushed} documents to your vault`
+            : 'Saved to your vault',
+        );
+      });
+    };
     const onReviewed = () => setReviewTick(value => value + 1);
     const onHistory = () => setStashTick(value => value + 1);
     const onAlerts = () => setAlertTick(value => value + 1);
@@ -497,6 +522,8 @@ export function AiReviewInboxPanel({
     window.addEventListener('orderly-notices-read-changed', onAlerts);
     window.addEventListener('orderly-vault-alerts-changed', onAlerts);
     window.addEventListener(OPEN_VAULT_ACTIVITY_TAB_EVENT, onOpenTab);
+    // Catch accepts queued before this panel mounted.
+    void flushQueuedAiAccepts();
     return () => {
       window.removeEventListener('orderly-ai-patch-stashed', onStash);
       window.removeEventListener('orderly-ai-section-reviewed', onReviewed);
@@ -506,7 +533,7 @@ export function AiReviewInboxPanel({
       window.removeEventListener('orderly-vault-alerts-changed', onAlerts);
       window.removeEventListener(OPEN_VAULT_ACTIVITY_TAB_EVENT, onOpenTab);
     };
-  }, []);
+  }, [routing]);
 
   useEffect(() => {
     let cancelled = false;
@@ -671,11 +698,7 @@ export function AiReviewInboxPanel({
 
   const handleApprove = useCallback(
     async (row: InboxRow, editedFacts?: DetectedAiFact[]) => {
-      if (
-        row.status !== 'ready' ||
-        !row.sectionId ||
-        row.sectionId === 'overview'
-      ) {
+      if (!row.sectionId || row.sectionId === 'overview') {
         return;
       }
       setApprovingId(row.id);
@@ -689,19 +712,138 @@ export function AiReviewInboxPanel({
 
         await ensureFreshSession();
 
-      const { isE2eeUnlocked } = await import('@/libs/e2ee/unlock');
-      const { fetchE2eeStatus } = await import('@/libs/e2ee/vaultApi');
-      const e2eeStatus = await fetchE2eeStatus().catch(() => null);
-      if (
-        e2eeStatus?.enabled &&
-        e2eeStatus?.configured &&
-        !isE2eeUnlocked()
-      ) {
-        toast.error(
-          'Vault is locked. Unlock encryption on the overview, then Accept again to save.',
-        );
-        return;
-      }
+        const { isE2eeUnlocked } = await import('@/libs/e2ee/unlock');
+        const { fetchE2eeStatus } = await import('@/libs/e2ee/vaultApi');
+        const e2eeStatus = await fetchE2eeStatus().catch(() => null);
+        if (
+          e2eeStatus?.enabled &&
+          e2eeStatus?.configured &&
+          !isE2eeUnlocked()
+        ) {
+          toast.error(
+            'Vault is locked. Unlock encryption on the overview, then Accept again to save.',
+          );
+          return;
+        }
+
+        const sectionMeta = AI_SECTION_BY_ID[row.sectionId];
+        const identitySource = primary?.result ?? null;
+        if (
+          identitySource &&
+          !primary?.vault_persisted &&
+          (isIdentityDocumentCandidate({
+            sectionId: row.sectionId,
+            sectionKey: sectionMeta?.key || primary?.section_key,
+            documentSummary: primary?.document_summary,
+            fileName: row.fileName || primary?.file_name,
+            result: identitySource,
+          }) ||
+            isHealthInsuranceCardCandidate({
+              sectionId: row.sectionId,
+              sectionKey: sectionMeta?.key || primary?.section_key,
+              documentSummary: primary?.document_summary,
+              fileName: row.fileName || primary?.file_name,
+              result: identitySource,
+            }))
+        ) {
+          const gated = await gateUploadedDocumentPerson({
+            sectionId: row.sectionId,
+            sectionKey: sectionMeta?.key || primary?.section_key || '',
+            subsection: primary?.subsection,
+            sectionLabel: sectionMeta?.label || row.sectionLabel,
+            result: identitySource,
+            documentSummary: primary?.document_summary,
+            fileName: row.fileName || primary?.file_name,
+          });
+
+          if (gated.skipped) {
+            markAiSectionReviewed({
+              sectionId: row.sectionId,
+              fileId: row.fileId,
+            });
+            setReviewTick(value => value + 1);
+            toast.message('Skipped this document fill');
+            return;
+          }
+
+          if (gated.target.sectionId !== row.sectionId) {
+            takeDashboardAiPatch(row.sectionId, row.fileId);
+            const saved = await persistAiResultToSectionBackground({
+              sectionId: gated.target.sectionId,
+              sectionKey: gated.target.sectionKey,
+              result: gated.target.result,
+              subsection: gated.target.subsection,
+            });
+            if (!saved.ok) {
+              toast.error(
+                saved.error ||
+                  `Could not save this document to ${gated.target.sectionLabel || 'the vault'}.`,
+              );
+              return;
+            }
+            routing?.clearPendingForSection(row.sectionId);
+            routing?.clearPendingForSection(gated.target.sectionId);
+            if (row.fileId) routing?.clearAllPendingForFile(row.fileId);
+            markAiSectionReviewed({
+              sectionId: row.sectionId,
+              fileId: row.fileId,
+            });
+            markAiSectionReviewed({
+              sectionId: gated.target.sectionId,
+              fileId: row.fileId,
+            });
+            setReviewTick(value => value + 1);
+            const toInsurance = gated.target.sectionId === '7';
+            toast.success(
+              `Saved to ${gated.target.sectionLabel || (toInsurance ? 'Insurance Policies' : 'Family & Relationships')}`,
+              {
+                description: toInsurance
+                  ? gated.choice === 'spouse'
+                    ? 'Tagged as Spouse/Partner on the health insurance policy.'
+                    : gated.choice === 'dependent'
+                      ? 'Tagged as Dependent on the health insurance policy.'
+                      : 'Saved on your Insurance Policies card.'
+                  : gated.choice === 'spouse'
+                    ? 'Added under Spouse / partner in Family Members.'
+                    : gated.choice === 'dependent'
+                      ? 'Added under Dependents.'
+                      : 'Added as a family member card.',
+              },
+            );
+            return;
+          }
+
+          // Same section (e.g. health card stays on Insurance) — persist stamped result.
+          if (gated.target.result && gated.choice) {
+            takeDashboardAiPatch(row.sectionId, row.fileId);
+            const saved = await persistAiResultToSectionBackground({
+              sectionId: gated.target.sectionId,
+              sectionKey: gated.target.sectionKey,
+              result: gated.target.result,
+              subsection: gated.target.subsection,
+            });
+            if (!saved.ok) {
+              toast.error(
+                saved.error || 'Could not save these fields. Please try again.',
+              );
+              return;
+            }
+            routing?.clearPendingForSection(gated.target.sectionId);
+            if (row.fileId) routing?.clearAllPendingForFile(row.fileId);
+            markAiSectionReviewed({
+              sectionId: gated.target.sectionId,
+              fileId: row.fileId,
+            });
+            setReviewTick(value => value + 1);
+            toast.success('Saved to your vault', {
+              description:
+                gated.choice === 'self'
+                  ? 'Tagged as your primary coverage.'
+                  : `Tagged as ${gated.choice === 'spouse' ? 'Spouse/Partner' : gated.choice === 'dependent' ? 'Dependent' : 'Other'}.`,
+            });
+            return;
+          }
+        }
 
         // Accept one vehicle/insurance alert → save ALL pending docs for that
         // section (Toyota + Honda + Jeep), then partner extracts on those files.
@@ -723,9 +865,37 @@ export function AiReviewInboxPanel({
         }
 
         if (flush.saved === 0) {
-          toast.error(
-            'Nothing ready to save yet. Wait until extraction finishes, then Accept again.',
-          );
+          // Extraction still running — queue Accept, remove from list, save later.
+          queueAiAccept({
+            sectionId: row.sectionId,
+            fileId: row.fileId,
+            fileName: row.fileName,
+          });
+          markAiSectionReviewed({
+            sectionId: row.sectionId,
+            fileId: row.fileId,
+          });
+          setReviewTick(value => value + 1);
+          toast.success('Accepted — saving in the background', {
+            description:
+              'We will write this into your vault as soon as extraction finishes.',
+          });
+          void flushQueuedAiAccepts().then(result => {
+            if (result.flushed > 0) {
+              result.clearedFiles.forEach(fileId => {
+                routing?.clearAllPendingForFile(fileId);
+              });
+              result.sectionIds.forEach(sectionId => {
+                routing?.clearPendingForSection(sectionId);
+              });
+              setReviewTick(value => value + 1);
+              toast.success(
+                result.flushed > 1
+                  ? `Saved ${result.flushed} documents to your vault`
+                  : 'Saved to your vault',
+              );
+            }
+          });
           return;
         }
 
@@ -1052,7 +1222,11 @@ export function AiReviewInboxPanel({
                             onClick={() => {
                               markNoticeRead(notice.id);
                               if (notice.category === 'reminder') {
+                                // Jump to Due dates and open the related vault section.
                                 setTab('dues');
+                                if (notice.sectionId) {
+                                  onNavigateToSection?.(notice.sectionId);
+                                }
                                 return;
                               }
                               if (notice.sectionId) {
@@ -1151,33 +1325,14 @@ export function AiReviewInboxPanel({
                             </button>
                             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                               {row.status === 'ready' ? (
-                                <>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    className="h-7 rounded-md bg-[#213D59] px-2.5 text-[11px] font-semibold text-white hover:bg-[#1a3149]"
-                                    onClick={() => openReviewDetail(row)}
-                                  >
-                                    Review
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={approvingId === row.id}
-                                    className="h-7 rounded-md border-[#213D59]/20 px-2.5 text-[11px] font-semibold text-[#213D59]"
-                                    onClick={() => void handleApprove(row)}
-                                  >
-                                    {approvingId === row.id ? (
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    ) : (
-                                      <>
-                                        <Check className="mr-1 h-3 w-3" />
-                                        Accept
-                                      </>
-                                    )}
-                                  </Button>
-                                </>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-7 rounded-md bg-[#213D59] px-2.5 text-[11px] font-semibold text-white hover:bg-[#1a3149]"
+                                  onClick={() => openReviewDetail(row)}
+                                >
+                                  Review
+                                </Button>
                               ) : (
                                 <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-sky-800">
                                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -1186,6 +1341,23 @@ export function AiReviewInboxPanel({
                                     : `Processing${typeof row.progress === 'number' ? ` · ${row.progress}%` : ''}`}
                                 </span>
                               )}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={approvingId === row.id}
+                                className="h-7 rounded-md border-[#213D59]/20 px-2.5 text-[11px] font-semibold text-[#213D59]"
+                                onClick={() => void handleApprove(row)}
+                              >
+                                {approvingId === row.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Check className="mr-1 h-3 w-3" />
+                                    Accept
+                                  </>
+                                )}
+                              </Button>
                               <span className="text-[11px] text-[#8a97a8]">
                                 {formatUploadRelativeShort(
                                   new Date(row.createdAt).toISOString(),
@@ -1193,21 +1365,19 @@ export function AiReviewInboxPanel({
                               </span>
                             </div>
                           </div>
-                          {row.status === 'ready' ? (
-                            <div className="flex items-center pr-1.5">
-                              <AlertActions
-                                isRead={read}
-                                onMarkRead={() =>
-                                  markAiReviewRead(row.sectionId, row.fileId)
-                                }
-                                onMarkUnread={() =>
-                                  markAiReviewUnread(row.sectionId, row.fileId)
-                                }
-                                onDelete={() => dismissAiReview(row)}
-                                deleteLabel="Remove alert"
-                              />
-                            </div>
-                          ) : null}
+                          <div className="flex items-center pr-1.5">
+                            <AlertActions
+                              isRead={read}
+                              onMarkRead={() =>
+                                markAiReviewRead(row.sectionId, row.fileId)
+                              }
+                              onMarkUnread={() =>
+                                markAiReviewUnread(row.sectionId, row.fileId)
+                              }
+                              onDelete={() => dismissAiReview(row)}
+                              deleteLabel="Remove alert"
+                            />
+                          </div>
                         </li>
                       );
                     })}

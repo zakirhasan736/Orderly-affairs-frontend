@@ -96,6 +96,20 @@ export async function readSafeErrorMessage(
     } catch {
       // ignore
     }
+  } else if (
+    res.status === 413 ||
+    res.status === 507 ||
+    res.status === 503 ||
+    res.status === 400
+  ) {
+    // Keep actionable storage / validation messages in production UI.
+    try {
+      const payload = await res.clone().json();
+      const detail = payload?.detail;
+      if (typeof detail === 'string' && detail.trim()) return detail;
+    } catch {
+      // ignore
+    }
   }
   return fallback;
 }

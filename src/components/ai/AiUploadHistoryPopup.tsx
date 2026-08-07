@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Eye, Loader2, Sparkles, Trash2 } from 'lucide-react';
+import { ChevronDown, Eye, Files, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -328,8 +328,8 @@ function ProgressBar({
 }
 
 /**
- * Overview: Eye button + dialog list (localStorage footprints).
- * Sections: Eye button bottom-right for that section's attachments.
+ * Overview: labeled attachments button + dialog list (localStorage footprints).
+ * Sections: labeled chip bottom-right for that section's attachments.
  * Re-uploading the same topic replaces the previous card and refreshes timestamps.
  */
 export function AiUploadHistoryPopup({
@@ -429,6 +429,20 @@ export function AiUploadHistoryPopup({
   );
 
   if (variant === 'inline') {
+    const previewItems = items.slice(0, 3);
+    const titleText =
+      count === 0
+        ? 'Documents'
+        : count === 1
+          ? '1 document'
+          : `${count > 99 ? '99+' : count} documents`;
+    const subtitleText =
+      count === 0
+        ? 'None attached yet'
+        : processingCount > 0
+          ? `${processingCount} processing · tap to open`
+          : 'Tap to open & preview';
+
     return (
       <>
       <div
@@ -444,47 +458,85 @@ export function AiUploadHistoryPopup({
           data-oa-view-ok
           title={
             count > 0
-              ? 'View section document attachments'
-              : 'No attachments yet — upload a document first'
+              ? 'Open documents attached to this section'
+              : 'No documents attached yet — upload a file first'
           }
-          aria-label="View section document attachments"
+          aria-label={
+            count > 0
+              ? `View section documents, ${count} file${count === 1 ? '' : 's'}`
+              : 'No section documents yet'
+          }
           aria-expanded={open}
           onClick={() => {
             refreshHistory();
             setOpen(value => !value);
           }}
           className={cn(
-            'relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#213D59] shadow-sm transition hover:border-[#213D59]/35 hover:bg-slate-50',
-            count > 0 && 'ring-1 ring-[#213D59]/10',
-            open && 'border-[#213D59]/40 bg-[#e7eef7]',
+            'inline-flex max-w-[min(100%,18rem)] items-center gap-2.5 rounded-2xl border px-2.5 py-2 text-left shadow-md transition',
+            count > 0
+              ? 'border-[#213D59]/30 bg-white text-[#213D59] ring-1 ring-[#213D59]/10 hover:border-[#213D59]/50 hover:bg-[#f4f7fb]'
+              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
+            open && 'ring-2 ring-[#213D59]/30 ring-offset-2',
           )}
         >
-          <Eye className="h-5 w-5" />
           {count > 0 ? (
-            <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#213D59] px-1 text-[10px] font-bold text-white">
+            <span className="relative flex h-10 w-[3.25rem] shrink-0 items-center">
+              {previewItems.map((item, index) => (
+                <span
+                  key={item.id}
+                  className="absolute top-0 h-10 w-10 overflow-hidden rounded-lg border-2 border-white bg-slate-100 shadow-sm"
+                  style={{
+                    left: `${index * 10}px`,
+                    zIndex: previewItems.length - index,
+                  }}
+                >
+                  <AiUploadHistoryThumb
+                    fileId={item.fileId}
+                    fileName={item.fileName}
+                    mimeType={item.mimeType}
+                    className="h-full w-full rounded-none border-0"
+                  />
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-[#213D59]">
+              <Files className="h-4 w-4" aria-hidden />
+            </span>
+          )}
+          <span className="min-w-0 pr-0.5">
+            <span className="block truncate text-[12px] font-semibold leading-tight text-[#213D59]">
+              {titleText}
+            </span>
+            <span className="block truncate text-[10px] font-medium leading-tight text-slate-500">
+              {subtitleText}
+            </span>
+          </span>
+          {count > 0 ? (
+            <span className="ml-auto inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full bg-[#213D59] px-1.5 text-[11px] font-bold text-white">
               {count > 99 ? '99+' : count}
             </span>
           ) : null}
         </button>
 
         {open ? (
-          <div className="absolute bottom-12 right-0 w-[min(calc(100vw-2rem),17.5rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-lg backdrop-blur-sm">
+          <div className="absolute bottom-[3.75rem] right-0 w-[min(calc(100vw-2rem),18.5rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-lg backdrop-blur-sm">
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold text-[#213D59]">
-                  Section attachments
+                  Section documents
                 </p>
                 <p className="text-[10px] text-slate-500">
                   {count === 0
                     ? 'No files yet'
-                    : `${count} document${count === 1 ? '' : 's'} · tap Eye to preview`}
+                    : `${count} file${count === 1 ? '' : 's'} · tap a preview to open`}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className="rounded-lg p-1 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
-                aria-label="Close attachments"
+                aria-label="Close documents"
               >
                 <ChevronDown className="h-4 w-4" />
               </button>
@@ -509,18 +561,23 @@ export function AiUploadHistoryPopup({
                 return (
                   <div
                     key={item.id}
-                    className="rounded-xl border border-slate-200 bg-slate-50/80 px-2.5 py-2"
+                    className="rounded-xl border border-slate-200 bg-slate-50/80 px-2 py-2"
                   >
                     <div className="flex items-start gap-2">
                       <button
                         type="button"
                         data-oa-view-ok
                         onClick={() => openPreview(item)}
-                        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-[#2B5A8C] shadow-sm transition hover:bg-emerald-50"
+                        className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
                         title="View document"
                         aria-label={`View ${item.fileName}`}
                       >
-                        <Eye className="h-3.5 w-3.5" />
+                        <AiUploadHistoryThumb
+                          fileId={item.fileId}
+                          fileName={item.fileName}
+                          mimeType={item.mimeType}
+                          className="h-full w-full rounded-none border-0"
+                        />
                       </button>
                       <button
                         type="button"
@@ -622,13 +679,17 @@ export function AiUploadHistoryPopup({
     );
   }
 
-  // Overview dashboard — eye button + dialog.
+  // Overview dashboard — labeled documents button + dialog.
   return (
     <>
       <button
         type="button"
         title="View uploaded documents"
-        aria-label="View uploaded documents"
+        aria-label={
+          count > 0
+            ? `View uploaded documents, ${count} file${count === 1 ? '' : 's'}`
+            : 'View uploaded documents'
+        }
         onClick={event => {
           event.stopPropagation();
           refreshHistory();
@@ -636,22 +697,72 @@ export function AiUploadHistoryPopup({
         }}
         className={cn(
           absolute ? 'absolute bottom-3 right-3 z-10' : 'relative',
-          'inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#213D59] shadow-sm transition hover:border-[#213D59]/30 hover:bg-slate-50',
-          count > 0 && 'ring-1 ring-[#213D59]/10',
+          'inline-flex max-w-[min(100%,18rem)] items-center gap-2.5 rounded-2xl border px-2.5 py-2 text-left shadow-md transition',
+          count > 0
+            ? 'border-[#213D59]/30 bg-white text-[#213D59] ring-1 ring-[#213D59]/10 hover:border-[#213D59]/50 hover:bg-[#f4f7fb]'
+            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
           className,
         )}
       >
-        <Eye className="h-5 w-5" />
         {count > 0 ? (
-          <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#213D59] px-1 text-[10px] font-bold text-white">
+          <span className="relative flex h-10 w-[3.25rem] shrink-0 items-center">
+            {items.slice(0, 3).map((item, index) => (
+              <span
+                key={item.id}
+                className="absolute top-0 h-10 w-10 overflow-hidden rounded-lg border-2 border-white bg-slate-100 shadow-sm"
+                style={{
+                  left: `${index * 10}px`,
+                  zIndex: Math.min(3, items.length) - index,
+                }}
+              >
+                <AiUploadHistoryThumb
+                  fileId={item.fileId}
+                  fileName={item.fileName}
+                  mimeType={item.mimeType}
+                  className="h-full w-full rounded-none border-0"
+                />
+              </span>
+            ))}
+          </span>
+        ) : (
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-[#213D59]">
+            <Files className="h-4 w-4" aria-hidden />
+          </span>
+        )}
+        <span className="min-w-0">
+          <span className="block truncate text-[12px] font-semibold leading-tight text-[#213D59]">
+            {count === 0
+              ? 'Documents'
+              : count === 1
+                ? '1 document'
+                : `${count > 99 ? '99+' : count} documents`}
+          </span>
+          <span className="block truncate text-[10px] font-medium leading-tight text-slate-500">
+            {count === 0
+              ? 'None uploaded yet'
+              : processingCount > 0
+                ? `${processingCount} processing · tap to open`
+                : 'Tap to open & preview'}
+          </span>
+        </span>
+        {count > 0 ? (
+          <span className="ml-auto inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full bg-[#213D59] px-1.5 text-[11px] font-bold text-white">
             {count > 99 ? '99+' : count}
           </span>
         ) : null}
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] w-[min(96vw,56rem)] max-w-[56rem] overflow-hidden border-0 bg-[#f3f5f7] p-0 sm:rounded-3xl">
-          <DialogHeader className="space-y-1 border-b border-black/5 bg-white px-5 pb-4 pt-5 pr-12 text-left sm:px-6 sm:pt-6">
+        <DialogContent
+          className={cn(
+            'flex w-[min(96vw,56rem)] max-w-[56rem] flex-col gap-0 overflow-hidden border-0 bg-[#f3f5f7] p-0 shadow-2xl',
+            // Desktop: centered card
+            'sm:max-h-[min(90vh,52rem)] sm:rounded-3xl',
+            // Mobile: bottom sheet so the list is not clipped by nav / safe area
+            'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:max-h-[min(88dvh,calc(100dvh-env(safe-area-inset-bottom)))] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-[1.5rem] max-sm:rounded-b-none max-sm:pb-[env(safe-area-inset-bottom)]',
+          )}
+        >
+          <DialogHeader className="shrink-0 space-y-1 border-b border-black/5 bg-white px-5 pb-4 pt-5 pr-12 text-left sm:px-6 sm:pt-6">
             <DialogTitle className="text-xl font-semibold tracking-tight text-[#213D59]">
               Uploaded documents
             </DialogTitle>
@@ -662,7 +773,7 @@ export function AiUploadHistoryPopup({
           </DialogHeader>
 
           {processingCount > 0 ? (
-            <div className="mx-4 mt-4 flex gap-3 rounded-2xl border border-[#213D59]/12 bg-gradient-to-br from-[#eef3f9] to-white px-4 py-3.5 shadow-sm sm:mx-5">
+            <div className="mx-4 mt-4 flex shrink-0 gap-3 rounded-2xl border border-[#213D59]/12 bg-gradient-to-br from-[#eef3f9] to-white px-4 py-3.5 shadow-sm sm:mx-5">
               <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#213D59] text-white shadow-sm">
                 <Sparkles className="h-4 w-4" />
               </div>
@@ -685,7 +796,7 @@ export function AiUploadHistoryPopup({
             </div>
           ) : null}
 
-          <div className="max-h-[min(70vh,38rem)] overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5 sm:py-5">
             {items.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-[#213D59]/15 bg-white px-4 py-12 text-center text-sm text-[#5a6b80]">
                 No documents uploaded yet.

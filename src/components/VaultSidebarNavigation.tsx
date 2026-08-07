@@ -81,6 +81,7 @@ function SectionProgressMark({
           'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
           selected ? 'bg-white/20' : 'bg-white/10',
         )}
+        title="Not started"
       >
         <Circle className="h-3.5 w-3.5 opacity-70" />
       </span>
@@ -93,7 +94,11 @@ function SectionProgressMark({
         'relative flex h-7 w-7 shrink-0 items-center justify-center',
         selected ? 'opacity-100' : 'opacity-95',
       )}
-      title={`${clamped}% complete`}
+      title={
+        clamped < 100
+          ? `Partially complete · ${clamped}%`
+          : `${clamped}% complete`
+      }
     >
       <svg width={size} height={size} className="-rotate-90">
         <circle
@@ -869,7 +874,7 @@ export function VaultSidebarNavigation({
           </div>
         </div>
 
-        <div className="border-t border-white/10 px-3 py-3">
+        <div className="space-y-2 border-t border-white/10 px-3 py-3">
           {onOpenHelp ? (
             <button
               type="button"

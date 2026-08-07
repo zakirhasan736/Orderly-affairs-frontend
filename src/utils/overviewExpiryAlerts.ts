@@ -36,6 +36,13 @@ export function isOverviewUrgentAlert(daysUntil: number): boolean {
 const EXPIRY_KEY_RE =
   /(expir|expiration|expiry|renewal_date|policy_expiry|registration_expiry|passport_expiry|license_expiry|drivers_license_expiry|valid_through|valid_until|end_date|lease_end_date|maturity_date|loan_maturity|mortgage_maturity|tax_filing_deadline|property_tax_due|filing_deadline|next_payment_due_date|next_due_date|cd_maturity|warranty_expiry|subscription_renewal|account_expiry)/i;
 
+/** Signed / historical dates — never treat as renewals or expiries. */
+const NEVER_EXPIRY_KEY_RE =
+  /(will_date|birth|dob|signed|executed|created|updated|start_date|hire_date|service_dates|employment_dates|inventory_date|important_dates|wedding|anniversary)/i;
+
+/** Sections with no policy/registration-style renewals in the vault model. */
+const NEVER_EXPIRY_SECTIONS = new Set(['0', '2', '3', '4', '21']);
+
 const SKIP_KEY_RE = /(requirement|instruction|header|note|location|document|upload)/i;
 const SKIP_EXACT_KEYS = new Set(['payment_due_date']);
 
@@ -45,7 +52,6 @@ const FIELD_LABELS: Record<string, string> = {
   passport_expiry: 'Passport',
   expiration_date: 'Document',
   expiry_date: 'Expiry date',
-  will_date: 'Will',
   drivers_license_expiry: "Driver's license",
   license_expiry: 'License',
   mortgage_maturity_date: 'Mortgage / home loan',
@@ -115,6 +121,25 @@ export function parseFlexibleDate(raw: string | null | undefined): Date | null {
   const parsed = Date.parse(text);
   if (!Number.isNaN(parsed)) return new Date(parsed);
   return null;
+}
+
+/**
+ * Expiry reminders only make sense for renewals in a modern planning window.
+ * Reject OCR/AI junk (e.g. year 899 from a sample will) and ancient signed dates.
+ */
+export function isPlausibleExpiryDate(
+  date: Date,
+  today: Date = new Date(),
+): boolean {
+  if (Number.isNaN(date.getTime())) return false;
+  const year = date.getFullYear();
+  const minYear = today.getFullYear() - 5;
+  const maxYear = today.getFullYear() + 40;
+  if (year < minYear || year > maxYear) return false;
+  const days = daysBetween(today, date);
+  // More than ~5 years overdue is almost always bad extraction, not a real reminder.
+  if (days < -(365 * 5 + 2)) return false;
+  return true;
 }
 
 function daysBetween(from: Date, to: Date) {
@@ -215,16 +240,10 @@ function buildAlertText(opts: {
   days: number;
   renewStyle: boolean;
   date: Date;
-  isWill: boolean;
 }): string {
-  const { label, context, days, renewStyle, date, isWill } = opts;
+  const { label, context, days, renewStyle, date } = opts;
   const subject = context ? `${label} (${context})` : label;
-
-  if (isWill) {
-    return days >= 0
-      ? `Will dated ${date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })} — review on file.`
-      : `Will dated ${date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })} — consider a review.`;
-  }
+  void date;
 
   if (renewStyle) {
     if (days < 0) return `${subject} overdue (${Math.abs(days)}d).`;
@@ -246,6 +265,7 @@ function walk(
   withinDays: number,
 ) {
   if (value == null) return;
+  if (NEVER_EXPIRY_SECTIONS.has(sectionId)) return;
 
   if (Array.isArray(value)) {
     value.forEach((item, index) =>
@@ -265,7 +285,7 @@ function walk(
 
   const record = value as Record<string, unknown>;
   Object.entries(record).forEach(([key, nested]) => {
-    if (SKIP_EXACT_KEYS.has(key)) {
+    if (SKIP_EXACT_KEYS.has(key) || NEVER_EXPIRY_KEY_RE.test(key)) {
       if (nested && typeof nested === 'object') {
         walk(nested, sectionId, [...path, key], out, today, withinDays);
       }
@@ -279,10 +299,10 @@ function walk(
       return;
     }
 
-    if (EXPIRY_KEY_RE.test(key) || key === 'will_date') {
+    if (EXPIRY_KEY_RE.test(key)) {
       const text = asText(nested);
       const date = parseFlexibleDate(text);
-      if (date) {
+      if (date && isPlausibleExpiryDate(date, today)) {
         const days = daysBetween(today, date);
         const baseLabel = humanLabel(key, sectionId);
         const context = itemContextLabel(record, sectionId, key, path);
@@ -293,32 +313,28 @@ function walk(
             key,
           );
 
-        if (key === 'will_date') {
-          // Wills stay out of the urgent strip — they clutter reminders.
-          return;
-        }
-
         // Overdue always included; future dates only within the window.
-        if (days >= 0 && days > withinDays) return;
-
-        out.push({
-          id: `${sectionId}:${path.join('.')}.${key}:${iso}:${context || 'item'}`,
-          sectionId,
-          fieldKey: key,
-          label: context ? `${baseLabel} · ${context}` : baseLabel,
-          expiryIso: iso,
-          daysUntil: days,
-          tone: toneForDays(days),
-          emailDue: isOverviewEmailMilestone(days),
-          text: buildAlertText({
-            label: baseLabel,
-            context,
-            days,
-            renewStyle,
-            date,
-            isWill: false,
-          }),
-        });
+        if (days >= 0 && days > withinDays) {
+          // continue to recurse
+        } else {
+          out.push({
+            id: `${sectionId}:${path.join('.')}.${key}:${iso}:${context || 'item'}`,
+            sectionId,
+            fieldKey: key,
+            label: context ? `${baseLabel} · ${context}` : baseLabel,
+            expiryIso: iso,
+            daysUntil: days,
+            tone: toneForDays(days),
+            emailDue: isOverviewEmailMilestone(days),
+            text: buildAlertText({
+              label: baseLabel,
+              context,
+              days,
+              renewStyle,
+              date,
+            }),
+          });
+        }
       }
     }
 
@@ -362,7 +378,7 @@ export function dedupeOverviewExpiryAlerts(
   return out;
 }
 
-/** Default horizon for overview strip / notifications (overdue + next 2 weeks). */
+/** Default horizon for overview strip / notifications (overdue + next year). */
 export const OVERVIEW_REMINDER_HORIZON_DAYS = 365;
 
 export function collectOverviewExpiryAlerts(
@@ -373,8 +389,8 @@ export function collectOverviewExpiryAlerts(
 
   const today = new Date();
   const alerts: OverviewExpiryAlert[] = [];
-  const withinDays = options?.withinDays ?? OVERVIEW_URGENT_WITHIN_DAYS;
-  const limit = options?.limit ?? 4;
+  const withinDays = options?.withinDays ?? OVERVIEW_REMINDER_HORIZON_DAYS;
+  const limit = options?.limit ?? 40;
 
   Object.entries(formData).forEach(([sectionId, data]) => {
     if (!/^\d+$/.test(sectionId)) return;

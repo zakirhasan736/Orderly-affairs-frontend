@@ -54,6 +54,42 @@ function formatChatTime(ts: number) {
   }
 }
 
+/** Split chat text so long filenames / paths wrap cleanly in bubbles. */
+function splitAssistantText(
+  text: string,
+): Array<{ kind: 'text' | 'file'; text: string }> {
+  const raw = String(text || '');
+  if (!raw) return [{ kind: 'text', text: '' }];
+
+  const lines = raw.split('\n');
+  const blocks: Array<{ kind: 'text' | 'file'; text: string }> = [];
+  let textBuf: string[] = [];
+
+  const flushText = () => {
+    if (!textBuf.length) return;
+    blocks.push({ kind: 'text', text: textBuf.join('\n') });
+    textBuf = [];
+  };
+
+  const looksLikeFile = (line: string) =>
+    /\.(?:pdf|png|jpe?g|webp|gif|doc|docx|xls|xlsx|txt|heic)\b/i.test(line) &&
+    line.trim().length > 8 &&
+    !line.trim().startsWith('•');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (looksLikeFile(trimmed)) {
+      flushText();
+      blocks.push({ kind: 'file', text: trimmed });
+    } else {
+      textBuf.push(line);
+    }
+  }
+  flushText();
+
+  return blocks.length ? blocks : [{ kind: 'text', text: raw }];
+}
+
 function SuggestionRail({
   chips,
   disabled,
@@ -218,13 +254,23 @@ function ChatBubble({
   const isUser = message.role === 'user';
   const isLive = message.role === 'live_agent';
   const isSystem = message.role === 'system';
+  const textBlocks = useMemo(
+    () => splitAssistantText(message.text),
+    [message.text],
+  );
 
   return (
     <div
-      className={cn('flex flex-col gap-1.5', isUser ? 'items-end' : 'items-start')}
+      className={cn(
+        'flex w-full min-w-0 flex-col gap-1.5',
+        isUser ? 'items-end' : 'items-start',
+      )}
     >
       <div
-        className={cn('flex max-w-full gap-2', isUser ? 'justify-end' : 'justify-start')}
+        className={cn(
+          'flex w-full min-w-0 gap-2',
+          isUser ? 'justify-end' : 'justify-start',
+        )}
       >
         {!isUser ? (
           <span
@@ -246,7 +292,7 @@ function ChatBubble({
         ) : null}
         <div
           className={cn(
-            'max-w-[88%] rounded-[22px] px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm sm:text-sm',
+            'min-w-0 max-w-[calc(100%-2.75rem)] overflow-hidden rounded-[22px] px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm sm:max-w-[85%] sm:text-sm',
             isUser
               ? 'rounded-br-md bg-[#1e1b4b] text-white'
               : isLive
@@ -266,17 +312,42 @@ function ChatBubble({
               Orderly assistant
             </p>
           ) : null}
-          <p className="whitespace-pre-wrap">
-            {message.text}
-            {isStreaming ? (
-              <span
-                className={cn(
-                  'ml-0.5 inline-block h-[1em] w-[2px] translate-y-[2px] animate-pulse align-baseline',
-                  isLive ? 'bg-white' : 'bg-[#7c3aed]',
-                )}
-              />
-            ) : null}
-          </p>
+          <div className="min-w-0 space-y-1.5 overflow-hidden">
+            {textBlocks.map((block, index) =>
+              block.kind === 'file' ? (
+                <p
+                  key={`${message.id}-f-${index}`}
+                  title={block.text}
+                  className={cn(
+                    'rounded-lg px-2 py-1.5 font-mono text-[11px] leading-snug',
+                    'break-all break-all [overflow-wrap:anywhere]',
+                    isUser
+                      ? 'bg-white/10 text-white/95'
+                      : isLive
+                        ? 'bg-white/10 text-white'
+                        : 'bg-slate-100/90 text-[#334155]',
+                  )}
+                >
+                  {block.text}
+                </p>
+              ) : (
+                <p
+                  key={`${message.id}-t-${index}`}
+                  className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
+                >
+                  {block.text}
+                  {isStreaming && index === textBlocks.length - 1 ? (
+                    <span
+                      className={cn(
+                        'ml-0.5 inline-block h-[1em] w-[2px] translate-y-[2px] animate-pulse align-baseline',
+                        isLive ? 'bg-white' : 'bg-[#7c3aed]',
+                      )}
+                    />
+                  ) : null}
+                </p>
+              ),
+            )}
+          </div>
           {message.actions?.length && !isStreaming ? (
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               {message.actions.map((action, index) => (
@@ -459,34 +530,27 @@ export function HelpAssistantPanel({
       return;
     }
     if (action.type === 'navigate' || action.type === 'fill_section') {
+      // Close first so the section is visible — otherwise the full-screen
+      // agent hides the destination and users think nothing happened.
+      closeHelp();
       onNavigateToSection?.(action.sectionId);
-      pushAssistant({
-        text:
-          action.type === 'fill_section'
-            ? `Opening ${action.label}. Upload a document or edit fields there — or ask me what’s still empty and I’ll open the fill popup.`
-            : `Taking you to ${action.label}.`,
-        suggestions: [
-          `What's empty in ${action.label}?`,
-          'Upload a document',
-          'Email support',
-        ],
-      });
+      toast.success(
+        action.type === 'fill_section'
+          ? `Opened ${action.label} — upload or edit fields there`
+          : `Opened ${action.label}`,
+      );
       if (action.type === 'fill_section') {
-        window.setTimeout(() => onFocusUpload?.(), 400);
+        window.setTimeout(() => onFocusUpload?.(), 450);
       }
       return;
     }
     if (action.type === 'show_empty') {
+      closeHelp();
       onNavigateToSection?.(action.sectionId);
-      onShowEmptyFields?.(action.sectionId, action.label);
-      pushAssistant({
-        text: `Opened the empty-fields popup for ${action.label}. Fill what’s missing there, or tell me the values in chat and I’ll guide you where they go.`,
-        suggestions: [
-          'Upload a document to fill gaps',
-          `Open ${action.label}`,
-          'Email support',
-        ],
-      });
+      window.setTimeout(() => {
+        onShowEmptyFields?.(action.sectionId, action.label);
+      }, 350);
+      toast.success(`Showing empty fields in ${action.label}`);
       return;
     }
     if (action.type === 'upload') {
@@ -713,7 +777,7 @@ export function HelpAssistantPanel({
   if (!open || !canPortal) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[99999] flex items-stretch justify-center sm:items-center sm:p-4 md:p-6">
+    <div className="fixed inset-0 z-[99999] flex items-end justify-center sm:items-center sm:p-4 md:p-6">
       <button
         type="button"
         className="absolute inset-0 z-0 bg-[#1a1030]/45 backdrop-blur-[6px]"
@@ -723,7 +787,12 @@ export function HelpAssistantPanel({
 
       <div
         className={cn(
-          'relative z-10 flex h-[100dvh] w-full max-w-[560px] flex-col overflow-hidden bg-white pointer-events-auto sm:h-[min(92dvh,820px)] sm:rounded-[32px] sm:border sm:border-white/50 sm:shadow-[0_30px_80px_rgba(40,20,80,0.28)]',
+          'relative z-10 flex w-full max-w-[560px] flex-col overflow-hidden bg-white pointer-events-auto',
+          // Mobile: bottom sheet with a clear 45px gap from the top of the screen
+          'h-[calc(100dvh-45px)] max-h-[calc(100dvh-45px)] rounded-t-[1.75rem] shadow-[0_-12px_40px_rgba(40,20,80,0.22)]',
+          'pb-[env(safe-area-inset-bottom)]',
+          // Desktop / tablet: centered card
+          'sm:h-[min(92dvh,820px)] sm:max-h-[min(92dvh,820px)] sm:rounded-[32px] sm:border sm:border-white/50 sm:pb-0 sm:shadow-[0_30px_80px_rgba(40,20,80,0.28)]',
         )}
         role="dialog"
         aria-modal="true"
@@ -736,34 +805,53 @@ export function HelpAssistantPanel({
         <div className="pointer-events-none absolute -right-10 top-24 h-48 w-48 rounded-full bg-[#fda4af]/30 blur-3xl" />
         <div className="pointer-events-none absolute bottom-24 left-1/3 h-40 w-40 rounded-full bg-[#93c5fd]/30 blur-3xl" />
 
-        <header className="relative z-10 flex items-center justify-between gap-3 px-4 pb-2 pt-[max(0.85rem,env(safe-area-inset-top))] sm:px-5 sm:pt-4">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/70 text-[#5b21b6] shadow-sm ring-1 ring-white/80 backdrop-blur">
-              {mode === 'live' ? (
-                <Headphones className="h-5 w-5 text-[#213D59]" />
-              ) : (
-                <Sparkles className="h-5 w-5" />
-              )}
-            </span>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-[15px] font-semibold tracking-tight text-[#1e1b4b]">
-                  Contact Support
+        {/* Mobile sheet handle */}
+        <div
+          className="relative z-10 flex shrink-0 justify-center pt-3 sm:hidden"
+          aria-hidden
+        >
+          <div className="h-1.5 w-11 rounded-full bg-slate-300/90" />
+        </div>
+
+        <header className="relative z-10 flex shrink-0 flex-col gap-2.5 px-4 pb-2 pt-3 sm:gap-3 sm:px-5 sm:pt-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/70 text-[#5b21b6] shadow-sm ring-1 ring-white/80 backdrop-blur">
+                {mode === 'live' ? (
+                  <Headphones className="h-5 w-5 text-[#213D59]" />
+                ) : (
+                  <Sparkles className="h-5 w-5" />
+                )}
+              </span>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate text-[15px] font-semibold tracking-tight text-[#1e1b4b]">
+                    Contact Support
+                  </p>
+                  {mode === 'chat' ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-100">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      Online
+                    </span>
+                  ) : null}
+                </div>
+                <p className="truncate text-[11px] font-medium text-[#64748b]">
+                  {sectionHint}
                 </p>
-                {mode === 'chat' ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-100">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    Online
-                  </span>
-                ) : null}
               </div>
-              <p className="truncate text-[11px] font-medium text-[#64748b]">
-                {sectionHint}
-              </p>
             </div>
+
+            <button
+              type="button"
+              onClick={closeHelp}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/80 text-[#475569] shadow-sm ring-1 ring-white/80 transition hover:bg-white hover:text-[#1e1b4b]"
+              aria-label="Close support"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
-          <div className="flex items-center gap-1 rounded-full bg-white/55 p-1 shadow-sm ring-1 ring-white/70 backdrop-blur">
+          <div className="flex items-center gap-1 self-stretch rounded-full bg-white/55 p-1 shadow-sm ring-1 ring-white/70 backdrop-blur sm:self-start">
             {(
               [
                 ['chat', 'AI'],
@@ -795,7 +883,7 @@ export function HelpAssistantPanel({
                   setMode(id);
                 }}
                 className={cn(
-                  'rounded-full px-2.5 py-1.5 text-[11px] font-semibold transition',
+                  'flex-1 rounded-full px-2.5 py-2 text-[11px] font-semibold transition sm:flex-none sm:py-1.5',
                   mode === id
                     ? 'bg-[#1e1b4b] text-white shadow-sm'
                     : 'text-[#475569] hover:bg-white/80',
@@ -813,20 +901,12 @@ export function HelpAssistantPanel({
                 ) : null}
               </button>
             ))}
-            <button
-              type="button"
-              onClick={closeHelp}
-              className="ml-0.5 flex h-8 w-8 items-center justify-center rounded-full text-[#64748b] hover:bg-white"
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </button>
           </div>
         </header>
 
         <div
           ref={scrollerRef}
-          className="relative z-10 flex-1 space-y-3.5 overflow-y-auto px-4 py-3 sm:px-5"
+          className="relative z-10 min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5"
         >
           {mode === 'chat' && (
             <>
@@ -1063,16 +1143,30 @@ export function HelpAssistantPanel({
 
 export function HelpAssistantFab() {
   const { open, openHelp } = useHelpAssistant();
-  if (typeof document === 'undefined' || open) return null;
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+
+  useEffect(() => {
+    const sync = () =>
+      setFeedbackOpen(document.body.dataset.oaFeedbackOpen === '1');
+    sync();
+    const obs = new MutationObserver(sync);
+    obs.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['data-oa-feedback-open'],
+    });
+    return () => obs.disconnect();
+  }, []);
+
+  if (typeof document === 'undefined' || open || feedbackOpen) return null;
   return createPortal(
     <button
       type="button"
       data-help-assistant-fab
       onClick={() => openHelp({ mode: 'chat' })}
-      className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-3 z-[90] flex h-11 w-11 items-center justify-center rounded-full bg-[#213D59] text-white shadow-lg ring-2 ring-white/90 md:bottom-6 md:right-4 md:h-12 md:w-12 md:z-[90]"
+      className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-3 z-[90] flex h-[31px] w-[31px] items-center justify-center rounded-full bg-[#213D59] text-white shadow-lg ring-2 ring-white/90 md:bottom-6 md:right-4 md:h-12 md:w-12 md:z-[90]"
       aria-label="Contact Support"
     >
-      <Sparkles className="h-[18px] w-[18px]" />
+      <Sparkles className="h-[13px] w-[13px] md:h-[18px] md:w-[18px]" />
     </button>,
     document.body,
   );

@@ -23,7 +23,20 @@ export const VAULT_NAVIGATION: VaultSection[] = [
     title: 'Vital Information & Key Contacts',
     subsections: [
       { id: '1A', title: 'Vital Information' },
-      { id: '1C', title: 'Key Contacts' },
+      { id: '1B', title: 'Key Contacts' },
+    ],
+  },
+  {
+    id: '17',
+    title: 'Family & Relationships',
+    subsections: [
+      { id: '17A', title: 'Ancestry & Family Tree' },
+      { id: '17B', title: 'Family Members' },
+      { id: '17C', title: 'Dependents' },
+      { id: '17D', title: 'Friends & Contacts' },
+      { id: '17E', title: 'Important Relationships' },
+      { id: '17F', title: ' Memorabilia & Sentimental Items' },
+      { id: '17G', title: 'Pet Care & Records' },
     ],
   },
   {
@@ -111,19 +124,6 @@ export const VAULT_NAVIGATION: VaultSection[] = [
     subsections: [
       { id: '16A', title: 'Debt & Credit Cards' },
       { id: '16B', title: 'Other Debts' },
-    ],
-  },
-  {
-    id: '17',
-    title: 'Family & Relationships',
-    subsections: [
-      { id: '17A', title: 'Ancestry & Family Tree' },
-      { id: '17B', title: 'Family Members' },
-      { id: '17C', title: 'Dependents' },
-      { id: '17D', title: 'Friends & Contacts' },
-      { id: '17E', title: 'Important Relationships' },
-      { id: '17F', title: ' Memorabilia & Sentimental Items' },
-      { id: '17G', title: 'Pet Care & Records' },
     ],
   },
   {

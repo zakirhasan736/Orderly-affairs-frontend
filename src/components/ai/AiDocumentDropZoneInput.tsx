@@ -16,7 +16,7 @@ type AiDocumentDropZoneInputProps = {
   uploadTitle?: string;
   uploadSubtitle?: string;
   showSupportedHint?: boolean;
-  /** When set, shows bottom-right Eye button for this section's attachments. */
+  /** When set, shows bottom-right attachments chip for this section. */
   sectionId?: string | null;
   children?: React.ReactNode;
 };
@@ -77,7 +77,7 @@ export function AiDocumentDropZoneInput({
 
   const withAttachments =
     sectionId != null && String(sectionId).trim() !== '' ? (
-      <div className="relative pb-14">
+      <div className="relative pb-[4.75rem] sm:pb-16">
         {dropZone}
         <AiUploadHistoryPopup
           absolute

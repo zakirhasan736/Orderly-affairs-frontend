@@ -1,6 +1,8 @@
 /**
  * Competitor-style Browse taxonomy: short category tiles that group vault sections.
  * Labels stay short on purpose — detail lives in the section list under each tile.
+ *
+ * Order: daily-use categories first; after-passing / legacy groups last.
  */
 
 export type OverviewBrowseCategory = {
@@ -22,12 +24,6 @@ export type OverviewBrowseCategory = {
 };
 
 export const OVERVIEW_BROWSE_CATEGORIES: OverviewBrowseCategory[] = [
-  {
-    id: 'family',
-    label: 'Family',
-    icon: 'family',
-    sectionIds: ['17', '2', '3', '4'],
-  },
   {
     id: 'finance',
     label: 'Finance',
@@ -59,10 +55,16 @@ export const OVERVIEW_BROWSE_CATEGORIES: OverviewBrowseCategory[] = [
     sectionIds: ['15'],
   },
   {
-    id: 'legal',
-    label: 'Legal',
-    icon: 'legal',
-    sectionIds: ['20', '21'],
+    id: 'identity',
+    label: 'Identity',
+    icon: 'identity',
+    sectionIds: ['1'],
+  },
+  {
+    id: 'family',
+    label: 'Family',
+    icon: 'family',
+    sectionIds: ['17', '2', '3', '4'],
   },
   {
     id: 'work',
@@ -71,15 +73,15 @@ export const OVERVIEW_BROWSE_CATEGORIES: OverviewBrowseCategory[] = [
     sectionIds: ['18'],
   },
   {
-    id: 'identity',
-    label: 'Identity',
-    icon: 'identity',
-    sectionIds: ['1'],
-  },
-  {
     id: 'community',
     label: 'Community',
     icon: 'community',
     sectionIds: ['8', '9', '10', '11'],
+  },
+  {
+    id: 'legal',
+    label: 'Legal',
+    icon: 'legal',
+    sectionIds: ['20', '21'],
   },
 ];

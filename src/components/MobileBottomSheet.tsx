@@ -110,6 +110,15 @@ export function MobileBottomSheet({
     };
   }, [open]);
 
+  const handleOverlayClose = () => {
+    // Portaled media picker/recorder sits above this sheet; if it is open,
+    // ignore overlay taps so we don't tear down the message editor mid-flow.
+    if (typeof document !== 'undefined' && document.querySelector('[data-oa-media-modal]')) {
+      return;
+    }
+    onClose();
+  };
+
   if (!mounted) return null;
 
   return createPortal(
@@ -124,7 +133,7 @@ export function MobileBottomSheet({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22 }}
             className={cn('absolute inset-0', MOBILE_SHEET_OVERLAY_CLASS)}
-            onClick={onClose}
+            onClick={handleOverlayClose}
           />
           <motion.div
             role="dialog"

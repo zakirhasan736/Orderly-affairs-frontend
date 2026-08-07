@@ -102,11 +102,123 @@ const SECTION_7A = {
       helperText: 'Name of the insurance company',
     },
     {
+      key: 'member_name',
+      label: 'Member / Insured Name',
+      type: 'TextInput',
+      helperText: 'Name printed on the insurance card',
+      conditionalDisplay: {
+        field: 'policy_type',
+        value: ['Health', 'Medical/Dental', 'Medicaid Supplements'],
+      },
+    },
+    {
+      key: 'covered_relationship',
+      label: 'Who this card covers',
+      type: 'Dropdown',
+      options: ['Me (primary)', 'Spouse/Partner', 'Dependent', 'Other'],
+      helperText: 'Which family member this health card belongs to',
+      conditionalDisplay: {
+        field: 'policy_type',
+        value: ['Health', 'Medical/Dental', 'Medicaid Supplements'],
+      },
+    },
+    {
+      key: 'member_id',
+      label: 'Member ID',
+      type: 'TextInput',
+      helperText: 'Member ID from the health insurance card',
+      conditionalDisplay: {
+        field: 'policy_type',
+        value: ['Health', 'Medical/Dental', 'Medicaid Supplements'],
+      },
+    },
+    {
+      key: 'group_number',
+      label: 'Group Number',
+      type: 'TextInput',
+      helperText: 'Group number from the insurance card',
+      conditionalDisplay: {
+        field: 'policy_type',
+        value: ['Health', 'Medical/Dental', 'Medicaid Supplements'],
+      },
+    },
+    {
+      key: 'plan_name',
+      label: 'Plan Name',
+      type: 'TextInput',
+      helperText: 'Plan product name (e.g. Choice Plus)',
+      conditionalDisplay: {
+        field: 'policy_type',
+        value: ['Health', 'Medical/Dental', 'Medicaid Supplements'],
+      },
+    },
+    {
       key: 'policy_number',
       label: 'Policy Number',
       type: 'TextInputWithUpload',
       helperText:
         'Enter the policy number or upload a photo of the policy showing the number',
+    },
+    {
+      key: 'rx_bin',
+      label: 'RxBIN',
+      type: 'TextInput',
+      helperText: 'Pharmacy BIN from the card',
+      conditionalDisplay: {
+        field: 'policy_type',
+        value: ['Health', 'Medical/Dental', 'Medicaid Supplements'],
+      },
+    },
+    {
+      key: 'rx_pcn',
+      label: 'RxPCN',
+      type: 'TextInput',
+      helperText: 'Pharmacy PCN from the card',
+      conditionalDisplay: {
+        field: 'policy_type',
+        value: ['Health', 'Medical/Dental', 'Medicaid Supplements'],
+      },
+    },
+    {
+      key: 'rx_grp',
+      label: 'RxGRP',
+      type: 'TextInput',
+      helperText: 'Pharmacy group from the card',
+      conditionalDisplay: {
+        field: 'policy_type',
+        value: ['Health', 'Medical/Dental', 'Medicaid Supplements'],
+      },
+    },
+    {
+      key: 'payer_id',
+      label: 'Payer ID',
+      type: 'TextInput',
+      helperText: 'Payer ID when printed on the card',
+      conditionalDisplay: {
+        field: 'policy_type',
+        value: ['Health', 'Medical/Dental', 'Medicaid Supplements'],
+      },
+    },
+    {
+      key: 'pharmacy_benefit_manager',
+      label: 'Pharmacy Benefit Manager',
+      type: 'TextInput',
+      helperText: 'e.g. Optum Rx',
+      conditionalDisplay: {
+        field: 'policy_type',
+        value: ['Health', 'Medical/Dental', 'Medicaid Supplements'],
+      },
+    },
+    {
+      key: 'benefit_summary',
+      label: 'Deductibles, OOP & Coinsurance',
+      type: 'TextArea',
+      helperText:
+        'In-network / out-of-network deductibles, out-of-pocket max, and coinsurance from the card',
+      conditionalDisplay: {
+        field: 'policy_type',
+        value: ['Health', 'Medical/Dental', 'Medicaid Supplements'],
+      },
     },
     {
       key: 'policy_expiry',

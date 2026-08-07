@@ -47,6 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@common/ui/select';
+import { Sheet, SheetContent } from '@common/ui/sheet';
 
 import { MediaMessagePicker } from '@/components/MediaMessagePicker';
 import { PhotoCapture } from '@/components/PhotoCapture';
@@ -922,6 +923,152 @@ export function Letters({
     };
   };
 
+  const editorOpen = Boolean(isWriting && currentLetter && !isReadOnly);
+  const isEditingExisting = Boolean(
+    currentLetter && letters.some(item => item.id === currentLetter.id),
+  );
+  const mediaOverlayOpen =
+    showVideoPicker ||
+    showAudioPicker ||
+    showVideoRecorder ||
+    showPhotoCapture ||
+    showAudioRecorder;
+
+  const dismissMediaOverlays = () => {
+    setShowVideoPicker(false);
+    setShowAudioPicker(false);
+    setShowVideoRecorder(false);
+    setShowPhotoCapture(false);
+    setShowAudioRecorder(false);
+  };
+
+  const handleEditorOpenChange = (open: boolean) => {
+    if (open) return;
+    // Clicks inside the portaled media picker/recorder look "outside" the
+    // Sheet — dismiss media first instead of destroying the whole editor.
+    if (mediaOverlayOpen) {
+      dismissMediaOverlays();
+      return;
+    }
+    closeEditor();
+  };
+
+  const renderMessageEditorShell = () => {
+    if (!currentLetter) return null;
+
+    return (
+      <>
+        {isMobile && <MobileSheetHandle />}
+
+        <div
+          className={cn(
+            'shrink-0 border-b px-4 pb-3 sm:px-6 sm:pb-4',
+            isMobile ? 'pt-1' : 'pt-5',
+          )}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h2
+                id="message-editor-title"
+                className="text-left text-base font-semibold sm:text-xl"
+              >
+                {isEditingExisting ? 'Edit Message' : 'New Message'}
+              </h2>
+              {!isMobile && (
+                <p className="mt-1 text-left text-sm text-muted-foreground">
+                  Choose type, recipient, delivery, and content — then save.
+                </p>
+              )}
+            </div>
+            {isMobile && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => closeEditor()}
+                className="h-10 w-10 shrink-0 rounded-full"
+                aria-label="Close editor"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div
+          className={cn(
+            'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6',
+            MOBILE_SHEET_SCROLL_CLASS,
+            isMobile
+              ? cn('py-3', MOBILE_SHEET_SCROLL_PADDING)
+              : 'py-5',
+          )}
+        >
+          <MessageEditorPanel
+            currentLetter={currentLetter}
+            letters={letters}
+            recipientOptions={recipientOptions}
+            saving={saving}
+            deletingMedia={deletingMedia}
+            embeddedInSheet
+            onPatch={patchCurrentLetter}
+            onChangeMessageType={changeMessageType}
+            onOpenMedia={openMediaRecorder}
+            onDeleteMedia={removeAttachedMedia}
+            uploadingMedia={uploadingMedia}
+            onSave={saveMessage}
+            onClose={() => closeEditor()}
+          />
+        </div>
+
+        <div
+          className={cn(
+            'shrink-0 border-t px-4 py-3 sm:px-6 sm:py-4',
+            isMobile
+              ? cn(
+                  MOBILE_SHEET_FOOTER_CLASS,
+                  'pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+                )
+              : 'bg-background/95 backdrop-blur',
+          )}
+        >
+          <div
+            className={cn(
+              'flex w-full gap-2',
+              isMobile
+                ? 'grid grid-cols-2'
+                : 'flex-col-reverse sm:flex-row sm:justify-between',
+            )}
+          >
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => closeEditor()}
+              className={cn(
+                'h-11 rounded-xl touch-manipulation',
+                isMobile ? '' : 'w-auto',
+              )}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={saving}
+              onClick={() => void saveMessage()}
+              className={cn(
+                'relative z-10 h-11 rounded-xl touch-manipulation',
+                isMobile ? '' : 'w-auto min-w-[9rem]',
+              )}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {saving ? 'Saving...' : isMobile ? 'Save' : 'Save Message'}
+            </Button>
+          </div>
+        </div>
+      </>
+    );
+  };
+
   return (
     <div
       className={cn(
@@ -963,7 +1110,7 @@ export function Letters({
               </div>
             </div>
 
-            {!isWriting && !isReadOnly && (
+            {!isReadOnly && (
               <Button type="button" size="sm" data-oa-mutate onClick={() => openNewMessage()}>
                 <Plus className="mr-2 h-4 w-4" />
                 New
@@ -979,13 +1126,12 @@ export function Letters({
           embeddedInSection && isMobile && 'p-0',
         )}
       >
-        {!isWriting && (
-          <div
-            className={cn(
-              'space-y-5',
-              embeddedInSection && isMobile && 'space-y-2',
-            )}
-          >
+        <div
+          className={cn(
+            'space-y-5',
+            embeddedInSection && isMobile && 'space-y-2',
+          )}
+        >
             {embeddedInSection ? (
               <EmbeddedMessagesToolbar
                 pendingCount={pendingCount}
@@ -1044,7 +1190,13 @@ export function Letters({
             )}
 
             {!isLoading && letters.length > 0 && (
-              <div className={cn(isMobile ? 'space-y-2.5' : 'space-y-3')}>
+              <div
+                className={cn(
+                  isMobile
+                    ? 'space-y-2.5'
+                    : 'grid gap-3 sm:grid-cols-1 xl:grid-cols-2',
+                )}
+              >
                 {letters.map(letter =>
                   isMobile ? (
                     <MessageListItem
@@ -1101,25 +1253,7 @@ export function Letters({
                 </CardContent>
               </Card>
             )}
-          </div>
-        )}
-
-        {isWriting && currentLetter && !isMobile && !isReadOnly && (
-          <MessageEditorPanel
-            currentLetter={currentLetter}
-            letters={letters}
-            recipientOptions={recipientOptions}
-            saving={saving}
-            deletingMedia={deletingMedia}
-            onPatch={patchCurrentLetter}
-            onChangeMessageType={changeMessageType}
-            onOpenMedia={openMediaRecorder}
-            onDeleteMedia={removeAttachedMedia}
-            uploadingMedia={uploadingMedia}
-            onSave={saveMessage}
-            onClose={() => closeEditor()}
-          />
-        )}
+        </div>
       </div>
 
       <MediaMessagePicker
@@ -1236,86 +1370,69 @@ export function Letters({
         </MobileBottomSheet>
       )}
 
-      {/* Mobile editor sheet — never for Viewers */}
-      {isMobile && isWriting && currentLetter && !isReadOnly && (
+      {/* Add / Edit message — Access Management pattern: bottom sheet mobile, right Sheet desktop */}
+      {isMobile ? (
         <MobileBottomSheet
-          open={isWriting}
-          onClose={() => closeEditor()}
-          className="h-[96dvh]"
+          open={editorOpen}
+          onClose={() => handleEditorOpenChange(false)}
+          className="h-[min(96dvh,100svh)]"
           labelledBy="message-editor-title"
         >
           <div className="flex h-full min-h-0 flex-col">
-            <MobileSheetHandle />
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-3 pt-1">
-              <div className="min-w-0">
-                <h3 id="message-editor-title" className="text-base font-semibold">
-                  {letters.some(item => item.id === currentLetter.id)
-                    ? 'Edit Message'
-                    : 'New Message'}
-                </h3>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => closeEditor()}
-                className="h-10 w-10 shrink-0 rounded-full"
-                aria-label="Close editor"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-
-            <div
-              className={cn(
-                'min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-3',
-                MOBILE_SHEET_SCROLL_CLASS,
-                MOBILE_SHEET_SCROLL_PADDING,
-              )}
-            >
-              <MessageEditorPanel
-                currentLetter={currentLetter}
-                letters={letters}
-                recipientOptions={recipientOptions}
-                saving={saving}
-                deletingMedia={deletingMedia}
-                embeddedInSheet
-                onPatch={patchCurrentLetter}
-                onChangeMessageType={changeMessageType}
-                onOpenMedia={openMediaRecorder}
-                onDeleteMedia={removeAttachedMedia}
-                uploadingMedia={uploadingMedia}
-                onSave={saveMessage}
-                onClose={() => closeEditor()}
-              />
-            </div>
-
-            <div
-              className={cn(
-                'grid shrink-0 grid-cols-2 gap-2 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
-                MOBILE_SHEET_FOOTER_CLASS,
-              )}
-            >
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => closeEditor()}
-                className="h-11 touch-manipulation rounded-xl"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                disabled={saving}
-                onClick={() => void saveMessage()}
-                className="relative z-10 h-11 touch-manipulation rounded-xl"
-              >
-                <Save className="mr-2 h-4 w-4" />
-                {saving ? 'Saving...' : 'Save'}
-              </Button>
-            </div>
+            {renderMessageEditorShell()}
           </div>
         </MobileBottomSheet>
+      ) : (
+        <Sheet
+          open={editorOpen}
+          onOpenChange={handleEditorOpenChange}
+        >
+          <SheetContent
+            side="right"
+            hideClose
+            className="flex h-full w-full max-w-full flex-col gap-0 p-0 sm:max-w-xl lg:max-w-2xl"
+            onPointerDownOutside={event => {
+              if (
+                mediaOverlayOpen ||
+                (event.target as Element | null)?.closest?.(
+                  '[data-oa-media-modal]',
+                )
+              ) {
+                event.preventDefault();
+              }
+            }}
+            onInteractOutside={event => {
+              if (
+                mediaOverlayOpen ||
+                (event.target as Element | null)?.closest?.(
+                  '[data-oa-media-modal]',
+                )
+              ) {
+                event.preventDefault();
+              }
+            }}
+            onFocusOutside={event => {
+              if (
+                mediaOverlayOpen ||
+                (event.target as Element | null)?.closest?.(
+                  '[data-oa-media-modal]',
+                )
+              ) {
+                event.preventDefault();
+              }
+            }}
+            onEscapeKeyDown={event => {
+              if (mediaOverlayOpen) {
+                event.preventDefault();
+                dismissMediaOverlays();
+              }
+            }}
+          >
+            <div className="flex h-full min-h-0 flex-col">
+              {renderMessageEditorShell()}
+            </div>
+          </SheetContent>
+        </Sheet>
       )}
 
       {isMobile &&
@@ -2048,7 +2165,7 @@ function MessageEditorPanel({
   onClose: () => void;
 }) {
   return (
-    <div className={cn('space-y-5', embeddedInSheet && 'space-y-4')}>
+    <div className={cn('space-y-5', embeddedInSheet && 'space-y-5')}>
       {!embeddedInSheet && (
         <EditorHeader
           isEditing={letters.some(item => item.id === currentLetter.id)}
@@ -2066,27 +2183,33 @@ function MessageEditorPanel({
           className={cn(
             'overflow-hidden rounded-[28px]',
             embeddedInSheet &&
-              'rounded-2xl border-0 bg-[var(--mobile-sheet-solid)] shadow-none',
+              'rounded-none border-0 bg-transparent shadow-none',
           )}
         >
           <CardContent
             className={cn(
               'space-y-7 p-4 sm:p-6',
-              embeddedInSheet && 'space-y-5 p-0',
+              embeddedInSheet && 'space-y-6 p-0',
             )}
           >
             <TypeSelector
               value={currentLetter.messageType}
               onChange={onChangeMessageType}
+              compact={embeddedInSheet}
             />
 
             <BasicDetails
               letter={currentLetter}
               recipients={recipientOptions}
               onChange={onPatch}
+              compact={embeddedInSheet}
             />
 
-            <DeliverySection letter={currentLetter} onChange={onPatch} />
+            <DeliverySection
+              letter={currentLetter}
+              onChange={onPatch}
+              compact={embeddedInSheet}
+            />
 
             {currentLetter.messageType === 'letter' ? (
               <LetterEditor letter={currentLetter} onChange={onPatch} />
@@ -2176,20 +2299,28 @@ function EditorHeader({
 function TypeSelector({
   value,
   onChange,
+  compact = false,
 }: {
   value: MessageType;
   onChange: (value: MessageType) => void;
+  compact?: boolean;
 }) {
   return (
     <div className="space-y-3">
-      <Label className='pl-2 sm:pl-0'>Message Type</Label>
+      <Label className={cn(!compact && 'pl-2 sm:pl-0')}>Message Type</Label>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div
+        className={cn(
+          'grid gap-2.5 sm:gap-3',
+          compact ? 'grid-cols-3' : 'grid-cols-1 sm:grid-cols-3',
+        )}
+      >
         <TypeCard
           active={value === 'letter'}
           icon={<FileText className="h-5 w-5" />}
           title="Letter"
           text="Write a rich text message"
+          compact={compact}
           onClick={() => onChange('letter')}
         />
 
@@ -2198,6 +2329,7 @@ function TypeSelector({
           icon={<Video className="h-5 w-5" />}
           title="Video"
           text="Record or upload video"
+          compact={compact}
           onClick={() => onChange('video')}
         />
 
@@ -2206,6 +2338,7 @@ function TypeSelector({
           icon={<Mic className="h-5 w-5" />}
           title="Audio"
           text="Record or upload voice"
+          compact={compact}
           onClick={() => onChange('audio')}
         />
       </div>
@@ -2217,13 +2350,20 @@ function BasicDetails({
   letter,
   recipients,
   onChange,
+  compact = false,
 }: {
   letter: Letter;
   recipients: RecipientOption[];
   onChange: (patch: Partial<Letter>) => void;
+  compact?: boolean;
 }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div
+      className={cn(
+        'grid gap-4',
+        compact ? 'grid-cols-1 sm:grid-cols-2' : 'md:grid-cols-2',
+      )}
+    >
       <FieldBlock label="Message Title">
         <Input
           value={letter.title}
@@ -2243,9 +2383,17 @@ function BasicDetails({
         />
       </FieldBlock>
 
-      <FieldBlock label="Recipient Name" className="md:col-span-2">
+      <FieldBlock
+        label="Recipient Name"
+        className={compact ? 'sm:col-span-2' : 'md:col-span-2'}
+      >
         {recipients.length > 0 ? (
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr]">
+          <div
+            className={cn(
+              'grid gap-3',
+              compact ? 'grid-cols-1' : 'md:grid-cols-[1fr_1fr]',
+            )}
+          >
             <Select
               value={letter.recipient}
               onValueChange={selectedName => {
@@ -2299,15 +2447,17 @@ function BasicDetails({
 function DeliverySection({
   letter,
   onChange,
+  compact = false,
 }: {
   letter: Letter;
   onChange: (patch: Partial<Letter>) => void;
+  compact?: boolean;
 }) {
   return (
     <div className="space-y-3">
       <Label>Delivery Trigger</Label>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={cn('grid gap-3', compact ? 'grid-cols-1 sm:grid-cols-2' : 'sm:grid-cols-2')}>
         <DeliveryCard
           active={letter.deliveryTrigger === 'death'}
           icon={<AlertTriangle className="h-5 w-5" />}
@@ -2332,7 +2482,12 @@ function DeliverySection({
       </div>
 
       {letter.deliveryTrigger === 'date' && (
-        <div className="grid gap-4 rounded-2xl border bg-muted/30 p-4 md:grid-cols-2">
+        <div
+          className={cn(
+            'grid gap-4 rounded-2xl border bg-muted/30 p-4',
+            compact ? 'grid-cols-1 sm:grid-cols-2' : 'md:grid-cols-2',
+          )}
+        >
           <FieldBlock label="Delivery Date">
             <DatePicker
               value={letter.deliveryDate || ''}
@@ -2572,19 +2727,22 @@ function TypeCard({
   title,
   text,
   onClick,
+  compact = false,
 }: {
   active: boolean;
   icon: React.ReactNode;
   title: string;
   text: string;
   onClick: () => void;
+  compact?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded-2xl border p-4 text-left transition hover:bg-muted/60',
+        'rounded-2xl border text-left transition hover:bg-muted/60',
+        compact ? 'p-3' : 'p-4',
         active
           ? 'border-primary bg-primary/10 shadow-sm'
           : 'border-border bg-background',
@@ -2592,7 +2750,8 @@ function TypeCard({
     >
       <div
         className={cn(
-          'mb-3 flex h-10 w-10 items-center justify-center rounded-xl',
+          'mb-2 flex items-center justify-center rounded-xl',
+          compact ? 'h-9 w-9' : 'mb-3 h-10 w-10',
           active
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted text-primary',
@@ -2601,8 +2760,15 @@ function TypeCard({
         {icon}
       </div>
 
-      <p className="font-semibold">{title}</p>
-      <p className="mt-1 text-xs leading-5 text-muted-foreground">{text}</p>
+      <p className={cn('font-semibold', compact && 'text-sm')}>{title}</p>
+      <p
+        className={cn(
+          'mt-1 leading-5 text-muted-foreground',
+          compact ? 'hidden text-[11px] sm:line-clamp-2 sm:block' : 'text-xs',
+        )}
+      >
+        {text}
+      </p>
     </button>
   );
 }
@@ -2668,12 +2834,12 @@ function MediaUploadPanel({
   const isVideo = type === 'video';
 
   return (
-    <div className="rounded-[24px] border bg-muted/25 p-4 sm:p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="rounded-2xl border bg-muted/25 p-4 sm:p-5">
+      <div className="flex flex-col gap-4">
         <div className="flex items-start gap-3">
           <div
             className={cn(
-              'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm',
+              'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm',
               isVideo ? 'bg-rose-600' : 'bg-blue-600',
             )}
           >
@@ -2684,11 +2850,11 @@ function MediaUploadPanel({
             )}
           </div>
 
-          <div>
+          <div className="min-w-0 flex-1">
             <h3 className="font-semibold">
               {isVideo ? 'Video Message' : 'Audio Message'}
             </h3>
-            <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
               {isVideo
                 ? 'Record a new video, take a photo, choose from your gallery, or upload a file.'
                 : 'Record a new voice note, choose from your gallery, or upload a file.'}
@@ -2701,7 +2867,7 @@ function MediaUploadPanel({
             type="button"
             onClick={onAddMedia}
             disabled={uploading}
-            className="h-11 rounded-xl lg:min-w-[200px]"
+            className="h-11 w-full rounded-xl"
           >
             <Plus className="mr-2 h-4 w-4" />
             {uploading
@@ -2714,8 +2880,8 @@ function MediaUploadPanel({
       </div>
 
       {media?.url && (
-        <div className="mt-5 rounded-2xl border bg-background p-3">
-          <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mt-4 rounded-2xl border bg-background p-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <p className="text-sm font-medium">
@@ -2748,7 +2914,7 @@ function MediaUploadPanel({
             <MessageMediaPreview
               messageType="video"
               media={media}
-              className="h-56 w-full rounded-xl bg-black object-cover sm:h-72"
+              className="aspect-video max-h-64 w-full rounded-xl bg-black object-cover"
             />
           ) : (
             <MessageMediaPreview
@@ -2757,6 +2923,17 @@ function MediaUploadPanel({
               className="w-full"
             />
           )}
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onAddMedia}
+            disabled={uploading}
+            className="mt-3 h-10 w-full rounded-xl"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {uploading ? 'Uploading...' : isVideo ? 'Replace Video' : 'Replace Audio'}
+          </Button>
         </div>
       )}
     </div>

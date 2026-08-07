@@ -4,8 +4,9 @@ import { toast } from 'sonner';
 import { Button } from '@common/ui/button';
 import { Input } from '@common/ui/input';
 import { Label } from '@common/ui/label';
-import { Upload, X } from 'lucide-react';
+import { Eye, FileText, Upload, X } from 'lucide-react';
 import { getSignedUploadUrl, uploadFile } from '@/libs/api/upload';
+import { VaultFieldUploadThumb } from '@/components/vault/VaultFieldUploadThumb';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
@@ -19,6 +20,9 @@ type UploadFileEntry = {
   public_id?: string;
   url?: string;
   name?: string;
+  original_filename?: string;
+  mime_type?: string;
+  content_type?: string;
   version?: number;
   scan_status?: string;
   uploaded_by_name?: string;
@@ -33,6 +37,13 @@ function asUploadFiles(value: unknown): UploadFileEntry[] {
     (item): item is UploadFileEntry =>
       !!item && typeof item === 'object' && !Array.isArray(item),
   );
+}
+
+function fileDisplayName(file: UploadFileEntry, index: number): string {
+  const name =
+    String(file.name || file.original_filename || '').trim() ||
+    `Attached document ${index + 1}`;
+  return name;
 }
 
 export function TextInputWithUpload({
@@ -126,6 +137,8 @@ export function TextInputWithUpload({
       files: [
         {
           ...uploaded,
+          name: uploaded?.name || uploaded?.original_filename || file.name,
+          mime_type: uploaded?.mime_type || file.type,
           version: 1,
           scan_status: 'pending',
         },
@@ -168,24 +181,26 @@ export function TextInputWithUpload({
         <p className="text-xs text-muted-foreground">{helperText}</p>
       )}
 
-      <Input
-        value={normalizedValue?.text || ''}
-        onChange={handleTextChange}
-        placeholder={placeholder}
-        readOnly={disabled}
-        className={`w-full${disabled ? ' cursor-default bg-slate-50' : ''}`}
-      />
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+        <Input
+          value={normalizedValue?.text || ''}
+          onChange={handleTextChange}
+          placeholder={placeholder}
+          readOnly={disabled}
+          className={`w-full flex-1${disabled ? ' cursor-default bg-slate-50' : ''}`}
+        />
         {!disabled && (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          data-oa-mutate
-          onClick={() => fileRef.current?.click()}
-        >
-          <Upload className="h-4 w-4 mr-1" /> Upload
-        </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            data-oa-mutate
+            onClick={() => fileRef.current?.click()}
+            className="h-10 shrink-0 rounded-xl sm:self-auto"
+          >
+            <Upload className="mr-1 h-4 w-4" />
+            {files.length > 0 ? 'Replace' : 'Upload'}
+          </Button>
         )}
       </div>
 
@@ -198,49 +213,101 @@ export function TextInputWithUpload({
         onChange={e => e.target.files && handleUpload(e.target.files[0])}
       />
 
-      {files.map((f, i) => (
-        <div
-          key={f.public_id || `${f.name || 'file'}-${i}`}
-          className="flex justify-between items-start gap-2 bg-muted p-2 rounded text-xs"
-        >
-          <div className="min-w-0">
-            <button
-              type="button"
-              data-oa-view-ok
-              className="underline text-left"
-              onClick={() => void openFile(f)}
-            >
-              {f.name}
-              {f.version && <span className="ml-1">v{f.version}</span>}
-            </button>
-            {f.uploaded_by_name && (
-              <p className="mt-0.5 text-[10px] text-muted-foreground">
-                Uploaded by{' '}
-                {f.uploaded_by_role === 'owner'
-                  ? 'Owner'
-                  : f.uploaded_by_name}
-                {f.uploaded_by_role && f.uploaded_by_role !== 'owner'
-                  ? ` (${f.uploaded_by_role})`
-                  : ''}
-                {f.uploaded_at
-                  ? ` · ${new Date(f.uploaded_at).toLocaleString([], {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}`
-                  : ''}
-              </p>
-            )}
-          </div>
+      {files.length > 0 ? (
+        <div className="space-y-2">
+          {files.map((f, i) => {
+            const title = fileDisplayName(f, i);
+            return (
+              <div
+                key={f.public_id || `${title}-${i}`}
+                className="overflow-hidden rounded-2xl border border-[#213D59]/15 bg-gradient-to-br from-[#eef3f9] to-white shadow-sm"
+              >
+                <div className="flex gap-3 p-2.5 sm:p-3">
+                  <button
+                    type="button"
+                    data-oa-view-ok
+                    onClick={() => void openFile(f)}
+                    className="w-[4.75rem] shrink-0 sm:w-24"
+                    title={`Open ${title}`}
+                    aria-label={`Open ${title}`}
+                  >
+                    <VaultFieldUploadThumb
+                      publicId={f.public_id}
+                      fileName={title}
+                      mimeType={f.mime_type || f.content_type}
+                    />
+                  </button>
 
-          {!disabled && (
-          <button type="button" data-oa-mutate onClick={() => removeFile(f, i)}>
-            <X className="h-3 w-3" />
-          </button>
-          )}
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-[#213D59]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#213D59]">
+                      <FileText className="h-3 w-3" />
+                      Document attached
+                    </div>
+                    <p className="truncate text-sm font-semibold text-slate-900" title={title}>
+                      {title}
+                      {f.version ? (
+                        <span className="ml-1 text-xs font-medium text-slate-500">
+                          v{f.version}
+                        </span>
+                      ) : null}
+                    </p>
+                    {f.uploaded_by_name ? (
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        Uploaded by{' '}
+                        {f.uploaded_by_role === 'owner'
+                          ? 'Owner'
+                          : f.uploaded_by_name}
+                        {f.uploaded_by_role && f.uploaded_by_role !== 'owner'
+                          ? ` (${f.uploaded_by_role})`
+                          : ''}
+                        {f.uploaded_at
+                          ? ` · ${new Date(f.uploaded_at).toLocaleString([], {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}`
+                          : ''}
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        Tap the preview to open this file.
+                      </p>
+                    )}
+
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        data-oa-view-ok
+                        onClick={() => void openFile(f)}
+                        className="h-8 rounded-lg"
+                      >
+                        <Eye className="mr-1.5 h-3.5 w-3.5" />
+                        View
+                      </Button>
+                      {!disabled && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          data-oa-mutate
+                          onClick={() => removeFile(f, i)}
+                          className="h-8 rounded-lg text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                        >
+                          <X className="mr-1.5 h-3.5 w-3.5" />
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      ))}
+      ) : null}
     </div>
   );
 }

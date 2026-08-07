@@ -30,6 +30,7 @@ import {
   getSectionProgress as computeSectionProgress,
   type SectionProgress,
 } from '@/utils/sectionCompletion';
+import { listAiUploadHistory } from '@/utils/aiUploadHistory';
 import { AiDocumentRoutingProvider } from '@/contexts/AiDocumentRoutingContext';
 import { DashboardAiBatchProvider } from '@/contexts/DashboardAiBatchContext';
 import { HelpAssistantProvider } from '@/components/help/HelpAssistantContext';
@@ -103,6 +104,12 @@ import {
   mergeDashboardNotices,
   type DashboardNotice,
 } from '@/utils/dashboardNotifications';
+import {
+  getNotificationPreferences,
+  NOTIFICATION_PREFS_CHANGED,
+} from '@/utils/notificationPreferences';
+import { maybePushReminderNotices } from '@/utils/browserPushNotifications';
+import { CollaboratorPushOptInBanner } from '@/components/vault/CollaboratorPushOptInBanner';
 import { useGetStatusQuery } from '@/services/billingApi';
 
 import { fetchSession, nokLogout as apiNokLogout, ownerLogout as apiOwnerLogout, secureFetch } from '@/libs/secureFetch';
@@ -256,6 +263,9 @@ export default function DashboardPage() {
   const [familyAcl, setFamilyAcl] = useState<FamilyDashboardSession>(() =>
     parseFamilyDashboardSession({}),
   );
+  const [vaultPushCollaboratorsEnabled, setVaultPushCollaboratorsEnabled] =
+    useState(false);
+  const [sessionOwnerId, setSessionOwnerId] = useState<string | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
   const [vaultPrefetchKey, setVaultPrefetchKey] = useState(0);
   const [familyVaultGate, setFamilyVaultGate] = useState<
@@ -283,6 +293,17 @@ export default function DashboardPage() {
   });
   const [pendingMessageCount, setPendingMessageCount] = useState(0);
   const [supportUnread, setSupportUnread] = useState(0);
+  const [uploadHistoryTick, setUploadHistoryTick] = useState(0);
+
+  useEffect(() => {
+    const onHistory = () => setUploadHistoryTick(value => value + 1);
+    window.addEventListener('orderly-ai-upload-history', onHistory);
+    window.addEventListener('orderly-ai-autofill-done', onHistory);
+    return () => {
+      window.removeEventListener('orderly-ai-upload-history', onHistory);
+      window.removeEventListener('orderly-ai-autofill-done', onHistory);
+    };
+  }, []);
 
   // backed next kin handler
   const [nextkinLogin] = useNextkinLoginMutation();
@@ -1009,6 +1030,10 @@ export default function DashboardPage() {
 
     const applyFamilyAcl = (session: Awaited<ReturnType<typeof fetchSession>>) => {
       const acl = parseFamilyDashboardSession(session);
+      setVaultPushCollaboratorsEnabled(
+        Boolean(session.vault_push?.collaborators_enabled),
+      );
+      setSessionOwnerId(session.owner_id ? String(session.owner_id) : null);
       setFamilyAcl(prev => {
         // Avoid useless re-renders when ACL unchanged
         if (
@@ -1093,6 +1118,12 @@ export default function DashboardPage() {
         return;
       }
       const acl = parseFamilyDashboardSession(session);
+      setVaultPushCollaboratorsEnabled(
+        Boolean(session.vault_push?.collaborators_enabled),
+      );
+      if (session.owner_id) {
+        setSessionOwnerId(String(session.owner_id));
+      }
       setFamilyAcl(prev => {
         if (
           prev.accessLevel === acl.accessLevel &&
@@ -1270,7 +1301,7 @@ export default function DashboardPage() {
             : firstSub === 'next_of_kin' ||
                 firstSub === 'executor_trustee' ||
                 firstSub === 'additional_contacts'
-              ? '1C'
+              ? '1B'
               : firstSub;
         setActiveSubsection(uiSubsection);
       }
@@ -1290,6 +1321,9 @@ export default function DashboardPage() {
         | { sectionId?: string }
         | undefined;
       setAiPatchTick(tick => tick + 1);
+      void import('@/utils/aiQueuedAccept').then(({ flushQueuedAiAccepts }) => {
+        void flushQueuedAiAccepts();
+      });
       if (detail?.sectionId && detail.sectionId === activeSection) {
         sectionMatchShownRef.current = null;
         openSectionMatchReview(detail.sectionId, { force: true });
@@ -1569,8 +1603,27 @@ export default function DashboardPage() {
   }, [instructionRead, instructionStorageKey]);
 
   // Field-fill progress: checkmark only at 100%
-  const sectionProgressCtx = useMemo(
-    () => ({
+  const sectionProgressCtx = useMemo(() => {
+    const sectionAiDocumentCounts: Record<string, number> = {};
+    try {
+      for (const item of listAiUploadHistory()) {
+        if (item.status === 'failed') continue;
+        const ids = new Set<string>();
+        if (item.sectionId && item.sectionId !== 'overview') {
+          ids.add(String(item.sectionId));
+        }
+        for (const id of item.sectionIds || []) {
+          if (id && id !== 'overview') ids.add(String(id));
+        }
+        for (const id of ids) {
+          sectionAiDocumentCounts[id] = (sectionAiDocumentCounts[id] || 0) + 1;
+        }
+      }
+    } catch {
+      /* history optional */
+    }
+
+    return {
       formData,
       instructionRead,
       myNextKin: Array.isArray(myNextKin) ? myNextKin : null,
@@ -1578,9 +1631,16 @@ export default function DashboardPage() {
         ? (dashboardNokLetter as unknown as Record<string, unknown>)
         : null,
       disabledSections,
-    }),
-    [formData, instructionRead, myNextKin, dashboardNokLetter, disabledSections],
-  );
+      sectionAiDocumentCounts,
+    };
+  }, [
+    formData,
+    instructionRead,
+    myNextKin,
+    dashboardNokLetter,
+    disabledSections,
+    uploadHistoryTick,
+  ]);
 
   // Recompute whenever form data / NOK list / letter / instructions change
   // (fill and delete both flow through sectionProgressCtx → formData).
@@ -2439,6 +2499,64 @@ export default function DashboardPage() {
     [],
   );
 
+  const [scrollToNotificationSettings, setScrollToNotificationSettings] =
+    useState(false);
+  const [notifPrefsTick, setNotifPrefsTick] = useState(0);
+
+  const openNotificationSettings = useCallback(() => {
+    if (familyAcl.isFamily && !familyCanViewVaultSettings(familyAcl)) {
+      toast.error('Vault Settings is not included in your access');
+      return;
+    }
+    setScrollToNotificationSettings(true);
+    goToSection('vault-settings');
+  }, [familyAcl, goToSection]);
+
+  useEffect(() => {
+    const onPrefs = () => setNotifPrefsTick(tick => tick + 1);
+    window.addEventListener(NOTIFICATION_PREFS_CHANGED, onPrefs);
+    window.addEventListener('storage', onPrefs);
+    return () => {
+      window.removeEventListener(NOTIFICATION_PREFS_CHANGED, onPrefs);
+      window.removeEventListener('storage', onPrefs);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!scrollToNotificationSettings || activeSection !== 'vault-settings') {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const el = document.getElementById('notification-settings');
+      if (el instanceof HTMLElement) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        el.classList.add('ring-2', 'ring-sky-400', 'ring-offset-2');
+        window.setTimeout(() => {
+          el.classList.remove('ring-2', 'ring-sky-400', 'ring-offset-2');
+        }, 2200);
+      }
+      setScrollToNotificationSettings(false);
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [scrollToNotificationSettings, activeSection]);
+
+  useEffect(() => {
+    const onOpenSettings = () => openNotificationSettings();
+    const onPushClick = () => openReviewInbox('alerts');
+    window.addEventListener(
+      'orderly-open-notification-settings',
+      onOpenSettings,
+    );
+    window.addEventListener('orderly-open-from-push-notice', onPushClick);
+    return () => {
+      window.removeEventListener(
+        'orderly-open-notification-settings',
+        onOpenSettings,
+      );
+      window.removeEventListener('orderly-open-from-push-notice', onPushClick);
+    };
+  }, [openNotificationSettings, openReviewInbox]);
+
   useEffect(() => {
     const onOpenTab = (event: Event) => {
       const detail = (event as CustomEvent<{ tab?: VaultActivityTabInput }>)
@@ -2465,7 +2583,7 @@ export default function DashboardPage() {
 
   const handleNoticeSelect = useCallback(
     (notice: DashboardNotice) => {
-      if (notice.id === 'event-support') {
+      if (notice.id === 'event-support' || notice.id.startsWith('event-support-')) {
         window.dispatchEvent(
           new CustomEvent('orderly-open-help', {
             detail: { mode: 'live' },
@@ -2490,7 +2608,7 @@ export default function DashboardPage() {
     [goToSection, openReviewInbox],
   );
 
-  const headerNotices = useMemo(() => {
+  const ownerNotices = useMemo(() => {
     if (appMode !== 'owner') return [] as DashboardNotice[];
     return mergeDashboardNotices([
       buildExpiryNotices(formData),
@@ -2513,6 +2631,36 @@ export default function DashboardPage() {
     pendingNOK,
     supportUnread,
   ]);
+
+  const headerNotices = useMemo(() => {
+    void notifPrefsTick;
+    if (!getNotificationPreferences().inAppEnabled) {
+      return [] as DashboardNotice[];
+    }
+    if (!familyAcl.isFamily) return ownerNotices;
+    const allowed = familyAllowedVaultSectionIds(familyAcl);
+    if (allowed === 'all') return ownerNotices;
+    return ownerNotices.filter(
+      notice =>
+        !notice.sectionId ||
+        allowed.has(notice.sectionId) ||
+        familyCanSeeVaultSection(familyAcl, notice.sectionId),
+    );
+  }, [ownerNotices, notifPrefsTick, familyAcl]);
+
+  useEffect(() => {
+    if (appMode !== 'owner') return;
+    const allowed = familyAcl.isFamily
+      ? (() => {
+          const ids = familyAllowedVaultSectionIds(familyAcl);
+          return ids === 'all' ? ('all' as const) : [...ids];
+        })()
+      : ('all' as const);
+    maybePushReminderNotices(ownerNotices, {
+      activeSection,
+      allowedSectionIds: allowed,
+    });
+  }, [appMode, ownerNotices, activeSection, familyAcl]);
 
   useEffect(() => {
     if (appMode !== 'owner') return;
@@ -2703,7 +2851,8 @@ export default function DashboardPage() {
           onAccountClick={() => setMobileMoreOpen(prev => !prev)}
           notices={headerNotices}
           onNoticeSelect={handleNoticeSelect}
-          onOpenReviewInbox={() => openReviewInbox('alerts')}
+          onOpenReviewInbox={() => openReviewInbox('dues')}
+          onOpenNotificationSettings={openNotificationSettings}
         />
 
         <div className="flex min-h-screen md:min-h-0">
@@ -2784,7 +2933,8 @@ export default function DashboardPage() {
               onLogout={handleOwnerLogout}
               notices={headerNotices}
               onNoticeSelect={handleNoticeSelect}
-              onOpenReviewInbox={() => openReviewInbox('alerts')}
+              onOpenReviewInbox={() => openReviewInbox('dues')}
+              onOpenNotificationSettings={openNotificationSettings}
             />
 
           {/* Main content */}
@@ -2792,6 +2942,14 @@ export default function DashboardPage() {
             <div className="mx-auto w-full max-w-[1480px] px-4 py-4 sm:px-5 md:px-6 md:py-6 lg:px-8 xl:px-10">
               {activeSection === 'dashboard' ? (
                 <div className="owner-dashboard-overview-area space-y-5 md:space-y-6">
+                  {familyAcl.isFamily && (
+                    <CollaboratorPushOptInBanner
+                      ownerId={sessionOwnerId}
+                      email={currentUser?.email}
+                      collaboratorsEnabled={vaultPushCollaboratorsEnabled}
+                      audienceLabel="your vault access"
+                    />
+                  )}
                   {appMode === 'owner' && !familyAcl.isFamily && (
                     <E2eeMigrationBanner enabled={false} />
                   )}
@@ -3342,6 +3500,15 @@ export default function DashboardPage() {
                     <AiActiveSectionProvider
                       sectionId={activeSection}
                       subsectionId={activeSubsection}
+                      sectionData={
+                        activeSection &&
+                        formData &&
+                        typeof formData === 'object' &&
+                        formData[activeSection] &&
+                        typeof formData[activeSection] === 'object'
+                          ? (formData[activeSection] as Record<string, unknown>)
+                          : null
+                      }
                     >
                       {familyAcl.isFamily && !familyCanWrite(familyAcl) ? (
                         <FamilyReadOnlyGuard className="min-w-0">

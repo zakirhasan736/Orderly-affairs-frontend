@@ -156,7 +156,7 @@ export const config = {
      * Needed so CSP nonce applies site-wide, not only auth routes.
      */
     {
-      source: '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+      source: '/((?!_next/static|_next/image|favicon.ico|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
     },
   ],
 };

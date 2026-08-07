@@ -27,16 +27,16 @@ async function uploadMessageMediaViaApi(
   const uploadFile =
     file instanceof File
       ? file
-      : new File([file], `message-media-${Date.now()}`, {
+      : new File([file], `message-media-${Date.now()}.webm`, {
           type: file.type || 'application/octet-stream',
         });
   formData.append('file', uploadFile);
 
   let res: Response;
   try {
+    // Do not set Content-Type — the browser must add the multipart boundary.
     res = await secureFetch('/message/media', {
       method: 'POST',
-      headers: {},
       body: formData,
     });
   } catch {
@@ -46,18 +46,30 @@ async function uploadMessageMediaViaApi(
   }
 
   if (!res.ok) {
-    throw new Error(
-      await readErrorMessage(res, 'Could not save media. Please try again.'),
+    const detail = await readErrorMessage(
+      res,
+      'Could not save media. Please try again.',
     );
+    if (res.status === 413 || res.status === 507) {
+      throw new Error(detail);
+    }
+    if (res.status === 503) {
+      throw new Error(
+        detail ||
+          'Media storage is not configured. Ask support to enable S3 for messages.',
+      );
+    }
+    throw new Error(detail);
   }
 
   const result = (await res.json()) as MessageMediaUploadResult;
+  const s3Key = result.s3_key || result.public_id;
   return {
     url: result.url,
-    public_id: result.public_id || result.s3_key,
-    s3_key: result.s3_key,
+    public_id: result.public_id || s3Key,
+    s3_key: s3Key,
     s3_bucket: result.s3_bucket,
-    storage: result.storage || (result.s3_key ? 's3' : 'cloudinary'),
+    storage: result.storage || (s3Key ? 's3' : 'cloudinary'),
     type: result.type,
     format: result.format,
     size: result.size,
