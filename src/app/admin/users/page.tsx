@@ -272,15 +272,19 @@ function UserDetail({
           disabled={busy}
           onClick={() => {
             const reason = window.prompt(
-              `Delete ${selected.email}? Enter an audit reason (required).`,
+              `Permanently delete ${selected.email} and ALL linked data (NOK, family, letters, messages, sections, subscription, S3)?\n\nEnter an audit reason (required).`,
             );
             if (!reason?.trim()) {
               toast.error('Reason is required to delete an account');
               return;
             }
+            const confirmed = window.confirm(
+              `This hard-deletes ${selected.email}. Vault, media, NOK/family accounts, and billing are wiped. A hashed identity fingerprint is kept so the same email/phone cannot re-register.`,
+            );
+            if (!confirmed) return;
             onRun(
               () => adminDeleteUser(selected.id, reason.trim()),
-              'User deleted',
+              'User permanently deleted',
             );
           }}
         >
@@ -295,7 +299,8 @@ function UserDetail({
           lineHeight: 1.45,
         }}
       >
-        Every action asks for a reason and is written to the audit log.
+        Delete is a hard purge (all linked data). A reason is required and audited.
+        Hashed email/phone is retained to block re-registration.
       </p>
     </div>
   );

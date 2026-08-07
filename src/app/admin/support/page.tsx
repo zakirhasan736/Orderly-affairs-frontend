@@ -212,7 +212,7 @@ export default function AdminSupportPage() {
           throw new Error('Not allowed to delete users');
         }
         await adminDeleteUser(selectedOwner.id, reason.trim());
-        toast.success('Account soft-deleted · action audited');
+        toast.success('Account hard-deleted · linked data wiped · action audited');
       }
       setTool(null);
       setReason('');

@@ -208,8 +208,13 @@ export async function adminPatchUser(
 }
 
 export async function adminDeleteUser(id: string, reason: string) {
-  const qs = `?reason=${encodeURIComponent(reason.trim())}`;
-  return adminFetch(`/admin/users/${id}${qs}`, { method: 'DELETE' });
+  const qs = new URLSearchParams({
+    reason: reason.trim(),
+    hard: 'true',
+  });
+  return adminFetch(`/admin/users/${id}?${qs.toString()}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function adminForceLogoutUser(id: string, reason: string) {
