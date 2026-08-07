@@ -2167,12 +2167,12 @@ const backButtonLabel =
                             I agree to the{' '}
                           </label>
                           <a
-                            href="/"
+                            href="/terms-of-services"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="auth-link"
                           >
-                            Terms of Services
+                            Terms of Service
                           </a>
                           <label htmlFor="signup-agree-terms">
                             {' '}
