@@ -36,7 +36,7 @@ async function readJson<T>(res: Response): Promise<T> {
     }
     if (res.status === 401 || res.status === 403) {
       throw new Error(
-        'Live agent chat requires an active owner login. Sign in as the kit owner, then try Live again.',
+        'Live agent chat requires an active owner login. Sign in as the Vault owner, then try Live again.',
       );
     }
     throw new Error(detail);

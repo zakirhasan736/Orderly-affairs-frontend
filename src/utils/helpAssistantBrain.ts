@@ -67,7 +67,7 @@ function sectionBlurb(id: string, title: string): string {
     '0': 'Start here for how the vault works and what to fill first.',
     '1': 'IDs, contacts, and vital details your loved ones will need first.',
     '2': 'Choose who can open your kit and when they get access.',
-    '3': 'A letter that greets your next of kin and points them to the kit.',
+    '3': 'A letter that greets your next of kin and points them to the Vault.',
     '4': 'Personal letters, audio, or video for specific people.',
     '5': 'Cars, titles, registration, and related documents.',
     '6': 'Home details, deeds, mortgage, and access notes.',

@@ -9,7 +9,7 @@ export const NOK_LETTER_DEFAULTS = {
   letter_opening:
     "I'm writing you this note as someone I trust deeply.\n\nAs my next of kin, the executor of my will, a close friend, my attorney, or someone who cares—I want you to know that I've prepared something to help guide you through what comes next.",
   kit_description:
-    "I've subscribed to an Orderly Affairs Kit. Inside, you'll find everything you may need to manage my affairs if I'm no longer able to, or when I'm gone. It includes not only documents, but also instructions—gentle step-by-step guides to make this process less overwhelming.",
+    "I've subscribed to an Orderly Affairs Vault. Inside, you'll find everything you may need to manage my affairs if I'm no longer able to, or when I'm gone. It includes not only documents, but also instructions—gentle step-by-step guides to make this process less overwhelming.",
   accessible_sections:
     "Once you log in, you'll be able to manage the sections below on my behalf:\n\n(Autofill sections based on selection in the access management section)",
   key_bag_info:
@@ -17,9 +17,9 @@ export const NOK_LETTER_DEFAULTS = {
   documents_bag_info:
     '• The Documents Bag: Please keep this safe. It contains originals of the essential documents that you may need to refer to it even after everything has been settled. It is located',
   incomplete_kit_message:
-    "If any part of the kit is incomplete, please don't worry. Even the unfinished parts can still help you stay organized. I've done my best to make sure you won't be left searching through drawers or wondering where things are.",
+    "If any part of the Vault is incomplete, please don't worry. Even the unfinished parts can still help you stay organized. I've done my best to make sure you won't be left searching through drawers or wondering where things are.",
   closing_message:
-    "Above all, this kit is my way of caring for you—even when I can't be here in person.\n\nTake your time. Breathe. You've got this, and I'm grateful it's you.",
+    "Above all, this Vault is my way of caring for you—even when I can't be here in person.\n\nTake your time. Breathe. You've got this, and I'm grateful it's you.",
   letter_signature: 'With love,',
 };
 
@@ -163,7 +163,7 @@ export function buildNokLetterPreviewText(
       data.nok_email || 'will auto-populate from Access Management'
     }) and your phone number (${
       data.nok_phone || 'will auto-populate from Access Management'
-    }), which you can use as your login credentials. The password to gain access to the kit is printed on a password card located ${
+    }), which you can use as your login credentials. The password to gain access to the Vault is printed on a password card located ${
       data.password_card_location ||
       'will auto-populate from Access Management'
     }.`;
@@ -190,7 +190,7 @@ ${data.letter_opening || NOK_LETTER_DEFAULTS.letter_opening}
 
 ${data.kit_description || NOK_LETTER_DEFAULTS.kit_description}
 
-You can access the kit online at: ${data.access_url || NOK_LETTER_DEFAULTS.access_url}
+You can access the Vault online at: ${data.access_url || NOK_LETTER_DEFAULTS.access_url}
 
 ${loginCredentialsText}
 

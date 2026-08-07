@@ -52,6 +52,7 @@ import {
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
 
+import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ============================================================
    FIELD CONFIGS (STATIC)
 ============================================================ */
@@ -1328,7 +1329,7 @@ export default function Section21EstatePlanningFinalWishes({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-1">
                 <CardTitle className="text-xl tracking-tight text-slate-900">
-                  {id}. {config.title}
+                  {getVaultSubsectionDisplayId('21', id)}. {config.title}
                 </CardTitle>
                 <p className="max-w-2xl text-sm leading-6 text-slate-600">
                   {SUBSECTION_SUBTITLE[id]}

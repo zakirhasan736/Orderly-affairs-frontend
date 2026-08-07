@@ -503,6 +503,42 @@ export function Letters({
     });
   };
 
+  /** Remove prior attachment from S3 (and Mongo if already saved). */
+  const disposePreviousMedia = async (
+    letter?: Letter | null,
+    nextMedia?: LetterMedia | null,
+  ) => {
+    const currentMedia = letter?.media;
+    const currentId = mediaAssetId(currentMedia);
+    const nextId = mediaAssetId(nextMedia);
+    if (!currentId || (nextId && currentId === nextId)) return;
+
+    const savedMedia = getSavedMediaForLetter(letter);
+    const isSavedAttachment =
+      Boolean(mediaAssetId(savedMedia)) &&
+      mediaAssetId(savedMedia) === currentId &&
+      Boolean(letter?.id) &&
+      !String(letter?.id).startsWith('local-');
+
+    try {
+      if (isSavedAttachment && letter?.id) {
+        await deleteMessageMedia(letter.id);
+        setLetters(prev =>
+          prev.map(item =>
+            item.id === letter.id
+              ? { ...item, media: undefined, lastModified: new Date() }
+              : item,
+          ),
+        );
+      } else {
+        await deleteStandaloneMedia(currentMedia);
+      }
+    } catch (error) {
+      console.error('Failed to delete previous message media from S3:', error);
+      throw error;
+    }
+  };
+
   const cleanupUnsavedMedia = (letter?: Letter | null) => {
     const currentMedia = letter?.media;
     const savedMedia = getSavedMediaForLetter(letter);
@@ -534,9 +570,9 @@ export function Letters({
     setShowAudioRecorder(false);
   };
 
-  const attachMedia = (media: LetterMedia) => {
-    cleanupUnsavedMedia(currentLetter);
-
+  const attachMedia = async (media: LetterMedia) => {
+    const previous = currentLetter;
+    // Attach new media first so a failed old-delete never drops the new upload.
     setCurrentLetter(prev => {
       if (!prev) return prev;
       return {
@@ -544,10 +580,19 @@ export function Letters({
         media,
       };
     });
+
+    try {
+      await disposePreviousMedia(previous, media);
+    } catch (error) {
+      console.error('Failed to delete previous message media from S3:', error);
+      toast.error(
+        'New media attached, but the previous file may still be in storage. Try remove again or re-save.',
+      );
+    }
   };
 
-  const handleMediaUploaded = (media: LetterMedia) => {
-    attachMedia(media);
+  const handleMediaUploaded = async (media: LetterMedia) => {
+    await attachMedia(media);
     setShowVideoPicker(false);
     setShowAudioPicker(false);
     setShowVideoRecorder(false);
@@ -588,7 +633,7 @@ export function Letters({
             ? 'image'
             : 'video',
       );
-      handleMediaUploaded(media);
+      await handleMediaUploaded(media);
     } catch (error) {
       console.error(`${mediaLabel} upload failed:`, error);
       const message =
@@ -674,7 +719,9 @@ export function Letters({
   const changeMessageType = (messageType: MessageType) => {
     if (isReadOnly) return;
     if (currentLetter?.messageType !== messageType) {
-      cleanupUnsavedMedia(currentLetter);
+      void disposePreviousMedia(currentLetter, null).catch(error => {
+        console.error('Failed to clear media when changing message type:', error);
+      });
     }
 
     setCurrentLetter(prev =>

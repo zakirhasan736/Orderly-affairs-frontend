@@ -107,7 +107,7 @@ export function NextOfKinDashboard({ ownerName, onRevokeAccess, onRevokeAll }: N
             <Shield className="h-6 w-6" />
             Kit Access Dashboard
           </h2>
-          <p className="text-muted-foreground">Monitor and manage access to {ownerName}'s Orderly Affairs Kit</p>
+          <p className="text-muted-foreground">Monitor and manage access to {ownerName}'s Orderly Affairs Vault</p>
         </div>
         
         {activeSessionsCount > 0 && (

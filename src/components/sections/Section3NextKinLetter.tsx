@@ -28,6 +28,7 @@ import {
 
 import { NextOfKinLetterField } from '@/components/NextOfKinLetterField';
 import { NokLetterPreviewDialog } from '@/components/NokLetterPreviewDialog';
+import { getVaultSectionDisplayNumber } from '@/utils/vaultNavigation';
 import {
   MobileBottomSheet,
   useIsMobile,
@@ -50,7 +51,7 @@ const SECTION_3A = {
 const GUIDE_STEPS = [
   {
     title: 'What this letter is',
-    text: "A personal note for the person who'll handle things when you're gone — it explains the kit, what's inside, and where to find what they need.",
+    text: "A personal note for the person who'll handle things when you're gone — it explains the Vault, what's inside, and where to find what they need.",
     icon: FileText,
   },
   {
@@ -72,8 +73,8 @@ const GUIDE_STEPS = [
 
 const HELPFUL_NOTES = [
   'Only Upon Death access trusted people with Will Receive Next of Kin Letter checked appear here.',
-  'Emailing the letter does not unlock the kit — the master password on the Password Card does that after your passing.',
-  'Complete Section 2 Access Management (card & bag locations) before finishing this letter.',
+  'Emailing the letter does not unlock the Vault — the master password on the Password Card does that after your passing.',
+  `Complete Section ${getVaultSectionDisplayNumber('2')} Access Management (card & bag locations) before finishing this letter.`,
 ];
 
 interface Props {
@@ -421,7 +422,11 @@ function EmptyRecipientsState() {
         No recipients ready yet
       </h3>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-amber-900/80">
-        In <strong className="font-medium">Section 2 → Access Management</strong>,
+        In{' '}
+        <strong className="font-medium">
+          Section {getVaultSectionDisplayNumber('2')} → Access Management
+        </strong>
+        ,
         add an upon-death trusted person and mark{' '}
         <strong className="font-medium">Next-of-Kin Letter Received</strong>.
         They will show up here automatically.

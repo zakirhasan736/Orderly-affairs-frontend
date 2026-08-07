@@ -56,6 +56,7 @@ import {
   buildUpsertAutofillNotice,
 } from '@/utils/aiItemDedup';
 
+import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ============================================================
    STATIC SUBSECTIONS — 20A, 20B
 ============================================================ */
@@ -1125,7 +1126,7 @@ export default function Section20LegalDocumentsRecords({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-1">
                 <CardTitle className="text-xl tracking-tight text-slate-900">
-                  {subsection}. {config.title}
+                  {getVaultSubsectionDisplayId('20', subsection)}. {config.title}
                 </CardTitle>
                 <p className="max-w-2xl text-sm leading-6 text-slate-600">
                   {STATIC_SUBTITLE[subsection]}
@@ -1226,7 +1227,7 @@ export default function Section20LegalDocumentsRecords({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="flex items-center gap-2">
                 <FolderOpen className="h-5 w-5 text-violet-600" />
-                20C. {SECTION_20C.title}
+                {getVaultSubsectionDisplayId('20', '20C')}. {SECTION_20C.title}
               </CardTitle>
 
               <Button

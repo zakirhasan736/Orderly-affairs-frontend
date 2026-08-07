@@ -122,7 +122,7 @@ export const OwnerNotificationModal: React.FC<OwnerNotificationModalProps> = ({
               <div className="text-sm">
                 <p className="font-medium text-green-800 dark:text-green-200">Access Granted</p>
                 <p className="text-green-700 dark:text-green-300">
-                  {nokData.person_name} has been automatically granted access to your Orderly Affairs Kit. 
+                  {nokData.person_name} has been automatically granted access to your Orderly Affairs Vault. 
                   You can revoke this access immediately if needed.
                 </p>
               </div>

@@ -34,7 +34,7 @@ export const RevocationModal: React.FC<RevocationModalProps> = ({
           </Alert>
 
           <div className="space-y-2 text-sm text-muted-foreground">
-            <p>Your access to the Orderly Affairs Kit has been terminated.</p>
+            <p>Your access to the Orderly Affairs Vault has been terminated.</p>
             <p>If you believe this was an error, please contact the Kit Owner directly.</p>
           </div>
 

@@ -46,6 +46,7 @@ import {
 } from '@/utils/vaultTopicNavigation';
 import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 
+import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -520,7 +521,7 @@ export default function Section5Vehicles({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
               <Car className="h-5 w-5 text-blue-600" />
-              5A. {SECTION_5.title}
+              {getVaultSubsectionDisplayId('5', '5A')}. {SECTION_5.title}
             </CardTitle>
 
             <Button

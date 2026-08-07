@@ -97,7 +97,7 @@ export function NOKInstructions({
             </p>
             <p>
               First, please know—we&apos;re sincerely sorry for your loss. This
-              Orderly Affairs Kit was created to bring you peace and clarity in
+              Orderly Affairs Vault was created to bring you peace and clarity in
               this moment, when things may feel overwhelming.
             </p>
           </div>

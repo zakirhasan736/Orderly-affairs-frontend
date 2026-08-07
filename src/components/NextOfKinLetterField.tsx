@@ -721,7 +721,7 @@ export function NextOfKinLetterField({
       localData.nok_email || 'will auto-populate from Access Management'
     }) and your phone number (${
       localData.nok_phone || 'will auto-populate from Access Management'
-    }), which you can use as your login credentials. The password to gain access to the kit is printed on a password card located ${
+    }), which you can use as your login credentials. The password to gain access to the Vault is printed on a password card located ${
       localData.password_card_location ||
       'will auto-populate from Access Management'
     }.`;
@@ -944,8 +944,8 @@ export function NextOfKinLetterField({
       return;
     }
 
-    const subject = 'Letter to Next of Kin - Orderly Affairs Kit';
-    const body = `Please find below your Letter to Next of Kin from your Orderly Affairs Kit:\n\n${generateLetterContent()}`;
+    const subject = 'Letter to Next of Kin - Orderly Affairs Vault';
+    const body = `Please find below your Letter to Next of Kin from your Orderly Affairs Vault:\n\n${generateLetterContent()}`;
 
     window.location.href = `mailto:${localData.nok_email}?subject=${encodeURIComponent(
       subject,

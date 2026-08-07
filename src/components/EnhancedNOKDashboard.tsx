@@ -341,7 +341,7 @@ export function EnhancedNOKDashboard({
   const ownerName =
     effectiveAccess?.owner?.full_name ||
     effectiveAccess?.owner?.email ||
-    'the kit owner';
+    'the Vault owner';
   const ownerIsDeceased = ownerStatus === 'deceased';
   const displayName =
     effectiveAccess?.nextkin?.full_name?.trim() ||
@@ -449,7 +449,7 @@ export function EnhancedNOKDashboard({
             Awaiting approval
           </h2>
           <p className="mt-2 text-sm text-slate-600">
-            The kit owner hasn&apos;t approved your access yet.
+            The Vault owner hasn&apos;t approved your access yet.
           </p>
           <Button
             onClick={onLogout}

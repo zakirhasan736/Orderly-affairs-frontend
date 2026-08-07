@@ -54,6 +54,10 @@ import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { onlineAccountsAreDuplicates } from '@/utils/aiItemDedup';
 import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
 
+import {
+  getVaultSectionDisplayNumber,
+  getVaultSubsectionDisplayId,
+} from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -85,7 +89,7 @@ const ACCOUNT_TYPE_HINTS: Record<
     examples: ['Gmail', 'Outlook', 'Yahoo Mail', 'Proton Mail'],
   },
   Banking: {
-    description: 'Online access to bank accounts (not the account numbers in Section 12).',
+    description: `Online access to bank accounts (not the account numbers in Section ${getVaultSectionDisplayNumber('12')}).`,
     examples: ['Chase.com', 'Bank of America online', 'Credit union portal'],
   },
   Investment: {
@@ -695,7 +699,7 @@ export default function Section13PasswordsOnlineAccounts({
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2">
                   <KeyRound className="h-5 w-5 text-violet-600" />
-                  13A. {SECTION_13A.title}
+                  {getVaultSubsectionDisplayId('13', '13A')}. {SECTION_13A.title}
                 </CardTitle>
                 <p className="text-sm text-slate-600">{SUBSECTION_SUBTITLE}</p>
               </div>

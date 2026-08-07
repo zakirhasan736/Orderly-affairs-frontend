@@ -2156,7 +2156,7 @@ const backButtonLabel =
                           className="mt-0.5 h-[18px] w-[18px] shrink-0 rounded-[5px] border-[1.5px] border-[#2B5A8C] accent-[#2B5A8C]"
                         />
                         <span>
-                          I agree to the terms and understand this kit is not
+                          I agree to the terms and understand this Vault is not
                           legal advice.
                         </span>
                       </label>

@@ -13,7 +13,9 @@ import { toast } from 'sonner';
 
 interface SafeMediaRecorderProps {
   type: 'video' | 'audio';
-  onUploaded: (media: MessageMediaUploadResult) => void;
+  onUploaded: (
+    media: MessageMediaUploadResult,
+  ) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -48,8 +50,7 @@ export function SafeMediaRecorder({
       const file = blobToMediaFile(blob, type);
       const media = await uploadMessageMedia(file, type);
 
-      onUploaded(media);
-      toast.success(`${mediaLabel} saved`);
+      await onUploaded(media);
       onClose();
       return true;
     } catch (error) {

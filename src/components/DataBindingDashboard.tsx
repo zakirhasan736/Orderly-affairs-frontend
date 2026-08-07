@@ -914,7 +914,7 @@ export function DataBindingDashboard({
                         title="No access people yet"
                         description={
                           readOnly
-                            ? 'No trusted people are listed for this kit yet.'
+                            ? 'No trusted people are listed for this Vault yet.'
                             : 'Add trusted people who can access your kit.'
                         }
                         action={readOnly ? undefined : 'Add access people'}
@@ -1131,7 +1131,7 @@ export function DataBindingDashboard({
                       title="No access people yet"
                       description={
                         readOnly
-                          ? 'No trusted people are listed for this kit yet.'
+                          ? 'No trusted people are listed for this Vault yet.'
                           : 'Add trusted people who can access your kit.'
                       }
                       action={readOnly ? undefined : 'Add access people'}

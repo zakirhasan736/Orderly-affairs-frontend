@@ -56,6 +56,7 @@ import {
   applySection1SubsectionPatch,
 } from '@/utils/applySection1AIPatch';
 
+import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -1260,7 +1261,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-1">
                 <CardTitle className="text-xl tracking-tight text-slate-900">
-                  1A. Vital Information
+                  {getVaultSubsectionDisplayId('1', '1A')}. Vital Information
                 </CardTitle>
                 <p className="max-w-2xl text-sm leading-6 text-slate-600">
                   Grouped essentials so you can fill personal, device, email, and
@@ -1348,7 +1349,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
       {contactGroupsToRender.length > 0 && (
         <Card id="subsection-1B" className="border-slate-200 shadow-sm">
           <CardHeader>
-            <CardTitle>1B. Key Contacts</CardTitle>
+            <CardTitle>{getVaultSubsectionDisplayId('1', '1B')}. Key Contacts</CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-8">

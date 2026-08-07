@@ -26,7 +26,7 @@ export const OwnerLetterModal: React.FC<OwnerLetterModalProps> = ({
   const ownerLetter = `
 Dear ${nokData.full_name},
 
-If you are reading this letter, it means you have been granted access to my Orderly Affairs Kit. Thank you for taking on this important responsibility during what I know is a difficult time.
+If you are reading this letter, it means you have been granted access to my Orderly Affairs Vault. Thank you for taking on this important responsibility during what I know is a difficult time.
 
 I have chosen you as my ${nokData.relationship.toLowerCase()} to help manage my affairs because I trust you completely. This Kit contains important information about my life, finances, and wishes, and I know you will handle it with the care and attention it deserves.
 

@@ -63,6 +63,7 @@ import {
   buildUpsertAutofillNotice,
 } from '@/utils/aiItemDedup';
 
+import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -967,11 +968,11 @@ export default function Section12BankingFinancialAccounts({
                     isBank ? 'text-emerald-600' : 'text-blue-600',
                   ].join(' ')}
                 />
-                {subsection}. {config.title}
+                {getVaultSubsectionDisplayId('12', subsection)}. {config.title}
                 <VaultFillProgressChip
                   sectionId="12"
                   subsectionId={subsection}
-                  title={`${subsection}. ${config.title}`}
+                  title={`${getVaultSubsectionDisplayId('12', subsection)}. ${config.title}`}
                   sectionData={data as Record<string, unknown>}
                   onApplySectionData={next => onChange(next)}
                 />

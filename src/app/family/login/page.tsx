@@ -125,7 +125,7 @@ export default function FamilyLoginPage() {
       onBackToOwner={() => router.push('/login')}
       formData={{}}
       titleOverride="Family collaborator sign-in"
-      subtitleOverride="Use the email invite from the kit owner. This is your own session — signing in as the owner does not open this access."
+      subtitleOverride="Use the email invite from the Vault owner. This is your own session — signing in as the owner does not open this access."
       captchaReady={captchaReady}
       captchaSlot={
         <TurnstileCaptcha

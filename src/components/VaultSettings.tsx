@@ -1129,7 +1129,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
           {billingViewOnly ? (
             <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
               Billing status is view-only for family Super Admin. Payment method,
-              plan changes, and portal access require the kit owner.
+              plan changes, and portal access require the Vault owner.
             </p>
           ) : (
           <div className="flex flex-wrap items-center gap-2.5">

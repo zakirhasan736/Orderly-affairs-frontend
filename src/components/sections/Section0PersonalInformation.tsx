@@ -81,9 +81,9 @@ The side benefit is real, though. If a next of kin ever had to step in unexpecte
     eyebrow: 'Please read',
     icon: ScrollText,
     colorClass: 'from-slate-500/15 to-zinc-500/10 text-slate-600',
-    content: `The Orderly Affairs Kit was created with great care and compassion to help people bring peace, clarity, and dignity to one of life's most difficult transitions.
+    content: `The Orderly Affairs Vault was created with great care and compassion to help people bring peace, clarity, and dignity to one of life's most difficult transitions.
 
-Orderly Affairs is not affiliated with any other product or company, and all material herein is protected by copyright. This kit is offered as a personal organizational tool and does not constitute legal, financial, or medical advice.
+Orderly Affairs is not affiliated with any other product or company, and all material herein is protected by copyright. Your Vault is offered as a personal organizational tool and does not constitute legal, financial, or medical advice.
 
 Please do not redistribute, copy, or resell any portion without written permission.`,
   },
@@ -198,7 +198,7 @@ export default function Section0PersonalInformation({
               <div className="mb-4 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
                   <ShieldCheck className="h-3.5 w-3.5" />
-                  Orderly Affairs Kit
+                  Orderly Affairs Vault
                 </span>
 
                 <span className="inline-flex items-center gap-1.5 rounded-full border bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -208,11 +208,11 @@ export default function Section0PersonalInformation({
               </div>
 
               <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl lg:text-4xl">
-                Welcome to your planning guide
+                Welcome to Orderly Affairs
               </h2>
 
               <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">
-                Read this short introduction before completing the kit. It
+                Read this short introduction before building out your Vault. It
                 explains how to use the sections, what to keep in mind, and how
                 to protect the people who may rely on this information.
               </p>
@@ -331,7 +331,7 @@ export default function Section0PersonalInformation({
                   <h3 className="font-semibold">Confirm you’ve read this</h3>
                   <p className="mt-1 text-sm leading-6">
                     Mark these instructions as read to complete this section,
-                    then continue into the kit. You can revisit anytime.
+                    then continue into your Vault. You can revisit anytime.
                   </p>
                   <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                     <button

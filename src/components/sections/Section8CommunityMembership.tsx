@@ -46,6 +46,7 @@ import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { namedItemsAreDuplicates } from '@/utils/aiItemDedup';
 
+import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -446,7 +447,7 @@ export default function Section8CommunityMembership({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
               <UsersRound className="h-5 w-5 text-orange-600" />
-              8A. {SECTION_8A.title}
+              {getVaultSubsectionDisplayId('8', '8A')}. {SECTION_8A.title}
             </CardTitle>
 
             <Button

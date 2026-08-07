@@ -64,6 +64,7 @@ import {
 } from '@/utils/vaultTopicNavigation';
 import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 
+import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ============================================================
    CONFIG — 17A
 ============================================================ */
@@ -1691,7 +1692,7 @@ export default function Section17FamilyTreasuredConnections({
           >
             <CardTitle className="flex items-center gap-2">
               <Icon className={`h-5 w-5 ${config.tone.icon}`} />
-              17A. {SECTION_17A.title}
+              {getVaultSubsectionDisplayId('17', '17A')}. {SECTION_17A.title}
             </CardTitle>
           </CardHeader>
 
@@ -1738,7 +1739,7 @@ export default function Section17FamilyTreasuredConnections({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Icon className={`h-5 w-5 ${config.tone.icon}`} />
-                {subsection}. {section.title}
+                {getVaultSubsectionDisplayId('17', subsection)}. {section.title}
               </CardTitle>
 
               <Button

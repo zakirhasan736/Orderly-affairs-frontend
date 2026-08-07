@@ -17,6 +17,7 @@ import {
 import {
   stashDashboardAiPatch,
   markDashboardAiPatchPersisted,
+  listDashboardAiPatchesForSection,
 } from '@/utils/aiDashboardPatchCache';
 import {
   aiPatchHasValues,
@@ -68,6 +69,38 @@ function factsFromFill(filled: {
     unwrapAiAutofillPatch(filled.result),
     filled.section,
   );
+}
+
+/** Build a Healthcare 15A summary card from an Insurance policy extract. */
+function seedHealthFromInsuranceResult(insuranceResult: unknown): unknown | null {
+  const patch = unwrapAiAutofillPatch(insuranceResult);
+  const raw = patch?.['7A'];
+  const policy =
+    (Array.isArray(raw) ? raw[0] : raw) && typeof (Array.isArray(raw) ? raw[0] : raw) === 'object'
+      ? ((Array.isArray(raw) ? raw[0] : raw) as Record<string, unknown>)
+      : null;
+  if (!policy) return null;
+
+  const lines = [
+    policy.policy_company || policy.insurance_company || policy.member_name,
+    policy.plan_name,
+    policy.member_id ? `Member ID: ${policy.member_id}` : '',
+    policy.group_number ? `Group: ${policy.group_number}` : '',
+    policy.policy_number ? `Policy: ${policy.policy_number}` : '',
+  ]
+    .map(value => String(value || '').trim())
+    .filter(Boolean);
+
+  if (!lines.length) return null;
+
+  return {
+    section: 'health_information',
+    patch: {
+      '15A': {
+        primary_health_insurance: lines.join('\n'),
+      },
+    },
+  };
 }
 
 async function stashAndPersist(args: {
@@ -246,7 +279,20 @@ async function fillPartnerSectionsFast(args: {
     const partnerMeta = AI_SECTION_BY_KEY[partnerKey];
     if (!partnerMeta) continue;
 
-    const seedHint = partnerResults?.[partnerKey];
+    let seedHint = partnerResults?.[partnerKey];
+    // Health cards often fill Insurance first; if partner extract fails later,
+    // still badge Healthcare from the insurance policy fields.
+    if (
+      !seedHint &&
+      partnerKey === 'health_information' &&
+      sectionKey === 'insurance_policies'
+    ) {
+      const insuranceStash = listDashboardAiPatchesForSection('7').find(
+        item => item.file_id === file_id,
+      );
+      seedHint =
+        seedHealthFromInsuranceResult(insuranceStash?.result) || undefined;
+    }
     const summaryFallback = documentSummary;
 
     // Stash seed immediately so Vehicles badges before the slower partner extract.
@@ -374,7 +420,60 @@ async function fillPartnerSectionsFast(args: {
         partnerKey,
         partnerError,
       );
-      // Seed stash (if any) already queued — leave it for Accept / New data.
+      // If live partner extract 404'd (doc status ready) but we have a seed,
+      // ensure Healthcare still has a reviewable stash.
+      if (
+        partnerKey === 'health_information' &&
+        !listDashboardAiPatchesForSection('15').some(
+          item => item.file_id === file_id,
+        )
+      ) {
+        const insuranceStash = listDashboardAiPatchesForSection('7').find(
+          item => item.file_id === file_id,
+        );
+        const fallback =
+          seedHint || seedHealthFromInsuranceResult(insuranceStash?.result);
+        if (fallback && aiPatchHasValues(unwrapAiAutofillPatch(fallback))) {
+          try {
+            await stashAndPersist({
+              file_id,
+              fileName,
+              sectionId: partnerMeta.id,
+              sectionKey: partnerKey,
+              subsection: partnerMeta.defaultSubsection || null,
+              result: fallback,
+              detectedFields: factsFromFill({
+                result: fallback,
+                section: partnerKey,
+              }),
+              documentSummary: summaryFallback,
+              persistNow: false,
+              onFilled: () => notifySectionFilled(partnerMeta.id),
+            });
+            routing?.queueRoutedSectionsSilently(
+              {
+                code: 'section_mismatch',
+                message: 'Partner section seeded from insurance',
+                requested_section: sectionKey,
+                suggested_section: partnerKey,
+                suggested_section_id: partnerMeta.id,
+                suggested_section_label: partnerMeta.label,
+                suggested_subsection: partnerMeta.defaultSubsection,
+                document_summary: summaryFallback,
+                file_id,
+                mime_type,
+                additional_sections: [],
+              },
+              {
+                currentSectionId: 'dashboard',
+                navigateIntent: 'review',
+              },
+            );
+          } catch (seedError) {
+            console.warn('Partner fallback seed failed', partnerKey, seedError);
+          }
+        }
+      }
     }
   }
 

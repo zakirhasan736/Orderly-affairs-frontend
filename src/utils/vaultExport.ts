@@ -1,4 +1,8 @@
-import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
+import {
+  getVaultSectionDisplayNumber,
+  getVaultSubsectionDisplayId,
+  VAULT_NAVIGATION,
+} from '@/utils/vaultNavigation';
 
 export type VaultExportFormat = 'csv' | 'txt' | 'pdf';
 
@@ -249,9 +253,11 @@ export function buildVaultCsv(rows: VaultExportRow[], exportDate: string) {
     header.join(','),
     ...rows.map(row =>
       [
-        escapeCsvValue(row.sectionId),
+        escapeCsvValue(getVaultSectionDisplayNumber(row.sectionId)),
         escapeCsvValue(row.sectionTitle),
-        escapeCsvValue(row.subsectionId),
+        escapeCsvValue(
+          getVaultSubsectionDisplayId(row.sectionId, row.subsectionId),
+        ),
         escapeCsvValue(row.subsectionTitle),
         escapeCsvValue(row.fieldLabel),
         escapeCsvValue(row.value),
@@ -273,7 +279,7 @@ export function buildVaultTxt(rows: VaultExportRow[], exportDate: string) {
   let currentSubsection = '';
 
   rows.forEach(row => {
-    const sectionHeading = `Section ${row.sectionId}: ${row.sectionTitle}`;
+    const sectionHeading = `Section ${getVaultSectionDisplayNumber(row.sectionId)}: ${row.sectionTitle}`;
     if (sectionHeading !== currentSection) {
       currentSection = sectionHeading;
       currentSubsection = '';
@@ -282,7 +288,7 @@ export function buildVaultTxt(rows: VaultExportRow[], exportDate: string) {
       lines.push('');
     }
 
-    const subsectionHeading = `${row.subsectionId} - ${row.subsectionTitle}`;
+    const subsectionHeading = `${getVaultSubsectionDisplayId(row.sectionId, row.subsectionId)} - ${row.subsectionTitle}`;
     if (subsectionHeading !== currentSubsection) {
       currentSubsection = subsectionHeading;
       lines.push(subsectionHeading);
@@ -344,7 +350,7 @@ export async function buildVaultPdf(rows: VaultExportRow[], exportDate: string) 
   let currentSubsection = '';
 
   rows.forEach(row => {
-    const sectionHeading = `Section ${row.sectionId}: ${row.sectionTitle}`;
+    const sectionHeading = `Section ${getVaultSectionDisplayNumber(row.sectionId)}: ${row.sectionTitle}`;
     if (sectionHeading !== currentSection) {
       currentSection = sectionHeading;
       currentSubsection = '';
@@ -355,7 +361,7 @@ export async function buildVaultPdf(rows: VaultExportRow[], exportDate: string) 
       y += 18;
     }
 
-    const subsectionHeading = `${row.subsectionId} - ${row.subsectionTitle}`;
+    const subsectionHeading = `${getVaultSubsectionDisplayId(row.sectionId, row.subsectionId)} - ${row.subsectionTitle}`;
     if (subsectionHeading !== currentSubsection) {
       currentSubsection = subsectionHeading;
       ensureSpace(22);

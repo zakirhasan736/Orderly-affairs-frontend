@@ -1253,7 +1253,7 @@ export default function DashboardPage() {
     (sectionId: string, data: any) => {
       if (familyAcl.isFamily && !familyCanWrite(familyAcl)) {
         toast.error(
-          'Your family role is view-only. Ask the kit owner for Editor or higher.',
+          'Your family role is view-only. Ask the Vault owner for Editor or higher.',
         );
         return;
       }
@@ -2379,11 +2379,11 @@ export default function DashboardPage() {
   const getSectionDescription = (sectionId: string) => {
     switch (sectionId) {
       case '0':
-        return 'Important legal information and instructions for using the Orderly Affairs Kit effectively.';
+        return 'Welcome to your Orderly Affairs Vault — how to use the sections, keep them current, and make sure someone you trust can access them.';
       case '2':
-        return 'Manage who can access your Orderly Affairs Kit after your passing. Add your Primary Next of Kin, assign access levels, and keep secure credentials organized.';
+        return 'Manage who can access your Orderly Affairs Vault after your passing. Add your Primary Next of Kin, assign access levels, and keep secure credentials organized.';
       case '3':
-        return 'Create an important introductory letter for your designated next of kin that explains how to access and use your Orderly Affairs Kit.';
+        return 'Create an important introductory letter for your designated next of kin that explains how to access and use your Orderly Affairs Vault.';
       case '4':
         return 'Create heartfelt personal messages for your loved ones. Write letters, record video or audio, and choose when each message should be delivered.';
       case '5':

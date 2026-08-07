@@ -48,6 +48,7 @@ import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { insurancePoliciesAreDuplicates, collapseInsurancePolicies } from '@/utils/aiItemDedup';
 
+import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -720,7 +721,7 @@ export default function Section7InsurancePolicies({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-purple-600" />
-              7A. {SECTION_7A.title}
+              {getVaultSubsectionDisplayId('7', '7A')}. {SECTION_7A.title}
             </CardTitle>
 
             <Button

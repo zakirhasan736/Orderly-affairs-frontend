@@ -34,7 +34,7 @@ export function SectionCardView({
             <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="font-semibold text-brand-primary mb-2">No Authorized People</h3>
             <p className="text-text-secondary text-sm mb-4">
-              Add people who can access your Orderly Affairs Kit after your passing.
+              Add people who can access your Orderly Affairs Vault after your passing.
             </p>
             <Button onClick={() => onEditItem?.()} variant="default">
               Add First Person

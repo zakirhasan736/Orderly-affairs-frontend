@@ -7,6 +7,7 @@ import { RepeatableGroup } from './RepeatableGroup';
 import { MedicareMedicaidInfoModal } from './MedicareMedicaidInfoModal';
 import { FieldDefinition } from '@/types/formTypes';
 import { useFamilyAcl } from '@/contexts/FamilyAclContext';
+import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 
 
 
@@ -121,7 +122,7 @@ export function DynamicSection({ section, data, onChange, activeSubsection,  dis
         >
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">{subsection.id}</span>
+              <span className="text-sm text-muted-foreground">{getVaultSubsectionDisplayId(section.id, subsection.id)}</span>
               {subsection.title}
             </CardTitle>
           </CardHeader>
@@ -201,7 +202,7 @@ export function DynamicSection({ section, data, onChange, activeSubsection,  dis
                   <ChevronDown className="h-4 w-4" />
                 )
               )}
-              <span className="text-sm text-muted-foreground">{subsection.id}</span>
+              <span className="text-sm text-muted-foreground">{getVaultSubsectionDisplayId(section.id, subsection.id)}</span>
               {obituarySubsections.has(subsection.id) && <span className="mr-1">🕊️</span>}
               {subsection.title}
             </CardTitle>
@@ -263,7 +264,7 @@ export function DynamicSection({ section, data, onChange, activeSubsection,  dis
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2 text-[16px]">
-                  <span className="text-sm text-muted-foreground">{subsection.id}</span>
+                  <span className="text-sm text-muted-foreground">{getVaultSubsectionDisplayId(section.id, subsection.id)}</span>
                   {obituarySubsections.has(subsection.id) && <span className="mr-1">🕊️</span>}
                   {subsection.title}
                 </CardTitle>
@@ -498,7 +499,7 @@ export function DynamicSection({ section, data, onChange, activeSubsection,  dis
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2 text-[16px]">
-                  <span className="text-sm text-muted-foreground">{subsection.id}</span>
+                  <span className="text-sm text-muted-foreground">{getVaultSubsectionDisplayId(section.id, subsection.id)}</span>
                   {subsection.title}
                 </CardTitle>
                 {subsection.description && (
@@ -621,7 +622,7 @@ export function DynamicSection({ section, data, onChange, activeSubsection,  dis
                 <ChevronDown className="h-4 w-4" />
               )
             )}
-            <span className="text-sm text-muted-foreground">{subsection.id}</span>
+            <span className="text-sm text-muted-foreground">{getVaultSubsectionDisplayId(section.id, subsection.id)}</span>
             {obituarySubsections.has(subsection.id) && <span className="mr-1">🕊️</span>}
             {subsection.title}
           </CardTitle>

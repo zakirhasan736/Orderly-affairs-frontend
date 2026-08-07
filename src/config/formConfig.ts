@@ -477,7 +477,7 @@ export const formConfig: FormConfig = {
                   label: 'Access Management',
                   type: 'AccessManagement',
                   helperText:
-                    'Manage who can access your Orderly Affairs Kit and what sections they can view',
+                    'Manage who can access your Orderly Affairs Vault and what sections they can view',
                 },
               ],
             },
@@ -487,7 +487,7 @@ export const formConfig: FormConfig = {
           id: '3',
           title: 'Letters to Next of Kin',
           description:
-            'Create an important introductory letter for your designated next of kin that explains how to access and use your Orderly Affairs Kit.',
+            'Create an important introductory letter for your designated next of kin that explains how to access and use your Orderly Affairs Vault.',
           subsections: [
             {
               id: '3A',
@@ -498,7 +498,7 @@ export const formConfig: FormConfig = {
                   label: 'Letter to Next of Kin Instructions',
                   type: 'Instructions',
                   content:
-                    'This section creates an important introductory letter for your designated next of kin. The letter explains how to access and use your Orderly Affairs Kit. Information automatically populates from your Access Management section to create a personalized letter with login credentials and access details. This letter serves as the first point of contact for your next of kin when they need to manage your affairs.',
+                    'This section creates an important introductory letter for your designated next of kin. The letter explains how to access and use your Orderly Affairs Vault. Information automatically populates from your Access Management section to create a personalized letter with login credentials and access details. This letter serves as the first point of contact for your next of kin when they need to manage your affairs.',
                 },
                 {
                   key: 'next_of_kin_letter_data',

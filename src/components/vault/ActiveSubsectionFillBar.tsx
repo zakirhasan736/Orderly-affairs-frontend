@@ -8,7 +8,11 @@ import {
   listIncompleteFields,
 } from '@/utils/sectionCompletion';
 import { useVaultFillGaps } from '@/components/vault/VaultFillGapsContext';
-import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
+import {
+  formatVaultSubsectionTitle,
+  getVaultSubsectionDisplayId,
+  VAULT_NAVIGATION,
+} from '@/utils/vaultNavigation';
 import { cn } from '@common/ui/utils';
 
 function parseTopicRef(topicId: string | null | undefined): {
@@ -56,7 +60,10 @@ export function ActiveSubsectionFillBar({
 
     let itemIndex = hasTopic ? topicRef.itemIndex : undefined;
     let groupId = topicRef.groupId;
-    let title = `${subsectionId}. ${subsection?.title || 'Subsection'}`;
+    const displayId = getVaultSubsectionDisplayId(sectionId, subsectionId);
+    let title = subsection
+      ? formatVaultSubsectionTitle(sectionId, subsection)
+      : `${displayId}. Subsection`;
 
     const bucket = sectionData?.[subsectionId];
     if (!hasTopic && Array.isArray(bucket)) {
@@ -70,7 +77,7 @@ export function ActiveSubsectionFillBar({
         );
         if (!itemProgress.complete && itemProgress.total > 0) {
           itemIndex = i;
-          title = `${subsectionId} · Item ${i + 1}`;
+          title = `${displayId} · Item ${i + 1}`;
           break;
         }
       }
@@ -93,7 +100,7 @@ export function ActiveSubsectionFillBar({
     });
 
     if (hasTopic) {
-      title = `${subsectionId} · Item ${(topicRef.itemIndex ?? 0) + 1}`;
+      title = `${displayId} · Item ${(topicRef.itemIndex ?? 0) + 1}`;
     }
 
     return {
