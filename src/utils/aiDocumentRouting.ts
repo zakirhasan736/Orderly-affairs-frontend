@@ -214,6 +214,9 @@ export function purgePendingUploadsForFile(
   uploads: AiPendingUpload[],
   fileId: string,
 ) {
+  if (!uploads.some(upload => upload.file_id === fileId)) {
+    return uploads;
+  }
   return uploads.filter(upload => upload.file_id !== fileId);
 }
 

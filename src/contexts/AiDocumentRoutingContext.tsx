@@ -171,6 +171,16 @@ export function AiDocumentRoutingProvider({
       sectionPreviews?: import('@/utils/aiDocumentRouting').AiSectionPreview[];
     };
   } | null>(null);
+  const pendingUploadsRef = useRef<AiPendingUpload[]>([]);
+  const filledSectionsByFileRef = useRef<FilledSectionsByFile>({});
+
+  useEffect(() => {
+    pendingUploadsRef.current = pendingUploads;
+  }, [pendingUploads]);
+
+  useEffect(() => {
+    filledSectionsByFileRef.current = filledSectionsByFile;
+  }, [filledSectionsByFile]);
 
   useEffect(() => {
     const stored = readPendingUploadsFromStorage();
@@ -273,29 +283,46 @@ export function AiDocumentRoutingProvider({
     });
   }, [pruneAndPromotePending]);
 
-  const clearAllPendingForFile = useCallback((fileId: string) => {
-    setPendingUploads(current => {
-      const next = pruneAndPromotePending(
-        purgePendingUploadsForFile(current, fileId),
-      );
-      writePendingUploadsToStorage(next);
-      return next;
-    });
+  const clearAllPendingForFile = useCallback(
+    (fileId: string) => {
+      const fid = String(fileId || '').trim();
+      if (!fid) return;
 
-    setFilledSectionsByFile(current => {
-      const next = clearFilledSectionsForFile(current, fileId);
-      writeFilledSectionsToStorage(next);
-      return next;
-    });
-
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('orderly-ai-document-consumed', {
-          detail: { fileId },
-        }),
+      const hadPending = pendingUploadsRef.current.some(
+        upload => upload.file_id === fid,
       );
-    }
-  }, [pruneAndPromotePending]);
+      const hadFilled = Boolean(filledSectionsByFileRef.current[fid]);
+      if (!hadPending && !hadFilled) return;
+
+      if (hadPending) {
+        setPendingUploads(current => {
+          const purged = purgePendingUploadsForFile(current, fid);
+          if (purged === current) return current;
+          const next = pruneAndPromotePending(purged);
+          writePendingUploadsToStorage(next);
+          return next;
+        });
+      }
+
+      if (hadFilled) {
+        setFilledSectionsByFile(current => {
+          const next = clearFilledSectionsForFile(current, fid);
+          if (next === current) return current;
+          writeFilledSectionsToStorage(next);
+          return next;
+        });
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('orderly-ai-document-consumed', {
+            detail: { fileId: fid },
+          }),
+        );
+      }
+    },
+    [pruneAndPromotePending],
+  );
 
   const dismissHighlight = useCallback((sectionId: string, scope = 'full') => {
     setPendingUploads(current => {

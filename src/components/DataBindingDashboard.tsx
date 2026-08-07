@@ -174,6 +174,7 @@ export function DataBindingDashboard({
   const [stashTick, setStashTick] = useState(0);
   const batchReviewShownRef = useRef(false);
   const prevWorkingRef = useRef(false);
+  const clearedErrorFileIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     // Prefer a visible people tab when ACL hides the default.
@@ -214,12 +215,27 @@ export function DataBindingDashboard({
     [needsChoiceJobs, doneJobs],
   );
 
+  // Clear pending pins once per failed file. Do not depend on `routing` —
+  // clearAllPendingForFile used to always emit a new pendingUploads array,
+  // which recreated the context value and re-fired this effect (React #185).
+  const errorFileIdsKey = useMemo(
+    () =>
+      batch.jobs
+        .filter(job => job.status === 'error' && job.file_id)
+        .map(job => String(job.file_id))
+        .sort()
+        .join('|'),
+    [batch.jobs],
+  );
+
   useEffect(() => {
-    for (const job of batch.jobs) {
-      if (job.status !== 'error' || !job.file_id) continue;
-      routing?.clearAllPendingForFile(job.file_id);
+    if (!errorFileIdsKey || !routing) return;
+    for (const fileId of errorFileIdsKey.split('|')) {
+      if (!fileId || clearedErrorFileIdsRef.current.has(fileId)) continue;
+      clearedErrorFileIdsRef.current.add(fileId);
+      routing.clearAllPendingForFile(fileId);
     }
-  }, [batch.jobs, routing]);
+  }, [errorFileIdsKey, routing]);
 
   // Open review when a doc needs a section, or after the batch finishes.
   useEffect(() => {

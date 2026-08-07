@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import { AiPendingUploadBanner } from '@/components/ai/AiPendingUploadBanner';
 import { InlineNotice } from '@/components/common/ui/inline-notice';
@@ -42,15 +42,28 @@ export function AiPendingUploadSectionBanner({ activeSectionId }: Props) {
   const sectionAlreadyFilled = isAiAutofillDoneForSection(activeSectionId);
   const doneRecord = getAiAutofillDoneForSection(activeSectionId);
 
+  const donePendingFileIdsKey = useMemo(
+    () =>
+      pendingForSection
+        .filter(
+          item =>
+            item.file_id &&
+            isAiAutofillDoneForSection(activeSectionId, item.file_id),
+        )
+        .map(item => item.file_id)
+        .sort()
+        .join('|'),
+    [activeSectionId, pendingForSection],
+  );
+
   useEffect(() => {
-    pendingForSection.forEach(item => {
-      if (!item.file_id) return;
-      if (!isAiAutofillDoneForSection(activeSectionId, item.file_id)) return;
-      if (clearedFilesRef.current.has(item.file_id)) return;
-      clearedFilesRef.current.add(item.file_id);
-      clearAllPendingForFile(item.file_id);
-    });
-  }, [activeSectionId, clearAllPendingForFile, pendingForSection]);
+    if (!donePendingFileIdsKey) return;
+    for (const fileId of donePendingFileIdsKey.split('|')) {
+      if (!fileId || clearedFilesRef.current.has(fileId)) continue;
+      clearedFilesRef.current.add(fileId);
+      clearAllPendingForFile(fileId);
+    }
+  }, [clearAllPendingForFile, donePendingFileIdsKey]);
 
   useEffect(() => {
     if (!pendingUpload?.navigateIntent) return;

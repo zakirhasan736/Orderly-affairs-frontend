@@ -37,7 +37,10 @@ import {
   removeReplacedAiUploadFileIds,
   upsertAiUploadHistory,
 } from '@/utils/aiUploadHistory';
-import { toAiUserFacingMessage } from '@/utils/aiUserFacingError';
+import {
+  isAiBusyMessage,
+  toAiUserFacingMessage,
+} from '@/utils/aiUserFacingError';
 import { isHealthInsuranceCardCandidate } from '@/utils/aiInsuranceDocument';
 // Person/section approval happens in AiOverviewReadMatchDialog after stash.
 
@@ -421,6 +424,16 @@ async function fillPartnerSectionsFast(args: {
         partnerKey,
         partnerError,
       );
+      // AI provider busy/unavailable — stop partner chain to avoid 503 storms.
+      if (
+        isAiBusyMessage(
+          partnerError instanceof Error
+            ? partnerError.message
+            : String(partnerError || ''),
+        )
+      ) {
+        break;
+      }
       // If live partner extract 404'd (doc status ready) but we have a seed,
       // ensure Healthcare still has a reviewable stash.
       if (
