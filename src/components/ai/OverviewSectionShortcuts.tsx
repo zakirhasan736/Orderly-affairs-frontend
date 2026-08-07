@@ -3,7 +3,10 @@
 import React, { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@common/ui/utils';
-import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
+import {
+  getVaultSectionDisplayNumber,
+  VAULT_NAVIGATION,
+} from '@/utils/vaultNavigation';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 
 const SHORTCUT_GROUPS: Array<{
@@ -158,7 +161,7 @@ export function OverviewSectionShortcuts({
                       : 'bg-[#213D59] text-white',
                 )}
               >
-                {sectionId}
+                {getVaultSectionDisplayNumber(sectionId)}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-slate-900">

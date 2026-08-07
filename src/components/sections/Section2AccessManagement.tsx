@@ -20,6 +20,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { cn } from '@/components/common/ui/utils';
+import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 
 const SECTION_2A = {
   id: '2A',
@@ -172,7 +173,7 @@ export default function Section2AccessManagement({ isActive = false }: Props) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="flex items-center gap-2.5 text-base sm:gap-3 sm:text-xl">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-xs font-bold text-primary-foreground sm:h-9 sm:w-9 sm:text-sm">
-              {SECTION_2A.id}
+              {getVaultSubsectionDisplayId('2', SECTION_2A.id)}
             </span>
             <span>{SECTION_2A.title}</span>
           </CardTitle>

@@ -28,7 +28,10 @@ import {
 
 import { NextOfKinLetterField } from '@/components/NextOfKinLetterField';
 import { NokLetterPreviewDialog } from '@/components/NokLetterPreviewDialog';
-import { getVaultSectionDisplayNumber } from '@/utils/vaultNavigation';
+import {
+  getVaultSectionDisplayNumber,
+  getVaultSubsectionDisplayId,
+} from '@/utils/vaultNavigation';
 import {
   MobileBottomSheet,
   useIsMobile,
@@ -567,7 +570,7 @@ export default function Section3NextOfKinLetter({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="flex items-center gap-2.5 text-base sm:gap-3 sm:text-xl">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-xs font-bold text-primary-foreground sm:h-9 sm:w-9 sm:text-sm">
-              {SECTION_3A.id}
+              {getVaultSubsectionDisplayId('3', SECTION_3A.id)}
             </span>
             <span>{SECTION_3A.title}</span>
           </CardTitle>

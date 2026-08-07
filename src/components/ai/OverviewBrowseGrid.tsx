@@ -15,7 +15,10 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
-import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
+import {
+  getVaultSectionDisplayNumber,
+  VAULT_NAVIGATION,
+} from '@/utils/vaultNavigation';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
   OVERVIEW_BROWSE_CATEGORIES,
@@ -171,7 +174,7 @@ export function OverviewBrowseGrid({
                       : 'bg-[#e7eef7] text-[#213D59]',
                 )}
               >
-                {sectionId}
+                {getVaultSectionDisplayNumber(sectionId)}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-semibold text-[#1a2b3d]">
