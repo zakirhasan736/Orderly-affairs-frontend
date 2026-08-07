@@ -217,6 +217,8 @@ const hasValidOwnerSession = async () => {
 };
 
 const MFA_METHODS: MFAMethod[] = ['authenticator', 'email', 'sms'];
+/** Display order on signup / “choose another method” screens. */
+const MFA_METHOD_DISPLAY_ORDER: MFAMethod[] = ['sms', 'email', 'authenticator'];
 const OTP_LENGTH = 6;
 const MAX_ATTEMPTS = 5;
 
@@ -399,7 +401,7 @@ export default function LoginPage() {
 
   const [isNewUser, setIsNewUser] = useState(false);
   const [selectedMFAMethod, setSelectedMFAMethod] =
-    useState<MFAMethod>('authenticator');
+    useState<MFAMethod>('sms');
   const [isLoginMfaChallenge, setIsLoginMfaChallenge] = useState(false);
   const [mfaChallengeToken, setMfaChallengeToken] = useState('');
   const [loginMFAMethods, setLoginMFAMethods] = useState(emptyMfaMethods);
@@ -1622,9 +1624,11 @@ const orderedMfaMethods =
   isLoginMfaChallenge && loginPrimaryMFAMethod
     ? [
         loginPrimaryMFAMethod,
-        ...MFA_METHODS.filter(method => method !== loginPrimaryMFAMethod),
+        ...MFA_METHOD_DISPLAY_ORDER.filter(
+          method => method !== loginPrimaryMFAMethod,
+        ),
       ]
-    : MFA_METHODS;
+    : MFA_METHOD_DISPLAY_ORDER;
 
 const getMfaMethodMeta = (method: MFAMethod) => {
   if (method === 'authenticator') {
@@ -1733,7 +1737,7 @@ const signupAsideSteps = (() => {
         ? 'Text message'
         : selectedMFAMethod === 'email'
           ? 'Email code'
-          : 'Authenticator app, email, or SMS';
+          : 'SMS, email, or authenticator app';
 
   return [
     {
@@ -2148,18 +2152,34 @@ const backButtonLabel =
                     )}
 
                     {isNewUser && (
-                      <label className="mt-1 flex items-start gap-2.5 text-[12.5px] leading-[1.5] text-[#3c4a46] lg:mt-4 lg:text-[13px]">
+                      <div className="mt-1 flex items-start gap-2.5 text-[12.5px] leading-[1.5] text-[#3c4a46] lg:mt-4 lg:text-[13px]">
                         <input
+                          id="signup-agree-terms"
                           type="checkbox"
                           checked={agreeToTerms}
                           onChange={e => setAgreeToTerms(e.target.checked)}
+                          required
+                          aria-required="true"
                           className="mt-0.5 h-[18px] w-[18px] shrink-0 rounded-[5px] border-[1.5px] border-[#2B5A8C] accent-[#2B5A8C]"
                         />
-                        <span>
-                          I agree to the terms and understand this Vault is not
-                          legal advice.
-                        </span>
-                      </label>
+                        <p className="m-0">
+                          <label htmlFor="signup-agree-terms">
+                            I agree to the{' '}
+                          </label>
+                          <a
+                            href="/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="auth-link"
+                          >
+                            Terms of Services
+                          </a>
+                          <label htmlFor="signup-agree-terms">
+                            {' '}
+                            and understand this Vault is not legal advice.
+                          </label>
+                        </p>
+                      </div>
                     )}
 
                     <Button
@@ -2170,7 +2190,9 @@ const backButtonLabel =
                         rateLimitSeconds > 0 ||
                         (!isNewUser && !securityReady) ||
                         (isNewUser &&
-                          (!!confirmPassword && password !== confirmPassword))
+                          (!agreeToTerms ||
+                            (!!confirmPassword &&
+                              password !== confirmPassword)))
                       }
                     >
                       {rateLimitedButtonLabel(

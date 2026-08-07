@@ -26,7 +26,7 @@ const DEFAULT_SIGNUP_STEPS: SignupStepMeta[] = [
   },
   {
     title: 'Secure it',
-    description: 'Authenticator app, email, or SMS',
+    description: 'SMS, email, or authenticator app',
   },
   {
     title: 'Choose your plan',
