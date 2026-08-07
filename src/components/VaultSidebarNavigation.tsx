@@ -13,8 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
-import { isAiSectionReviewed } from '@/utils/aiSectionReviewState';
-import { peekDashboardAiPatch } from '@/utils/aiDashboardPatchCache';
+import { sectionHasSidebarNewAiData } from '@/utils/aiSidebarNewData';
 import {
   getDynamicTopicsForSubsection,
   subsectionHasDynamicTopics,
@@ -564,25 +563,12 @@ export function VaultSidebarNavigation({
               const pendingAiUploads =
                 aiRouting?.getPendingUploadsForSection(section.id) ?? [];
               void aiBadgeTick;
-              const stash = peekDashboardAiPatch(section.id);
-              const reviewed = isAiSectionReviewed(
+              // Every matching section with unread AI fill — not only the
+              // single highlighted upload card for the file.
+              const hasAiReady = sectionHasSidebarNewAiData(
                 section.id,
-                stash?.file_id,
+                pendingAiUploads,
               );
-              // Only show when there is real fill data (stash) or a pending
-              // upload still waiting — never from a failed / empty classify.
-              const hasAiReady =
-                !reviewed &&
-                (Boolean(stash) ||
-                  pendingAiUploads.some(
-                    upload =>
-                      upload.highlightUpload &&
-                      Boolean(
-                        upload.documentSummary ||
-                          (upload.extractedFields &&
-                            upload.extractedFields.length > 0),
-                      ),
-                  ));
 
               return (
                 <div key={`main-section-${section.id}`} className="space-y-1">

@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CheckCircle2,
   FileText,
+  Sparkles,
   UploadCloud,
 } from 'lucide-react';
 import { Button } from '@/components/common/ui/button';
@@ -17,7 +18,7 @@ import { upsertAiUploadHistory } from '@/utils/aiUploadHistory';
 import { AiUploadHistoryPopup } from '@/components/ai/AiUploadHistoryPopup';
 
 function isActiveStatus(status: DashboardAiJobStatus) {
-  return !['queued', 'done', 'error'].includes(status);
+  return !['queued', 'done', 'error', 'needs_section_choice'].includes(status);
 }
 
 function CircularDocProgress({
@@ -135,6 +136,8 @@ type OverviewAiUploadCardProps = {
   enqueueFiles: (files: FileList | File[]) => void;
   dismissJob?: (jobId: string) => void;
   maxConcurrent?: number;
+  hasReviewableDocs?: boolean;
+  onOpenReview?: () => void;
 };
 
 export function OverviewAiUploadCard({
@@ -142,6 +145,8 @@ export function OverviewAiUploadCard({
   jobs,
   enqueueFiles,
   dismissJob,
+  hasReviewableDocs = false,
+  onOpenReview,
 }: OverviewAiUploadCardProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -153,10 +158,10 @@ export function OverviewAiUploadCard({
         fileName: job.fileName,
         status: job.status,
         progress:
-          job.status === 'done'
+          job.status === 'done' || job.status === 'error'
             ? 100
-            : job.status === 'error'
-              ? 100
+            : job.status === 'needs_section_choice'
+              ? 80
               : Math.max(0, Math.min(99, job.progress || 0)),
         createdAt: job.createdAt,
         updatedAt: job.updatedAt,
@@ -303,11 +308,13 @@ export function OverviewAiUploadCard({
               <p className="mt-1 text-[12px] text-[var(--ink-muted)] sm:text-[13px]">
                 {isWorking
                   ? summaryText
-                  : 'After AI finishes, files appear in Review inbox so you can check and approve.'}
+                  : hasReviewableDocs
+                    ? 'Documents are ready — assign sections and approve fills here.'
+                    : 'After AI finishes, review and approve fills here on the dashboard.'}
               </p>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 self-end sm:self-auto">
             <div
               onClick={event => event.stopPropagation()}
               onKeyDown={event => event.stopPropagation()}
@@ -320,6 +327,20 @@ export function OverviewAiUploadCard({
                 onDismissJob={dismissJob}
               />
             </div>
+            {hasReviewableDocs && onOpenReview ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={event => {
+                  event.stopPropagation();
+                  onOpenReview();
+                }}
+                className="h-11 shrink-0 rounded-xl border-[#213D59]/25 bg-[#e7eef7] px-3 text-[12px] font-semibold text-[#213D59] hover:bg-[#dce6f2] sm:px-4 sm:text-[13px]"
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                Review & assign
+              </Button>
+            ) : null}
             <Button
               type="button"
               onClick={event => {

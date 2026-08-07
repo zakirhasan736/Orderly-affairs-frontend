@@ -176,6 +176,7 @@ export function AiDocumentRoutingProvider({
     const stored = readPendingUploadsFromStorage();
     // Drop stale "New data" pins from failed fills (e.g. Gemini 503 after
     // classify queued review sections but never wrote a stash / done marker).
+    // Keep recent review pins briefly — stash can lag one tick behind queue.
     const cleaned = stored.filter(upload => {
       if (peekDashboardAiPatch(upload.targetSectionId, upload.file_id)) {
         return true;
@@ -185,7 +186,10 @@ export function AiDocumentRoutingProvider({
       ) {
         return true;
       }
-      if (upload.navigateIntent === 'review') return false;
+      if (upload.navigateIntent === 'review') {
+        const ageMs = Date.now() - (upload.createdAt || 0);
+        return ageMs < 60_000;
+      }
       return true;
     });
     if (cleaned.length !== stored.length) {
@@ -509,9 +513,10 @@ export function AiDocumentRoutingProvider({
           {
             currentSectionId: context?.currentSectionId,
             uploadScope: 'full',
-            // Only the next section card lights up — rest stay queued quietly.
+            // Only one upload card highlights at a time; every matching
+            // section still gets review intent for sidebar "New data".
             highlight: shouldHighlight,
-            navigateIntent: shouldHighlight ? navigateIntent : null,
+            navigateIntent,
           },
         );
         if (shouldHighlight) highlightedOnce = true;

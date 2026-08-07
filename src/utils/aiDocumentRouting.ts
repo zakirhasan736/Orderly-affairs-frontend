@@ -301,7 +301,8 @@ export function promoteSingleHighlightPerFile(
       return {
         ...upload,
         highlightUpload: shouldHighlight,
-        navigateIntent: shouldHighlight ? upload.navigateIntent : null,
+        // Keep navigateIntent on quiet partner rows so sidebar "New data"
+        // (and overview pins) still mark every matching section.
       };
     });
 }

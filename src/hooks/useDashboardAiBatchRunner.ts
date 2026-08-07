@@ -38,6 +38,7 @@ import {
   upsertAiUploadHistory,
 } from '@/utils/aiUploadHistory';
 import { toAiUserFacingMessage } from '@/utils/aiUserFacingError';
+import { isHealthInsuranceCardCandidate } from '@/utils/aiInsuranceDocument';
 // Person/section approval happens in AiOverviewReadMatchDialog after stash.
 
 /** Always also fill related sections when one of the pair is targeted. */
@@ -490,6 +491,7 @@ export type DashboardAiJobStatus =
   | 'almost'
   | 'routing'
   | 'filling'
+  | 'needs_section_choice'
   | 'done'
   | 'error';
 
@@ -555,6 +557,8 @@ function statusLabel(status: DashboardAiJobStatus) {
       return 'Matching vault sections…';
     case 'filling':
       return 'Filling matched fields…';
+    case 'needs_section_choice':
+      return 'Choose a section';
     case 'done':
       return 'Ready to review';
     case 'error':
@@ -1033,7 +1037,7 @@ export function useDashboardAiBatchRunner() {
         let bestKey =
           classified.best_section ||
           (classified.matches_requested_section ? PROBE_SECTION_KEY : null) ||
-          PROBE_SECTION_KEY;
+          null;
 
         // Never dump non-vital docs into Vital just because the probe key was Vital.
         if (
@@ -1044,13 +1048,39 @@ export function useDashboardAiBatchRunner() {
             (item: { section_key?: string }) =>
               item?.section_key && item.section_key !== PROBE_SECTION_KEY,
           );
-          if (alt?.section_key) {
-            bestKey = alt.section_key;
-          } else {
-            throw new Error(
-              'Could not tell which section this document belongs to. Open the matching section and upload there.',
-            );
-          }
+          bestKey = alt?.section_key || null;
+        }
+
+        // Health cards → Insurance (structured member ID / group # fields).
+        const looksHealthCard = isHealthInsuranceCardCandidate({
+          documentSummary: classified.document_summary,
+          fileName: job.fileName,
+          sectionKey: bestKey,
+        });
+        if (looksHealthCard) {
+          bestKey = 'insurance_policies';
+        }
+
+        const pauseForSectionChoice = (summary?: string) => {
+          patchJob(job.id, {
+            status: 'needs_section_choice',
+            progress: 80,
+            message: statusLabel('needs_section_choice'),
+            file_id: uploaded.file_id,
+            mime_type: uploaded.mime_type,
+            documentSummary: summary || classified.document_summary,
+            readSource:
+              classified.extract_reuse || classified.from_cache
+                ? 'cache'
+                : uploadReadSource,
+            extractMethod: uploaded.extract_method,
+            error: undefined,
+          });
+        };
+
+        if (!bestKey) {
+          pauseForSectionChoice();
+          return;
         }
 
         const bestMeta =
@@ -1059,13 +1089,14 @@ export function useDashboardAiBatchRunner() {
             ? AI_SECTION_BY_ID[classified.best_section_id]
             : null);
 
-        const sectionId = bestMeta?.id || classified.best_section_id || PROBE_SECTION_ID;
+        const sectionId = bestMeta?.id || classified.best_section_id || '';
         const sectionKey = bestMeta?.key || bestKey;
         const subsection =
           classified.best_subsection || bestMeta?.defaultSubsection || undefined;
 
         if (!sectionId || !sectionKey) {
-          throw new Error('Could not classify this document to a section.');
+          pauseForSectionChoice();
+          return;
         }
 
         patchJob(job.id, {
@@ -1107,7 +1138,16 @@ export function useDashboardAiBatchRunner() {
             message: statusLabel('routing'),
           });
 
-          const suggestedKey = error.detail.suggested_section;
+          let suggestedKey = error.detail.suggested_section;
+          const looksHealthCard = isHealthInsuranceCardCandidate({
+            documentSummary: error.detail.document_summary,
+            fileName: job.fileName,
+            sectionKey: suggestedKey,
+          });
+          if (looksHealthCard) {
+            suggestedKey = 'insurance_policies';
+          }
+
           const suggestedMeta =
             AI_SECTION_BY_KEY[suggestedKey] ||
             (error.detail.suggested_section_id
@@ -1118,7 +1158,19 @@ export function useDashboardAiBatchRunner() {
           const sectionKey = suggestedMeta?.key || suggestedKey;
 
           if (!sectionId || !sectionKey) {
-            throw new Error('Could not classify this document to a section.');
+            patchJob(job.id, {
+              status: 'needs_section_choice',
+              progress: 80,
+              message: statusLabel('needs_section_choice'),
+              file_id: uploaded.file_id,
+              mime_type:
+                uploaded.mime_type || error.detail.mime_type || 'application/pdf',
+              documentSummary: error.detail.document_summary,
+              readSource: uploadReadSource,
+              extractMethod: uploaded.extract_method,
+              error: undefined,
+            });
+            return;
           }
 
           // Point the matching overview task card at this job while filling.
@@ -1256,28 +1308,107 @@ export function useDashboardAiBatchRunner() {
     setJobs(prev => prev.filter(job => job.id !== id));
   }, []);
 
+  const resolveSectionChoice = useCallback(
+    async (jobId: string, sectionId: string) => {
+      const job = jobsRef.current.find(item => item.id === jobId);
+      if (!job?.file_id) {
+        throw new Error('Document is not ready to assign yet.');
+      }
+      const meta = AI_SECTION_BY_ID[sectionId];
+      if (!meta?.key) {
+        throw new Error('Choose a valid vault section.');
+      }
+
+      if (activeIdsRef.current.has(jobId)) {
+        throw new Error('This document is already being processed.');
+      }
+
+      activeIdsRef.current.add(jobId);
+      routing?.setBatchSilentMode(true);
+      patchJob(jobId, {
+        status: 'routing',
+        progress: 82,
+        message: statusLabel('routing'),
+        targetSectionId: meta.id,
+        targetSectionKey: meta.key,
+        targetSubsection: meta.defaultSubsection,
+        targetSectionLabel: meta.label,
+        error: undefined,
+      });
+
+      try {
+        await finishWithSection({
+          jobId,
+          file_id: job.file_id,
+          mime_type: job.mime_type || 'application/pdf',
+          fileName: job.fileName,
+          sectionKey: meta.key,
+          sectionId: meta.id,
+          subsection: meta.defaultSubsection,
+          sectionLabel: meta.label,
+          documentSummary: job.documentSummary,
+          additionalSections: [],
+          alreadyExtracted: false,
+          readSource: job.readSource,
+          extractMethod: job.extractMethod,
+        });
+      } catch (error: any) {
+        patchJob(jobId, {
+          status: 'needs_section_choice',
+          progress: 80,
+          message: statusLabel('needs_section_choice'),
+          error: toAiUserFacingMessage(
+            error?.message || 'Could not fill that section. Try another.',
+          ),
+        });
+        throw error;
+      } finally {
+        activeIdsRef.current.delete(jobId);
+        const stillWorking = jobsRef.current.some(item =>
+          ACTIVE_STATUSES.includes(item.status),
+        );
+        if (!stillWorking) {
+          routing?.setBatchSilentMode(false);
+        }
+        pumpRef.current();
+      }
+    },
+    [finishWithSection, patchJob, routing],
+  );
+
   const readingCount = jobs.filter(
     job =>
       job.status !== 'queued' &&
       job.status !== 'done' &&
-      job.status !== 'error',
+      job.status !== 'error' &&
+      job.status !== 'needs_section_choice',
   ).length;
   const waitingCount = jobs.filter(job => job.status === 'queued').length;
   const doneJobs = jobs.filter(
     job => job.status === 'done' && job.targetSectionId,
   );
-  const processingJobs = jobs.filter(job => job.status !== 'done');
+  const needsSectionChoiceJobs = jobs.filter(
+    job => job.status === 'needs_section_choice',
+  );
+  const processingJobs = jobs.filter(
+    job =>
+      job.status !== 'done' &&
+      job.status !== 'needs_section_choice' &&
+      job.status !== 'error',
+  );
 
   return {
     jobs,
     processingJobs,
     doneJobs,
+    needsSectionChoiceJobs,
     activeCount: readingCount,
     waitingCount,
     doneCount: doneJobs.length,
     enqueueFiles,
     clearFinished,
     dismissJob,
+    resolveSectionChoice,
     maxConcurrent: MAX_CONCURRENT,
   };
 }

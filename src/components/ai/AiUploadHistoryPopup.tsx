@@ -66,6 +66,7 @@ function displayStatus(item: {
     return 'done';
   }
   if (status === 'queued') return 'queued';
+  if (status === 'needs_section_choice') return 'attention';
   if (status === 'error') {
     return looksLikeTransientIssue(item.error) ? 'processing' : 'attention';
   }
@@ -94,14 +95,22 @@ function statusTone(status: ReturnType<typeof displayStatus>) {
   return 'text-sky-800 bg-sky-50 ring-sky-100';
 }
 
-function statusLabel(status: ReturnType<typeof displayStatus>) {
+function statusLabel(
+  status: ReturnType<typeof displayStatus>,
+  rawStatus?: string,
+) {
+  if (rawStatus === 'needs_section_choice') return 'Choose section';
   if (status === 'done') return 'Complete';
   if (status === 'attention') return 'Needs attention';
   if (status === 'queued') return 'In queue';
   return 'Processing';
 }
 
-function statusFootnote(status: ReturnType<typeof displayStatus>) {
+function statusFootnote(
+  status: ReturnType<typeof displayStatus>,
+  rawStatus?: string,
+) {
+  if (rawStatus === 'needs_section_choice') return 'Choose section';
   if (status === 'done') return 'Complete';
   if (status === 'attention') return 'Needs attention';
   if (status === 'queued') return 'In queue';
@@ -602,7 +611,7 @@ export function AiUploadHistoryPopup({
                             {uiStatus === 'processing' ? (
                               <Loader2 className="h-2.5 w-2.5 animate-spin" />
                             ) : null}
-                            {statusLabel(uiStatus)}
+                            {statusLabel(uiStatus, item.status)}
                           </span>
                           <span className="text-[10px] font-semibold text-slate-600">
                             {progress}%
@@ -842,7 +851,7 @@ export function AiUploadHistoryPopup({
                             <div className="mb-1.5 flex items-center justify-between gap-2">
                               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-white">
                                 <Loader2 className="h-3 w-3 animate-spin" />
-                                {statusLabel(uiStatus)}
+                                {statusLabel(uiStatus, item.status)}
                                 {` · ${progress}%`}
                               </span>
                             </div>
@@ -857,7 +866,9 @@ export function AiUploadHistoryPopup({
 
                         {uiStatus === 'attention' ? (
                           <div className="absolute inset-x-1.5 bottom-1.5 rounded-lg bg-amber-600/90 px-2 py-1 text-[10px] font-semibold text-white">
-                            Needs attention
+                            {item.status === 'needs_section_choice'
+                              ? 'Choose section'
+                              : 'Needs attention'}
                           </div>
                         ) : null}
 
@@ -904,7 +915,7 @@ export function AiUploadHistoryPopup({
                             {uiStatus === 'processing' ? (
                               <Loader2 className="h-2.5 w-2.5 animate-spin" />
                             ) : null}
-                            {statusFootnote(uiStatus)}
+                            {statusFootnote(uiStatus, item.status)}
                           </span>
                           <span
                             className="truncate text-[10px] text-[#6b7785] sm:text-[11px]"

@@ -63,41 +63,82 @@ async function persistOne(args: {
   });
 }
 
+/** Vital only accepts personal-identity extracts after user approve. */
+function mayWriteVital(args: {
+  fileName?: string;
+  documentSummary?: string | null;
+  sectionId: string;
+  sectionKey?: string;
+  result?: unknown;
+}): boolean {
+  if (args.sectionId !== '1' && args.sectionKey !== 'vital_information') {
+    return true;
+  }
+  return isIdentityDocumentCandidate({
+    sectionId: args.sectionId,
+    sectionKey: args.sectionKey,
+    documentSummary: args.documentSummary,
+    fileName: args.fileName,
+    result: args.result,
+  });
+}
+
 export async function approveOverviewAiDocuments(
   payload: OverviewApprovePayload,
 ): Promise<{ saved: number; failed: number }> {
   let saved = 0;
   let failed = 0;
+  let skippedVital = 0;
 
   for (const doc of payload.documents) {
     const patches = patchesForFile(doc.fileId);
     if (!patches.length && !doc.selectedSectionIds.length) continue;
 
-    const personChoice = (doc.personChoice || 'self') as IdentityPersonChoice;
     const primary =
       patches.find(p => doc.selectedSectionIds.includes(p.section_id)) ||
       patches[0] ||
       null;
 
-    const needsIdentity =
+    const needsIdentity = Boolean(
       primary &&
-      isIdentityDocumentCandidate({
-        sectionId: primary.section_id,
-        sectionKey: primary.section_key,
-        documentSummary: primary.document_summary,
-        fileName: doc.fileName || primary.file_name,
-        result: primary.result,
-      });
+        isIdentityDocumentCandidate({
+          sectionId: primary.section_id,
+          sectionKey: primary.section_key,
+          documentSummary: primary.document_summary,
+          fileName: doc.fileName || primary.file_name,
+          result: primary.result,
+        }),
+    );
 
-    const needsInsurance =
+    const needsInsurance = Boolean(
       primary &&
-      isHealthInsuranceCardCandidate({
-        sectionId: primary.section_id,
-        sectionKey: primary.section_key,
-        documentSummary: primary.document_summary,
-        fileName: doc.fileName || primary.file_name,
-        result: primary.result,
-      });
+        isHealthInsuranceCardCandidate({
+          sectionId: primary.section_id,
+          sectionKey: primary.section_key,
+          documentSummary: primary.document_summary,
+          fileName: doc.fileName || primary.file_name,
+          result: primary.result,
+        }),
+    );
+
+    const personChoice = (doc.personChoice ||
+      (needsIdentity || needsInsurance ? 'self' : null)) as
+      | IdentityPersonChoice
+      | null;
+
+    // Prefer Insurance when a health card was selected under Vital/Health.
+    let selectedIds = [...doc.selectedSectionIds];
+    if (needsInsurance) {
+      const hasInsurance = selectedIds.includes('7');
+      const hasVitalOrHealth =
+        selectedIds.includes('1') || selectedIds.includes('15');
+      if (!hasInsurance && (hasVitalOrHealth || selectedIds.length === 0)) {
+        selectedIds = ['7', ...selectedIds.filter(id => id !== '1')];
+      } else if (hasInsurance) {
+        // Structured card fields live on Insurance; drop Vital dump for cards.
+        selectedIds = selectedIds.filter(id => id !== '1');
+      }
+    }
 
     // Person remap for ID / insurance (may change destination section).
     if (primary && (needsIdentity || needsInsurance) && personChoice) {
@@ -132,17 +173,35 @@ export async function approveOverviewAiDocuments(
             fileName: doc.fileName,
           });
           saved += 1;
-        } else if (doc.selectedSectionIds.includes(primary.section_id)) {
-          await persistOne({
-            sectionId: remapped.sectionId,
-            sectionKey: remapped.sectionKey,
-            subsection: remapped.subsection,
-            result: remapped.result,
-            fileId: doc.fileId || primary.file_id,
-            fileName: doc.fileName,
-          });
-          takeDashboardAiPatch(primary.section_id, primary.file_id);
-          saved += 1;
+          // Avoid double-writing the original selected id when remapped.
+          selectedIds = selectedIds.filter(id => id !== primary.section_id);
+          if (!selectedIds.includes(remapped.sectionId)) {
+            selectedIds.push(remapped.sectionId);
+          }
+        } else if (selectedIds.includes(primary.section_id)) {
+          if (
+            !mayWriteVital({
+              fileName: doc.fileName || primary.file_name,
+              documentSummary: primary.document_summary,
+              sectionId: remapped.sectionId,
+              sectionKey: remapped.sectionKey,
+              result: remapped.result,
+            })
+          ) {
+            skippedVital += 1;
+            takeDashboardAiPatch(primary.section_id, primary.file_id);
+          } else {
+            await persistOne({
+              sectionId: remapped.sectionId,
+              sectionKey: remapped.sectionKey,
+              subsection: remapped.subsection,
+              result: remapped.result,
+              fileId: doc.fileId || primary.file_id,
+              fileName: doc.fileName,
+            });
+            takeDashboardAiPatch(primary.section_id, primary.file_id);
+            saved += 1;
+          }
         }
       } catch (error) {
         console.warn('Overview person remap persist failed', error);
@@ -150,7 +209,7 @@ export async function approveOverviewAiDocuments(
       }
     }
 
-    for (const sectionId of doc.selectedSectionIds) {
+    for (const sectionId of selectedIds) {
       // Already handled as remapped primary.
       if (
         primary &&
@@ -161,9 +220,27 @@ export async function approveOverviewAiDocuments(
       }
 
       const stash = patches.find(p => p.section_id === sectionId);
-      if (!stash?.result) continue;
+      if (!stash?.result) {
+        // Health card remapped to Insurance may only have Vital/Health stash —
+        // persist via insurance remap already handled above when needsInsurance.
+        continue;
+      }
       if (stash.vault_persisted) {
         markAiSectionReviewed({ sectionId, fileId: stash.file_id });
+        continue;
+      }
+
+      if (
+        !mayWriteVital({
+          fileName: doc.fileName || stash.file_name,
+          documentSummary: stash.document_summary,
+          sectionId,
+          sectionKey: stash.section_key,
+          result: stash.result,
+        })
+      ) {
+        skippedVital += 1;
+        takeDashboardAiPatch(sectionId, stash.file_id);
         continue;
       }
 
@@ -200,7 +277,11 @@ export async function approveOverviewAiDocuments(
         : 'One section could not be saved. Check Vault Activity.',
     );
   }
-  if (saved === 0 && failed === 0) {
+  if (skippedVital > 0 && saved === 0 && failed === 0) {
+    toast.message(
+      'Vital Information was skipped — only personal ID documents fill that section.',
+    );
+  } else if (saved === 0 && failed === 0) {
     toast.message('Nothing selected to fill');
   }
 

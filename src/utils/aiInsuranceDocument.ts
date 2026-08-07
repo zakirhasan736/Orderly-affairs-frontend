@@ -154,8 +154,17 @@ export function applyInsurancePersonChoice(
         };
 
   // Prefer saving health cards into Insurance (structured card fields).
+  // Also remap mis-routed Vital / Healthcare extracts so member ID & group # land on 7A.
   const preferInsurance =
-    args.sectionKey === 'health_information' || args.sectionId === '15';
+    args.sectionKey === 'health_information' ||
+    args.sectionId === '15' ||
+    args.sectionKey === 'vital_information' ||
+    args.sectionId === '1' ||
+    isHealthInsuranceCardCandidate({
+      sectionId: args.sectionId,
+      sectionKey: args.sectionKey,
+      result: args.result,
+    });
 
   return {
     sectionId: preferInsurance ? '7' : args.sectionId,

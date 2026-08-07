@@ -45,6 +45,8 @@ import {
   approveOverviewAiDocuments,
   detectOverviewPersonPrompt,
 } from '@/utils/approveOverviewAiDocuments';
+import { isHealthInsuranceCardCandidate } from '@/utils/aiInsuranceDocument';
+import { isIdentityDocumentCandidate } from '@/utils/aiIdentityDocument';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
   collectOverviewExpiryAlerts,
@@ -166,6 +168,9 @@ export function DataBindingDashboard({
   const routing = useOptionalAiDocumentRouting();
   const [overviewReviewOpen, setOverviewReviewOpen] = useState(false);
   const [approvingOverview, setApprovingOverview] = useState(false);
+  const [choosingSectionDocId, setChoosingSectionDocId] = useState<
+    string | null
+  >(null);
   const [stashTick, setStashTick] = useState(0);
   const batchReviewShownRef = useRef(false);
   const prevWorkingRef = useRef(false);
@@ -186,7 +191,10 @@ export function DataBindingDashboard({
   const docsWorkingCount = useMemo(
     () =>
       batch.jobs.filter(
-        job => job.status !== 'done' && job.status !== 'error',
+        job =>
+          job.status !== 'done' &&
+          job.status !== 'error' &&
+          job.status !== 'needs_section_choice',
       ).length,
     [batch.jobs],
   );
@@ -196,6 +204,16 @@ export function DataBindingDashboard({
     [batch.jobs],
   );
 
+  const needsChoiceJobs = useMemo(
+    () => batch.jobs.filter(job => job.status === 'needs_section_choice'),
+    [batch.jobs],
+  );
+
+  const reviewableJobs = useMemo(
+    () => [...needsChoiceJobs, ...doneJobs],
+    [needsChoiceJobs, doneJobs],
+  );
+
   useEffect(() => {
     for (const job of batch.jobs) {
       if (job.status !== 'error' || !job.file_id) continue;
@@ -203,12 +221,17 @@ export function DataBindingDashboard({
     }
   }, [batch.jobs, routing]);
 
-  // Open review popup only after the whole upload batch finishes (all 100%).
+  // Open review when a doc needs a section, or after the batch finishes.
   useEffect(() => {
     const working = docsWorkingCount > 0;
     const finishedBatch =
       prevWorkingRef.current && !working && doneJobs.length > 0;
     prevWorkingRef.current = working;
+
+    if (needsChoiceJobs.length > 0) {
+      setOverviewReviewOpen(true);
+      return;
+    }
 
     if (!finishedBatch || batchReviewShownRef.current) return;
 
@@ -218,7 +241,7 @@ export function DataBindingDashboard({
     }, 700);
 
     return () => window.clearTimeout(timer);
-  }, [docsWorkingCount, doneJobs.length]);
+  }, [docsWorkingCount, doneJobs.length, needsChoiceJobs.length]);
 
   // Allow another popup when the user queues a new batch later.
   useEffect(() => {
@@ -229,7 +252,7 @@ export function DataBindingDashboard({
 
   const overviewDocuments = useMemo((): OverviewDocumentReview[] => {
     void stashTick;
-    return doneJobs.map(job => {
+    return reviewableJobs.map(job => {
       const fileId = job.file_id;
       const facts = fileId
         ? listDashboardAiPatches()
@@ -290,8 +313,24 @@ export function DataBindingDashboard({
           });
         });
 
-      // Only list sections that actually have stashed extracts or real pending
-      // routing — do NOT force Vehicles↔Insurance badges (false "matched").
+      // Health cards: always offer Insurance for structured member ID / group #.
+      const healthCard = isHealthInsuranceCardCandidate({
+        sectionId: job.targetSectionId,
+        documentSummary: job.documentSummary,
+        fileName: job.fileName,
+        result: fileId
+          ? listDashboardAiPatches().find(entry => entry.file_id === fileId)
+              ?.result
+          : undefined,
+      });
+      if (healthCard) {
+        add('7', {
+          label: getAiSectionLabel('7'),
+          summary: job.documentSummary,
+        });
+        // Don't push non-personal card data into Vital by default.
+        byId.delete('1');
+      }
 
       const person = detectOverviewPersonPrompt({
         fileId,
@@ -299,6 +338,16 @@ export function DataBindingDashboard({
         documentSummary: job.documentSummary,
         sectionId: job.targetSectionId,
       });
+
+      // Multi-ID batches: prompt whose document even when summary is thin.
+      const identityHint =
+        !person.needsPersonChoice &&
+        !healthCard &&
+        isIdentityDocumentCandidate({
+          sectionId: job.targetSectionId,
+          documentSummary: job.documentSummary,
+          fileName: job.fileName,
+        });
 
       return {
         id: job.id,
@@ -309,16 +358,20 @@ export function DataBindingDashboard({
         matchedSections: Array.from(byId.values()),
         readSource: job.readSource,
         extractMethod: job.extractMethod,
-        needsPersonChoice: person.needsPersonChoice,
-        personPromptKind: person.personPromptKind,
+        needsPersonChoice: person.needsPersonChoice || identityHint,
+        personPromptKind:
+          person.personPromptKind || (identityHint ? 'identity' : undefined),
         personName: person.personName,
+        needsSectionChoice: job.status === 'needs_section_choice',
       };
     });
-  }, [doneJobs, routing?.pendingUploads, stashTick]);
+  }, [reviewableJobs, routing?.pendingUploads, stashTick]);
 
   // Avoid Radix presence thrash: only open when we have docs to show.
   const overviewDialogOpen =
     overviewReviewOpen && overviewDocuments.length > 0;
+
+  const hasReviewableDocs = overviewDocuments.length > 0;
 
   // Same horizon as the notification bell / Review inbox dues tab.
   const expiryAlerts = useMemo(
@@ -622,6 +675,8 @@ export function DataBindingDashboard({
                 enqueueFiles={batch.enqueueFiles}
                 dismissJob={batch.dismissJob}
                 maxConcurrent={batch.maxConcurrent}
+                hasReviewableDocs={hasReviewableDocs}
+                onOpenReview={() => setOverviewReviewOpen(true)}
               />
               <div className="overview-upload-types">
                 <AiUploadSupportedSectionsHint />
@@ -657,6 +712,19 @@ export function DataBindingDashboard({
             documents={overviewDocuments}
             onOpenSection={onNavigateToSection}
             approving={approvingOverview}
+            choosingSectionDocId={choosingSectionDocId}
+            onChooseSection={async (docId, sectionId) => {
+              setChoosingSectionDocId(docId);
+              try {
+                await batch.resolveSectionChoice(docId, sectionId);
+                setStashTick(value => value + 1);
+                setOverviewReviewOpen(true);
+              } catch (error) {
+                console.warn('Section choice failed', error);
+              } finally {
+                setChoosingSectionDocId(null);
+              }
+            }}
             onApproveFill={async (payload: OverviewApprovePayload) => {
               setApprovingOverview(true);
               try {

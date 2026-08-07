@@ -26,6 +26,7 @@ import { cn } from '@common/ui/utils';
 import { AI_ROUTING_DIALOG_SHEET } from '@/utils/aiMobileUi';
 import {
   AI_SECTION_BY_ID,
+  AI_SECTION_REGISTRY,
   getAiSectionLabel,
 } from '@/utils/aiSectionRegistry';
 import type { DetectedAiFact } from '@/utils/aiDashboardPatchCache';
@@ -36,6 +37,7 @@ import {
   aiReadSourceTitle,
 } from '@/utils/aiReadSourceLabels';
 import type { IdentityPersonChoice } from '@/utils/aiIdentityDocument';
+import { getVaultSectionDisplayNumber } from '@/utils/vaultNavigation';
 
 export type OverviewMatchedSection = {
   sectionId: string;
@@ -57,6 +59,8 @@ export type OverviewDocumentReview = {
   needsPersonChoice?: boolean;
   personPromptKind?: 'identity' | 'insurance';
   personName?: string | null;
+  /** AI could not place this doc — user must pick a section first. */
+  needsSectionChoice?: boolean;
 };
 
 export type OverviewApprovePayload = {
@@ -76,7 +80,12 @@ type Props = {
   documents: OverviewDocumentReview[];
   onOpenSection: (sectionId: string) => void;
   onApproveFill?: (payload: OverviewApprovePayload) => void | Promise<void>;
+  onChooseSection?: (
+    docId: string,
+    sectionId: string,
+  ) => void | Promise<void>;
   approving?: boolean;
+  choosingSectionDocId?: string | null;
 };
 
 const PERSON_OPTIONS: Array<{
@@ -108,7 +117,9 @@ export function AiOverviewReadMatchDialog({
   documents,
   onOpenSection,
   onApproveFill,
+  onChooseSection,
   approving = false,
+  choosingSectionDocId = null,
 }: Props) {
   const [openDocId, setOpenDocId] = useState<string | null>(null);
   const [selectedByDoc, setSelectedByDoc] = useState<
@@ -116,6 +127,9 @@ export function AiOverviewReadMatchDialog({
   >({});
   const [personByDoc, setPersonByDoc] = useState<
     Record<string, IdentityPersonChoice>
+  >({});
+  const [sectionQueryByDoc, setSectionQueryByDoc] = useState<
+    Record<string, string>
   >({});
 
   const firstDocId = documents[0]?.id || null;
@@ -156,8 +170,10 @@ export function AiOverviewReadMatchDialog({
 
   const handleApprove = async () => {
     if (!onApproveFill) return;
+    const ready = documents.filter(doc => !doc.needsSectionChoice);
+    if (!ready.length) return;
     await onApproveFill({
-      documents: documents.map(doc => ({
+      documents: ready.map(doc => ({
         id: doc.id,
         fileId: doc.fileId,
         fileName: doc.fileName,
@@ -172,7 +188,20 @@ export function AiOverviewReadMatchDialog({
 
   const canApprove =
     Boolean(onApproveFill) &&
-    documents.some(doc => (selectedByDoc[doc.id] || []).length > 0);
+    documents.some(
+      doc =>
+        !doc.needsSectionChoice && (selectedByDoc[doc.id] || []).length > 0,
+    );
+
+  const pickerSections = useMemo(
+    () =>
+      [...AI_SECTION_REGISTRY].sort(
+        (a, b) =>
+          Number(getVaultSectionDisplayNumber(a.id)) -
+          Number(getVaultSectionDisplayNumber(b.id)),
+      ),
+    [],
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -189,9 +218,9 @@ export function AiOverviewReadMatchDialog({
                   : `Review & fill · ${documents.length} documents`}
               </DialogTitle>
               <DialogDescription className="text-slate-600">
-                Confirm where each document belongs, uncheck any section you
-                don&apos;t want filled, then approve — no need to open sections
-                first.
+                Assign a section if needed, say whose ID or insurance card it
+                is (you, spouse, dependent), then approve — no need to open
+                sections first.
               </DialogDescription>
             </div>
           </div>
@@ -269,7 +298,68 @@ export function AiOverviewReadMatchDialog({
                       </span>
                     </p>
 
-                    {doc.needsPersonChoice ? (
+                    {doc.needsSectionChoice ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+                          Where should we put this?
+                        </p>
+                        <p className="mt-1 text-sm text-amber-950/80">
+                          AI could not tell which vault section this belongs to.
+                          Pick one and we&apos;ll extract the fields here for
+                          your approval.
+                        </p>
+                        <input
+                          type="search"
+                          value={sectionQueryByDoc[doc.id] || ''}
+                          onChange={event =>
+                            setSectionQueryByDoc(prev => ({
+                              ...prev,
+                              [doc.id]: event.target.value,
+                            }))
+                          }
+                          placeholder="Search sections…"
+                          className="mt-2 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#213D59]"
+                        />
+                        <ul className="mt-2 max-h-48 space-y-1.5 overflow-y-auto">
+                          {pickerSections
+                            .filter(section => {
+                              const q = (sectionQueryByDoc[doc.id] || '')
+                                .trim()
+                                .toLowerCase();
+                              if (!q) return true;
+                              const label = `${getVaultSectionDisplayNumber(section.id)}. ${section.label}`.toLowerCase();
+                              return label.includes(q);
+                            })
+                            .map(section => {
+                              const busy = choosingSectionDocId === doc.id;
+                              return (
+                                <li key={section.id}>
+                                  <button
+                                    type="button"
+                                    disabled={busy || !onChooseSection}
+                                    onClick={() =>
+                                      void onChooseSection?.(doc.id, section.id)
+                                    }
+                                    className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm transition hover:border-[#213D59]/35 hover:bg-[#e7eef7]/50 disabled:opacity-60"
+                                  >
+                                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#213D59] text-[11px] font-bold text-white">
+                                      {getVaultSectionDisplayNumber(section.id)}
+                                    </span>
+                                    <span className="min-w-0 flex-1 font-medium text-[#213D59]">
+                                      {section.label}
+                                    </span>
+                                    {busy ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                                    ) : null}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    {!doc.needsSectionChoice && doc.needsPersonChoice ? (
                       <div className="rounded-xl border border-sky-100 bg-sky-50/60 p-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-sky-900">
                           {doc.personPromptKind === 'insurance'
@@ -314,6 +404,7 @@ export function AiOverviewReadMatchDialog({
                       </div>
                     ) : null}
 
+                    {!doc.needsSectionChoice ? (
                     <div className="grid gap-3 md:grid-cols-2">
                       <section className="overflow-hidden rounded-xl border border-slate-200">
                         <div className="flex items-center gap-2 border-b border-slate-100 bg-[#f5f8fc] px-3 py-2">
@@ -359,7 +450,8 @@ export function AiOverviewReadMatchDialog({
                         <ul className="max-h-52 space-y-2 overflow-y-auto p-2.5">
                           {sections.length === 0 ? (
                             <li className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-sm text-slate-500">
-                              No vault sections matched yet.
+                              No vault sections matched yet. Use Assign below if
+                              this document still needs a home.
                             </li>
                           ) : (
                             sections.map(section => {
@@ -419,6 +511,7 @@ export function AiOverviewReadMatchDialog({
                         </ul>
                       </section>
                     </div>
+                    ) : null}
                   </div>
                 ) : null}
               </article>
@@ -428,7 +521,9 @@ export function AiOverviewReadMatchDialog({
 
         <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
           <p className="text-xs text-slate-500">
-            Unchecked sections stay in Vault Activity until you Accept later.
+            {documents.some(doc => doc.needsSectionChoice)
+              ? 'Assign a section for each document that still needs a home, then approve the rest.'
+              : 'Unchecked sections stay in Vault Activity until you Accept later.'}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button

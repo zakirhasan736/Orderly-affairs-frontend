@@ -122,6 +122,14 @@ function resolveCardState(
         progress: Math.max(12, Math.min(fillPercent || 20, 99)),
       };
     }
+    if (job.status === 'needs_section_choice') {
+      return {
+        kind: 'partial',
+        label: 'Assign',
+        progress: 80,
+        isNew: true,
+      };
+    }
 
     // Finished AI job: still reflect real section fill (empty → Start, not Done)
     if (job.status === 'done') {
