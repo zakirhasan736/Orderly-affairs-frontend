@@ -580,7 +580,14 @@ export function Letters({
 
     try {
       setUploadingMedia(true);
-      const media = await uploadMessageMedia(file);
+      const media = await uploadMessageMedia(
+        file,
+        type === 'audio'
+          ? 'audio'
+          : file.type.startsWith('image/')
+            ? 'image'
+            : 'video',
+      );
       handleMediaUploaded(media);
     } catch (error) {
       console.error(`${mediaLabel} upload failed:`, error);

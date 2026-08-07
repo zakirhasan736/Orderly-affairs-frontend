@@ -100,13 +100,25 @@ export async function readSafeErrorMessage(
     res.status === 413 ||
     res.status === 507 ||
     res.status === 503 ||
-    res.status === 400
+    res.status === 400 ||
+    res.status === 401 ||
+    res.status === 403 ||
+    res.status === 500
   ) {
-    // Keep actionable storage / validation messages in production UI.
+    // Keep actionable storage / auth / validation messages in production UI.
     try {
       const payload = await res.clone().json();
       const detail = payload?.detail;
-      if (typeof detail === 'string' && detail.trim()) return detail;
+      if (typeof detail === 'string' && detail.trim()) {
+        if (
+          res.status !== 500 ||
+          /s3|storage|media|upload|quota|bucket|access denied|session|csrf|sign in/i.test(
+            detail,
+          )
+        ) {
+          return detail;
+        }
+      }
     } catch {
       // ignore
     }

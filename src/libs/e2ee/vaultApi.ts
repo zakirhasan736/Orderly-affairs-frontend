@@ -89,10 +89,10 @@ export const VAULT_SECTION_PATHS = [
   '/sections/section17-family-treasured-connections',
   '/sections/section18-employment-business',
   '/sections/section19-assets-valuables',
-  '/sections/section20-legal-document-records',
-  '/sections/section20-legal-documents-records', // FE/legacy alias
-  '/sections/section21-estate-planning-finalwishes',
-  '/sections/section21-estate-planning-final-wishes', // FE/legacy alias
+  '/sections/section20-legal-documents-records',
+  '/sections/section20-legal-document-records', // E2EE / alias
+  '/sections/section21-estate-planning-final-wishes',
+  '/sections/section21-estate-planning-finalwishes', // E2EE / alias
 ] as const;
 
 const MAX_MIGRATE_PASSES = 5;

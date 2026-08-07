@@ -46,7 +46,7 @@ export function SafeMediaRecorder({
       setUploading(true);
 
       const file = blobToMediaFile(blob, type);
-      const media = await uploadMessageMedia(file);
+      const media = await uploadMessageMedia(file, type);
 
       onUploaded(media);
       toast.success(`${mediaLabel} saved`);

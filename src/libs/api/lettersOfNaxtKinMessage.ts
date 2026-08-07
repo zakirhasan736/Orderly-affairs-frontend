@@ -1,4 +1,9 @@
-import { validateMessageMediaSize } from '@/utils/mediaUpload';
+import {
+  validateMessageMediaSize,
+  blobToMediaFile,
+  blobToPhotoFile,
+  prepareMessageMediaFile,
+} from '@/utils/mediaUpload';
 import { secureFetch } from '@/libs/secureFetch';
 import { readSafeErrorMessage } from '@/utils/sanitizeApiError';
 
@@ -16,21 +21,52 @@ export type MessageMediaUploadResult = {
   folder_uuid?: string;
 };
 
+export type MessageMediaKind = 'video' | 'audio' | 'image';
+
 async function readErrorMessage(res: Response, fallback: string) {
+  // Prefer actionable backend detail for storage failures (even in production).
+  try {
+    const payload = await res.clone().json();
+    const detail = payload?.detail;
+    if (typeof detail === 'string' && detail.trim()) {
+      return detail.trim();
+    }
+    if (typeof payload?.message === 'string' && payload.message.trim()) {
+      return payload.message.trim();
+    }
+  } catch {
+    /* fall through */
+  }
   return readSafeErrorMessage(res, fallback);
+}
+
+function normalizeUploadFile(
+  file: File | Blob,
+  kind: MessageMediaKind = 'video',
+): File {
+  if (file instanceof File) {
+    if (kind === 'image' || file.type.startsWith('image/')) {
+      return prepareMessageMediaFile(file, 'video');
+    }
+    return prepareMessageMediaFile(file, kind === 'audio' ? 'audio' : 'video');
+  }
+  if (kind === 'image') {
+    return blobToPhotoFile(file);
+  }
+  return blobToMediaFile(file, kind === 'audio' ? 'audio' : 'video');
 }
 
 async function uploadMessageMediaViaApi(
   file: File | Blob,
+  kind: MessageMediaKind = 'video',
 ): Promise<MessageMediaUploadResult> {
+  const uploadFile = normalizeUploadFile(file, kind);
   const formData = new FormData();
-  const uploadFile =
-    file instanceof File
-      ? file
-      : new File([file], `message-media-${Date.now()}.webm`, {
-          type: file.type || 'application/octet-stream',
-        });
   formData.append('file', uploadFile);
+  formData.append(
+    'kind',
+    uploadFile.type.startsWith('image/') ? 'image' : kind === 'audio' ? 'audio' : 'video',
+  );
 
   let res: Response;
   try {
@@ -46,6 +82,15 @@ async function uploadMessageMediaViaApi(
   }
 
   if (!res.ok) {
+    // Nginx often returns HTML 413 before the API — make that obvious.
+    if (res.status === 413) {
+      const text = await res.clone().text().catch(() => '');
+      if (/request entity too large|413/i.test(text) || !text.trim().startsWith('{')) {
+        throw new Error(
+          'Recording is too large for the server upload limit. Ask support to raise nginx client_max_body_size to at least 160m, or record a shorter clip.',
+        );
+      }
+    }
     const detail = await readErrorMessage(
       res,
       'Could not save media. Please try again.',
@@ -59,11 +104,22 @@ async function uploadMessageMediaViaApi(
           'Media storage is not configured. Ask support to enable S3 for messages.',
       );
     }
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        detail ||
+          'Your session could not upload media. Please sign in again and retry.',
+      );
+    }
     throw new Error(detail);
   }
 
   const result = (await res.json()) as MessageMediaUploadResult;
   const s3Key = result.s3_key || result.public_id;
+  if (!s3Key || !result.url) {
+    throw new Error(
+      'Media uploaded but S3 did not return a playback URL. Please try again.',
+    );
+  }
   return {
     url: result.url,
     public_id: result.public_id || s3Key,
@@ -147,8 +203,13 @@ export async function deleteMessageMedia(id: string) {
   return res.json();
 }
 
+/**
+ * Upload recorded or picked message media (audio / video / photo).
+ * Always goes through POST /message/media → S3.
+ */
 export async function uploadMessageMedia(
   file: File | Blob,
+  kind: MessageMediaKind = 'video',
 ): Promise<MessageMediaUploadResult> {
   validateMessageMediaSize(file.size);
 
@@ -158,8 +219,7 @@ export async function uploadMessageMedia(
     );
   }
 
-  // All new message media goes through the API → S3 path.
-  return uploadMessageMediaViaApi(file);
+  return uploadMessageMediaViaApi(file, kind);
 }
 
 export async function deleteUploadedMessageMedia(
