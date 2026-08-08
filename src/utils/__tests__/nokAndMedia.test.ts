@@ -108,7 +108,7 @@ describe('nokLetterPreview (Next of Kin letter)', () => {
 
   it('detects delivered status only when sent', () => {
     expect(isNokLetterDelivered({ delivery_status: 'sent' })).toBe(true);
-    expect(isNokLetterDelivered({ delivery_status: 'draft' })).toBe(false);
+    expect(isNokLetterDelivered({ delivery_status: 'pending' })).toBe(false);
     expect(isNokLetterDelivered(null)).toBe(false);
   });
 });

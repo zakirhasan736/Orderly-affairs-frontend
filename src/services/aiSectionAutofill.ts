@@ -48,6 +48,24 @@ type RunAiAutofillArgs = {
   > | null;
 };
 
+/** Shared shape so callers can safely read optional partner_results / routing flags. */
+export type RunAiSectionAutofillResult = {
+  // AI patches vary by section; keep this flexible for section callers.
+  result?: any;
+  document_summary?: string;
+  additional_sections?: Array<{
+    section_key?: string;
+    [key: string]: unknown;
+  }>;
+  section_previews?: unknown;
+  document_deleted?: boolean;
+  already_filled?: boolean;
+  identity_skipped?: boolean;
+  identity_routed?: boolean;
+  routed_section_id?: string;
+  partner_results?: Record<string, any>;
+};
+
 export function releaseDeferredAiRoutingDialog(
   aiRouting?: Pick<
     AiDocumentRoutingContextValue,
@@ -91,7 +109,7 @@ export async function runAiSectionAutofill({
   useRoutedCache,
   fields,
   aiRouting,
-}: RunAiAutofillArgs) {
+}: RunAiAutofillArgs): Promise<RunAiSectionAutofillResult | null> {
   try {
     // Same document already filled this section — don't re-hit the temp API.
     // Other documents for the same section (2nd vehicle, 2nd policy) still run.

@@ -794,8 +794,8 @@ describe('section1Mapper', () => {
         next_of_kin: [],
       },
     });
-    expect(ui.vital_info.full_legal_name).toBe('Jordan Casey');
-    expect(ui.vital_info.passport).toEqual({ text: 'scan', files: [] });
+    expect(ui.vital_info?.full_legal_name).toBe('Jordan Casey');
+    expect(ui.vital_info?.passport).toEqual({ text: 'scan', files: [] });
     expect(mapSection1ResponseToUI({})).toEqual({});
   });
 });
@@ -901,12 +901,14 @@ describe('sectionUploadFields + aiPatchNormalizer', () => {
       _deleted_files: [],
     });
     expect(
-      sanitizeSectionPayload(
-        {
-          '6A': [{ property_deeds_titles: 'text only', home_address: '123 Main' }],
-        },
-        '6A',
-        ['property_deeds_titles'],
+      (
+        sanitizeSectionPayload(
+          {
+            '6A': [{ property_deeds_titles: 'text only', home_address: '123 Main' }],
+          },
+          '6A',
+          ['property_deeds_titles'],
+        ) as Record<string, Array<Record<string, unknown>>>
       )['6A'][0].property_deeds_titles,
     ).toMatchObject({ text: 'text only' });
   });
