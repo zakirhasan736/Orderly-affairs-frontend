@@ -48,7 +48,9 @@ function buildApiUrl(path: string): string {
 function applySessionKindHeader(headers: Headers) {
   if (typeof window === 'undefined') return;
   try {
+    if (window.location.pathname.startsWith('/admin')) return;
     const kind = sessionStorage.getItem('oa_portal_kind');
+    if (kind === 'admin') return;
     if (kind === 'family' || kind === 'nextkin' || kind === 'owner') {
       headers.set('X-OA-Session-Kind', kind);
     }

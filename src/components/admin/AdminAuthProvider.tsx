@@ -19,7 +19,7 @@ type AdminAuthContextValue = {
   session: AdminSession | null;
   loading: boolean;
   refresh: () => Promise<void>;
-  signOut: () => Promise<void>;
+  signOut: (opts?: { reason?: 'idle' | 'manual' }) => Promise<void>;
 };
 
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
@@ -56,14 +56,20 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [loading, session, pathname, router]);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (opts?: { reason?: 'idle' | 'manual' }) => {
     try {
       await adminLogout();
     } catch {
       /* ignore */
     }
     setSession(null);
-    router.replace('/admin/login');
+    try {
+      sessionStorage.removeItem('oa_portal_kind');
+    } catch {
+      /* ignore */
+    }
+    const q = opts?.reason === 'idle' ? '?session=expired' : '';
+    router.replace(`/admin/login${q}`);
   }, [router]);
 
   const value = useMemo(

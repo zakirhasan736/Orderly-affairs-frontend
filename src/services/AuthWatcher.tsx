@@ -5,10 +5,10 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAppDispatch } from '@/store/hooks';
 import { clearSession } from '@/store/slices/authSlice';
 import {
-  clearPortalSession,
   fetchSession,
   markPortalSession,
 } from '@/libs/secureFetch';
+import { SessionExpiredListener } from '@/components/SessionExpiredListener';
 
 const PORTAL_KIND_KEY = 'oa_portal_kind';
 
@@ -32,7 +32,8 @@ export default function AuthWatcher({
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    // NOK portal and family login use their own session UX.
+    // NOK / family login pages manage their own gate; hard expiry is handled
+    // by SessionExpiredListener mounted below.
     if (pathname.startsWith('/next-kin') || pathname.startsWith('/family')) {
       return;
     }
@@ -107,38 +108,15 @@ export default function AuthWatcher({
 
     void verify();
 
-    const onSessionExpired = () => {
-      let portalKind = 'owner';
-      try {
-        portalKind = sessionStorage.getItem(PORTAL_KIND_KEY) || 'owner';
-        sessionStorage.removeItem(PORTAL_KIND_KEY);
-      } catch {
-        /* ignore */
-      }
-      dispatch(clearSession());
-      void import('@/libs/e2ee/unlock').then(({ lockE2ee }) => lockE2ee());
-      void import('@/utils/clearSensitiveClientStorage').then(
-        ({ clearSensitiveClientStorage }) => clearSensitiveClientStorage(),
-      );
-      void clearPortalSession().finally(() => {
-        if (portalKind === 'family') {
-          router.replace('/family/login?session=expired');
-          return;
-        }
-        if (portalKind === 'nextkin') {
-          router.replace('/next-kin?session=expired');
-          return;
-        }
-        router.replace('/?session=expired');
-      });
-    };
-    window.addEventListener('orderly-session-expired', onSessionExpired);
-
     return () => {
       cancelled = true;
-      window.removeEventListener('orderly-session-expired', onSessionExpired);
     };
   }, [pathname, router, dispatch]);
 
-  return <>{children}</>;
+  return (
+    <>
+      <SessionExpiredListener />
+      {children}
+    </>
+  );
 }

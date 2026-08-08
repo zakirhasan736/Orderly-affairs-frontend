@@ -9,7 +9,6 @@ import { EnhancedSectionView } from '@/components/EnhancedSectionView';
 import { isHiddenFromNokDashboard } from '@/config/nokConfig';
 import { nokCanReadSection } from '@/utils/nokSectionAccess';
 import { nokLogout, fetchSession } from '@/libs/secureFetch';
-import { SessionTimeoutGuard } from '@/components/SessionTimeoutGuard';
 import {
   NokVaultUnlockBanner,
   useNokKitDecrypt,
@@ -92,7 +91,6 @@ export default function NextKinSectionPage() {
   }, [accessLevel]);
 
   const sessionSeconds = fullKit ? 5 * 60 : 10 * 60;
-  const idleMs = fullKit ? 3.5 * 60 * 1000 : 8 * 60 * 1000;
 
   if ((kitLoading && !kit) || !kit || vaultGate === 'checking') {
     return <SectionSkeleton />;
@@ -100,7 +98,6 @@ export default function NextKinSectionPage() {
 
   return (
     <>
-      <SessionTimeoutGuard idleMs={idleMs} warnSeconds={45} />
       <div className="bg-[#f6f8fb] px-4 pt-4">
         <NokVaultUnlockBanner
           vaultGate={vaultGate}

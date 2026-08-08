@@ -64,7 +64,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { session, signOut } = useAdminAuth();
   const pageKey = adminPageKeyFromPath(pathname);
   const meta = ADMIN_PAGE_META[pageKey] || ADMIN_PAGE_META.overview;
-  const [sessionLeft, setSessionLeft] = useState(25 * 60);
+  const [sessionLeft, setSessionLeft] = useState(15 * 60);
   const [moreOpen, setMoreOpen] = useState(false);
   const [badges, setBadges] = useState<
     Record<string, { n: number; alert?: boolean }>
@@ -75,6 +75,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       setSessionLeft(v => (v > 0 ? v - 1 : 0));
     }, 1000);
     return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const onExtended = () => setSessionLeft(15 * 60);
+    window.addEventListener('orderly-session-extended', onExtended);
+    return () =>
+      window.removeEventListener('orderly-session-extended', onExtended);
   }, []);
 
   useEffect(() => {

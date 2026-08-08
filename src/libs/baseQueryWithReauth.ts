@@ -13,8 +13,16 @@ import {
   isCsrfFailure,
   rememberCsrfFromResponse,
 } from '@/libs/csrf';
-import { refreshAuthSession } from '@/libs/sessionRefresh';
+import {
+  refreshAuthSession,
+  stillAuthenticated,
+} from '@/libs/sessionRefresh';
 import { resolveApiBaseUrl } from '@/libs/apiBase';
+
+function notifySessionExpired() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('orderly-session-expired'));
+}
 
 /** Auth routes where a 401 must NOT trigger refresh-token (avoids 429 spam). */
 const SKIP_REFRESH_PATHS = [
@@ -56,7 +64,13 @@ export function createSecureBaseQuery(
       headers.set('X-CSRF-Token', token);
     }
     try {
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) {
+        return headers;
+      }
       const kind = sessionStorage.getItem('oa_portal_kind');
+      if (kind === 'admin') {
+        return headers;
+      }
       if (kind === 'family' || kind === 'nextkin' || kind === 'owner') {
         headers.set('X-OA-Session-Kind', kind);
       }
@@ -116,6 +130,8 @@ export function createSecureBaseQuery(
       if (refreshed) {
         result = await rawBaseQuery(args, api, extraOptions);
         rememberCsrfFromResponse(result.meta?.response);
+      } else if (!(await stillAuthenticated())) {
+        notifySessionExpired();
       }
     }
 

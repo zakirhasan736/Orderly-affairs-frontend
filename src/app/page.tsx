@@ -67,6 +67,7 @@ import {
 } from '@/components/RateLimitBanner';
 import { Button } from '@/components/common/ui/button';
 import { InlineNotice } from '@/components/common/ui/inline-notice';
+import { SessionExpiredNotice } from '@/components/SessionExpiredNotice';
 
 type MFAMethod = 'authenticator' | 'email' | 'sms';
 
@@ -1838,6 +1839,7 @@ const backButtonLabel =
           isPlanStep ? 'lg:px-[52px] lg:py-[44px]' : undefined
         }
       >
+            <SessionExpiredNotice className="mb-4" />
             {error &&
               rateLimitSeconds <= 0 &&
               step !== 'payment' &&

@@ -11,6 +11,7 @@ import {
 import { useAdminAuth } from '@/components/admin/AdminAuthProvider';
 import { BRAND_LOGO } from '@/constants/brand';
 import Image from 'next/image';
+import { SessionExpiredNotice } from '@/components/SessionExpiredNotice';
 import '@/app/admin/admin.css';
 
 type Step = 'credentials' | 'setup' | 'verify';
@@ -133,6 +134,11 @@ export default function AdminLoginPage() {
             {step === 'setup' && 'Enroll authenticator'}
             {step === 'verify' && 'Authenticator code'}
           </h2>
+
+          <SessionExpiredNotice
+            className="mb-4"
+            description="Your admin session ended. Sign in again to continue."
+          />
 
           {step === 'credentials' && (
             <form onSubmit={onLogin}>

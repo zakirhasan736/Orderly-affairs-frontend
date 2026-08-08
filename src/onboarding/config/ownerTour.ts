@@ -33,6 +33,14 @@ export const ownerTour: OwnerTourStep[] = [
       'Drop PDFs or photos here. We detect the right section and fill matching fields for you — no need to type everything by hand. You can upload several files at once.',
   },
   {
+    section: 'Just saved',
+    selector: '[data-tour="tour-new-data-hub"]',
+    ensureSection: 'dashboard',
+    title: 'Just saved — one place for new data',
+    description:
+      'After you Accept an AI fill, it lands here under Just saved. Tap Open to jump to the exact card, or Review fields to finish blanks — you stay on the Dashboard until you choose.',
+  },
+  {
     section: 'Upload types',
     selector: '.overview-upload-types',
     ensureSection: 'dashboard',
@@ -103,11 +111,11 @@ export const ownerTour: OwnerTourStep[] = [
   },
   {
     section: 'After upload',
-    selector: '[data-ai-overview-upload]',
-    ensureSection: 'dashboard',
-    title: 'Finish blanks after AI fills',
+    selector: '[data-tour="tour-fill-empty-bar"]',
+    ensureSection: '1',
+    title: 'Review fields after AI fills',
     description:
-      "Upload documents above and AI will fill matching sections for you. Open a section afterward to review what it added. Anything still blank shows a sparkle icon, tap 'Fill empty fields' to jump straight to what's left, no need to redo the whole section.",
+      "When you open a section that was just filled, this bar says This card was just filled. Tap Review fields to see empty blanks and already-filled values — same popup every time, even if you skipped it earlier.",
   },
   {
     section: 'Home',

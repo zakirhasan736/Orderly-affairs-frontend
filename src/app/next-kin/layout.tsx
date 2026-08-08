@@ -1,8 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { fetchSession } from '@/libs/secureFetch';
+import { SessionExpiredListener } from '@/components/SessionExpiredListener';
+import {
+  SessionTimeoutGuard,
+  nokIdleTiming,
+} from '@/components/SessionTimeoutGuard';
+
+const PORTAL_KIND_KEY = 'oa_portal_kind';
+
+function isNokLoginPath(pathname: string) {
+  return pathname === '/next-kin' || pathname === '/next-kin/';
+}
 
 /**
  * NOK portal shell — family collaborators use /dashboard, not /next-kin.
@@ -16,6 +27,16 @@ export default function NextKinPortalLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
+  const [accessLevel, setAccessLevel] = useState<string | undefined>();
+  const [authenticatedNok, setAuthenticatedNok] = useState(false);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(PORTAL_KIND_KEY, 'nextkin');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,11 +53,18 @@ export default function NextKinPortalLayout({
       if (
         session.authenticated &&
         session.role === 'owner' &&
-        !pathname.endsWith('/next-kin') &&
-        pathname !== '/next-kin'
+        !isNokLoginPath(pathname)
       ) {
         router.replace('/dashboard');
         return;
+      }
+
+      if (session.authenticated && session.role === 'nextkin') {
+        setAuthenticatedNok(true);
+        setAccessLevel(session.access_level);
+      } else {
+        setAuthenticatedNok(false);
+        setAccessLevel(undefined);
       }
 
       setReady(true);
@@ -47,6 +75,20 @@ export default function NextKinPortalLayout({
     };
   }, [router, pathname]);
 
+  const fullKit = useMemo(() => {
+    const level = String(accessLevel || '').trim();
+    if (
+      level === 'Area-Specific Access' ||
+      level === 'Section-Specific Access'
+    ) {
+      return false;
+    }
+    return true;
+  }, [accessLevel]);
+
+  const idle = nokIdleTiming(fullKit);
+  const guardEnabled = authenticatedNok && !isNokLoginPath(pathname);
+
   if (!ready) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-[#f6f8fb]">
@@ -55,5 +97,15 @@ export default function NextKinPortalLayout({
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <SessionExpiredListener />
+      <SessionTimeoutGuard
+        enabled={guardEnabled}
+        idleMs={idle.idleMs}
+        warnSeconds={idle.warnSeconds}
+      />
+      {children}
+    </>
+  );
 }

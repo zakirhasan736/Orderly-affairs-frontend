@@ -27,6 +27,7 @@ import {
   isHealthInsuranceCardCandidate,
 } from '@/utils/aiInsuranceDocument';
 import type { IdentityPersonChoice } from '@/utils/aiIdentityDocument';
+import { toastSavedJustSavedHandoff } from '@/utils/toastSavedJustSavedHandoff';
 
 function patchesForFile(fileId?: string): StashedAiPatch[] {
   if (!fileId) return [];
@@ -264,11 +265,7 @@ export async function approveOverviewAiDocuments(
   }
 
   if (saved > 0) {
-    toast.success(
-      saved > 1
-        ? `Saved ${saved} section fills to your vault`
-        : 'Saved to your vault',
-    );
+    toastSavedJustSavedHandoff({ savedCount: saved });
   }
   if (failed > 0) {
     toast.error(

@@ -11,7 +11,6 @@ import { MessagesDeliveryModal } from '@/components/MessagesDeliveryModal';
 import { nokLogout, fetchSession } from '@/libs/secureFetch';
 import { HelpAssistantProvider } from '@/components/help/HelpAssistantContext';
 import { HelpAssistantHost } from '@/components/help/HelpAssistantHost';
-import { SessionTimeoutGuard } from '@/components/SessionTimeoutGuard';
 import {
   NokVaultUnlockBanner,
   useNokKitDecrypt,
@@ -88,7 +87,6 @@ export default function NextKinDashboardPage() {
   }, [accessLevel]);
 
   const sessionSeconds = fullKit ? 5 * 60 : 10 * 60;
-  const idleMs = fullKit ? 3.5 * 60 * 1000 : 8 * 60 * 1000;
 
   const nokNotices = useMemo(() => {
     if (!kit || typeof kit !== 'object') return [];
@@ -179,7 +177,6 @@ export default function NextKinDashboardPage() {
 
   return (
     <HelpAssistantProvider>
-      <SessionTimeoutGuard idleMs={idleMs} warnSeconds={45} />
       <div className="space-y-3 px-4 pt-4">
         <NokVaultUnlockBanner
           vaultGate={vaultGate}

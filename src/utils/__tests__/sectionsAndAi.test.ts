@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import {
   applySection1AIPatch,
   applySection1SubsectionPatch,
@@ -1380,5 +1380,114 @@ describe('applyAiResultToSectionForm multi-card', () => {
     } else {
       expect(policy?.text).toBe('SF-445566');
     }
+  });
+});
+
+describe('recordNewFillsFromPersistResult', () => {
+  const store: Record<string, string> = {};
+
+  beforeEach(() => {
+    for (const key of Object.keys(store)) delete store[key];
+    const localStorageMock = {
+      getItem: (key: string) => store[key] ?? null,
+      setItem: (key: string, value: string) => {
+        store[key] = value;
+      },
+      removeItem: (key: string) => {
+        delete store[key];
+      },
+      clear: () => {
+        for (const key of Object.keys(store)) delete store[key];
+      },
+    };
+    vi.stubGlobal('window', {
+      localStorage: localStorageMock,
+      dispatchEvent: () => true,
+    });
+    vi.stubGlobal('localStorage', localStorageMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('records a vehicle card marker from persist data + AI result', async () => {
+    const { recordNewFillsFromPersistResult } = await import(
+      '@/utils/recordNewFillsFromPersist'
+    );
+    const { listUnseenNewFills } = await import('@/utils/newFillMarkers');
+
+    const markers = recordNewFillsFromPersistResult({
+      sectionId: '5',
+      subsection: '5A',
+      data: {
+        '5A': [{ make: 'BMW', model: 'X5', year: '2020' }],
+      },
+      result: {
+        patch: {
+          '5A': [{ make: 'BMW', model: 'X5', year: '2020' }],
+        },
+      },
+    });
+
+    expect(markers.length).toBeGreaterThanOrEqual(1);
+    expect(markers[0].sectionId).toBe('5');
+    expect(markers[0].subsectionId).toBe('5A');
+    expect(markers[0].index).toBe(0);
+    expect(markers[0].label.toLowerCase()).toContain('bmw');
+    expect(listUnseenNewFills().some(m => m.sectionId === '5')).toBe(true);
+  });
+
+  it('records an insurance card marker (not identity-only)', async () => {
+    const { recordNewFillsFromPersistResult } = await import(
+      '@/utils/recordNewFillsFromPersist'
+    );
+    const { listUnseenNewFills } = await import('@/utils/newFillMarkers');
+
+    recordNewFillsFromPersistResult({
+      sectionId: '7',
+      subsection: '7A',
+      data: {
+        '7A': [
+          {
+            policy_company: 'State Farm',
+            policy_type: 'Vehicle',
+            make: 'Toyota',
+            notes: 'Toyota Camry policy',
+          },
+        ],
+      },
+      result: {
+        '7A': [
+          {
+            policy_company: 'State Farm',
+            policy_type: 'Vehicle',
+            make: 'Toyota',
+          },
+        ],
+      },
+    });
+
+    const unseen = listUnseenNewFills().filter(m => m.sectionId === '7');
+    expect(unseen.length).toBeGreaterThanOrEqual(1);
+    expect(unseen[0].subsectionId).toBe('7A');
+    expect(unseen[0].label.length).toBeGreaterThan(0);
+  });
+
+  it('falls back to a section-level marker when no card arrays match', async () => {
+    const { recordNewFillsFromPersistResult } = await import(
+      '@/utils/recordNewFillsFromPersist'
+    );
+
+    const markers = recordNewFillsFromPersistResult({
+      sectionId: '6',
+      subsection: '6A',
+      data: {},
+      result: { summary: 'Residence notes only' },
+    });
+
+    expect(markers.length).toBe(1);
+    expect(markers[0].sectionId).toBe('6');
+    expect(markers[0].label.toLowerCase()).toMatch(/residence|main/);
   });
 });

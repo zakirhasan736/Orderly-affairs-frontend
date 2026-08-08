@@ -51,6 +51,7 @@ import {
   type AiUploadHistoryItem,
 } from '@/utils/aiUploadHistory';
 import { toast } from 'sonner';
+import { toastSavedJustSavedHandoff } from '@/utils/toastSavedJustSavedHandoff';
 import {
   AiInboxDocumentReviewDialog,
   type AiInboxReviewDocument,
@@ -514,6 +515,37 @@ export function AiReviewInboxPanel({
     mimeType?: string;
   } | null>(null);
 
+  const openJustSavedHandoff = useCallback(
+    (marker: {
+      sectionId: string;
+      subsectionId?: string;
+      topicId?: string;
+    }) => {
+      if (onNavigateToSection) {
+        onNavigateToSection(
+          marker.sectionId,
+          marker.subsectionId || null,
+          marker.topicId || null,
+        );
+        return;
+      }
+      const el = document.getElementById('overview-recently-filled');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    [onNavigateToSection],
+  );
+
+  const toastAcceptSaved = useCallback(
+    (savedCount = 1, description?: string) => {
+      toastSavedJustSavedHandoff({
+        savedCount,
+        description,
+        onOpenMarker: openJustSavedHandoff,
+      });
+    },
+    [openJustSavedHandoff],
+  );
+
   // RTK cache — reopen vault activity / switch tabs won't re-hit the API
   // unless data is older than 60s (uploads/deletes invalidate tags).
   const {
@@ -543,11 +575,7 @@ export function AiReviewInboxPanel({
           routing?.clearPendingForSection(sectionId);
         });
         setReviewTick(value => value + 1);
-        toast.success(
-          result.flushed > 1
-            ? `Saved ${result.flushed} documents to your vault`
-            : 'Saved to your vault',
-        );
+        toastAcceptSaved(result.flushed);
       });
     };
     const onReviewed = () => setReviewTick(value => value + 1);
@@ -576,7 +604,7 @@ export function AiReviewInboxPanel({
       window.removeEventListener('orderly-vault-alerts-changed', onAlerts);
       window.removeEventListener(OPEN_VAULT_ACTIVITY_TAB_EVENT, onOpenTab);
     };
-  }, [routing]);
+  }, [routing, toastAcceptSaved]);
 
   const patches = useMemo(
     () => listDashboardAiPatches(),
@@ -817,21 +845,19 @@ export function AiReviewInboxPanel({
             });
             setReviewTick(value => value + 1);
             const toInsurance = gated.target.sectionId === '7';
-            toast.success(
-              `Saved to ${gated.target.sectionLabel || (toInsurance ? 'Insurance Policies' : 'Family & Relationships')}`,
-              {
-                description: toInsurance
-                  ? gated.choice === 'spouse'
-                    ? 'Tagged as Spouse/Partner on the health insurance policy.'
-                    : gated.choice === 'dependent'
-                      ? 'Tagged as Dependent on the health insurance policy.'
-                      : 'Saved on your Insurance Policies card.'
-                  : gated.choice === 'spouse'
-                    ? 'Added under Spouse / partner in Family Members.'
-                    : gated.choice === 'dependent'
-                      ? 'Added under Dependents.'
-                      : 'Added as a family member card.',
-              },
+            toastAcceptSaved(
+              1,
+              toInsurance
+                ? gated.choice === 'spouse'
+                  ? 'Tagged as Spouse/Partner — find it under Just saved.'
+                  : gated.choice === 'dependent'
+                    ? 'Tagged as Dependent — find it under Just saved.'
+                    : 'Saved on Insurance — find it under Just saved.'
+                : gated.choice === 'spouse'
+                  ? 'Added under Spouse / partner — find it under Just saved.'
+                  : gated.choice === 'dependent'
+                    ? 'Added under Dependents — find it under Just saved.'
+                    : 'Added as a family member — find it under Just saved.',
             );
             return;
           }
@@ -858,12 +884,12 @@ export function AiReviewInboxPanel({
               fileId: row.fileId,
             });
             setReviewTick(value => value + 1);
-            toast.success('Saved to your vault', {
-              description:
-                gated.choice === 'self'
-                  ? 'Tagged as your primary coverage.'
-                  : `Tagged as ${gated.choice === 'spouse' ? 'Spouse/Partner' : gated.choice === 'dependent' ? 'Dependent' : 'Other'}.`,
-            });
+            toastAcceptSaved(
+              1,
+              gated.choice === 'self'
+                ? 'Tagged as your primary coverage — find it under Just saved.'
+                : `Tagged as ${gated.choice === 'spouse' ? 'Spouse/Partner' : gated.choice === 'dependent' ? 'Dependent' : 'Other'} — find it under Just saved.`,
+            );
             return;
           }
         }
@@ -912,11 +938,7 @@ export function AiReviewInboxPanel({
                 routing?.clearPendingForSection(sectionId);
               });
               setReviewTick(value => value + 1);
-              toast.success(
-                result.flushed > 1
-                  ? `Saved ${result.flushed} documents to your vault`
-                  : 'Saved to your vault',
-              );
+              toastAcceptSaved(result.flushed);
             }
           });
           return;
@@ -961,16 +983,11 @@ export function AiReviewInboxPanel({
         setReviewTick(value => value + 1);
 
         const totalSaved = flush.saved + partners.saved;
-        toast.success(
+        toastAcceptSaved(
+          totalSaved,
           totalSaved > 1
-            ? `Saved ${totalSaved} documents to your vault`
-            : 'Saved to your vault',
-          {
-            description:
-              totalSaved > 1
-                ? 'Separate cards were created for each distinct vehicle/policy. Matching data updates existing cards instead of duplicating.'
-                : 'Open the section to finish any blanks — use Fill empty fields.',
-          },
+            ? 'Separate cards for each vehicle/policy — open them from Just saved, or Review fields.'
+            : 'Open from Just saved, or tap Review fields to finish blanks.',
         );
 
         if (flush.failed > 0 || partners.failed > 0) {
@@ -984,7 +1001,7 @@ export function AiReviewInboxPanel({
         setApprovingId(null);
       }
     },
-    [routing],
+    [routing, toastAcceptSaved],
   );
 
   const dismissAiReview = useCallback(

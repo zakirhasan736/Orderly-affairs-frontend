@@ -23,8 +23,11 @@ export const REFRESH_COOLDOWN_MS = 60_000;
 
 function preferredRefreshRole(): 'family' | 'nextkin' | 'owner' | null {
   if (typeof window === 'undefined') return null;
+  // Admin cookies win when not prefer_nok — never advertise family/NOK here.
   try {
+    if (window.location.pathname.startsWith('/admin')) return null;
     const kind = sessionStorage.getItem('oa_portal_kind');
+    if (kind === 'admin') return null;
     if (kind === 'family' || kind === 'nextkin') return kind;
     if (kind === 'owner') return 'owner';
   } catch {

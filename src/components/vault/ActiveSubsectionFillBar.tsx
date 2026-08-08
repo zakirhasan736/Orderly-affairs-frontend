@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Sparkles } from 'lucide-react';
 import {
   getSubsectionProgress,
@@ -14,6 +14,11 @@ import {
   VAULT_NAVIGATION,
 } from '@/utils/vaultNavigation';
 import { cn } from '@common/ui/utils';
+import {
+  listAllNewFills,
+  NEW_FILLS_CHANGED,
+  type NewFillMarker,
+} from '@/utils/newFillMarkers';
 
 function parseTopicRef(topicId: string | null | undefined): {
   itemIndex?: number;
@@ -28,6 +33,32 @@ function parseTopicRef(topicId: string | null | undefined): {
     return { itemIndex: Number(parts[1]) || 0 };
   }
   return {};
+}
+
+const JUST_FILLED_MS = 2 * 60 * 1000;
+
+function markerMatchesCard(
+  item: NewFillMarker,
+  match: {
+    sectionId: string;
+    subsectionId: string;
+    topicGroupKey?: string;
+    index?: number;
+  },
+) {
+  if (item.sectionId !== match.sectionId) return false;
+  if (item.subsectionId !== match.subsectionId) return false;
+  if (
+    match.topicGroupKey != null &&
+    match.index != null &&
+    item.topicGroupKey === match.topicGroupKey &&
+    item.index === match.index
+  ) {
+    return true;
+  }
+  if (match.index != null && item.index === match.index) return true;
+  if (match.index == null) return true;
+  return false;
 }
 
 type ActiveSubsectionFillBarProps = {
@@ -50,6 +81,30 @@ export function ActiveSubsectionFillBar({
   className,
 }: ActiveSubsectionFillBarProps) {
   const fillGaps = useVaultFillGaps();
+  const [fillTick, setFillTick] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => setFillTick(value => value + 1);
+    window.addEventListener(NEW_FILLS_CHANGED, refresh);
+    return () => window.removeEventListener(NEW_FILLS_CHANGED, refresh);
+  }, []);
+
+  const justFilled = useMemo(() => {
+    void fillTick;
+    if (!subsectionId) return false;
+    const topicRef = parseTopicRef(topicId);
+    const now = Date.now();
+    return listAllNewFills().some(item => {
+      const fresh = now - item.createdAt < JUST_FILLED_MS;
+      if (item.seenAt && !fresh) return false;
+      return markerMatchesCard(item, {
+        sectionId,
+        subsectionId,
+        topicGroupKey: topicRef.groupId,
+        index: topicRef.itemIndex,
+      });
+    });
+  }, [fillTick, sectionId, subsectionId, topicId]);
 
   const meta = useMemo(() => {
     if (!subsectionId) return null;
@@ -133,7 +188,7 @@ export function ActiveSubsectionFillBar({
       data-tour="tour-fill-empty-bar"
       className={cn(
         'sticky top-0 z-30 mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#213D59]/15 bg-white/95 px-3.5 py-2.5 shadow-sm backdrop-blur-md',
-        meta.emptyCount > 0
+        meta.emptyCount > 0 || justFilled
           ? 'border-amber-200 bg-amber-50/90'
           : undefined,
         className,
@@ -149,10 +204,16 @@ export function ActiveSubsectionFillBar({
             ? ` · ${meta.emptyCount} empty field${meta.emptyCount === 1 ? '' : 's'}`
             : ' · all fields have values'}
         </p>
-        <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
-          Use Review fields anytime — empty blanks, already filled values, or
-          after you skipped the popup.
-        </p>
+        {justFilled ? (
+          <p className="mt-0.5 text-[12px] font-semibold leading-snug text-amber-800">
+            This card was just filled — Review fields
+          </p>
+        ) : (
+          <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+            Use Review fields anytime — empty blanks, already filled values, or
+            after you skipped the popup.
+          </p>
+        )}
       </div>
 
       {fillGaps ? (

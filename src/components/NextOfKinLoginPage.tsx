@@ -4,6 +4,7 @@ import React, { useRef, useState } from 'react';
 import Image from 'next/image';
 import { Eye, EyeOff, Lock, Mail, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { InlineNotice } from '@/components/common/ui/inline-notice';
+import { SessionExpiredNotice } from '@/components/SessionExpiredNotice';
 import { BRAND_LOGO } from '@/constants/brand';
 import {
   useStartEmailMfaMutation,
@@ -382,6 +383,8 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
                 </p>
               </div>
             </div>
+
+            <SessionExpiredNotice className="mt-5" />
 
             {error ? (
               <InlineNotice

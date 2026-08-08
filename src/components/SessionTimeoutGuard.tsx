@@ -3,9 +3,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@common/ui/utils';
 import { useLogout } from '@/libs/logoutHandler';
+import { refreshAuthSession } from '@/libs/sessionRefresh';
 
-const DEFAULT_IDLE_MS = 14 * 60 * 1000; // owner: warn after 14 min idle
-const WARN_SECONDS = 60;
+/** Owner / family / admin: warn after 14 min idle (access JWT ~15 min). */
+export const DEFAULT_IDLE_MS = 14 * 60 * 1000;
+export const DEFAULT_WARN_SECONDS = 60;
+
+/** NOK Full Kit (~5 min JWT) vs section (~10 min JWT). */
+export function nokIdleTiming(fullKit: boolean): {
+  idleMs: number;
+  warnSeconds: number;
+} {
+  return fullKit
+    ? { idleMs: 3.5 * 60 * 1000, warnSeconds: 45 }
+    : { idleMs: 8 * 60 * 1000, warnSeconds: 45 };
+}
+
 const ACTIVITY_EVENTS = [
   'mousedown',
   'mousemove',
@@ -24,26 +37,28 @@ function formatCountdown(totalSeconds: number) {
 }
 
 /**
- * Idle session guard for authenticated vault areas.
+ * Idle session guard for authenticated areas.
  * After idle, shows a branded countdown; then auto-logout.
- *
- * NOK Full Kit tokens expire in 5 minutes — use a tighter idle window so the
- * UI signs out before the JWT dies mid-form.
+ * "Stay signed in" refreshes the access cookie before resetting the idle timer.
  */
 export function SessionTimeoutGuard({
   enabled = true,
   idleMs = DEFAULT_IDLE_MS,
-  warnSeconds = WARN_SECONDS,
+  warnSeconds = DEFAULT_WARN_SECONDS,
+  onLogout,
 }: {
   enabled?: boolean;
   /** Milliseconds of idle time before the warning dialog. */
   idleMs?: number;
   /** Countdown seconds shown in the warning dialog. */
   warnSeconds?: number;
+  /** Override default owner/NOK logout (e.g. admin signOut). */
+  onLogout?: () => Promise<void> | void;
 }) {
-  const logout = useLogout();
+  const defaultLogout = useLogout();
   const [warningOpen, setWarningOpen] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(warnSeconds);
+  const [stayingSignedIn, setStayingSignedIn] = useState(false);
 
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -51,11 +66,18 @@ export function SessionTimeoutGuard({
   const loggingOutRef = useRef(false);
   const idleMsRef = useRef(idleMs);
   const warnSecondsRef = useRef(warnSeconds);
+  const onLogoutRef = useRef(onLogout);
+  const defaultLogoutRef = useRef(defaultLogout);
 
   useEffect(() => {
     idleMsRef.current = idleMs;
     warnSecondsRef.current = warnSeconds;
   }, [idleMs, warnSeconds]);
+
+  useEffect(() => {
+    onLogoutRef.current = onLogout;
+    defaultLogoutRef.current = defaultLogout;
+  }, [onLogout, defaultLogout]);
 
   const clearIdleTimer = useCallback(() => {
     if (idleTimerRef.current) {
@@ -78,12 +100,17 @@ export function SessionTimeoutGuard({
     clearCountdown();
     setWarningOpen(false);
     warningOpenRef.current = false;
+    setStayingSignedIn(false);
     try {
-      await logout();
+      if (onLogoutRef.current) {
+        await onLogoutRef.current();
+      } else {
+        await defaultLogoutRef.current({ reason: 'idle' });
+      }
     } finally {
       loggingOutRef.current = false;
     }
-  }, [clearCountdown, clearIdleTimer, logout]);
+  }, [clearCountdown, clearIdleTimer]);
 
   const startWarning = useCallback(() => {
     if (warningOpenRef.current || loggingOutRef.current) return;
@@ -112,13 +139,27 @@ export function SessionTimeoutGuard({
     }, idleMsRef.current);
   }, [clearIdleTimer, enabled, startWarning]);
 
-  const staySignedIn = useCallback(() => {
+  const staySignedIn = useCallback(async () => {
+    if (loggingOutRef.current || stayingSignedIn) return;
+    setStayingSignedIn(true);
     clearCountdown();
-    warningOpenRef.current = false;
-    setWarningOpen(false);
-    setSecondsLeft(warnSecondsRef.current);
-    armIdleTimer();
-  }, [armIdleTimer, clearCountdown]);
+    try {
+      const refreshed = await refreshAuthSession();
+      if (!refreshed) {
+        await doLogout();
+        return;
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('orderly-session-extended'));
+      }
+      warningOpenRef.current = false;
+      setWarningOpen(false);
+      setSecondsLeft(warnSecondsRef.current);
+      armIdleTimer();
+    } finally {
+      setStayingSignedIn(false);
+    }
+  }, [armIdleTimer, clearCountdown, doLogout, stayingSignedIn]);
 
   useEffect(() => {
     warningOpenRef.current = warningOpen;
@@ -182,7 +223,8 @@ export function SessionTimeoutGuard({
           id="session-timeout-title"
           className="mt-3 mb-0 text-[17px] font-semibold text-[#213D59]"
         >
-          We&apos;ll sign you out in {warn} seconds
+          We&apos;ll sign you out in {secondsLeft} second
+          {secondsLeft === 1 ? '' : 's'}
         </h3>
         <p className="mt-2.5 mb-0 text-[13.5px] leading-relaxed text-[#5c6b66]">
           For safety on shared computers. Everything you&apos;ve typed is
@@ -202,17 +244,19 @@ export function SessionTimeoutGuard({
         <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
           <button
             type="button"
+            disabled={stayingSignedIn}
             onClick={() => void doLogout()}
-            className="h-[42px] flex-1 rounded-[21px] border border-[#e4e6e1] bg-white text-[13px] font-medium text-[#213D59] transition hover:bg-[#f5f8fc]"
+            className="h-[42px] flex-1 rounded-[21px] border border-[#e4e6e1] bg-white text-[13px] font-medium text-[#213D59] transition hover:bg-[#f5f8fc] disabled:opacity-60"
           >
             Sign out now
           </button>
           <button
             type="button"
-            onClick={staySignedIn}
-            className="h-[42px] flex-1 rounded-[21px] border-0 bg-[#213D59] text-[13px] font-medium text-white transition hover:bg-[#2B5A8C]"
+            disabled={stayingSignedIn}
+            onClick={() => void staySignedIn()}
+            className="h-[42px] flex-1 rounded-[21px] border-0 bg-[#213D59] text-[13px] font-medium text-white transition hover:bg-[#2B5A8C] disabled:opacity-60"
           >
-            Stay signed in
+            {stayingSignedIn ? 'Extending…' : 'Stay signed in'}
           </button>
         </div>
       </div>

@@ -2797,12 +2797,17 @@ export default function DashboardPage() {
     setMobileMoreOpen(false);
     markSectionFillsSeen(sectionId, { subsectionId, topicId });
 
-    setTimeout(() => {
+    const tryScroll = (attempt: number) => {
       const element = document.getElementById(getTopicElementId(topicId));
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
       }
-    }, 120);
+      if (attempt < 8) {
+        window.setTimeout(() => tryScroll(attempt + 1), 120 + attempt * 40);
+      }
+    };
+    window.setTimeout(() => tryScroll(0), 120);
   };
 
   const handleReorderSubsection = useCallback(

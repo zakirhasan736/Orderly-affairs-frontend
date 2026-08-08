@@ -1,16 +1,28 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { AdminSessionSkeleton } from '@/components/admin/AdminSkeletons';
 import { AdminAuthProvider, useAdminAuth } from '@/components/admin/AdminAuthProvider';
 import { AdminShell } from '@/components/admin/AdminShell';
+import { SessionExpiredListener } from '@/components/SessionExpiredListener';
+import { SessionTimeoutGuard } from '@/components/SessionTimeoutGuard';
 import './admin.css';
+
+const PORTAL_KIND_KEY = 'oa_portal_kind';
 
 function AdminGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || '';
-  const { loading, session } = useAdminAuth();
+  const { loading, session, signOut } = useAdminAuth();
   const isLogin = pathname.startsWith('/admin/login');
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(PORTAL_KIND_KEY, 'admin');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   if (loading) {
     return <AdminSessionSkeleton />;
@@ -24,7 +36,16 @@ function AdminGate({ children }: { children: React.ReactNode }) {
     return <AdminSessionSkeleton />;
   }
 
-  return <AdminShell>{children}</AdminShell>;
+  return (
+    <>
+      <SessionTimeoutGuard
+        onLogout={async () => {
+          await signOut({ reason: 'idle' });
+        }}
+      />
+      <AdminShell>{children}</AdminShell>
+    </>
+  );
 }
 
 export default function AdminLayout({
@@ -35,6 +56,7 @@ export default function AdminLayout({
   return (
     <div className="oa-admin">
       <AdminAuthProvider>
+        <SessionExpiredListener />
         <AdminGate>{children}</AdminGate>
       </AdminAuthProvider>
     </div>

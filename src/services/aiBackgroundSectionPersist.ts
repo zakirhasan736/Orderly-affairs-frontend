@@ -222,6 +222,20 @@ async function persistAiResultUnlocked(args: {
         '@/utils/sectionLastUpdated'
       );
       setSectionLastUpdated(sectionId);
+      // Every Accept/persist path records findable “Just saved” markers.
+      try {
+        const { recordNewFillsFromPersistResult } = await import(
+          '@/utils/recordNewFillsFromPersist'
+        );
+        recordNewFillsFromPersistResult({
+          sectionId,
+          subsection,
+          data: merged,
+          result,
+        });
+      } catch {
+        /* ignore marker failures — save already succeeded */
+      }
       window.dispatchEvent(
         new CustomEvent('orderly-ai-section-persisted', {
           detail: { sectionId, sectionKey, data: merged },
