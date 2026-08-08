@@ -24,6 +24,12 @@ import {
   OVERVIEW_BROWSE_CATEGORIES,
   type OverviewBrowseCategory,
 } from '@/utils/overviewBrowseCategories';
+import {
+  listUnseenNewFills,
+  NEW_FILLS_CHANGED,
+  sectionHasUnseenFills,
+} from '@/utils/newFillMarkers';
+import { sectionHasSidebarNewAiData } from '@/utils/aiSidebarNewData';
 
 const ICONS: Record<
   OverviewBrowseCategory['icon'],
@@ -65,8 +71,21 @@ export function OverviewBrowseGrid({
   const routing = useOptionalAiDocumentRouting();
   const pendingUploads = routing?.pendingUploads ?? [];
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [newFillTick, setNewFillTick] = useState(0);
   const detailsRef = useRef<HTMLDivElement>(null);
   const isSheet = variant === 'sheet';
+
+  useEffect(() => {
+    const bump = () => setNewFillTick(value => value + 1);
+    window.addEventListener(NEW_FILLS_CHANGED, bump);
+    window.addEventListener('orderly-ai-patch-stashed', bump);
+    window.addEventListener('orderly-ai-section-reviewed', bump);
+    return () => {
+      window.removeEventListener(NEW_FILLS_CHANGED, bump);
+      window.removeEventListener('orderly-ai-patch-stashed', bump);
+      window.removeEventListener('orderly-ai-section-reviewed', bump);
+    };
+  }, []);
 
   const canSeeSection = (sectionId: string) =>
     allowedSectionIds === 'all' || allowedSectionIds.has(String(sectionId));
@@ -78,6 +97,11 @@ export function OverviewBrowseGrid({
     })).filter(category => category.sectionIds.length > 0);
   }, [allowedSectionIds]);
 
+  const newFills = useMemo(() => {
+    void newFillTick;
+    return listUnseenNewFills();
+  }, [newFillTick]);
+
   const pendingBySection = useMemo(() => {
     const map = new Set<string>();
     pendingUploads.forEach(upload => {
@@ -88,8 +112,19 @@ export function OverviewBrowseGrid({
         map.add(upload.targetSectionId);
       }
     });
+    // Also treat unread AI fills / new-fill markers as attention.
+    void newFillTick;
+    VAULT_NAVIGATION.forEach(section => {
+      if (!canSeeSection(section.id)) return;
+      if (
+        sectionHasUnseenFills(newFills, section.id) ||
+        sectionHasSidebarNewAiData(section.id, pendingUploads)
+      ) {
+        map.add(section.id);
+      }
+    });
     return map;
-  }, [pendingUploads, allowedSectionIds]);
+  }, [pendingUploads, allowedSectionIds, newFillTick, newFills]);
 
   const completedSet = useMemo(
     () => new Set(completedSectionIds.map(String).filter(canSeeSection)),
@@ -144,7 +179,7 @@ export function OverviewBrowseGrid({
   }, [activeId, isSheet]);
 
   const sectionList = active ? (
-    <ul className={cn('space-y-1.5', isSheet && 'max-h-[38dvh] overflow-y-auto')}>
+    <ul className={cn('space-y-2', isSheet && 'max-h-[38dvh] overflow-y-auto')}>
       {active.sectionIds.map(sectionId => {
         const title = sectionTitle.get(sectionId) || `Section ${sectionId}`;
         const hasPending = pendingBySection.has(sectionId);
@@ -156,9 +191,9 @@ export function OverviewBrowseGrid({
               type="button"
               onClick={() => onNavigateToSection(sectionId)}
               className={cn(
-                'group flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition',
+                'group flex w-full items-center gap-3 rounded-xl border px-3.5 py-3.5 text-left transition',
                 hasPending
-                  ? 'border-sky-200 bg-sky-50'
+                  ? 'border-amber-300 bg-amber-50 ring-1 ring-amber-200'
                   : isDone
                     ? 'border-emerald-100 bg-emerald-50/60 hover:bg-emerald-50'
                     : 'border-slate-200 bg-white hover:border-[#213D59]/25',
@@ -166,9 +201,9 @@ export function OverviewBrowseGrid({
             >
               <span
                 className={cn(
-                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold',
+                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[13px] font-bold',
                   hasPending
-                    ? 'bg-sky-600 text-white'
+                    ? 'bg-amber-600 text-white'
                     : isDone
                       ? 'bg-emerald-600 text-white'
                       : 'bg-[#e7eef7] text-[#213D59]',
@@ -177,18 +212,29 @@ export function OverviewBrowseGrid({
                 {getVaultSectionDisplayNumber(sectionId)}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-semibold text-[#1a2b3d]">
+                <span className="block truncate text-[15px] font-semibold text-[#1a2b3d]">
                   {title}
                 </span>
-                <span className="block text-[11px] text-[#5a6b80]">
+                <span
+                  className={cn(
+                    'mt-0.5 block text-[13px]',
+                    hasPending ? 'font-medium text-amber-900' : 'text-[#5a6b80]',
+                  )}
+                >
                   {hasPending
-                    ? 'Ready to review'
+                    ? 'New information ready — tap to review'
                     : isDone
                       ? 'Completed'
-                      : 'Open section'}
+                      : 'Tap to open this section'}
                 </span>
               </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-[#213D59]" />
+              {hasPending ? (
+                <span className="shrink-0 rounded-full bg-amber-500 px-2.5 py-1 text-[12px] font-bold text-white">
+                  New
+                </span>
+              ) : (
+                <ChevronRight className="h-5 w-5 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-[#213D59]" />
+              )}
             </button>
           </li>
         );
@@ -207,40 +253,79 @@ export function OverviewBrowseGrid({
         const Icon = ICONS[category.icon];
         const badge = attentionCount(category);
         const selected = activeId === category.id;
+        const newLabel =
+          badge === 1
+            ? '1 section with new data'
+            : `${badge > 9 ? '9+' : badge} sections with new data`;
 
         return (
           <button
             key={category.id}
             type="button"
             onClick={() => openCategory(category)}
+            aria-label={
+              badge > 0
+                ? `${category.label}. ${newLabel}. Tap to open.`
+                : `${category.label}. Tap to open.`
+            }
             className={cn(
-              'relative flex min-h-[5.75rem] flex-col justify-between rounded-2xl border px-3.5 py-3 text-left transition active:scale-[0.98] sm:min-h-[6.75rem] sm:py-3.5',
+              'relative flex min-h-[7rem] flex-col justify-between rounded-2xl border px-3.5 py-3.5 text-left transition active:scale-[0.98] sm:min-h-[7.5rem]',
               selected
                 ? 'border-[#213D59] bg-[#213D59] text-white shadow-sm'
-                : 'border-slate-200/90 bg-[#f7f8fa] text-[#1a2b3d] hover:border-[#213D59]/30 hover:bg-white',
+                : badge > 0
+                  ? 'border-amber-300 bg-amber-50 text-[#1a2b3d] shadow-sm ring-1 ring-amber-200 hover:bg-amber-100/80'
+                  : 'border-slate-200/90 bg-[#f7f8fa] text-[#1a2b3d] hover:border-[#213D59]/30 hover:bg-white',
             )}
           >
-            {badge > 0 ? (
-              <span
+            <div className="flex items-start justify-between gap-2">
+              <Icon
                 className={cn(
-                  'absolute right-2.5 top-2.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold',
+                  'h-6 w-6 shrink-0',
                   selected
-                    ? 'bg-white/20 text-white'
-                    : 'bg-[#2B5A8C] text-white',
+                    ? 'text-white/90'
+                    : badge > 0
+                      ? 'text-amber-800'
+                      : 'text-[#213D59]',
                 )}
-              >
-                {badge > 9 ? '9+' : badge}
+              />
+              {badge > 0 ? (
+                <span
+                  className={cn(
+                    'inline-flex max-w-[7.5rem] items-center justify-center rounded-full px-2 py-1 text-center text-[11px] font-bold leading-tight sm:max-w-none sm:text-[12px]',
+                    selected
+                      ? 'bg-amber-300 text-amber-950'
+                      : 'bg-amber-500 text-white',
+                  )}
+                >
+                  {badge > 9 ? '9+' : badge} new
+                </span>
+              ) : null}
+            </div>
+
+            <div className="mt-3 space-y-1">
+              <span className="block text-[15px] font-semibold leading-snug tracking-tight sm:text-[16px]">
+                {category.label}
               </span>
-            ) : null}
-            <Icon
-              className={cn(
-                'h-5 w-5',
-                selected ? 'text-white/90' : 'text-[#213D59]',
+              {badge > 0 ? (
+                <span
+                  className={cn(
+                    'block text-[12px] font-medium leading-snug sm:text-[13px]',
+                    selected ? 'text-amber-100' : 'text-amber-900',
+                  )}
+                >
+                  {newLabel}
+                </span>
+              ) : (
+                <span
+                  className={cn(
+                    'block text-[12px] leading-snug sm:text-[13px]',
+                    selected ? 'text-white/75' : 'text-[#5a6b80]',
+                  )}
+                >
+                  Tap to browse
+                </span>
               )}
-            />
-            <span className="mt-3 text-[14px] font-semibold tracking-tight">
-              {category.label}
-            </span>
+            </div>
           </button>
         );
       })}
@@ -261,11 +346,12 @@ export function OverviewBrowseGrid({
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
             Browse
           </p>
-          <h2 className="mt-0.5 text-[15px] font-semibold text-[#213D59]">
+          <h2 className="mt-0.5 text-[17px] font-semibold text-[#213D59]">
             Vault by category
           </h2>
-          <p className="mt-0.5 text-[12.5px] text-[#5a6b80]">
-            Tap a category to see its sections below.
+          <p className="mt-1 text-[13.5px] leading-snug text-[#5a6b80]">
+            Amber tiles say <span className="font-semibold text-amber-800">new</span>{' '}
+            when documents were just filled — tap one to open those sections.
           </p>
         </div>
 
@@ -299,11 +385,12 @@ export function OverviewBrowseGrid({
             </div>
           ) : (
             <div className="px-4 py-4 text-center">
-              <p className="text-[13px] font-medium text-[#213D59]">
-                Select a category
+              <p className="text-[15px] font-semibold text-[#213D59]">
+                Select a category above
               </p>
-              <p className="mt-0.5 text-[12px] text-[#5a6b80]">
-                Sections for that group will show here.
+              <p className="mt-1 text-[13px] leading-snug text-[#5a6b80]">
+                Then tap a section to open it. Amber means new documents are
+                ready.
               </p>
             </div>
           )}
@@ -325,11 +412,13 @@ export function OverviewBrowseGrid({
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
           Browse
         </p>
-        <h2 className="mt-0.5 text-[15px] font-semibold text-[#213D59]">
+        <h2 className="mt-0.5 text-[17px] font-semibold text-[#213D59]">
           Vault by category
         </h2>
-        <p className="mt-0.5 text-[12.5px] text-[#5a6b80]">
-          Short groups — same sections as the sidebar.
+        <p className="mt-1 text-[13.5px] leading-snug text-[#5a6b80]">
+          Look for amber tiles labeled{' '}
+          <span className="font-semibold text-amber-800">new</span> — those have
+          documents ready to review. Tap the category, then tap the section.
         </p>
       </div>
 

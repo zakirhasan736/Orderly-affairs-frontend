@@ -78,6 +78,7 @@ import {
 } from '@/utils/aiSectionFormApply';
 import { buildUpsertAutofillNotice } from '@/utils/aiItemDedup';
 import { getAiSectionLabel } from '@/utils/aiSectionRegistry';
+import { markSectionFillsSeen } from '@/utils/newFillMarkers';
 import { applyFieldEditsToSectionData } from '@/utils/aiFieldMatchReview';
 import {
   markAiSectionReviewed,
@@ -112,7 +113,7 @@ import {
   getNotificationPreferences,
   NOTIFICATION_PREFS_CHANGED,
 } from '@/utils/notificationPreferences';
-import { maybePushReminderNotices } from '@/utils/browserPushNotifications';
+import { maybePushReminderNotices, syncCollaboratorPushFromVaultPolicy } from '@/utils/browserPushNotifications';
 import { CollaboratorPushOptInBanner } from '@/components/vault/CollaboratorPushOptInBanner';
 import { useGetStatusQuery } from '@/services/billingApi';
 
@@ -1037,6 +1038,21 @@ export default function DashboardPage() {
       setVaultPushCollaboratorsEnabled(
         Boolean(session.vault_push?.collaborators_enabled),
       );
+      syncCollaboratorPushFromVaultPolicy(
+        session.vault_push
+          ? {
+              state:
+                session.vault_push.state === 'active' ||
+                session.vault_push.state === 'paused' ||
+                session.vault_push.state === 'off'
+                  ? session.vault_push.state
+                  : 'off',
+              collaborators_enabled: Boolean(
+                session.vault_push.collaborators_enabled,
+              ),
+            }
+          : null,
+      );
       setSessionOwnerId(session.owner_id ? String(session.owner_id) : null);
       setFamilyAcl(prev => {
         // Avoid useless re-renders when ACL unchanged
@@ -1124,6 +1140,21 @@ export default function DashboardPage() {
       const acl = parseFamilyDashboardSession(session);
       setVaultPushCollaboratorsEnabled(
         Boolean(session.vault_push?.collaborators_enabled),
+      );
+      syncCollaboratorPushFromVaultPolicy(
+        session.vault_push
+          ? {
+              state:
+                session.vault_push.state === 'active' ||
+                session.vault_push.state === 'paused' ||
+                session.vault_push.state === 'off'
+                  ? session.vault_push.state
+                  : 'off',
+              collaborators_enabled: Boolean(
+                session.vault_push.collaborators_enabled,
+              ),
+            }
+          : null,
       );
       if (session.owner_id) {
         setSessionOwnerId(String(session.owner_id));
@@ -2715,6 +2746,7 @@ export default function DashboardPage() {
     setActiveTopicId(null);
     setSidebarOpen(false);
     setMobileMoreOpen(false);
+    markSectionFillsSeen(sectionId, { subsectionId });
 
     setTimeout(() => {
       const element = document.getElementById(`subsection-${subsectionId}`);
@@ -2734,6 +2766,7 @@ export default function DashboardPage() {
     setActiveTopicId(topicId);
     setSidebarOpen(false);
     setMobileMoreOpen(false);
+    markSectionFillsSeen(sectionId, { subsectionId, topicId });
 
     setTimeout(() => {
       const element = document.getElementById(getTopicElementId(topicId));
@@ -3038,6 +3071,24 @@ export default function DashboardPage() {
                       isReturningUser={currentUser?.returning_user !== false}
                       notices={headerNotices}
                       onNavigateToSection={sectionId => goToSection(sectionId)}
+                      onOpenNewFill={marker => {
+                        if (marker.subsectionId && marker.topicId) {
+                          goToTopic(
+                            marker.sectionId,
+                            marker.subsectionId,
+                            marker.topicId,
+                          );
+                          return;
+                        }
+                        if (marker.subsectionId) {
+                          goToSubsection(
+                            marker.sectionId,
+                            marker.subsectionId,
+                          );
+                          return;
+                        }
+                        goToSection(marker.sectionId);
+                      }}
                       readOnly={
                         familyAcl.isFamily && !familyCanWrite(familyAcl)
                       }
@@ -3081,6 +3132,24 @@ export default function DashboardPage() {
                       isReturningUser={currentUser?.returning_user !== false}
                       notices={headerNotices}
                       onNavigateToSection={sectionId => goToSection(sectionId)}
+                      onOpenNewFill={marker => {
+                        if (marker.subsectionId && marker.topicId) {
+                          goToTopic(
+                            marker.sectionId,
+                            marker.subsectionId,
+                            marker.topicId,
+                          );
+                          return;
+                        }
+                        if (marker.subsectionId) {
+                          goToSubsection(
+                            marker.sectionId,
+                            marker.subsectionId,
+                          );
+                          return;
+                        }
+                        goToSection(marker.sectionId);
+                      }}
                     />
                   )}
                 </div>
@@ -3837,7 +3906,18 @@ export default function DashboardPage() {
           open={reviewInboxOpen}
           onOpenChange={setReviewInboxOpen}
           initialTab={reviewInboxTab}
-          onNavigateToSection={sectionId => goToSection(sectionId)}
+          onNavigateToSection={(sectionId, subsectionId, topicId) => {
+            setReviewInboxOpen(false);
+            if (subsectionId && topicId) {
+              goToTopic(sectionId, subsectionId, topicId);
+              return;
+            }
+            if (subsectionId) {
+              goToSubsection(sectionId, subsectionId);
+              return;
+            }
+            goToSection(sectionId);
+          }}
           onOpenNotificationSettings={openNotificationSettings}
           ownerName={
             currentUser?.full_name || currentUser?.email || 'You'

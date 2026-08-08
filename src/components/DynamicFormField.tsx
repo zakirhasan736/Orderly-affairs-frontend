@@ -215,6 +215,11 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
             helperText={field.helperText}
             disabled={isReadOnly}
             sensitive={isMaskedField}
+            showUploadButton={Boolean(
+              (field as { allowFieldUpload?: boolean }).allowFieldUpload ||
+                field.key === 'document_upload' ||
+                field.key === 'doc_upload',
+            )}
           />
         );
 

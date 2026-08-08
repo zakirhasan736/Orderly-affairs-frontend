@@ -524,11 +524,21 @@ function countSubsection(
     }
   }
 
-  // Repeatable groups (e.g. section 1 contacts)
+  // Repeatable groups (e.g. section 1 contacts, 20A identity_documents)
   for (const group of subsection.groups || []) {
-    const items = Array.isArray(sectionData[group.id])
+    const objectBucket = resolveObjectBucket(
+      sectionData,
+      subsection.id,
+      sectionId,
+    );
+    const nestedItems =
+      objectBucket && Array.isArray(objectBucket[group.id])
+        ? (objectBucket[group.id] as unknown[])
+        : null;
+    const rootItems = Array.isArray(sectionData[group.id])
       ? (sectionData[group.id] as unknown[])
-      : [];
+      : null;
+    const items = nestedItems ?? rootItems ?? [];
     const counted = countRepeatableItems(group.fields, items);
     filled += counted.filled;
     total += counted.total;
@@ -668,9 +678,15 @@ export function getTopicItemProgress(
   if (groupId) {
     const group = (subsection.groups || []).find(g => g.id === groupId);
     if (!group) return EMPTY;
-    const items = Array.isArray(data[groupId])
+    const objectBucket = resolveObjectBucket(data, subsectionId, sectionId);
+    const nestedItems =
+      objectBucket && Array.isArray(objectBucket[groupId])
+        ? (objectBucket[groupId] as unknown[])
+        : null;
+    const rootItems = Array.isArray(data[groupId])
       ? (data[groupId] as unknown[])
-      : [];
+      : null;
+    const items = nestedItems ?? rootItems ?? [];
     const item = items[itemIndex];
     if (!item || typeof item !== 'object') {
       const countable = (group.fields || []).filter(f =>
@@ -749,9 +765,15 @@ export function listAreaFields(
   if (groupId) {
     const group = (subsection.groups || []).find(g => g.id === groupId);
     if (!group) return [];
-    const items = Array.isArray(data[groupId])
+    const objectBucket = resolveObjectBucket(data, subsectionId, sectionId);
+    const nestedItems =
+      objectBucket && Array.isArray(objectBucket[groupId])
+        ? (objectBucket[groupId] as unknown[])
+        : null;
+    const rootItems = Array.isArray(data[groupId])
       ? (data[groupId] as unknown[])
-      : [];
+      : null;
+    const items = nestedItems ?? rootItems ?? [];
     if (typeof itemIndex === 'number') {
       const item = items[itemIndex];
       const row =
@@ -897,10 +919,31 @@ export function applySectionFieldValue(
   const groupId = options?.groupId;
 
   if (groupId) {
+    const idx = typeof itemIndex === 'number' ? itemIndex : 0;
+    const subsectionBucket = base[subsectionId];
+    if (
+      subsectionBucket &&
+      typeof subsectionBucket === 'object' &&
+      !Array.isArray(subsectionBucket)
+    ) {
+      const nested = { ...(subsectionBucket as Record<string, unknown>) };
+      const items = Array.isArray(nested[groupId])
+        ? [...(nested[groupId] as unknown[])]
+        : [];
+      const current =
+        items[idx] && typeof items[idx] === 'object'
+          ? { ...(items[idx] as Record<string, unknown>) }
+          : {};
+      current[fieldKey] = value;
+      items[idx] = current;
+      nested[groupId] = items;
+      base[subsectionId] = nested;
+      return base;
+    }
+
     const items = Array.isArray(base[groupId])
       ? [...(base[groupId] as unknown[])]
       : [];
-    const idx = typeof itemIndex === 'number' ? itemIndex : 0;
     const current =
       items[idx] && typeof items[idx] === 'object'
         ? { ...(items[idx] as Record<string, unknown>) }

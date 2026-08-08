@@ -1,10 +1,18 @@
 /**
  * Identity documents (driver's license, passport, military/school ID, etc.)
  * often land in Vital Information. Ask whose ID it is before writing fields.
+ *
+ * Routing (product):
+ * - self → Vital Information 1A identity_documents
+ * - spouse / partner / dependent / other → Legal Documents 20A identity_documents
  */
 
 import { unwrapAiAutofillPatch } from '@/utils/aiPatchNormalizer';
 import { AI_SECTION_BY_KEY } from '@/utils/aiSectionRegistry';
+import {
+  createEmptyIdentityDocument,
+  IDENTITY_DOCUMENT_TYPES,
+} from '@/utils/identityDocumentFields';
 
 export type IdentityPersonChoice =
   | 'self'
@@ -15,7 +23,7 @@ export type IdentityPersonChoice =
 const IDENTITY_DOC_RE =
   /\b(driver'?s?\s*licen[cs]e|driving\s*licen[cs]e|state\s*id(?:entification)?|identification\s*card|id\s*card|passport|military\s*id|military\s*identification|dod\s*id|common\s*access\s*card|\bcac\b|school\s*id|student\s*id|campus\s*id|birth\s*certificate|social\s*security\s*card|ssn\s*card|green\s*card|permanent\s*resident|national\s*id|photo\s*id)\b/i;
 
-const FAMILY_SECTION = AI_SECTION_BY_KEY.family_treasured_connections;
+const LEGAL_SECTION = AI_SECTION_BY_KEY.legal_documents_records;
 
 export function inferIdentityDocumentLabel(args: {
   documentSummary?: string | null;
@@ -106,7 +114,11 @@ export function isIdentityDocumentCandidate(args: {
       block.passport ||
       block.drivers_license ||
       block.birth_certificate ||
-      block.social_security_card
+      block.social_security_card ||
+      (Array.isArray(block.identity_documents) &&
+        block.identity_documents.length > 0) ||
+      (Array.isArray(patch?.identity_documents) &&
+        (patch!.identity_documents as unknown[]).length > 0)
     ) {
       return true;
     }
@@ -146,40 +158,134 @@ export function extractIdentityPersonName(result: unknown): string | null {
   return null;
 }
 
-function compactJoin(parts: Array<string | null | undefined>) {
-  return parts
-    .map(part => (part == null ? '' : String(part).trim()))
-    .filter(Boolean)
-    .join(' · ');
+function mapDocumentType(
+  label: string,
+): (typeof IDENTITY_DOCUMENT_TYPES)[number] {
+  const text = label.toLowerCase();
+  if (text.includes('passport')) return 'Passport';
+  if (text.includes('birth')) return 'Birth certificate';
+  if (text.includes('social') || text.includes('ssn') || text.includes('sin')) {
+    return 'SSN/SIN card';
+  }
+  if (
+    text.includes('driver') ||
+    text.includes('license') ||
+    text.includes('state id')
+  ) {
+    return "Driver's license";
+  }
+  if (text.includes('marriage')) return 'Marriage certificate';
+  if (text.includes('divorce')) return 'Divorce certificate';
+  return 'Other';
 }
 
-function identityNotesFromVital(
-  vital: Record<string, unknown>,
-  documentSummary?: string | null,
-  fileName?: string | null,
-) {
-  const bits = [
-    inferIdentityDocumentLabel({ documentSummary, fileName }),
-    vital.social_security_number
-      ? `SSN note: ${String(vital.social_security_number)}`
-      : null,
-    documentSummary || null,
-    fileName ? `Source file: ${fileName}` : null,
-  ];
-  return compactJoin(bits);
+export function buildIdentityDocumentCard(args: {
+  mode: 'owner' | 'family';
+  vital?: Record<string, unknown> | null;
+  personName?: string | null;
+  assignedTo?: string;
+  documentSummary?: string | null;
+  fileName?: string | null;
+}): Record<string, unknown> {
+  const vital = args.vital || {};
+  const label = inferIdentityDocumentLabel({
+    documentSummary: args.documentSummary,
+    fileName: args.fileName,
+  });
+  const name =
+    String(args.personName || '').trim() ||
+    String(vital.full_legal_name || '').trim();
+
+  const card: Record<string, unknown> = {
+    ...createEmptyIdentityDocument(args.mode),
+    category: 'identity',
+    full_legal_name: name,
+    date_of_birth: String(vital.date_of_birth || vital.birthdate || '').trim(),
+    document_type: mapDocumentType(label),
+    document_number:
+      String(
+        vital.drivers_license_number ||
+          vital.passport_number ||
+          vital.document_number ||
+          vital.social_security_number ||
+          '',
+      ).trim(),
+    issue_date: String(
+      vital.drivers_license_issue_date ||
+        vital.issue_date ||
+        vital.passport_issue_date ||
+        '',
+    ).trim(),
+    expiration_date: String(
+      vital.drivers_license_expiration_date ||
+        vital.expiration_date ||
+        vital.passport_expiration_date ||
+        '',
+    ).trim(),
+    issuing_authority: String(
+      vital.issuing_authority || vital.state || vital.country || '',
+    ).trim(),
+    last_updated: new Date().toISOString().slice(0, 10),
+  };
+
+  if (args.mode === 'family') {
+    card.assigned_to = args.assignedTo || 'Other';
+    card.assigned_to_name = name;
+  }
+
+  return card;
 }
 
-function wrapFamilyResult(
-  subsection: '17B' | '17C',
-  card: Record<string, unknown>,
-) {
+function wrapLegalIdentityResult(card: Record<string, unknown>) {
   return {
-    section: 'family_treasured_connections',
+    section: 'legal_documents_records',
     scope: 'subsection',
-    subsection,
+    subsection: '20A',
     confidence: 0.9,
     patch: {
-      [subsection]: [card],
+      '20A': {
+        identity_documents: [card],
+      },
+    },
+  };
+}
+
+function ensureOwnerIdentityDocuments(
+  result: unknown,
+  args: {
+    documentSummary?: string | null;
+    fileName?: string | null;
+  },
+): unknown {
+  const patch = unwrapAiAutofillPatch(result) as Record<string, unknown> | null;
+  if (!patch) return result;
+
+  if (
+    Array.isArray(patch.identity_documents) &&
+    patch.identity_documents.length > 0
+  ) {
+    return result;
+  }
+
+  const vital =
+    (patch.vital_info as Record<string, unknown> | undefined) || {};
+  const hasVital = Object.values(vital).some(
+    value => value !== null && value !== undefined && String(value).trim() !== '',
+  );
+  if (!hasVital) return result;
+
+  const card = buildIdentityDocumentCard({
+    mode: 'owner',
+    vital,
+    documentSummary: args.documentSummary,
+    fileName: args.fileName,
+  });
+
+  return {
+    ...(typeof result === 'object' && result ? result : {}),
+    patch: {
+      ...patch,
+      identity_documents: [card],
     },
   };
 }
@@ -208,12 +314,16 @@ export function applyIdentityPersonChoice(
   },
 ): IdentityRouteTarget {
   if (choice === 'self') {
+    const vitalMeta = AI_SECTION_BY_KEY.vital_information;
     return {
-      sectionId: args.sectionId,
-      sectionKey: args.sectionKey,
-      subsection: args.subsection || undefined,
-      sectionLabel: args.sectionLabel,
-      result: args.result,
+      sectionId: vitalMeta?.id || '1',
+      sectionKey: vitalMeta?.key || 'vital_information',
+      subsection: '1A',
+      sectionLabel: vitalMeta?.label || args.sectionLabel || 'Vital Information',
+      result: ensureOwnerIdentityDocuments(args.result, {
+        documentSummary: args.documentSummary,
+        fileName: args.fileName,
+      }),
     };
   }
 
@@ -226,63 +336,32 @@ export function applyIdentityPersonChoice(
     String(vital.full_legal_name || '').trim() ||
     extractIdentityPersonName(args.result) ||
     '';
-  const birthdate = String(vital.date_of_birth || '').trim();
-  const contact = compactJoin([
-    vital.phone_number ? String(vital.phone_number) : null,
-    vital.primary_email_username
-      ? String(vital.primary_email_username)
-      : null,
-  ]);
-  const notes = identityNotesFromVital(
+
+  const assignedTo =
+    choice === 'spouse'
+      ? 'Spouse/Partner'
+      : choice === 'dependent'
+        ? 'Dependent'
+        : 'Other';
+
+  const card = buildIdentityDocumentCard({
+    mode: 'family',
     vital,
-    args.documentSummary,
-    args.fileName,
-  );
+    personName: name,
+    assignedTo,
+    documentSummary: args.documentSummary,
+    fileName: args.fileName,
+  });
 
-  const familyId = FAMILY_SECTION?.id || '17';
-  const familyKey = FAMILY_SECTION?.key || 'family_treasured_connections';
-  const familyLabel = FAMILY_SECTION?.label || 'Family & Relationships';
-
-  if (choice === 'dependent') {
-    return {
-      sectionId: familyId,
-      sectionKey: familyKey,
-      subsection: '17C',
-      sectionLabel: familyLabel,
-      result: wrapFamilyResult('17C', {
-        dependent_name: name || null,
-        relationship: 'Child',
-        birthdate: birthdate || null,
-        dependency_type: null,
-        support_details: null,
-        backup_caregivers: null,
-        special_needs: null,
-        future_care_plans: null,
-        legal_documents: notes || null,
-        financial_accounts: null,
-      }),
-    };
-  }
-
-  const relationship =
-    choice === 'spouse' ? 'Spouse/Partner' : 'Other Family';
+  const legalId = LEGAL_SECTION?.id || '20';
+  const legalKey = LEGAL_SECTION?.key || 'legal_documents_records';
+  const legalLabel = LEGAL_SECTION?.label || 'Legal Documents & Records';
 
   return {
-    sectionId: familyId,
-    sectionKey: familyKey,
-    subsection: '17B',
-    sectionLabel: familyLabel,
-    result: wrapFamilyResult('17B', {
-      person_name: name || null,
-      relationship,
-      contact_info: contact || null,
-      birthdate: birthdate || null,
-      importance: null,
-      notify_instructions: null,
-      special_considerations: notes || null,
-      photos_mementos: args.fileName
-        ? `Uploaded ID: ${args.fileName}`
-        : null,
-    }),
+    sectionId: legalId,
+    sectionKey: legalKey,
+    subsection: '20A',
+    sectionLabel: legalLabel,
+    result: wrapLegalIdentityResult(card),
   };
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -56,6 +56,13 @@ import {
   applySection1AIPatch,
   applySection1SubsectionPatch,
 } from '@/utils/applySection1AIPatch';
+import { IdentityDocumentCards } from '@/components/IdentityDocumentCards';
+import { identityDocumentCardLabel } from '@/utils/identityDocumentFields';
+import {
+  listUnseenNewFills,
+  NEW_FILLS_CHANGED,
+  recordNewFill,
+} from '@/utils/newFillMarkers';
 
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -283,70 +290,6 @@ const SECTION_1 = {
   ],
 
   contactGroups: [
-    {
-      key: 'next_of_kin',
-      title: 'Next of Kin',
-      fields: [
-        {
-          key: 'contact_name',
-          label: 'Full Name',
-          type: 'TextInput',
-          helperText: 'Full legal name of your next of kin',
-          required: true,
-        },
-        {
-          key: 'relationship',
-          label: 'Relationship',
-          type: 'TextInput',
-          helperText: 'e.g., Spouse, Child, Parent, Sibling',
-          required: true,
-        },
-        {
-          key: 'phone_number',
-          label: 'Phone Number',
-          type: 'TextInput',
-          helperText: 'Primary phone number for this person',
-          required: true,
-        },
-        {
-          key: 'email_address',
-          label: 'Email Address',
-          type: 'TextInput',
-          helperText: 'Email address for this person',
-        },
-        {
-          key: 'mailing_address',
-          label: 'Mailing Address',
-          type: 'TextArea',
-          helperText: 'Complete mailing address for this person',
-          required: true,
-        },
-        {
-          key: 'alternate_contact',
-          label: 'Alternate Contact Method',
-          type: 'TextInput',
-          helperText: 'Secondary phone, work number, or other contact method',
-        },
-        {
-          key: 'priority_level',
-          label: 'Contact Priority',
-          type: 'RadioGroup',
-          options: [
-            'Primary - Contact First',
-            'Secondary - Contact if Primary Unavailable',
-            'Emergency Only',
-          ],
-          helperText: 'When should this person be contacted?',
-        },
-        {
-          key: 'special_instructions',
-          label: 'Special Instructions',
-          type: 'TextArea',
-          helperText:
-            'Any specific instructions about contacting this person or their role',
-        },
-      ],
-    },
     {
       key: 'executor_trustee',
       title: 'Executor / Trustee',
@@ -647,7 +590,6 @@ const VITAL_INFO_GROUPS: VitalInfoGroup[] = [
 
 type Section1Subsection =
   | 'vital_info'
-  | 'next_of_kin'
   | 'executor_trustee'
   | 'additional_contacts';
 
@@ -678,7 +620,7 @@ interface Props {
   /**
    * Dashboard may pass "1A" / "1B" (legacy "1C" still accepted).
    * This component also supports direct keys:
-   * "vital_info", "next_of_kin", "executor_trustee", "additional_contacts".
+   * "vital_info", "executor_trustee", "additional_contacts".
    */
   activeSubsection?: string | null;
   activeTopicId?: string | null;
@@ -708,13 +650,16 @@ const normalizeActiveSubsection = (
 
   if (activeSubsection === '1A') return 'vital_info';
 
-  if (activeSubsection === '1B' || activeSubsection === '1C') {
+  if (
+    activeSubsection === '1B' ||
+    activeSubsection === '1C' ||
+    activeSubsection === 'next_of_kin'
+  ) {
     return 'contacts';
   }
 
   if (
     activeSubsection === 'vital_info' ||
-    activeSubsection === 'next_of_kin' ||
     activeSubsection === 'executor_trustee' ||
     activeSubsection === 'additional_contacts'
   ) {
@@ -754,16 +699,23 @@ export default function Section1VitalInformation({
     null,
   );
 
-const [uploadedFiles, setUploadedFiles] = useState<
-  Record<string, UploadedAIFile | null>
->({
-  full: null,
-  vital_info: null,
-});
+  const [uploadedFiles, setUploadedFiles] = useState<
+    Record<string, UploadedAIFile | null>
+  >({
+    full: null,
+    vital_info: null,
+  });
 
   const latestUploadRef = useRef<Record<string, UploadedAIFile>>({});
 
   const aiRouting = useOptionalAiDocumentRouting();
+
+  const [newFills, setNewFills] = useState(() => listUnseenNewFills());
+  useEffect(() => {
+    const refresh = () => setNewFills(listUnseenNewFills());
+    window.addEventListener(NEW_FILLS_CHANGED, refresh);
+    return () => window.removeEventListener(NEW_FILLS_CHANGED, refresh);
+  }, []);
 
   useRestoreAiPendingUploadForSection({
     sectionId: '1',
@@ -773,6 +725,9 @@ const [uploadedFiles, setUploadedFiles] = useState<
 
   const active = normalizeActiveSubsection(activeSubsection);
   const vitalInfo = data.vital_info || {};
+  const identityDocuments = Array.isArray(data.identity_documents)
+    ? data.identity_documents
+    : [];
 
   const showVitalInfo = !active || active === 'vital_info';
 
@@ -806,7 +761,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
   };
 
   const contactTopicWatchKey =
-    getGroupArray('next_of_kin').length +
+    identityDocuments.length +
     getGroupArray('executor_trustee').length +
     getGroupArray('additional_contacts').length;
 
@@ -855,10 +810,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
     item: Record<string, unknown>,
     index: number,
   ) => {
-    const labelFields =
-      group.key === 'next_of_kin'
-        ? ['contact_name', 'relationship']
-        : ['contact_name', 'role_title'];
+    const labelFields = ['contact_name', 'role_title'];
 
     const detail = labelFields
       .map(field => String(item?.[field] ?? '').trim())
@@ -1006,7 +958,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
       if ((json as { identity_routed?: boolean }).identity_routed) {
         setAiNotice(
           json.document_summary ||
-            'Saved this ID under Family & Relationships instead of Vital Information.',
+            'Saved this ID under Legal Documents (family identity) instead of Vital Information.',
         );
         return;
       }
@@ -1050,6 +1002,23 @@ const [uploadedFiles, setUploadedFiles] = useState<
           : applySection1AIPatch(data, patch);
 
       onChange(nextData);
+
+      const identityCards = Array.isArray(nextData?.identity_documents)
+        ? nextData.identity_documents
+        : [];
+      const priorCount = Array.isArray(data?.identity_documents)
+        ? data.identity_documents.length
+        : 0;
+      identityCards.slice(priorCount).forEach((card: Record<string, unknown>, offset: number) => {
+        const index = priorCount + offset;
+        recordNewFill({
+          sectionId: '1',
+          subsectionId: '1A',
+          topicGroupKey: 'identity_documents',
+          index,
+          label: identityDocumentCardLabel(card, index, 'owner'),
+        });
+      });
 
       setAiNotice(
         subsection === 'vital_info'
@@ -1395,6 +1364,21 @@ const [uploadedFiles, setUploadedFiles] = useState<
                   </section>
                 );
               })}
+            </div>
+
+            <div className="xl:col-span-2">
+              <IdentityDocumentCards
+                mode="owner"
+                items={identityDocuments}
+                onChange={next =>
+                  onChange({ ...data, identity_documents: next })
+                }
+                subsectionId="1A"
+                topicGroupKey="identity_documents"
+                activeTopicId={activeTopicId}
+                sectionId="1"
+                newFills={newFills}
+              />
             </div>
           </CardContent>
         </Card>

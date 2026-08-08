@@ -231,7 +231,8 @@ export function buildMessageNotices(
   if (pendingCount <= 0) return [];
   return [
     {
-      id: `messages-pending-${pendingCount}`,
+      // Stable id — count belongs in the body only, or mark-as-read never sticks.
+      id: 'messages-pending',
       category: 'message',
       title: 'Personal messages',
       body: `${pendingCount} draft message${pendingCount === 1 ? '' : 's'} waiting in Messages.`,
@@ -260,7 +261,8 @@ export function buildEventNotices(opts: {
   }
   if (opts.supportUnread && opts.supportUnread > 0) {
     items.push({
-      id: `event-support-${opts.supportUnread}`,
+      // Stable id — unread count belongs in the body only.
+      id: 'event-support',
       category: 'notice',
       title: 'Support reply',
       body: `You have ${opts.supportUnread} new live support message${opts.supportUnread === 1 ? '' : 's'}.`,

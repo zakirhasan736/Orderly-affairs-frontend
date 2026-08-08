@@ -13,7 +13,7 @@ self.addEventListener('push', event => {
   let payload = {
     title: 'Orderly Affairs',
     body: 'You have a vault reminder.',
-    url: '/dashboard',
+    url: '/',
     tag: 'orderly-reminder',
   };
 
@@ -32,12 +32,13 @@ self.addEventListener('push', event => {
   }
 
   const title = payload.title || 'Orderly Affairs';
+  const targetUrl = payload.url || '/';
   const options = {
     body: payload.body || '',
     tag: payload.tag || 'orderly-reminder',
     renotify: true,
     data: {
-      url: payload.url || '/dashboard',
+      url: targetUrl,
     },
     icon: '/images/brand-mark-light.svg',
     badge: '/images/brand-mark-light.svg',
@@ -49,7 +50,7 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   const targetUrl =
-    (event.notification.data && event.notification.data.url) || '/dashboard';
+    (event.notification.data && event.notification.data.url) || '/';
 
   event.waitUntil(
     (async () => {

@@ -80,15 +80,19 @@ describe('applySection1AIPatch', () => {
       {
         vital_info: { full_legal_name: 'Old' },
         next_of_kin: [{ name: 'A' }],
+        executor_trustee: [{ name: 'Old Exec' }],
       },
       {
         vital_info: { full_legal_name: 'New', city: 'Austin' },
         next_of_kin: [{ name: 'B' }],
+        executor_trustee: [{ name: 'New Exec' }],
       },
     );
     expect(next.vital_info.full_legal_name).toBe('New');
     expect(next.vital_info.city).toBe('Austin');
-    expect(next.next_of_kin).toEqual([{ name: 'B' }]);
+    // Next of Kin removed from Key Contacts — legacy data preserved, AI ignored
+    expect(next.next_of_kin).toEqual([{ name: 'A' }]);
+    expect(next.executor_trustee).toEqual([{ name: 'New Exec' }]);
   });
 
   it('fills empty vital fields only when overwrite declined', () => {
@@ -97,24 +101,37 @@ describe('applySection1AIPatch', () => {
       {
         vital_info: { full_legal_name: 'Keep Me', city: '' },
         next_of_kin: [{ name: 'Existing' }],
+        executor_trustee: [{ name: 'Existing' }],
       },
       {
         vital_info: { full_legal_name: 'Overwrite', city: 'Dallas' },
         next_of_kin: [{ name: 'Incoming' }],
+        executor_trustee: [{ name: 'Incoming' }],
       },
     );
     expect(next.vital_info.full_legal_name).toBe('Keep Me');
     expect(next.vital_info.city).toBe('Dallas');
     expect(next.next_of_kin).toEqual([{ name: 'Existing' }]);
+    expect(next.executor_trustee).toEqual([{ name: 'Existing' }]);
   });
 
   it('routes subsection patches', () => {
-    const base = { vital_info: {}, next_of_kin: [] };
+    const base = {
+      vital_info: {},
+      next_of_kin: [{ name: 'Legacy' }],
+      executor_trustee: [],
+    };
+    // Next of Kin UI removed — subsection patches are ignored
     expect(
       applySection1SubsectionPatch(base, 'next_of_kin', {
         next_of_kin: [{ name: 'Kin' }],
       }).next_of_kin,
-    ).toEqual([{ name: 'Kin' }]);
+    ).toEqual([{ name: 'Legacy' }]);
+    expect(
+      applySection1SubsectionPatch(base, 'executor_trustee', {
+        executor_trustee: [{ name: 'Exec' }],
+      }).executor_trustee,
+    ).toEqual([{ name: 'Exec' }]);
     expect(applySection1SubsectionPatch(base, 'unknown', {})).toEqual(base);
   });
 });

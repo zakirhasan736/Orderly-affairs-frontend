@@ -1,7 +1,6 @@
 'use client';
 
 import React, {
-  forwardRef,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -18,6 +17,14 @@ import { Badge } from '@common/ui/badge';
 import { BrandDangerConfirm } from '@/components/BrandDangerConfirm';
 import { BrandSuccessScreen } from '@/components/BrandSuccessScreen';
 import { InlineNotice } from '@/components/common/ui/inline-notice';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@common/ui/dialog';
 import {
   Sheet,
   SheetContent,
@@ -569,6 +576,8 @@ function TrustedPersonLoginPassword({
   const [revealing, setRevealing] = useState(false);
   const [needsStepUp, setNeedsStepUp] = useState(false);
   const [stepUpPassword, setStepUpPassword] = useState('');
+  const [stepUpError, setStepUpError] = useState('');
+  const stepUpInputRef = useRef<HTMLInputElement>(null);
   const [revealNextKinPassword] = useRevealNextKinPasswordMutation();
   const effectivePassword = password?.trim() || revealedPassword.trim();
   const hasPassword = Boolean(effectivePassword);
@@ -576,11 +585,17 @@ function TrustedPersonLoginPassword({
 
   const runReveal = async (accountPassword: string) => {
     if (!personId) return;
+    const pwIn = accountPassword.trim();
+    if (!pwIn) {
+      setStepUpError('Enter your Orderly Affairs sign-in password.');
+      return;
+    }
     setRevealing(true);
+    setStepUpError('');
     try {
       const res = await revealNextKinPassword({
         id: personId,
-        password: accountPassword,
+        password: pwIn,
       }).unwrap();
       const pw = (res.master_password || '').trim();
       if (!pw) {
@@ -591,11 +606,21 @@ function TrustedPersonLoginPassword({
       setVisible(true);
       setNeedsStepUp(false);
       setStepUpPassword('');
+      setStepUpError('');
     } catch (err: unknown) {
-      toast.error(getSafeErrorMessage(err, 'Could not reveal password'));
+      const message = getSafeErrorMessage(err, 'Could not reveal password');
+      setStepUpError(message);
+      toast.error(message);
     } finally {
       setRevealing(false);
     }
+  };
+
+  const submitStepUp = () => {
+    // Prefer the live input value so browser autofill still works when
+    // React state has not caught the autofilled password yet.
+    const fromDom = stepUpInputRef.current?.value || '';
+    void runReveal(fromDom || stepUpPassword);
   };
 
   const handleToggle = async () => {
@@ -608,24 +633,46 @@ function TrustedPersonLoginPassword({
       return;
     }
     if (!personId) return;
+    setStepUpError('');
     setNeedsStepUp(true);
   };
 
   const showToggle = hasPassword || canReveal;
 
   const stepUpBlock = needsStepUp ? (
-    <div className="mt-2 space-y-2 rounded-xl border bg-muted/40 p-2.5">
-      <p className="text-[11px] text-muted-foreground">
-        Re-enter your account password to reveal this login.
+    <form
+      className="mt-2 space-y-2 rounded-xl border bg-muted/40 p-2.5"
+      onSubmit={e => {
+        e.preventDefault();
+        submitStepUp();
+      }}
+    >
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        Enter your Orderly Affairs sign-in password (the one you use to log in
+        to this vault) — not {compact ? 'their' : 'this person’s'} login
+        password.
       </p>
       <Input
+        ref={stepUpInputRef}
         type="password"
+        name="orderly-step-up-password"
         autoComplete="current-password"
         value={stepUpPassword}
-        onChange={e => setStepUpPassword(e.target.value)}
-        placeholder="Your account password"
+        onChange={e => {
+          setStepUpPassword(e.target.value);
+          if (stepUpError) setStepUpError('');
+        }}
+        onInput={e => {
+          // Keep state in sync with browser autofill.
+          setStepUpPassword((e.target as HTMLInputElement).value);
+        }}
+        placeholder="Your Orderly Affairs password"
         className="h-9"
+        autoFocus
       />
+      {stepUpError ? (
+        <p className="text-[11px] leading-snug text-rose-700">{stepUpError}</p>
+      ) : null}
       <div className="flex gap-2">
         <Button
           type="button"
@@ -635,20 +682,16 @@ function TrustedPersonLoginPassword({
           onClick={() => {
             setNeedsStepUp(false);
             setStepUpPassword('');
+            setStepUpError('');
           }}
         >
           Cancel
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          disabled={revealing || !stepUpPassword.trim()}
-          onClick={() => void runReveal(stepUpPassword.trim())}
-        >
+        <Button type="submit" size="sm" disabled={revealing}>
           {revealing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Reveal'}
         </Button>
       </div>
-    </div>
+    </form>
   ) : null;
 
   if (compact) {
@@ -682,6 +725,11 @@ function TrustedPersonLoginPassword({
               onClick={() => void handleToggle()}
               disabled={revealing}
               aria-label={visible ? 'Hide password' : 'Show password'}
+              title={
+                visible
+                  ? 'Hide password'
+                  : 'Reveal with your Orderly Affairs sign-in password'
+              }
             >
               {revealing ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -731,6 +779,11 @@ function TrustedPersonLoginPassword({
               onClick={() => void handleToggle()}
               disabled={revealing}
               aria-label={visible ? 'Hide password' : 'Show password'}
+              title={
+                visible
+                  ? 'Hide password'
+                  : 'Reveal with your Orderly Affairs sign-in password'
+              }
             >
               {revealing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -1321,16 +1374,17 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 interface AccessManagementProps {
   /** When true, defers section title/copy to Section 2 wrapper — toolbar + list only. */
   embedded?: boolean;
+  ref?: React.Ref<AccessManagementHandle>;
 }
 
 export type AccessManagementHandle = {
   openAddWizard: () => void;
 };
 
-export const AccessManagement = forwardRef<
-  AccessManagementHandle,
-  AccessManagementProps
->(function AccessManagement({ embedded = false }, ref) {
+export function AccessManagement({
+  embedded = false,
+  ref,
+}: AccessManagementProps) {
   const isMobile = useIsMobile();
   const { data, isLoading, refetch } = useGetMyNextKinQuery(undefined);
 
@@ -1351,6 +1405,11 @@ export const AccessManagement = forwardRef<
   const [sectionPickerOpen, setSectionPickerOpen] = useState(false);
 
   const [cardPreviewIndex, setCardPreviewIndex] = useState<number | null>(null);
+  const [cardStepUpIndex, setCardStepUpIndex] = useState<number | null>(null);
+  const [cardStepUpPassword, setCardStepUpPassword] = useState('');
+  const [cardStepUpError, setCardStepUpError] = useState('');
+  const [cardStepUpBusy, setCardStepUpBusy] = useState(false);
+  const cardStepUpInputRef = useRef<HTMLInputElement>(null);
   const [originalMasterPassword, setOriginalMasterPassword] = useState('');
   const [detailViewIndex, setDetailViewIndex] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
@@ -1371,41 +1430,81 @@ export const AccessManagement = forwardRef<
   const [revokeAllNextKinAccess, { isLoading: isRevokingAll }] =
     useRevokeAllNextKinAccessMutation();
 
-  const ensurePersonPassword = useCallback(
-    async (index: number): Promise<string> => {
-      const person = authorizedPeople[index];
-      if (!person) return '';
-      const local = (person.master_password || '').trim();
-      if (local) return local;
-      if (!person._id || !person.has_master_password) return '';
-      const accountPassword = window.prompt(
-        'Re-enter your account password to load this Next-of-Kin login for the card.',
+  const closeCardStepUp = useCallback(() => {
+    setCardStepUpIndex(null);
+    setCardStepUpPassword('');
+    setCardStepUpError('');
+    setCardStepUpBusy(false);
+  }, []);
+
+  /** Open password card only after login is available (or confirmed missing). */
+  const requestCardPreview = useCallback((index: number) => {
+    const person = authorizedPeople[index];
+    if (!person) return;
+    const local = (person.master_password || '').trim();
+    if (local) {
+      setCardPreviewIndex(index);
+      return;
+    }
+    if (person._id && person.has_master_password) {
+      setCardStepUpError('');
+      setCardStepUpPassword('');
+      setCardStepUpIndex(index);
+      return;
+    }
+    // No password on file — still allow viewing locations / access level.
+    setCardPreviewIndex(index);
+  }, [authorizedPeople]);
+
+  const submitCardStepUp = useCallback(async () => {
+    if (cardStepUpIndex === null) return;
+    const person = authorizedPeople[cardStepUpIndex];
+    if (!person?._id) {
+      closeCardStepUp();
+      return;
+    }
+    const fromDom = cardStepUpInputRef.current?.value || '';
+    const accountPassword = (fromDom || cardStepUpPassword).trim();
+    if (!accountPassword) {
+      setCardStepUpError('Enter your Orderly Affairs sign-in password.');
+      return;
+    }
+    setCardStepUpBusy(true);
+    setCardStepUpError('');
+    try {
+      const res = await revealNextKinPassword({
+        id: person._id,
+        password: accountPassword,
+      }).unwrap();
+      const pw = (res.master_password || '').trim();
+      if (!pw) {
+        setCardStepUpError(
+          'No login password is on file for this person. Edit them to generate one.',
+        );
+        return;
+      }
+      setAuthorizedPeople(prev =>
+        prev.map((p, i) =>
+          i === cardStepUpIndex ? { ...p, master_password: pw } : p,
+        ),
       );
-      if (!accountPassword?.trim()) {
-        toast.error('Password required to reveal Next-of-Kin login');
-        return '';
-      }
-      try {
-        const res = await revealNextKinPassword({
-          id: person._id,
-          password: accountPassword.trim(),
-        }).unwrap();
-        const pw = (res.master_password || '').trim();
-        if (pw) {
-          setAuthorizedPeople(prev =>
-            prev.map((p, i) =>
-              i === index ? { ...p, master_password: pw } : p,
-            ),
-          );
-        }
-        return pw;
-      } catch (err: unknown) {
-        toast.error(getSafeErrorMessage(err, 'Could not load password for card'));
-        return '';
-      }
-    },
-    [authorizedPeople, revealNextKinPassword],
-  );
+      const openIndex = cardStepUpIndex;
+      closeCardStepUp();
+      setCardPreviewIndex(openIndex);
+    } catch (err: unknown) {
+      setCardStepUpError(
+        getSafeErrorMessage(err, 'Could not load password for card'),
+      );
+    } finally {
+      setCardStepUpBusy(false);
+    }
+  }, [
+    authorizedPeople,
+    cardStepUpIndex,
+    cardStepUpPassword,
+    closeCardStepUp,
+    revealNextKinPassword,
+  ]);
 
   useEffect(() => {
     if (!data) return;
@@ -1451,11 +1550,6 @@ export const AccessManagement = forwardRef<
       return [...fromApi, ...unsaved];
     });
   }, [data]);
-
-  useEffect(() => {
-    if (cardPreviewIndex === null) return;
-    void ensurePersonPassword(cardPreviewIndex);
-  }, [cardPreviewIndex, ensurePersonPassword]);
 
   const sectionRegistry = useMemo(() => buildSectionRegistry(), []);
 
@@ -2942,7 +3036,7 @@ export const AccessManagement = forwardRef<
                             hasNokLetter={hasNokLetter}
                             revokeDisabled={isRevokingOne}
                             onEdit={() => openEditWizard(index)}
-                            onViewCard={() => setCardPreviewIndex(index)}
+                            onViewCard={() => requestCardPreview(index)}
                             onApprove={() => approveOne(index)}
                             onRevoke={() => revokeOne(index)}
                             onDelete={() => setDeleteTarget(index)}
@@ -3063,7 +3157,7 @@ export const AccessManagement = forwardRef<
                   },
                   onViewCard: () => {
                     setDetailViewIndex(null);
-                    setCardPreviewIndex(detailViewIndex);
+                    requestCardPreview(detailViewIndex);
                   },
                   onApprove: () => approveOne(detailViewIndex),
                   onRevoke: () => revokeOne(detailViewIndex),
@@ -3117,6 +3211,75 @@ export const AccessManagement = forwardRef<
           </div>
         </MobileBottomSheet>
       )}
+
+      {/* Unlock login before opening password card */}
+      <Dialog
+        open={cardStepUpIndex !== null}
+        onOpenChange={open => {
+          if (!open) closeCardStepUp();
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm to view password card</DialogTitle>
+            <DialogDescription>
+              Enter your Orderly Affairs sign-in password (the one you use to
+              log in to this vault) — not{' '}
+              {cardStepUpIndex !== null
+                ? authorizedPeople[cardStepUpIndex]?.full_name ||
+                  'this person’s'
+                : 'this person’s'}{' '}
+              login password. The card opens only after verification succeeds.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-2 py-1"
+            onSubmit={e => {
+              e.preventDefault();
+              void submitCardStepUp();
+            }}
+          >
+            <Label htmlFor="card-step-up-password">Your sign-in password</Label>
+            <Input
+              id="card-step-up-password"
+              ref={cardStepUpInputRef}
+              type="password"
+              name="orderly-card-step-up-password"
+              autoComplete="current-password"
+              autoFocus
+              value={cardStepUpPassword}
+              onChange={e => {
+                setCardStepUpPassword(e.target.value);
+                if (cardStepUpError) setCardStepUpError('');
+              }}
+              onInput={e =>
+                setCardStepUpPassword((e.target as HTMLInputElement).value)
+              }
+              placeholder="Your Orderly Affairs password"
+              className="h-10"
+            />
+            {cardStepUpError ? (
+              <p className="text-sm text-rose-700">{cardStepUpError}</p>
+            ) : null}
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={cardStepUpBusy}
+                onClick={closeCardStepUp}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={cardStepUpBusy}>
+                {cardStepUpBusy ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                View card
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Password card preview from list */}
       {isMobile ? (
@@ -3336,4 +3499,4 @@ export const AccessManagement = forwardRef<
       />
     </div>
   );
-});
+}

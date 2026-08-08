@@ -15,6 +15,11 @@ import { cn } from '@common/ui/utils';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import { sectionHasSidebarNewAiData } from '@/utils/aiSidebarNewData';
 import {
+  listUnseenNewFills,
+  NEW_FILLS_CHANGED,
+  sectionHasUnseenFills,
+} from '@/utils/newFillMarkers';
+import {
   getDynamicTopicsForSubsection,
   subsectionHasDynamicTopics,
 } from '@/utils/dynamicVaultTopics';
@@ -399,10 +404,12 @@ export function VaultSidebarNavigation({
     window.addEventListener('orderly-ai-patch-stashed', bump);
     window.addEventListener('orderly-ai-section-reviewed', bump);
     window.addEventListener('orderly-ai-autofill-done', bump);
+    window.addEventListener(NEW_FILLS_CHANGED, bump);
     return () => {
       window.removeEventListener('orderly-ai-patch-stashed', bump);
       window.removeEventListener('orderly-ai-section-reviewed', bump);
       window.removeEventListener('orderly-ai-autofill-done', bump);
+      window.removeEventListener(NEW_FILLS_CHANGED, bump);
     };
   }, []);
 
@@ -514,22 +521,65 @@ export function VaultSidebarNavigation({
         <div className="flex-1 overflow-y-auto px-3 pb-4 pt-2">
           <div className="space-y-2">
             {(
-              [
-                ...sections
-                  .filter(section => section.id === '0')
-                  .map(section => ({
+              (() => {
+                const instructionSections = sections.filter(
+                  section => section.id === '0',
+                );
+                const vaultSections = sections.filter(
+                  section => section.id !== '0',
+                );
+                const unseen = listUnseenNewFills();
+                const hasNew = (sectionId: string) =>
+                  sectionHasUnseenFills(unseen, sectionId) ||
+                  sectionHasSidebarNewAiData(
+                    sectionId,
+                    aiRouting?.getPendingUploadsForSection(sectionId) ?? [],
+                  );
+                // Pin sections with new AI fills just under Dashboard so they
+                // are not buried in the long vault list.
+                const withNew = vaultSections.filter(section =>
+                  hasNew(section.id),
+                );
+                const withoutNew = vaultSections.filter(
+                  section => !hasNew(section.id),
+                );
+                void aiBadgeTick;
+                const items: Array<
+                  | { kind: 'section'; section: (typeof sections)[number] }
+                  | { kind: 'dashboard' }
+                  | { kind: 'new-header' }
+                > = [
+                  ...instructionSections.map(section => ({
                     kind: 'section' as const,
                     section,
                   })),
-                { kind: 'dashboard' as const },
-                ...sections
-                  .filter(section => section.id !== '0')
-                  .map(section => ({
-                    kind: 'section' as const,
-                    section,
-                  })),
-              ] as const
+                  { kind: 'dashboard' as const },
+                ];
+                if (withNew.length > 0) {
+                  items.push({ kind: 'new-header' as const });
+                  withNew.forEach(section => {
+                    items.push({ kind: 'section' as const, section });
+                  });
+                }
+                withoutNew.forEach(section => {
+                  items.push({ kind: 'section' as const, section });
+                });
+                return items;
+              })()
             ).map(navItem => {
+              if (navItem.kind === 'new-header') {
+                return (
+                  <div key="new-fills-header" className="px-3.5 pb-1 pt-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300">
+                      Review these first
+                    </p>
+                    <p className="mt-0.5 text-[12px] leading-snug text-amber-100/85">
+                      Sections with newly filled documents
+                    </p>
+                  </div>
+                );
+              }
+
               if (navItem.kind === 'dashboard') {
                 return (
                   <button
@@ -572,10 +622,9 @@ export function VaultSidebarNavigation({
               void aiBadgeTick;
               // Every matching section with unread AI fill — not only the
               // single highlighted upload card for the file.
-              const hasAiReady = sectionHasSidebarNewAiData(
-                section.id,
-                pendingAiUploads,
-              );
+              const hasAiReady =
+                sectionHasSidebarNewAiData(section.id, pendingAiUploads) ||
+                sectionHasUnseenFills(listUnseenNewFills(), section.id);
 
               return (
                 <div key={`main-section-${section.id}`} className="space-y-1">
@@ -611,13 +660,13 @@ export function VaultSidebarNavigation({
                         </span>
                       )}
                       {hasAiReady && (
-                        <span className="mt-1 inline-flex items-center gap-1.5">
+                        <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 px-2 py-0.5">
                           <span className="relative flex h-2 w-2 shrink-0">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" />
-                            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-300" />
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-300 opacity-75" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-300" />
                           </span>
-                          <span className="text-[10px] font-semibold text-emerald-200">
-                            New data
+                          <span className="text-[11px] font-bold text-amber-200">
+                            New — tap to open
                           </span>
                         </span>
                       )}

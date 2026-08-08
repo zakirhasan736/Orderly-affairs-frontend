@@ -7,6 +7,8 @@ import { getSignedUploadUrl } from '@/libs/api/upload';
 
 type VaultFieldUploadThumbProps = {
   publicId?: string;
+  /** Direct preview URL when public_id is not yet available (e.g. temp AI upload). */
+  previewUrl?: string;
   fileName?: string;
   mimeType?: string;
   className?: string;
@@ -27,12 +29,13 @@ function guessKind(fileName?: string, mimeType?: string): 'image' | 'pdf' | 'oth
  */
 export function VaultFieldUploadThumb({
   publicId,
+  previewUrl,
   fileName,
   mimeType,
   className,
 }: VaultFieldUploadThumbProps) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(Boolean(publicId));
+  const [url, setUrl] = useState<string | null>(previewUrl || null);
+  const [loading, setLoading] = useState(Boolean(publicId) && !previewUrl);
   const [failed, setFailed] = useState(false);
   const kind = guessKind(fileName, mimeType);
 
@@ -40,6 +43,12 @@ export function VaultFieldUploadThumb({
     let cancelled = false;
 
     async function load() {
+      if (previewUrl) {
+        setUrl(previewUrl);
+        setLoading(false);
+        setFailed(false);
+        return;
+      }
       if (!publicId) {
         setLoading(false);
         setFailed(true);
@@ -66,7 +75,7 @@ export function VaultFieldUploadThumb({
     return () => {
       cancelled = true;
     };
-  }, [publicId]);
+  }, [publicId, previewUrl]);
 
   return (
     <div

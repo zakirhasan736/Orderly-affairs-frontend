@@ -7,11 +7,12 @@ import { cn } from '@common/ui/utils';
 import {
   browserNotificationsSupported,
   enableBrowserPush,
+  ensureBrowserPushSubscription,
 } from '@/utils/browserPushNotifications';
 import {
   markCollabPushPromptDismissed,
   markCollabPushPromptEnabled,
-  wasCollabPushPromptDismissed,
+  wasCollabPushPromptDismissedOnly,
 } from '@/utils/notificationPreferences';
 
 type Props = {
@@ -25,8 +26,8 @@ type Props = {
 
 /**
  * Soft prompt for family / NOK after the owner turns vault push Active.
- * Clicking Allow push triggers the browser permission dialog (user gesture),
- * then registers Web Push (VAPID + service worker) for this device.
+ * - Permission default → show Allow push (user gesture).
+ * - Permission already granted → silently repair PushSubscription + server token.
  */
 export function CollaboratorPushOptInBanner({
   ownerId,
@@ -39,27 +40,48 @@ export function CollaboratorPushOptInBanner({
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!collaboratorsEnabled || !ownerId || !email) {
-      setVisible(false);
-      return;
-    }
-    if (!browserNotificationsSupported()) {
-      setVisible(false);
-      return;
-    }
-    if (Notification.permission === 'granted') {
-      setVisible(false);
-      return;
-    }
-    if (Notification.permission === 'denied') {
-      setVisible(false);
-      return;
-    }
-    if (wasCollabPushPromptDismissed(ownerId, email)) {
-      setVisible(false);
-      return;
-    }
-    setVisible(true);
+    let cancelled = false;
+
+    const run = async () => {
+      if (!collaboratorsEnabled || !ownerId || !email) {
+        setVisible(false);
+        return;
+      }
+      if (!browserNotificationsSupported()) {
+        setVisible(false);
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        setVisible(false);
+        return;
+      }
+
+      // Already allowed in this browser — make sure we still have a server token.
+      if (Notification.permission === 'granted') {
+        const repaired = await ensureBrowserPushSubscription();
+        if (cancelled) return;
+        if (repaired.ok) {
+          markCollabPushPromptEnabled(ownerId, email);
+          setVisible(false);
+          return;
+        }
+        // Repair failed — show banner so they can retry from a click.
+        setVisible(true);
+        return;
+      }
+
+      // permission === 'default'
+      if (wasCollabPushPromptDismissedOnly(ownerId, email)) {
+        setVisible(false);
+        return;
+      }
+      setVisible(true);
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
   }, [collaboratorsEnabled, ownerId, email]);
 
   if (!visible) return null;

@@ -18,6 +18,20 @@ function normalizeVitalDates(
   return next;
 }
 
+function mergeIdentityDocuments(currentData: any, patch: any) {
+  if (Array.isArray(patch?.identity_documents) && patch.identity_documents.length) {
+    const existing = Array.isArray(currentData?.identity_documents)
+      ? currentData.identity_documents
+      : [];
+    // Append new AI cards; do not wipe user cards unless patch replaces explicitly
+    if (existing.length === 0) return patch.identity_documents;
+    return [...existing, ...patch.identity_documents];
+  }
+  return Array.isArray(currentData?.identity_documents)
+    ? currentData.identity_documents
+    : [];
+}
+
 export function applySection1AIPatch(currentData: any, patch: any) {
   const nextVital = normalizeVitalDates({
     ...(currentData?.vital_info || {}),
@@ -31,7 +45,7 @@ export function applySection1AIPatch(currentData: any, patch: any) {
     value => value !== null && value !== undefined && String(value).trim() !== '',
   );
 
-  const contactKeys = ['next_of_kin', 'executor_trustee', 'additional_contacts'] as const;
+  const contactKeys = ['executor_trustee', 'additional_contacts'] as const;
   const wouldReplaceContacts = contactKeys.some(key => {
     const incoming = patch?.[key];
     const existing = currentData?.[key];
@@ -50,7 +64,6 @@ export function applySection1AIPatch(currentData: any, patch: any) {
         'This document would update existing Vital Information. Continue and overwrite?',
       );
     if (!confirmed) {
-      // Fill empty vital fields only; keep existing contact arrays
       const mergedVital = { ...(currentData?.vital_info || {}) };
       for (const [key, value] of Object.entries(patch?.vital_info || {})) {
         const existing = mergedVital[key];
@@ -63,7 +76,7 @@ export function applySection1AIPatch(currentData: any, patch: any) {
       return {
         ...currentData,
         vital_info: normalizeVitalDates(mergedVital),
-        next_of_kin: currentData?.next_of_kin || [],
+        identity_documents: mergeIdentityDocuments(currentData, patch),
         executor_trustee: currentData?.executor_trustee || [],
         additional_contacts: currentData?.additional_contacts || [],
       };
@@ -73,9 +86,8 @@ export function applySection1AIPatch(currentData: any, patch: any) {
   return {
     ...currentData,
     vital_info: nextVital,
-    next_of_kin: Array.isArray(patch?.next_of_kin)
-      ? patch.next_of_kin
-      : currentData?.next_of_kin || [],
+    identity_documents: mergeIdentityDocuments(currentData, patch),
+    next_of_kin: currentData?.next_of_kin || [],
     executor_trustee: Array.isArray(patch?.executor_trustee)
       ? patch.executor_trustee
       : currentData?.executor_trustee || [],
@@ -90,19 +102,24 @@ export function applySection1SubsectionPatch(
   subsection: string,
   patch: any,
 ) {
-  if (subsection === 'vital_info') {
+  if (subsection === 'vital_info' || subsection === '1A') {
     return applySection1AIPatch(currentData, {
       vital_info: patch?.vital_info || patch,
+      identity_documents: patch?.identity_documents,
     });
   }
 
-  if (subsection === 'next_of_kin') {
+  if (subsection === 'identity_documents') {
     return {
       ...currentData,
-      next_of_kin: Array.isArray(patch?.next_of_kin)
-        ? patch.next_of_kin
-        : currentData?.next_of_kin || [],
+      identity_documents: Array.isArray(patch?.identity_documents)
+        ? patch.identity_documents
+        : mergeIdentityDocuments(currentData, patch),
     };
+  }
+
+  if (subsection === 'next_of_kin') {
+    return currentData;
   }
 
   if (subsection === 'executor_trustee') {

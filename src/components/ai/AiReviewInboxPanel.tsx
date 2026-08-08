@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarClock,
   Check,
+  ExternalLink,
   FileText,
   Loader2,
   Mail,
@@ -29,6 +30,7 @@ import {
   AI_SECTION_BY_ID,
   getAiSectionLabel,
 } from '@/utils/aiSectionRegistry';
+import { listUnseenNewFills } from '@/utils/newFillMarkers';
 import {
   isAiSectionReviewed,
   markAiSectionReviewed,
@@ -397,16 +399,35 @@ function AlertActions({
   onMarkRead,
   onMarkUnread,
   onDelete,
+  onOpen,
+  openLabel = 'Open section',
   deleteLabel = 'Remove',
 }: {
   isRead: boolean;
   onMarkRead: () => void;
   onMarkUnread: () => void;
   onDelete: () => void;
+  /** Optional — stay in vault activity by default; open only when asked. */
+  onOpen?: () => void;
+  openLabel?: string;
   deleteLabel?: string;
 }) {
   return (
     <div className="flex shrink-0 items-center gap-0.5">
+      {onOpen ? (
+        <button
+          type="button"
+          title={openLabel}
+          aria-label={openLabel}
+          onClick={event => {
+            event.stopPropagation();
+            onOpen();
+          }}
+          className="rounded-md p-1.5 text-[#8a97a8] transition hover:bg-[#213D59]/8 hover:text-[#213D59]"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
       {isRead ? (
         <button
           type="button"
@@ -463,7 +484,11 @@ export function AiReviewInboxPanel({
   notices = [],
   className,
 }: {
-  onNavigateToSection?: (sectionId: string) => void;
+  onNavigateToSection?: (
+    sectionId: string,
+    subsectionId?: string | null,
+    topicId?: string | null,
+  ) => void;
   onOpenNotificationSettings?: () => void;
   ownerName?: string | null;
   ownerEmail?: string | null;
@@ -1037,11 +1062,19 @@ export function AiReviewInboxPanel({
   const markAllCurrentRead = useCallback(() => {
     if (tab === 'alerts') {
       markAllNoticesRead(visibleNotices.map(n => n.id));
+      // Match header badge source (all stashed patches), not only inbox rows.
       markAllAiReviewsRead(
-        inboxRows.map(row => ({
-          sectionId: row.sectionId,
-          fileId: row.fileId,
-        })),
+        listDashboardAiPatches()
+          .map(entry => ({
+            sectionId: String(entry.section_id || '').trim(),
+            fileId: String(entry.file_id || '').trim(),
+          }))
+          .filter(
+            item =>
+              item.sectionId &&
+              item.sectionId !== 'overview' &&
+              item.fileId,
+          ),
       );
       toast.message('Alerts marked read');
       return;
@@ -1053,7 +1086,7 @@ export function AiReviewInboxPanel({
     }
     markAllRemindersRead(visibleReminders.map(r => r.id));
     toast.message('Due dates marked read');
-  }, [tab, visibleNotices, inboxRows, historyFiles, visibleReminders]);
+  }, [tab, visibleNotices, historyFiles, visibleReminders]);
 
   const tabs: {
     id: VaultActivityTab;
@@ -1183,6 +1216,8 @@ export function AiReviewInboxPanel({
               </p>
               <p className="mx-auto mt-1 max-w-[32ch] text-[12.5px] leading-relaxed text-[#5a6b80]">
                 Notices and AI document fills waiting for Accept will show here.
+                Review AI fills here to edit and save — or use Open to visit a
+                section.
               </p>
             </div>
           ) : (
@@ -1219,17 +1254,11 @@ export function AiReviewInboxPanel({
                           <button
                             type="button"
                             onClick={() => {
+                              // Stay in vault activity — mark read only.
+                              // Use the open-section control to jump away.
                               markNoticeRead(notice.id);
                               if (notice.category === 'reminder') {
-                                // Jump to Due dates and open the related vault section.
                                 setTab('dues');
-                                if (notice.sectionId) {
-                                  onNavigateToSection?.(notice.sectionId);
-                                }
-                                return;
-                              }
-                              if (notice.sectionId) {
-                                onNavigateToSection?.(notice.sectionId);
                               }
                             }}
                             className="min-w-0 flex-1 px-3 py-2.5 text-left"
@@ -1251,6 +1280,14 @@ export function AiReviewInboxPanel({
                               isRead={read}
                               onMarkRead={() => markNoticeRead(notice.id)}
                               onMarkUnread={() => markNoticeUnread(notice.id)}
+                              onOpen={
+                                notice.sectionId
+                                  ? () => {
+                                      markNoticeRead(notice.id);
+                                      onNavigateToSection?.(notice.sectionId!);
+                                    }
+                                  : undefined
+                              }
                               onDelete={() => {
                                 dismissNotice(notice.id);
                                 toast.message('Notice removed');
@@ -1557,8 +1594,8 @@ export function AiReviewInboxPanel({
                     <button
                       type="button"
                       onClick={() => {
+                        // Stay here — mark read. Use open-section to leave.
                         markReminderRead(alert.id);
-                        onNavigateToSection?.(alert.sectionId);
                       }}
                       className="min-w-0 flex-1 px-3 py-2.5 text-left"
                     >
@@ -1587,6 +1624,10 @@ export function AiReviewInboxPanel({
                         isRead={read}
                         onMarkRead={() => markReminderRead(alert.id)}
                         onMarkUnread={() => markReminderUnread(alert.id)}
+                        onOpen={() => {
+                          markReminderRead(alert.id);
+                          onNavigateToSection?.(alert.sectionId);
+                        }}
                         onDelete={() => {
                           dismissReminder(alert.id);
                           toast.message('Due date cleared');
@@ -1632,6 +1673,22 @@ export function AiReviewInboxPanel({
             routing?.getPendingUploadsForSection(reviewDoc.sectionId)?.[0];
           if (pending && routing) {
             routing.navigateToPendingSection(pending, 'review');
+            return;
+          }
+          const fills = listUnseenNewFills().filter(
+            item => item.sectionId === reviewDoc.sectionId,
+          );
+          const first = fills[0];
+          if (first?.subsectionId && first.topicId) {
+            onNavigateToSection?.(
+              reviewDoc.sectionId,
+              first.subsectionId,
+              first.topicId,
+            );
+            return;
+          }
+          if (first?.subsectionId) {
+            onNavigateToSection?.(reviewDoc.sectionId, first.subsectionId);
             return;
           }
           onNavigateToSection?.(reviewDoc.sectionId);

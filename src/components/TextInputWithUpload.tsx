@@ -55,6 +55,8 @@ export function TextInputWithUpload({
   placeholder,
   disabled = false,
   sensitive = false,
+  /** Field-level upload is off by default — use the section Upload document control. */
+  showUploadButton = false,
 }: any) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [showSecret, setShowSecret] = useState(false);
@@ -220,7 +222,7 @@ export function TextInputWithUpload({
             </button>
           ) : null}
         </div>
-        {!disabled && (
+        {!disabled && showUploadButton && (
           <Button
             type="button"
             size="sm"
@@ -235,15 +237,16 @@ export function TextInputWithUpload({
         )}
       </div>
 
-      <input
-        ref={fileRef}
-        type="file"
-        className="hidden"
-        disabled={disabled}
-        accept="image/*,application/pdf"
-        onChange={e => e.target.files && handleUpload(e.target.files[0])}
-      />
-
+      {showUploadButton ? (
+        <input
+          ref={fileRef}
+          type="file"
+          className="hidden"
+          disabled={disabled}
+          accept="image/*,application/pdf"
+          onChange={e => e.target.files && handleUpload(e.target.files[0])}
+        />
+      ) : null}
       {files.length > 0 ? (
         <div className="space-y-2">
           {files.map((f, i) => {

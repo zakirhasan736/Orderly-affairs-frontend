@@ -99,7 +99,7 @@ export const ownerTour: OwnerTourStep[] = [
     tooltipPlacement: 'below',
     title: 'What the % means',
     description:
-      'This % and the rings beside each section show field-fill progress — how many tracked fields have a value. 100% means the fields are filled, not that a document was uploaded.',
+      "This percentage, and the ring next to each section, count how many fields have a value, nothing else. A section can hit 100% just by typing in details yourself. Uploading a document isn't required and doesn't automatically move the number.",
   },
   {
     section: 'After upload',
@@ -107,7 +107,7 @@ export const ownerTour: OwnerTourStep[] = [
     ensureSection: 'dashboard',
     title: 'Finish blanks after AI fills',
     description:
-      "After AI fills a section from your documents, open it to check the work. Anything still empty shows a sparkle icon, and a 'Fill empty fields' bar lets you jump straight to just what's missing — no need to redo the whole section.",
+      "Upload documents above and AI will fill matching sections for you. Open a section afterward to review what it added. Anything still blank shows a sparkle icon, tap 'Fill empty fields' to jump straight to what's left, no need to redo the whole section.",
   },
   {
     section: 'Home',
@@ -116,6 +116,6 @@ export const ownerTour: OwnerTourStep[] = [
     tooltipPlacement: 'beside',
     title: 'Back to overview anytime',
     description:
-      'Tap Dashboard to return to this overview — progress, document inbox, tasks, and people. When you are ready, upload another document or open a task card and keep going.',
+      "Dashboard is the overall view of your vault. Tap it anytime to check your progress, review uploaded documents, or open any section. When you're ready, upload another document or pick up where you left off.",
   },
 ];

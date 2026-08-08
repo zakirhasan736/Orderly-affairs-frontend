@@ -21,6 +21,10 @@ export type AiUploadHistoryItem = {
   /** All section ids this upload relates to (primary + partners). */
   sectionIds?: string[];
   targetSectionLabel?: string;
+  /** Friendly type label shown on cards (Passport, Driver's license, …). */
+  displayTitle?: string;
+  /** AI document summary used to derive displayTitle. */
+  documentSummary?: string;
   error?: string;
   /** Where the upload started. */
   source?: 'overview' | 'section';
@@ -126,6 +130,10 @@ function normalizeItem(raw: any): AiUploadHistoryItem | null {
     sectionIds,
     targetSectionLabel: raw.targetSectionLabel
       ? String(raw.targetSectionLabel)
+      : undefined,
+    displayTitle: raw.displayTitle ? String(raw.displayTitle) : undefined,
+    documentSummary: raw.documentSummary
+      ? String(raw.documentSummary)
       : undefined,
     error: raw.error ? String(raw.error) : undefined,
     source:
@@ -374,6 +382,8 @@ export function upsertAiUploadHistory(
     sectionId: preservedSectionId,
     sectionIds,
     targetSectionLabel: item.targetSectionLabel ?? prev?.targetSectionLabel,
+    displayTitle: item.displayTitle ?? prev?.displayTitle,
+    documentSummary: item.documentSummary ?? prev?.documentSummary,
     error: item.error,
     source: item.source ?? prev?.source,
     // Re-upload of same topic = fresh uploaded/updated timestamps.
@@ -601,6 +611,8 @@ export function hydrateAiUploadHistoryFromServer(
         (primarySection && AI_SECTION_BY_ID[primarySection]
           ? AI_SECTION_BY_ID[primarySection].label
           : undefined),
+      displayTitle: prev?.displayTitle,
+      documentSummary: prev?.documentSummary,
     });
   }
 

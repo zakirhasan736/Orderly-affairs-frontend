@@ -533,7 +533,7 @@ export function extractSubsectionPatch(
 
   // If AI returned flat fields (no subsection wrapper), use the patch itself.
   const nestedKeys = Object.keys(patch).filter(key =>
-    /^(?:\d+[A-Z]|vital_info|next_of_kin|executor_trustee|additional_contacts)$/.test(
+    /^(?:\d+[A-Z]|vital_info|executor_trustee|additional_contacts)$/.test(
       key,
     ),
   );

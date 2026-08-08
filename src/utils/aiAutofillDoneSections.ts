@@ -111,6 +111,20 @@ export function clearAiAutofillDoneForSection(sectionId: string) {
   if (changed) writeMap(map);
 }
 
+/** Clear done flag for one document×section so reassignment can re-fill. */
+export function clearAiAutofillDoneForFileSection(
+  sectionId: string,
+  fileId?: string | null,
+) {
+  if (!sectionId) return;
+  const map = readMap();
+  const key = doneKey(sectionId, fileId);
+  if (map[key]) {
+    delete map[key];
+    writeMap(map);
+  }
+}
+
 export function listSectionsStillPendingForFile(
   fileId: string,
   pendingSectionIds: string[],

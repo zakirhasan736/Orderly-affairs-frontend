@@ -29,6 +29,7 @@ import { MessageCard } from './MessageCard';
 import { OverviewAiUploadCard } from './ai/OverviewAiUploadCard';
 import { OverviewTaskBoard } from './ai/OverviewTaskBoard';
 import { OverviewBrowseGrid } from './ai/OverviewBrowseGrid';
+import { OverviewRecentlyFilled } from './ai/OverviewRecentlyFilled';
 import { AiUploadSupportedSectionsHint } from './ai/AiUploadSupportedSectionsHint';
 import { AiUploadHistoryPopup } from './ai/AiUploadHistoryPopup';
 import { useDashboardAiBatch } from '@/contexts/DashboardAiBatchContext';
@@ -65,6 +66,11 @@ interface DataBindingDashboardProps {
   isNextOfKin?: boolean;
   nextTask: { id: string; title: string } | null;
   onNavigateToSection: (sectionId: string) => void;
+  onOpenNewFill?: (marker: {
+    sectionId: string;
+    subsectionId?: string;
+    topicId?: string;
+  }) => void;
   progress?: number;
   completedCount?: number;
   totalCount?: number;
@@ -112,6 +118,7 @@ export function DataBindingDashboard({
   nextKinList,
   nokLetter,
   onNavigateToSection,
+  onOpenNewFill,
   isNextOfKin = false,
   completedCount = 0,
   totalCount = 0,
@@ -683,6 +690,16 @@ export function DataBindingDashboard({
               onClick={() => openReviewInbox('docs')}
             />
           </div>
+
+          <OverviewRecentlyFilled
+            onOpenFill={marker => {
+              if (onOpenNewFill) {
+                onOpenNewFill(marker);
+                return;
+              }
+              onNavigateToSection(marker.sectionId);
+            }}
+          />
 
           {/* 2) Upload document — drop zone for Editor+; history for all family readers */}
           {!uploadsDisabled && !isNextOfKin && (

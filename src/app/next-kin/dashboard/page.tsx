@@ -18,7 +18,10 @@ import {
 } from '@/hooks/useNokKitDecrypt';
 import { CollaboratorPushOptInBanner } from '@/components/vault/CollaboratorPushOptInBanner';
 import { buildExpiryNotices } from '@/utils/dashboardNotifications';
-import { maybePushReminderNotices } from '@/utils/browserPushNotifications';
+import {
+  maybePushReminderNotices,
+  syncCollaboratorPushFromVaultPolicy,
+} from '@/utils/browserPushNotifications';
 import { nokCanReadSection } from '@/utils/nokSectionAccess';
 
 export default function NextKinDashboardPage() {
@@ -54,6 +57,21 @@ export default function NextKinDashboardPage() {
       }
       setAccessLevel(session.access_level);
       setSessionEmail(session.email || null);
+      syncCollaboratorPushFromVaultPolicy(
+        session.vault_push
+          ? {
+              state:
+                session.vault_push.state === 'active' ||
+                session.vault_push.state === 'paused' ||
+                session.vault_push.state === 'off'
+                  ? session.vault_push.state
+                  : 'off',
+              collaborators_enabled: Boolean(
+                session.vault_push.collaborators_enabled,
+              ),
+            }
+          : null,
+      );
       setSessionReady(true);
     });
   }, [router]);
@@ -84,6 +102,19 @@ export default function NextKinDashboardPage() {
         nokCanReadSection(access, notice.sectionId),
     );
   }, [kit, access]);
+
+  useEffect(() => {
+    if (!access?.vault_push) return;
+    syncCollaboratorPushFromVaultPolicy({
+      state:
+        access.vault_push.state === 'active' ||
+        access.vault_push.state === 'paused' ||
+        access.vault_push.state === 'off'
+          ? access.vault_push.state
+          : 'off',
+      collaborators_enabled: Boolean(access.vault_push.collaborators_enabled),
+    });
+  }, [access?.vault_push]);
 
   useEffect(() => {
     if (!access?.immediate_access) return;

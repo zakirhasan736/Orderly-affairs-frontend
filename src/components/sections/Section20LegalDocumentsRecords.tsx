@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -17,7 +17,6 @@ import {
   CheckCircle2,
   Loader2,
   FolderOpen,
-  Globe,
   Info,
   Landmark,
   Receipt,
@@ -55,7 +54,17 @@ import {
   applyExtractedArrayWithDedup,
   buildUpsertAutofillNotice,
 } from '@/utils/aiItemDedup';
-
+import { IdentityDocumentCards } from '@/components/IdentityDocumentCards';
+import {
+  cardsFromLegacyIdentitySlots,
+  identityDocumentCardLabel,
+  migrateLegacyIdentityUploads,
+} from '@/utils/identityDocumentFields';
+import {
+  listUnseenNewFills,
+  NEW_FILLS_CHANGED,
+  recordNewFill,
+} from '@/utils/newFillMarkers';
 /* ============================================================
    STATIC SUBSECTIONS — 20A, 20B
 ============================================================ */
@@ -248,45 +257,17 @@ type FieldGroup = {
 
 const SECTION_20A_GROUPS: FieldGroup[] = [
   {
-    key: 'identification_documents',
-    title: 'Identification Documents',
-    subtitle: 'Birth, SSN, passport, license, and marriage records',
-    icon: FileText,
-    accent: 'from-blue-500/[0.07] to-indigo-500/[0.03]',
-    iconWrap: 'bg-blue-500/10 text-blue-600',
-    layout: 'grid',
-    fieldKeys: [
-      'birth_certificate',
-      'social_security_card',
-      'passport',
-      'drivers_license',
-      'marriage_certificate',
-      'divorce_decree',
-      'name_change_documents',
-    ],
-  },
-  {
-    key: 'citizenship_documents',
-    title: 'Citizenship & Immigration',
-    subtitle: 'Naturalization and immigration paperwork',
-    icon: Globe,
-    accent: 'from-cyan-500/[0.07] to-sky-500/[0.03]',
-    iconWrap: 'bg-cyan-500/10 text-cyan-700',
-    layout: 'grid',
-    fieldKeys: ['naturalization_certificate', 'immigration_documents'],
-  },
-  {
     key: 'family_documents',
     title: 'Family Documents',
-    subtitle: 'Children, adoption, and custody records',
+    subtitle: 'Adoption, custody, and name-change records',
     icon: Users,
     accent: 'from-violet-500/[0.07] to-purple-500/[0.03]',
     iconWrap: 'bg-violet-500/10 text-violet-600',
     layout: 'grid',
     fieldKeys: [
-      'children_birth_certificates',
       'adoption_documents',
       'custody_agreements',
+      'name_change_documents',
     ],
   },
 ];
@@ -542,6 +523,13 @@ export default function Section20LegalDocumentsRecords({
 
   const aiRouting = useOptionalAiDocumentRouting();
 
+  const [newFills, setNewFills] = useState(() => listUnseenNewFills());
+  useEffect(() => {
+    const refresh = () => setNewFills(listUnseenNewFills());
+    window.addEventListener(NEW_FILLS_CHANGED, refresh);
+    return () => window.removeEventListener(NEW_FILLS_CHANGED, refresh);
+  }, []);
+
   useRestoreAiPendingUploadForSection({
     sectionId: '20',
     setUploadedFiles,
@@ -554,7 +542,30 @@ export default function Section20LegalDocumentsRecords({
       ? [data['20C']]
       : [];
 
-  useScrollToVaultTopic(activeTopicId, documents.length);
+  const section20A = data['20A'] || {};
+  const familyIdentityDocuments = useMemo(() => {
+    const existing = Array.isArray(section20A.identity_documents)
+      ? section20A.identity_documents
+      : [];
+    if (existing.length > 0) return existing;
+    return migrateLegacyIdentityUploads(section20A);
+  }, [section20A]);
+
+  // One-time hydrate: write migrated legacy uploads into identity_documents.
+  useEffect(() => {
+    const existing = Array.isArray(section20A.identity_documents)
+      ? section20A.identity_documents
+      : [];
+    if (existing.length > 0) return;
+    if (familyIdentityDocuments.length === 0) return;
+    updateStaticField('20A', 'identity_documents', familyIdentityDocuments);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- migrate once when legacy data present
+  }, [familyIdentityDocuments.length]);
+
+  useScrollToVaultTopic(
+    activeTopicId,
+    documents.length + familyIdentityDocuments.length,
+  );
 
   const isAnyAIActionRunning =
     uploadingScope !== null || aiLoadingScope !== null;
@@ -772,6 +783,71 @@ export default function Section20LegalDocumentsRecords({
 
       const patch = json?.result?.patch ?? {};
       const extracted = extractStaticObjectFromPatch(subsection, patch);
+
+      // Prefer structured identity_documents cards when present in the patch
+      const identityDocs = Array.isArray(patch?.['20A']?.identity_documents)
+        ? patch['20A'].identity_documents
+        : Array.isArray(patch?.identity_documents)
+          ? patch.identity_documents
+          : Array.isArray(extracted.identity_documents)
+            ? extracted.identity_documents
+            : null;
+
+      if (subsection === '20A') {
+        const fromCards = Array.isArray(identityDocs) ? identityDocs : [];
+        const fromLegacy =
+          fromCards.length === 0
+            ? cardsFromLegacyIdentitySlots(extracted)
+            : [];
+        const incomingCards = [...fromCards, ...fromLegacy] as Record<
+          string,
+          unknown
+        >[];
+
+        if (incomingCards.length > 0) {
+          const existing = familyIdentityDocuments as Record<string, unknown>[];
+          const startIndex = existing.length;
+          const merged =
+            existing.length === 0
+              ? incomingCards
+              : [...existing, ...incomingCards];
+
+          // Keep non-identity leftover slots (adoption/custody/name-change)
+          // while preferring structured cards for ID uploads.
+          const {
+            birth_certificate: _bc,
+            social_security_card: _ssn,
+            passport: _pp,
+            drivers_license: _dl,
+            marriage_certificate: _mc,
+            divorce_decree: _dd,
+            naturalization_certificate: _nat,
+            immigration_documents: _imm,
+            children_birth_certificates: _cbc,
+            identity_documents: _id,
+            ...restExtracted
+          } = extracted as Record<string, unknown>;
+
+          updateStaticWithPatch('20A', {
+            ...restExtracted,
+            identity_documents: merged,
+          });
+          incomingCards.forEach((card, offset) => {
+            const index = startIndex + offset;
+            recordNewFill({
+              sectionId: '20',
+              subsectionId: '20A',
+              topicGroupKey: 'identity_documents',
+              index,
+              label: identityDocumentCardLabel(card, index, 'family'),
+            });
+          });
+          setAiNotice(
+            'AI filled identity document cards. Please review the results.',
+          );
+          return;
+        }
+      }
 
       if (Object.keys(extracted).length === 0) {
         // POA and similar docs belong in 20C — recover if model put them there
@@ -1164,6 +1240,21 @@ export default function Section20LegalDocumentsRecords({
               buttonLabel: config.buttonLabel,
               onAutofill: () => handleAutofillStatic(subsection, scope),
             })}
+
+            {subsection === '20A' && (
+              <IdentityDocumentCards
+                mode="family"
+                items={familyIdentityDocuments as Record<string, unknown>[]}
+                onChange={next =>
+                  updateStaticField('20A', 'identity_documents', next)
+                }
+                subsectionId="20A"
+                topicGroupKey="identity_documents"
+                activeTopicId={activeTopicId}
+                sectionId="20"
+                newFills={newFills}
+              />
+            )}
 
             <div className="grid gap-5 xl:grid-cols-2">
               {groups.map(group => {

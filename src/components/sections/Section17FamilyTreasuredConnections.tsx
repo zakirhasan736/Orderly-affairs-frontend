@@ -19,6 +19,7 @@ import {
   FileHeart,
   FileText,
   Gem,
+  GraduationCap,
   HeartHandshake,
   Loader2,
   Minus,
@@ -298,6 +299,48 @@ const SECTION_17C = createRepeatableSection('17C', 'Dependents', 'Dependent', [
     type: 'TextArea',
     helperText:
       'Your wishes for their care if you become unable to provide support',
+  },
+  {
+    key: 'school_name',
+    label: 'School name',
+    type: 'TextInput',
+    helperText: 'Current school or program name',
+  },
+  {
+    key: 'grade',
+    label: 'Grade',
+    type: 'TextInput',
+    helperText: 'Current grade, class year, or program level',
+  },
+  {
+    key: 'enrollment_contact',
+    label: 'Enrollment / registrar contact',
+    type: 'TextArea',
+    helperText: 'School office or registrar phone, email, and contact person',
+  },
+  {
+    key: 'iep_or_504',
+    label: 'IEP / 504 plan',
+    type: 'Dropdown',
+    options: ['Yes', 'No'],
+    helperText: 'Whether this dependent has an IEP or 504 plan',
+  },
+  {
+    key: 'iep_504_details',
+    label: 'IEP / 504 details',
+    type: 'TextArea',
+    helperText: 'Plan details, case manager, or where documents are stored',
+    conditionalDisplay: {
+      field: 'iep_or_504',
+      value: 'Yes',
+    },
+  },
+  {
+    key: 'emergency_pickup_list',
+    label: 'Emergency pickup list',
+    type: 'TextArea',
+    helperText:
+      'People authorized to pick up this dependent in an emergency (names and phones)',
   },
   {
     key: 'dependency_documents',
@@ -772,6 +815,23 @@ const SECTION_17C_GROUPS: FieldGroup[] = [
       'backup_caregivers',
       'special_needs',
       'future_care_plans',
+    ],
+  },
+  {
+    key: 'education',
+    title: 'Education',
+    subtitle: 'School, grade, IEP/504, and emergency pickup',
+    icon: GraduationCap,
+    accent: 'from-sky-500/[0.07] to-cyan-500/[0.03]',
+    iconWrap: 'bg-sky-500/10 text-sky-700',
+    layout: 'stack',
+    fieldKeys: [
+      'school_name',
+      'grade',
+      'enrollment_contact',
+      'iep_or_504',
+      'iep_504_details',
+      'emergency_pickup_list',
     ],
   },
   {

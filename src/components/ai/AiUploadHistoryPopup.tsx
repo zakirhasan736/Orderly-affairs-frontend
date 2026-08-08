@@ -2,7 +2,18 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Eye, Files, Loader2, Sparkles, Trash2 } from 'lucide-react';
+import { useOptionalDashboardAiBatch } from '@/contexts/DashboardAiBatchContext';
+import { resolveUploadDisplayTitle } from '@/utils/aiUploadDisplayTitle';
+import { AI_SECTION_REGISTRY } from '@/utils/aiSectionRegistry';
+import {
+  ChevronDown,
+  Eye,
+  Files,
+  FolderInput,
+  Loader2,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -150,6 +161,27 @@ function mergeHistoryWithJobs(
           ? 100
           : Math.max(0, Math.min(99, live.progress || 0)),
       targetSectionLabel: live.targetSectionLabel || item.targetSectionLabel,
+      documentSummary: live.documentSummary || item.documentSummary,
+      displayTitle:
+        live.documentSummary || live.targetSectionLabel
+          ? resolveUploadDisplayTitle({
+              displayTitle: item.displayTitle,
+              documentSummary: live.documentSummary || item.documentSummary,
+              fileName: item.fileName,
+              sectionId,
+              targetSectionLabel:
+                live.targetSectionLabel || item.targetSectionLabel,
+              fileId: live.file_id || item.fileId,
+            })
+          : item.displayTitle ||
+            resolveUploadDisplayTitle({
+              displayTitle: item.displayTitle,
+              documentSummary: item.documentSummary,
+              fileName: item.fileName,
+              sectionId,
+              targetSectionLabel: item.targetSectionLabel,
+              fileId: item.fileId,
+            }),
       sectionId,
       sectionIds,
       fileId: live.file_id || item.fileId,
@@ -188,6 +220,14 @@ function mergeHistoryWithJobs(
         ? [String(job.targetSectionId)]
         : ['overview'],
       targetSectionLabel: job.targetSectionLabel,
+      documentSummary: job.documentSummary,
+      displayTitle: resolveUploadDisplayTitle({
+        documentSummary: job.documentSummary,
+        fileName: job.fileName,
+        sectionId: job.targetSectionId,
+        targetSectionLabel: job.targetSectionLabel,
+        fileId: job.file_id,
+      }),
       error: job.error,
       source: 'overview',
     });
@@ -362,6 +402,11 @@ export function AiUploadHistoryPopup({
   });
   const [open, setOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [reassigningId, setReassigningId] = useState<string | null>(null);
+  const [changeSectionFor, setChangeSectionFor] =
+    useState<AiUploadHistoryItem | null>(null);
+  const [selectedSectionId, setSelectedSectionId] = useState('');
+  const batch = useOptionalDashboardAiBatch();
   const [preview, setPreview] = useState<{
     fileId: string;
     fileName: string;
@@ -413,6 +458,44 @@ export function AiUploadHistoryPopup({
     [deletingId, jobs, onDismissJob, syncFromServer],
   );
 
+  const handleChangeSection = useCallback(async () => {
+    if (
+      !changeSectionFor ||
+      !selectedSectionId ||
+      !batch?.reassignDocumentSection
+    ) {
+      return;
+    }
+    if (selectedSectionId === changeSectionFor.sectionId) {
+      setChangeSectionFor(null);
+      return;
+    }
+    const fileId = changeSectionFor.fileId;
+    if (!fileId) {
+      toast.error('This document is not ready to move yet.');
+      return;
+    }
+    setReassigningId(changeSectionFor.id);
+    try {
+      await batch.reassignDocumentSection({
+        fileId,
+        fileName: changeSectionFor.fileName,
+        mimeType: changeSectionFor.mimeType,
+        sectionId: selectedSectionId,
+        documentSummary: changeSectionFor.documentSummary,
+        historyId: changeSectionFor.id,
+        previousSectionId: changeSectionFor.sectionId,
+      });
+      refreshHistory();
+      toast.success('Document moved to the new section');
+      setChangeSectionFor(null);
+    } catch (error: any) {
+      toast.error(error?.message || 'Could not change section');
+    } finally {
+      setReassigningId(null);
+    }
+  }, [batch, changeSectionFor, refreshHistory, selectedSectionId]);
+
   const openPreview = useCallback((item: AiUploadHistoryItem) => {
     const live = jobs.find(job => job.id === item.id);
     const fileId = item.fileId || live?.file_id || '';
@@ -422,7 +505,10 @@ export function AiUploadHistoryPopup({
     }
     setPreview({
       fileId,
-      fileName: item.fileName,
+      fileName: resolveUploadDisplayTitle({
+        ...item,
+        fileId,
+      }),
       mimeType: item.mimeType || live?.mime_type || undefined,
     });
   }, [jobs]);
@@ -514,6 +600,67 @@ export function AiUploadHistoryPopup({
       mimeType={preview?.mimeType}
       onNotFound={handlePreviewMissing}
     />
+  );
+
+  const changeSectionDialog = (
+    <Dialog
+      open={Boolean(changeSectionFor)}
+      onOpenChange={next => {
+        if (!next) setChangeSectionFor(null);
+      }}
+    >
+      <DialogContent className="max-w-md gap-0 overflow-hidden p-0 sm:rounded-2xl">
+        <DialogHeader className="space-y-1 border-b border-black/5 px-5 py-4 text-left">
+          <DialogTitle className="text-lg font-semibold text-[#213D59]">
+            Change section
+          </DialogTitle>
+          <DialogDescription className="text-[13px] text-[#5a6b80]">
+            {changeSectionFor
+              ? `Move “${resolveUploadDisplayTitle(changeSectionFor)}” if AI put it in the wrong place.`
+              : 'Choose where this document should live.'}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 px-5 py-4">
+          <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#6b7785]">
+            Vault section
+            <select
+              className="mt-1.5 w-full rounded-xl border border-[#213D59]/15 bg-white px-3 py-2.5 text-sm text-[#1a2b3d] outline-none focus:border-[#2B5A8C]"
+              value={selectedSectionId}
+              onChange={event => setSelectedSectionId(event.target.value)}
+            >
+              <option value="">Select a section…</option>
+              {AI_SECTION_REGISTRY.map(section => (
+                <option key={section.id} value={section.id}>
+                  {section.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              className="rounded-xl px-3 py-2 text-sm font-medium text-[#5a6b80] hover:bg-slate-50"
+              onClick={() => setChangeSectionFor(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!selectedSectionId || Boolean(reassigningId)}
+              onClick={() => void handleChangeSection()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#213D59] px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {reassigningId ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FolderInput className="h-3.5 w-3.5" />
+              )}
+              Move & fill
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 
   if (variant === 'inline') {
@@ -724,9 +871,9 @@ export function AiUploadHistoryPopup({
                         >
                           <p
                             className="truncate text-[11px] font-semibold text-slate-900"
-                            title={item.fileName}
+                            title={resolveUploadDisplayTitle(item)}
                           >
-                            {item.fileName}
+                            {resolveUploadDisplayTitle(item)}
                           </p>
                           <div className="mt-0.5 flex flex-wrap items-center gap-1">
                             <span
@@ -812,6 +959,7 @@ export function AiUploadHistoryPopup({
           )
         : null}
       {previewDialog}
+      {changeSectionDialog}
       </>
     );
   }
@@ -956,6 +1104,7 @@ export function AiUploadHistoryPopup({
                   const relative = formatUploadRelativeShort(
                     item.updatedAt || item.createdAt,
                   );
+                  const title = resolveUploadDisplayTitle(item);
 
                   return (
                     <div
@@ -966,7 +1115,7 @@ export function AiUploadHistoryPopup({
                         type="button"
                         onClick={() => openPreview(item)}
                         className="relative block w-full text-left"
-                        title={`Preview ${item.fileName}`}
+                        title={`Preview ${title}`}
                       >
                         <AiUploadHistoryThumb
                           fileId={item.fileId}
@@ -1015,7 +1164,7 @@ export function AiUploadHistoryPopup({
                           void handleDelete(item);
                         }}
                         className="absolute right-2.5 top-2.5 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-white opacity-100 shadow-sm backdrop-blur-sm transition hover:bg-rose-600 sm:h-8 sm:w-8 sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-50"
-                        aria-label={`Delete ${item.fileName}`}
+                        aria-label={`Delete ${title}`}
                         title="Delete upload"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -1025,13 +1174,13 @@ export function AiUploadHistoryPopup({
                         type="button"
                         onClick={() => openPreview(item)}
                         className="mt-2 space-y-0.5 px-0.5 text-left"
-                        title={item.fileName}
+                        title={title}
                       >
                         <p className="text-[10px] font-medium text-[#6b7785] sm:text-[11px]">
                           {relative || 'Just now'}
                         </p>
                         <p className="line-clamp-2 text-[12px] font-semibold leading-snug text-[#1a2b3d] sm:text-[13px]">
-                          {item.fileName}
+                          {title}
                         </p>
                         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                           <span
@@ -1054,6 +1203,34 @@ export function AiUploadHistoryPopup({
                         </div>
                       </button>
 
+                      {canWrite &&
+                      item.fileId &&
+                      (uiStatus === 'done' ||
+                        uiStatus === 'attention' ||
+                        item.status === 'needs_section_choice') ? (
+                        <button
+                          type="button"
+                          disabled={reassigningId === item.id}
+                          onClick={event => {
+                            event.stopPropagation();
+                            setSelectedSectionId(
+                              item.sectionId && item.sectionId !== 'overview'
+                                ? item.sectionId
+                                : '',
+                            );
+                            setChangeSectionFor(item);
+                          }}
+                          className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-[#213D59]/15 bg-white/80 px-2 py-1.5 text-[10px] font-semibold text-[#2B5A8C] transition hover:bg-white disabled:opacity-50"
+                        >
+                          {reassigningId === item.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <FolderInput className="h-3 w-3" />
+                          )}
+                          Change section
+                        </button>
+                      ) : null}
+
                       {uiStatus === 'attention' && item.error ? (
                         <p
                           className="mt-1 line-clamp-2 px-0.5 text-[10px] text-amber-700"
@@ -1071,6 +1248,7 @@ export function AiUploadHistoryPopup({
         </DialogContent>
       </Dialog>
       {previewDialog}
+      {changeSectionDialog}
     </>
   );
 }

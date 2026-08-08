@@ -237,6 +237,78 @@ export const formConfig: FormConfig = {
                   type: 'TextArea',
                   helperText: "List of commonly used PINs and what they're for",
                 },
+
+                {
+                  key: 'identity_documents_header',
+                  label: 'Identity Documents',
+                  type: 'Instructions',
+                  content:
+                    'Passport, birth certificate, SSN card, and other IDs for you',
+                },
+                {
+                  key: 'full_legal_name_on_id',
+                  label: 'Full legal name (on ID)',
+                  type: 'TextInput',
+                  helperText: 'Name as printed on the identity document',
+                },
+                {
+                  key: 'document_type',
+                  label: 'Document type',
+                  type: 'Dropdown',
+                  options: [
+                    'Passport',
+                    'Birth certificate',
+                    'SSN/SIN card',
+                    "Driver's license",
+                    'Marriage certificate',
+                    'Divorce certificate',
+                    'Other',
+                  ],
+                  helperText: 'Passport, birth certificate, SSN card, license, etc.',
+                },
+                {
+                  key: 'document_number',
+                  label: 'Document number',
+                  type: 'TextInput',
+                  helperText: 'Passport number, certificate number, license number, etc.',
+                },
+                {
+                  key: 'issue_date',
+                  label: 'Issue date',
+                  type: 'DatePicker',
+                  helperText: 'Date the document was issued',
+                },
+                {
+                  key: 'expiration_date',
+                  label: 'Expiration date',
+                  type: 'DatePicker',
+                  helperText: 'Expiration date if applicable',
+                },
+                {
+                  key: 'issuing_authority',
+                  label: 'Issuing authority',
+                  type: 'TextInput',
+                  helperText: 'Agency or office that issued the document',
+                },
+                {
+                  key: 'document_location',
+                  label: 'Physical / digital location of the original',
+                  type: 'TextArea',
+                  helperText:
+                    'Where the original is stored (safe, file bag, cloud folder, etc.)',
+                },
+                {
+                  key: 'last_updated',
+                  label: 'Last updated',
+                  type: 'DatePicker',
+                  helperText: 'When this record was last reviewed or updated',
+                },
+                {
+                  key: 'document_upload',
+                  label: 'Document file',
+                  type: 'TextInputWithUpload',
+                  helperText: 'Upload a scan or photo of this document',
+                },
               ],
             },
             {
@@ -244,75 +316,6 @@ export const formConfig: FormConfig = {
               title: 'Key Contacts',
               fields: [],
               groups: [
-                {
-                  id: 'next_of_kin',
-                  title: 'Next of Kin',
-                  isRepeatable: true,
-                  itemLabel: 'Next of Kin',
-                  description:
-                    'Your next of kin are typically your closest living relatives who should be contacted first.',
-                  fields: [
-                    {
-                      key: 'contact_name',
-                      label: 'Full Name',
-                      type: 'TextInput',
-                      helperText: 'Full legal name of your next of kin',
-                      required: true,
-                    },
-                    {
-                      key: 'relationship',
-                      label: 'Relationship',
-                      type: 'TextInput',
-                      helperText: 'e.g., Spouse, Child, Parent, Sibling',
-                      required: true,
-                    },
-                    {
-                      key: 'phone_number',
-                      label: 'Phone Number',
-                      type: 'TextInput',
-                      helperText: 'Primary phone number for this person',
-                      required: true,
-                    },
-                    {
-                      key: 'email_address',
-                      label: 'Email Address',
-                      type: 'TextInput',
-                      helperText: 'Email address for this person',
-                    },
-                    {
-                      key: 'mailing_address',
-                      label: 'Mailing Address',
-                      type: 'TextArea',
-                      helperText: 'Complete mailing address for this person',
-                      required: true,
-                    },
-                    {
-                      key: 'alternate_contact',
-                      label: 'Alternate Contact Method',
-                      type: 'TextInput',
-                      helperText:
-                        'Secondary phone, work number, or other contact method',
-                    },
-                    {
-                      key: 'priority_level',
-                      label: 'Contact Priority',
-                      type: 'RadioGroup',
-                      options: [
-                        'Primary - Contact First',
-                        'Secondary - Contact if Primary Unavailable',
-                        'Emergency Only',
-                      ],
-                      helperText: 'When should this person be contacted?',
-                    },
-                    {
-                      key: 'special_instructions',
-                      label: 'Special Instructions',
-                      type: 'TextArea',
-                      helperText:
-                        'Any specific instructions about contacting this person or their role',
-                    },
-                  ],
-                },
                 {
                   id: 'executor_trustee',
                   title: 'Executor or Trustee',
@@ -2842,6 +2845,50 @@ export const formConfig: FormConfig = {
                     'Your wishes for their care if you become unable to provide support',
                 },
                 {
+                  key: 'school_name',
+                  label: 'School name',
+                  type: 'TextInput',
+                  helperText: 'Current school or program name',
+                },
+                {
+                  key: 'grade',
+                  label: 'Grade',
+                  type: 'TextInput',
+                  helperText: 'Current grade, class year, or program level',
+                },
+                {
+                  key: 'enrollment_contact',
+                  label: 'Enrollment / registrar contact',
+                  type: 'TextArea',
+                  helperText:
+                    'School office or registrar phone, email, and contact person',
+                },
+                {
+                  key: 'iep_or_504',
+                  label: 'IEP / 504 plan',
+                  type: 'Dropdown',
+                  options: ['Yes', 'No'],
+                  helperText: 'Whether this dependent has an IEP or 504 plan',
+                },
+                {
+                  key: 'iep_504_details',
+                  label: 'IEP / 504 details',
+                  type: 'TextArea',
+                  helperText:
+                    'Plan details, case manager, or where documents are stored',
+                  conditionalDisplay: {
+                    field: 'iep_or_504',
+                    value: 'Yes',
+                  },
+                },
+                {
+                  key: 'emergency_pickup_list',
+                  label: 'Emergency pickup list',
+                  type: 'TextArea',
+                  helperText:
+                    'People authorized to pick up this dependent in an emergency (names and phones)',
+                },
+                {
                   key: 'dependency_documents',
                   label: 'Dependency Documentation',
                   type: 'Instructions',
@@ -3859,96 +3906,12 @@ export const formConfig: FormConfig = {
                   content:
                     "To help your executors and trustees efficiently settle your estate, it's essential to keep organized records of your legal documents. This section is dedicated to storing copies of essential paperwork related to your personal and financial affairs. Consider storing the originals in your fireproof document bag.",
                 },
-
-                {
-                  key: 'identification_documents_header',
-                  label: 'Identification Documents',
-                  type: 'Instructions',
-                  content:
-                    'Essential identification documents for estate settlement and official processes',
-                },
-                {
-                  key: 'birth_certificate',
-                  label: 'Birth Certificate',
-                  type: 'TextInputWithUpload',
-                  helperText:
-                    'Upload copy of birth certificate or note location of original',
-                },
-                {
-                  key: 'social_security_card',
-                  label: 'Social Security Card',
-                  type: 'TextInputWithUpload',
-                  helperText:
-                    'Upload copy of Social Security card or note location',
-                },
-                {
-                  key: 'passport',
-                  label: 'Passport',
-                  type: 'TextInputWithUpload',
-                  helperText:
-                    'Upload copy of current passport or note location',
-                },
-                {
-                  key: 'drivers_license',
-                  label: "Driver's License",
-                  type: 'TextInputWithUpload',
-                  helperText:
-                    "Upload copy of current driver's license or state ID",
-                },
-                {
-                  key: 'marriage_certificate',
-                  label: 'Marriage Certificate',
-                  type: 'TextInputWithUpload',
-                  helperText:
-                    'Upload copy of marriage certificate(s) or note location',
-                },
-                {
-                  key: 'divorce_decree',
-                  label: 'Divorce Decree',
-                  type: 'TextInputWithUpload',
-                  helperText:
-                    'Upload copies of divorce decrees or legal separation documents',
-                },
-                {
-                  key: 'name_change_documents',
-                  label: 'Name Change Documents',
-                  type: 'TextInputWithUpload',
-                  helperText: 'Legal documents for any name changes',
-                },
-
-                {
-                  key: 'citizenship_documents_header',
-                  label: 'Citizenship & Immigration Documents',
-                  type: 'Instructions',
-                  content:
-                    'Documents proving citizenship or immigration status',
-                },
-                {
-                  key: 'naturalization_certificate',
-                  label: 'Naturalization Certificate',
-                  type: 'TextInputWithUpload',
-                  helperText: 'Certificate of naturalization or citizenship',
-                },
-                {
-                  key: 'immigration_documents',
-                  label: 'Immigration Documents',
-                  type: 'TextInputWithUpload',
-                  helperText:
-                    'Green card, visa, or other immigration documents',
-                },
-
                 {
                   key: 'family_documents_header',
                   label: 'Family Documents',
                   type: 'Instructions',
                   content:
                     'Documents related to children and family relationships',
-                },
-                {
-                  key: 'children_birth_certificates',
-                  label: "Children's Birth Certificates",
-                  type: 'TextInputWithUpload',
-                  helperText: 'Birth certificates for all children',
                 },
                 {
                   key: 'adoption_documents',
@@ -3961,6 +3924,131 @@ export const formConfig: FormConfig = {
                   label: 'Custody Agreements',
                   type: 'TextInputWithUpload',
                   helperText: 'Child custody or visitation agreements',
+                },
+                {
+                  key: 'name_change_documents',
+                  label: 'Name Change Documents',
+                  type: 'TextInputWithUpload',
+                  helperText: 'Legal documents for any name changes',
+                },
+              ],
+              groups: [
+                {
+                  id: 'identity_documents',
+                  title: 'Identification Documents',
+                  isRepeatable: true,
+                  itemLabel: 'Identity document',
+                  description:
+                    'Structured identity cards (passport, birth certificate, SSN, license, etc.) with assigned-to and fillable fields',
+                  fields: [
+                    {
+                      key: 'assigned_to',
+                      label: 'Assigned to',
+                      type: 'Dropdown',
+                      options: [
+                        'Self',
+                        'Spouse/Partner',
+                        'Dependent',
+                        'Other',
+                        'Household',
+                      ],
+                      helperText: 'Who this identity document belongs to',
+                      required: true,
+                    },
+                    {
+                      key: 'assigned_to_name',
+                      label: 'Person name',
+                      type: 'TextInput',
+                      helperText:
+                        'Full name when assigned to someone other than Self',
+                      conditionalDisplay: {
+                        field: 'assigned_to',
+                        value: [
+                          'Spouse/Partner',
+                          'Dependent',
+                          'Other',
+                          'Household',
+                        ],
+                      },
+                    },
+                    {
+                      key: 'full_legal_name',
+                      label: 'Full legal name',
+                      type: 'TextInput',
+                      helperText: 'Name as printed on the document',
+                      required: true,
+                    },
+                    {
+                      key: 'date_of_birth',
+                      label: 'Date of birth',
+                      type: 'DatePicker',
+                      helperText: 'Date of birth on the document',
+                    },
+                    {
+                      key: 'document_type',
+                      label: 'Document type',
+                      type: 'Dropdown',
+                      options: [
+                        'Passport',
+                        'Birth certificate',
+                        'SSN/SIN card',
+                        "Driver's license",
+                        'Marriage certificate',
+                        'Divorce certificate',
+                        'Naturalization',
+                        'Immigration',
+                        'Other',
+                      ],
+                      helperText:
+                        'Passport, birth certificate, SSN card, license, etc.',
+                      required: true,
+                    },
+                    {
+                      key: 'document_number',
+                      label: 'Document number',
+                      type: 'TextInput',
+                      helperText:
+                        'Passport number, certificate number, license number, etc.',
+                    },
+                    {
+                      key: 'issue_date',
+                      label: 'Issue date',
+                      type: 'DatePicker',
+                      helperText: 'Date the document was issued',
+                    },
+                    {
+                      key: 'expiration_date',
+                      label: 'Expiration date',
+                      type: 'DatePicker',
+                      helperText: 'Expiration date if applicable',
+                    },
+                    {
+                      key: 'issuing_authority',
+                      label: 'Issuing authority',
+                      type: 'TextInput',
+                      helperText: 'Agency or office that issued the document',
+                    },
+                    {
+                      key: 'document_location',
+                      label: 'Physical / digital location of the original',
+                      type: 'TextArea',
+                      helperText:
+                        'Where the original is stored (safe, file bag, cloud folder, etc.)',
+                    },
+                    {
+                      key: 'last_updated',
+                      label: 'Last updated',
+                      type: 'DatePicker',
+                      helperText:
+                        'When this record was last reviewed or updated',
+                    },
+                    {
+                      key: 'document_upload',
+                      label: 'Document file',
+                      type: 'TextInputWithUpload',
+                      helperText: 'Upload a scan or photo of this document',
+                    },
+                  ],
                 },
               ],
             },

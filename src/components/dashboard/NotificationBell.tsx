@@ -1,6 +1,12 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { Bell, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
@@ -16,6 +22,11 @@ import {
   markNoticeToasted,
   type DashboardNotice,
 } from '@/utils/dashboardNotifications';
+import {
+  getNotificationBadgeServerSnapshot,
+  getNotificationBadgeSnapshot,
+  subscribeNotificationBadge,
+} from '@/utils/notificationBadgeStore';
 import { isAiReviewRead } from '@/utils/vaultAlertState';
 import { useListOwnerAiDocumentsQuery } from '@/services/aiDocumentsApi';
 
@@ -95,7 +106,6 @@ export function NotificationBell({
 }: NotificationBellProps) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
-  const [storageTick, setStorageTick] = useState(0);
   const [toastReady, setToastReady] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [desktopPos, setDesktopPos] = useState<{
@@ -109,6 +119,14 @@ export function NotificationBell({
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
+
+  // Re-subscribe to localStorage mark-as-read so the badge clears immediately
+  // (React Compiler can freeze useMemo that only reads localStorage via void tick).
+  const badgeVersion = useSyncExternalStore(
+    subscribeNotificationBadge,
+    getNotificationBadgeSnapshot,
+    getNotificationBadgeServerSnapshot,
+  );
 
   // Warm RTK document cache so vault activity opens without a loading spinner.
   useListOwnerAiDocumentsQuery(undefined, {
@@ -149,35 +167,17 @@ export function NotificationBell({
   }, [open, isMobile, align]);
 
   useEffect(() => {
-    const refresh = () => setStorageTick(n => n + 1);
-    window.addEventListener('orderly-notices-read-changed', refresh);
-    window.addEventListener('orderly-vault-alerts-changed', refresh);
-    window.addEventListener('orderly-ai-patch-stashed', refresh);
-    window.addEventListener('orderly-ai-section-reviewed', refresh);
-    window.addEventListener('orderly-ai-section-persisted', refresh);
-    return () => {
-      window.removeEventListener('orderly-notices-read-changed', refresh);
-      window.removeEventListener('orderly-vault-alerts-changed', refresh);
-      window.removeEventListener('orderly-ai-patch-stashed', refresh);
-      window.removeEventListener('orderly-ai-section-reviewed', refresh);
-      window.removeEventListener('orderly-ai-section-persisted', refresh);
-    };
-  }, []);
-
-  useEffect(() => {
     const id = window.setTimeout(() => setToastReady(true), 900);
     return () => window.clearTimeout(id);
   }, []);
 
   const visibleNotices = useMemo(() => {
-    void storageTick;
     return filterVisibleNotices(notices, MAX_COUNT);
-  }, [notices, storageTick]);
+  }, [notices, badgeVersion]);
 
   const readIds = useMemo(() => {
-    void storageTick;
     return getReadNoticeIds();
-  }, [storageTick]);
+  }, [badgeVersion]);
 
   const unreadNoticeCount = useMemo(
     () => visibleNotices.filter(notice => !readIds.has(notice.id)).length,
@@ -185,14 +185,13 @@ export function NotificationBell({
   );
 
   const unreadAiReviewCount = useMemo(() => {
-    void storageTick;
     return listDashboardAiPatches().filter(entry => {
       const sectionId = String(entry.section_id || '').trim();
       const fileId = String(entry.file_id || '').trim();
       if (!sectionId || sectionId === 'overview' || !fileId) return false;
       return !isAiReviewRead(sectionId, fileId);
     }).length;
-  }, [storageTick]);
+  }, [badgeVersion]);
 
   // Bell badge = notices + AI fills waiting in the review inbox.
   const unreadCount = unreadNoticeCount + unreadAiReviewCount;

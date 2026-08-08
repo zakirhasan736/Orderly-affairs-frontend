@@ -162,6 +162,14 @@ function mergeObjectFields(
     }
     if (value === null || value === undefined || value === '') return;
 
+    if (key === 'identity_documents' && Array.isArray(value)) {
+      const existing = Array.isArray(next[key])
+        ? (next[key] as unknown[])
+        : [];
+      next[key] = existing.length ? [...existing, ...value] : value;
+      return;
+    }
+
     next[key] = coerceFieldValue(key, value, current[key], fieldMap.get(key));
   });
 
@@ -172,7 +180,6 @@ function isSubsectionKey(key: string) {
   return (
     /^\d+[A-Z]$/.test(key) ||
     key === 'vital_info' ||
-    key === 'next_of_kin' ||
     key === 'executor_trustee' ||
     key === 'additional_contacts'
   );
@@ -180,11 +187,7 @@ function isSubsectionKey(key: string) {
 
 /** Contact arrays and any vault subsection that renders repeatable cards. */
 function isCardArraySubsection(sectionId: string, key: string) {
-  if (
-    key === 'next_of_kin' ||
-    key === 'executor_trustee' ||
-    key === 'additional_contacts'
-  ) {
+  if (key === 'executor_trustee' || key === 'additional_contacts') {
     return true;
   }
   return subsectionHasDynamicTopics(sectionId, key);

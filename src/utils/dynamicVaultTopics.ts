@@ -132,7 +132,12 @@ export const SUBSECTION_TOPIC_CONFIG: Record<
   },
   '17': {
     '17B': topicConfig('17B', 'Family Member', ['person_name', 'relationship']),
-    '17C': topicConfig('17C', 'Dependent', ['dependent_name', 'relationship']),
+    '17C': topicConfig('17C', 'Dependent', [
+      'dependent_name',
+      'relationship',
+      'school_name',
+      'grade',
+    ]),
     '17D': topicConfig('17D', 'Friend', ['friend_name']),
     '17E': topicConfig('17E', 'Relationship', [
       'person_name',
@@ -179,12 +184,14 @@ const MULTI_GROUP_TOPIC_CONFIG: Record<
   Record<string, MultiGroupTopicSource[]>
 > = {
   '1': {
-    '1B': [
+    '1A': [
       {
-        groupKey: 'next_of_kin',
-        fallbackPrefix: 'Next of Kin',
-        labelFields: ['contact_name', 'relationship'],
+        groupKey: 'identity_documents',
+        fallbackPrefix: 'Identity document',
+        labelFields: ['document_type', 'full_legal_name'],
       },
+    ],
+    '1B': [
       {
         groupKey: 'executor_trustee',
         fallbackPrefix: 'Executor / Trustee',
@@ -199,11 +206,6 @@ const MULTI_GROUP_TOPIC_CONFIG: Record<
     // Legacy nav id — same contact groups as 1B
     '1C': [
       {
-        groupKey: 'next_of_kin',
-        fallbackPrefix: 'Next of Kin',
-        labelFields: ['contact_name', 'relationship'],
-      },
-      {
         groupKey: 'executor_trustee',
         fallbackPrefix: 'Executor / Trustee',
         labelFields: ['contact_name', 'role_title'],
@@ -212,6 +214,15 @@ const MULTI_GROUP_TOPIC_CONFIG: Record<
         groupKey: 'additional_contacts',
         fallbackPrefix: 'Additional Contact',
         labelFields: ['contact_name', 'role_title'],
+      },
+    ],
+  },
+  '20': {
+    '20A': [
+      {
+        groupKey: 'identity_documents',
+        fallbackPrefix: 'Identity document',
+        labelFields: ['document_type', 'assigned_to_name', 'full_legal_name'],
       },
     ],
   },
@@ -246,7 +257,13 @@ function readMultiGroupTopics(
   groups: MultiGroupTopicSource[],
 ): DynamicTopic[] {
   return groups.flatMap(group => {
-    const raw = sectionData?.[group.groupKey];
+    const nested =
+      sectionData?.[subsectionId] &&
+      typeof sectionData[subsectionId] === 'object' &&
+      !Array.isArray(sectionData[subsectionId])
+        ? (sectionData[subsectionId] as Record<string, unknown>)[group.groupKey]
+        : undefined;
+    const raw = nested ?? sectionData?.[group.groupKey];
     const items = Array.isArray(raw) ? raw : [];
 
     return items.map((item, index) => ({

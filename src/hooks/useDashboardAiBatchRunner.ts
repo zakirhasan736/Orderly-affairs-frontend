@@ -18,6 +18,7 @@ import {
   stashDashboardAiPatch,
   markDashboardAiPatchPersisted,
   listDashboardAiPatchesForSection,
+  takeDashboardAiPatch,
 } from '@/utils/aiDashboardPatchCache';
 import {
   aiPatchHasValues,
@@ -31,7 +32,11 @@ import { persistAiResultToSectionBackground } from '@/services/aiBackgroundSecti
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import { getSectionFieldCatalog } from '@/utils/aiSectionFieldCatalog';
 import { markAiSectionFilled } from '@/utils/aiSectionFillGuard';
-import { markAiAutofillDoneForSection } from '@/utils/aiAutofillDoneSections';
+import {
+  clearAiAutofillDoneForFileSection,
+  markAiAutofillDoneForSection,
+} from '@/utils/aiAutofillDoneSections';
+import { resolveUploadDisplayTitle } from '@/utils/aiUploadDisplayTitle';
 import {
   linkAiUploadHistorySections,
   removeReplacedAiUploadFileIds,
@@ -510,7 +515,7 @@ export type DashboardAiJobStatus =
 
 export type DashboardAiJob = {
   id: string;
-  file: File;
+  file?: File | null;
   fileName: string;
   status: DashboardAiJobStatus;
   progress: number;
@@ -718,6 +723,16 @@ export function useDashboardAiBatchRunner() {
           Pick<DashboardAiJob, 'readSource' | 'extractMethod' | 'documentSummary'>
         >,
       ) => {
+        const summary = extra?.documentSummary ?? documentSummary;
+        const label =
+          sectionLabel || AI_SECTION_BY_ID[sectionId]?.label || 'Section';
+        const displayTitle = resolveUploadDisplayTitle({
+          documentSummary: summary,
+          fileName,
+          sectionId,
+          targetSectionLabel: label,
+          fileId: file_id,
+        });
         patchJob(jobId, {
           status: 'done',
           progress: 100,
@@ -728,12 +743,25 @@ export function useDashboardAiBatchRunner() {
           targetSectionId: sectionId,
           targetSectionKey: sectionKey,
           targetSubsection: subsection,
-          targetSectionLabel:
-            sectionLabel || AI_SECTION_BY_ID[sectionId]?.label || 'Section',
-          documentSummary: extra?.documentSummary ?? documentSummary,
+          targetSectionLabel: label,
+          documentSummary: summary,
           activeFillSectionId: undefined,
           readSource: extra?.readSource ?? readSource,
           extractMethod: extra?.extractMethod ?? extractMethod,
+        });
+        upsertAiUploadHistory({
+          id: jobId,
+          fileName,
+          status: 'done',
+          progress: 100,
+          fileId: file_id,
+          mimeType: mime_type,
+          sectionId,
+          sectionIds: [sectionId],
+          targetSectionLabel: label,
+          documentSummary: summary,
+          displayTitle,
+          source: 'overview',
         });
       };
 
@@ -944,6 +972,7 @@ export function useDashboardAiBatchRunner() {
         message: statusLabel('starting'),
       });
 
+      if (!job.file) throw new Error('Upload file is missing.');
       const validationError = validateAiDocumentFile(job.file);
       if (validationError) throw new Error(validationError);
 
@@ -1389,6 +1418,103 @@ export function useDashboardAiBatchRunner() {
     [finishWithSection, patchJob, routing],
   );
 
+  /**
+   * Move an already-uploaded document into a different vault section
+   * when AI routed it incorrectly (or the user prefers another home).
+   */
+  const reassignDocumentSection = useCallback(
+    async (args: {
+      fileId: string;
+      fileName: string;
+      mimeType?: string;
+      sectionId: string;
+      documentSummary?: string | null;
+      historyId?: string;
+      previousSectionId?: string | null;
+    }) => {
+      const fileId = String(args.fileId || '').trim();
+      if (!fileId) throw new Error('Document file is missing.');
+      const meta = AI_SECTION_BY_ID[args.sectionId];
+      if (!meta?.key) throw new Error('Choose a valid vault section.');
+
+      // Allow a fresh fill for this document × target section.
+      clearAiAutofillDoneForFileSection(meta.id, fileId);
+      takeDashboardAiPatch(meta.id, fileId);
+      if (args.previousSectionId && args.previousSectionId !== meta.id) {
+        clearAiAutofillDoneForFileSection(args.previousSectionId, fileId);
+      }
+
+      const jobId = args.historyId || createJobId();
+      const now = new Date().toISOString();
+      const nextJob: DashboardAiJob = {
+        id: jobId,
+        file: null,
+        fileName: args.fileName || 'Uploaded document',
+        status: 'routing',
+        progress: 82,
+        message: statusLabel('routing'),
+        createdAt: now,
+        updatedAt: now,
+        file_id: fileId,
+        mime_type: args.mimeType || 'application/pdf',
+        targetSectionId: meta.id,
+        targetSectionKey: meta.key,
+        targetSubsection: meta.defaultSubsection,
+        targetSectionLabel: meta.label,
+        documentSummary: args.documentSummary || undefined,
+      };
+
+      if (activeIdsRef.current.has(jobId)) {
+        throw new Error('This document is already being processed.');
+      }
+
+      activeIdsRef.current.add(jobId);
+      routing?.setBatchSilentMode(true);
+      setJobs(prev => {
+        const without = prev.filter(item => item.id !== jobId);
+        const merged = [nextJob, ...without];
+        jobsRef.current = merged;
+        return merged;
+      });
+
+      try {
+        await finishWithSection({
+          jobId,
+          file_id: fileId,
+          mime_type: args.mimeType || 'application/pdf',
+          fileName: args.fileName || 'Uploaded document',
+          sectionKey: meta.key,
+          sectionId: meta.id,
+          subsection: meta.defaultSubsection,
+          sectionLabel: meta.label,
+          documentSummary: args.documentSummary || undefined,
+          additionalSections: [],
+          alreadyExtracted: false,
+        });
+      } catch (error: any) {
+        patchJob(jobId, {
+          status: 'error',
+          progress: 100,
+          message: statusLabel('error'),
+          error: toAiUserFacingMessage(
+            error?.message || 'Could not move this document. Try again.',
+          ),
+        });
+        throw error;
+      } finally {
+        activeIdsRef.current.delete(jobId);
+        const stillWorking = jobsRef.current.some(item =>
+          ACTIVE_STATUSES.includes(item.status),
+        );
+        if (!stillWorking) {
+          routing?.setBatchSilentMode(false);
+        }
+        pumpRef.current();
+      }
+    },
+    [finishWithSection, patchJob, routing],
+  );
+
   const readingCount = jobs.filter(
     job =>
       job.status !== 'queued' &&
@@ -1422,6 +1548,7 @@ export function useDashboardAiBatchRunner() {
     clearFinished,
     dismissJob,
     resolveSectionChoice,
+    reassignDocumentSection,
     maxConcurrent: MAX_CONCURRENT,
   };
 }

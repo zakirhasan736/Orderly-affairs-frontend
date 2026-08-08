@@ -27,7 +27,11 @@ type AiReviewInboxDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialTab?: VaultActivityTabInput;
-  onNavigateToSection?: (sectionId: string) => void;
+  onNavigateToSection?: (
+    sectionId: string,
+    subsectionId?: string | null,
+    topicId?: string | null,
+  ) => void;
   onOpenNotificationSettings?: () => void;
   ownerName?: string | null;
   ownerEmail?: string | null;
@@ -101,9 +105,9 @@ export function AiReviewInboxDialog({
         </DialogDescription>
         <div className="min-h-0 flex-1 overflow-y-auto rounded-xl shadow-2xl ring-1 ring-black/10">
           <AiReviewInboxPanel
-            onNavigateToSection={sectionId => {
+            onNavigateToSection={(sectionId, subsectionId, topicId) => {
               onOpenChange(false);
-              onNavigateToSection?.(sectionId);
+              onNavigateToSection?.(sectionId, subsectionId, topicId);
             }}
             onOpenNotificationSettings={
               onOpenNotificationSettings

@@ -1,11 +1,11 @@
 /**
  * Web Push + in-tab Notification helpers.
  *
- * Real offline push requires:
- * - VAPID public/private keys (backend + NEXT_PUBLIC_VAPID_PUBLIC_KEY)
+ * Offline delivery requires:
+ * - VAPID keys on the API (public for subscribe; private from AWS secrets for send)
  * - public/sw.js service worker
  * - PushSubscription stored via POST /auth/push-subscribe
- * - Browser permission granted from a user gesture (click)
+ * - Browser permission (from a user gesture the first time)
  */
 
 import {
@@ -13,6 +13,7 @@ import {
   isPushDeliveryActive,
   setNotificationPreferences,
   type PushDeliveryState,
+  type VaultPushPolicy,
 } from '@/utils/notificationPreferences';
 
 const PUSHED_NOTICE_KEY = 'oa_browser_push_notice_ids_v1';
@@ -64,11 +65,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 async function resolveVapidPublicKey(): Promise<string | null> {
-  const fromEnv = String(
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '',
-  ).trim();
-  if (fromEnv) return fromEnv;
-
+  // Prefer live server key (AWS / SSM) so frontend env is optional.
   try {
     const { store } = await import('@/store/store');
     const { authApi } = await import('@/services/authApi');
@@ -78,12 +75,16 @@ async function resolveVapidPublicKey(): Promise<string | null> {
       }),
     );
     if ('data' in result && result.data?.publicKey) {
-      return String(result.data.publicKey);
+      return String(result.data.publicKey).trim() || null;
     }
   } catch {
-    /* ignore */
+    /* fall through to build-time env */
   }
-  return null;
+
+  const fromEnv = String(
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '',
+  ).trim();
+  return fromEnv || null;
 }
 
 async function ensureServiceWorker(): Promise<ServiceWorkerRegistration> {
@@ -124,9 +125,106 @@ async function postSubscriptionToServer(
     .unwrap();
 }
 
+export async function getBrowserPushSubscription(): Promise<PushSubscription | null> {
+  if (!browserNotificationsSupported()) return null;
+  try {
+    const registration = await ensureServiceWorker();
+    return (await registration.pushManager.getSubscription()) || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function hasBrowserPushSubscription(): Promise<boolean> {
+  return Boolean(await getBrowserPushSubscription());
+}
+
+async function subscribeAndStore(
+  vapidKey: string,
+): Promise<PushSubscription> {
+  const registration = await ensureServiceWorker();
+  let subscription = await registration.pushManager.getSubscription();
+
+  if (!subscription) {
+    try {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
+      });
+    } catch (err) {
+      // Stale subscription from a previous VAPID key — clear and retry once.
+      const existing = await registration.pushManager.getSubscription();
+      if (existing) {
+        await existing.unsubscribe().catch(() => undefined);
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(
+            vapidKey,
+          ) as BufferSource,
+        });
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  await postSubscriptionToServer(subscription);
+  return subscription;
+}
+
+/**
+ * Subscribe + store when Notification.permission is already `granted`
+ * (no new permission prompt). Used to repair missing tokens after reload.
+ */
+export async function ensureBrowserPushSubscription(): Promise<{
+  ok: boolean;
+  permission: NotificationPermission | 'unsupported';
+  message?: string;
+}> {
+  if (!browserNotificationsSupported()) {
+    return {
+      ok: false,
+      permission: 'unsupported',
+      message:
+        'This browser does not support Web Push (needs Notification + Service Worker + PushManager).',
+    };
+  }
+
+  if (Notification.permission !== 'granted') {
+    return {
+      ok: false,
+      permission: Notification.permission,
+      message: 'Notification permission is not granted yet.',
+    };
+  }
+
+  const vapidKey = await resolveVapidPublicKey();
+  if (!vapidKey) {
+    return {
+      ok: false,
+      permission: 'granted',
+      message:
+        'VAPID public key missing on the server. Confirm VAPID_PUBLIC_KEY is loaded from AWS secrets.',
+    };
+  }
+
+  try {
+    await subscribeAndStore(vapidKey);
+    setNotificationPreferences({
+      pushState: 'active',
+      pushPermission: 'granted',
+    });
+    return { ok: true, permission: 'granted' };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : 'Could not subscribe to Web Push';
+    return { ok: false, permission: Notification.permission, message };
+  }
+}
+
 /**
  * Must be called from a click / tap handler so the browser shows the
- * Allow Notifications system dialog.
+ * Allow Notifications system dialog (when permission is still default).
  */
 export async function enableBrowserPush(): Promise<{
   ok: boolean;
@@ -146,7 +244,6 @@ export async function enableBrowserPush(): Promise<{
     };
   }
 
-  // 1) System permission popup (requires user gesture)
   let permission = Notification.permission;
   if (permission === 'default') {
     permission = await Notification.requestPermission();
@@ -167,49 +264,14 @@ export async function enableBrowserPush(): Promise<{
     };
   }
 
-  // 2) Service worker + VAPID subscribe
-  const vapidKey = await resolveVapidPublicKey();
-  if (!vapidKey) {
-    setNotificationPreferences({
-      pushState: 'off',
-      pushPermission: 'granted',
-    });
-    return {
-      ok: false,
-      permission: 'granted',
-      message:
-        'VAPID public key missing. Set NEXT_PUBLIC_VAPID_PUBLIC_KEY and backend VAPID_* keys, then retry.',
-    };
-  }
-
-  try {
-    const registration = await ensureServiceWorker();
-    let subscription = await registration.pushManager.getSubscription();
-    if (!subscription) {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(
-          vapidKey,
-        ) as BufferSource,
-      });
-    }
-
-    await postSubscriptionToServer(subscription);
-
-    setNotificationPreferences({
-      pushState: 'active',
-      pushPermission: 'granted',
-    });
-    return { ok: true, permission: 'granted' };
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : 'Could not subscribe to Web Push';
+  const result = await ensureBrowserPushSubscription();
+  if (!result.ok) {
     setNotificationPreferences({
       pushState: 'off',
       pushPermission: Notification.permission,
     });
-    return { ok: false, permission: Notification.permission, message };
   }
+  return result;
 }
 
 export async function setPushDeliveryState(state: PushDeliveryState) {
@@ -246,6 +308,21 @@ export async function setPushDeliveryState(state: PushDeliveryState) {
     ok: true as const,
     permission: getNotificationPreferences().pushPermission,
   });
+}
+
+/**
+ * Keep family / NOK local delivery in sync with the owner's vault push policy.
+ * When the owner pauses or turns off collaborator push, stop in-tab alerts.
+ */
+export function syncCollaboratorPushFromVaultPolicy(
+  policy: VaultPushPolicy | null | undefined,
+) {
+  if (!policy) return;
+  if (policy.collaborators_enabled) return;
+  const current = getNotificationPreferences().pushState;
+  if (current === 'active') {
+    setNotificationPreferences({ pushState: 'paused' });
+  }
 }
 
 export function showBrowserReminderNotification(args: {
