@@ -418,3 +418,21 @@ export function maybePushReminderNotices(
       });
     });
 }
+
+/** Re-subscribe when the service worker reports endpoint rotation. */
+export function listenForPushSubscriptionChange(): () => void {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    return () => undefined;
+  }
+
+  const onMessage = (event: MessageEvent) => {
+    const data = event.data;
+    if (!data || data.type !== 'orderly-pushsubscriptionchange') return;
+    void ensureBrowserPushSubscription();
+  };
+
+  navigator.serviceWorker.addEventListener('message', onMessage);
+  return () => {
+    navigator.serviceWorker.removeEventListener('message', onMessage);
+  };
+}

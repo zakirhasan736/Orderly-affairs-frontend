@@ -8,6 +8,7 @@ import {
   browserNotificationsSupported,
   enableBrowserPush,
   ensureBrowserPushSubscription,
+  listenForPushSubscriptionChange,
 } from '@/utils/browserPushNotifications';
 import {
   markCollabPushPromptDismissed,
@@ -38,6 +39,10 @@ export function CollaboratorPushOptInBanner({
 }: Props) {
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    return listenForPushSubscriptionChange();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

@@ -12,6 +12,8 @@ type OpenFillGapsArgs = {
   itemIndex?: number;
   groupId?: string;
   title: string;
+  /** Prefer opening on empty fields or the full area (already filled). */
+  initialTab?: 'empty' | 'area';
 };
 
 type VaultFillGapsContextValue = {
@@ -49,6 +51,7 @@ export function VaultFillGapsProvider({
         itemIndex: args.itemIndex,
         groupId: args.groupId,
         title: args.title,
+        initialTab: args.initialTab,
         sectionData,
         onApplySectionData: next => {
           updateSectionData(args.sectionId, next);

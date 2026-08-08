@@ -76,7 +76,7 @@ import {
   countFilledAiFields,
   type AiSectionApplyStats,
 } from '@/utils/aiSectionFormApply';
-import { buildUpsertAutofillNotice } from '@/utils/aiItemDedup';
+import { buildUpsertAutofillNotice, normalizeInsuranceSectionData } from '@/utils/aiItemDedup';
 import { getAiSectionLabel } from '@/utils/aiSectionRegistry';
 import { markSectionFillsSeen } from '@/utils/newFillMarkers';
 import { applyFieldEditsToSectionData } from '@/utils/aiFieldMatchReview';
@@ -498,9 +498,12 @@ export default function DashboardPage() {
           }
         }
 
+        const normalized =
+          sectionId === '7' ? normalizeInsuranceSectionData(data) : data;
+
         return {
           ...prev,
-          [sectionId]: data,
+          [sectionId]: normalized,
         };
       });
     },
@@ -956,6 +959,23 @@ export default function DashboardPage() {
     }
   }, [loading, status, tourStarted]);
 
+  // Collapse insurance OCR duplicates (same Toyota / Honda / Allstate homeowner)
+  // as soon as section 7 data is in memory — sidebar must not list the same
+  // vehicle multiple times before the user opens Insurance Policies.
+  useEffect(() => {
+    const section7 = formData['7'];
+    if (!section7 || typeof section7 !== 'object') return;
+    const normalized = normalizeInsuranceSectionData(section7);
+    if (normalized === section7) return;
+    setFormData(prev => {
+      const current = prev['7'];
+      if (!current || typeof current !== 'object') return prev;
+      const again = normalizeInsuranceSectionData(current);
+      if (again === current) return prev;
+      return { ...prev, '7': again };
+    });
+  }, [formData['7']]);
+
   useEffect(() => {
     if (appMode !== 'owner') return;
     if (familyAcl.isFamily && !familyCanWrite(familyAcl)) return;
@@ -1286,7 +1306,9 @@ export default function DashboardPage() {
         );
         return;
       }
-      setFormData(prev => ({ ...prev, [sectionId]: data }));
+      const normalized =
+        sectionId === '7' ? normalizeInsuranceSectionData(data) : data;
+      setFormData(prev => ({ ...prev, [sectionId]: normalized }));
     },
     [familyAcl],
   );
@@ -1379,9 +1401,16 @@ export default function DashboardPage() {
         | { sectionId?: string; data?: Record<string, unknown> }
         | undefined;
       if (!detail?.sectionId || !detail.data) return;
+      const normalized =
+        detail.sectionId === '7'
+          ? (normalizeInsuranceSectionData(detail.data) as Record<
+              string,
+              unknown
+            >)
+          : detail.data;
       setFormData(prev => ({
         ...prev,
-        [detail.sectionId as string]: detail.data,
+        [detail.sectionId as string]: normalized,
       }));
       setSectionLastUpdated(detail.sectionId);
       setSectionLastUpdatedMap(listSectionLastUpdated());

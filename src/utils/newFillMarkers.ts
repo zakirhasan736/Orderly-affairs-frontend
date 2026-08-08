@@ -52,6 +52,25 @@ export function listUnseenNewFills(ownerId?: string | null): NewFillMarker[] {
   return readAll(ownerId).filter(item => !item.seenAt);
 }
 
+/** Newest first, including already-opened markers (for the one-view hub). */
+export function listAllNewFills(ownerId?: string | null): NewFillMarker[] {
+  return [...readAll(ownerId)].sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export function unmarkSectionFillsSeen(
+  sectionId: string,
+  opts?: { subsectionId?: string; ownerId?: string | null },
+) {
+  const next = readAll(opts?.ownerId).map(item => {
+    if (item.sectionId !== sectionId) return item;
+    if (opts?.subsectionId && item.subsectionId !== opts.subsectionId) {
+      return item;
+    }
+    return { ...item, seenAt: null };
+  });
+  writeAll(next, opts?.ownerId);
+}
+
 export function recordNewFill(
   marker: Omit<NewFillMarker, 'id' | 'createdAt' | 'seenAt'> & {
     id?: string;

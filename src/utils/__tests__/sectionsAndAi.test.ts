@@ -19,6 +19,7 @@ import {
   filterDuplicateAutofillItems,
   insurancePoliciesAreDuplicates,
   isJunkVehicleCard,
+  normalizeInsuranceSectionData,
   upsertAutofillItems,
   vehiclesAreDuplicates,
 } from '@/utils/aiItemDedup';
@@ -581,6 +582,136 @@ describe('aiItemDedup', () => {
         },
       ]),
     ).toHaveLength(3);
+  });
+
+  it('merges same-vehicle cards even when OCR policy numbers differ', () => {
+    expect(
+      insurancePoliciesAreDuplicates(
+        {
+          policy_company: 'Allstate',
+          policy_type: 'Vehicle',
+          policy_number: 'ABC-111',
+          notes: 'Bmw Ix',
+          coverage_amount: '50k',
+        },
+        {
+          policy_company: 'Allstate',
+          policy_type: 'Vehicle',
+          policy_number: 'ABC-222',
+          notes: 'Bmw',
+          coverage_amount: '55k',
+        },
+      ),
+    ).toBe(true);
+
+    expect(
+      insurancePoliciesAreDuplicates(
+        {
+          policy_company: 'Allstate',
+          policy_type: 'Vehicle',
+          policy_number: 'KIA-1',
+          notes: 'Kia Sorento',
+        },
+        {
+          policy_company: 'Allstate',
+          policy_type: 'Auto',
+          policy_number: 'KIA-9',
+          notes: 'Kia',
+        },
+      ),
+    ).toBe(true);
+
+    // Toyota vs Honda stay separate even with noisy numbers.
+    expect(
+      insurancePoliciesAreDuplicates(
+        {
+          policy_company: 'State Farm',
+          policy_type: 'Vehicle',
+          policy_number: '1',
+          notes: 'Toyota Camry',
+        },
+        {
+          policy_company: 'State Farm',
+          policy_type: 'Vehicle',
+          policy_number: '2',
+          notes: 'Honda Civic',
+        },
+      ),
+    ).toBe(false);
+
+    const collapsed = collapseInsurancePolicies([
+      {
+        policy_company: 'Allstate',
+        policy_type: 'Vehicle',
+        policy_number: 'A1',
+        notes: 'Bmw Ix',
+        coverage_amount: '1',
+      },
+      {
+        policy_company: 'Allstate',
+        policy_type: 'Vehicle',
+        policy_number: 'A2',
+        notes: 'Bmw',
+        coverage_amount: '2',
+      },
+      {
+        policy_type: 'Vehicle',
+        policy_number: 'A3',
+        notes: 'Bmw Vehicle',
+        coverage_amount: '3',
+      },
+      {
+        policy_company: 'Allstate',
+        policy_type: 'Vehicle',
+        policy_number: 'K1',
+        notes: 'Kia',
+        coverage_amount: '4',
+      },
+      {
+        policy_company: 'Allstate',
+        policy_type: 'Vehicle',
+        policy_number: 'K2',
+        notes: 'Kia Sorento',
+        coverage_amount: '5',
+      },
+      {
+        policy_company: 'Allstate',
+        policy_type: 'Homeowner/Renter',
+        policy_number: 'H1',
+        coverage_amount: '6',
+      },
+      {
+        policy_company: 'Allstate',
+        policy_type: 'Homeowner/Renter',
+        policy_number: 'H2',
+        coverage_amount: '7',
+      },
+    ]);
+    // One BMW, one Kia, one homeowner.
+    expect(collapsed).toHaveLength(3);
+
+    expect(
+      normalizeInsuranceSectionData({
+        '7A': collapsed.concat([
+          {
+            policy_company: 'Allstate',
+            policy_type: 'Vehicle',
+            notes: 'Bmw again',
+          },
+        ]),
+      }),
+    ).toMatchObject({
+      '7A': expect.any(Array),
+    });
+    const normalized = normalizeInsuranceSectionData({
+      '7A': [
+        { policy_type: 'Vehicle', notes: 'Toyota Camry', policy_number: 't1' },
+        { policy_type: 'Vehicle', notes: 'Toyota', policy_number: 't2' },
+        { policy_type: 'Vehicle', notes: 'Honda Civic', policy_number: 'h1' },
+        { policy_type: 'Vehicle', notes: 'Honda', policy_number: 'h2' },
+      ],
+    }) as { '7A': unknown[] };
+    expect(normalized['7A']).toHaveLength(2);
   });
 
   it('merges repeated same-vehicle Allstate cards and homeowner duplicates', () => {

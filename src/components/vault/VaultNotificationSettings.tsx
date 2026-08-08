@@ -25,6 +25,7 @@ import {
 } from '@/utils/notificationPreferences';
 import {
   browserNotificationsSupported,
+  listenForPushSubscriptionChange,
   setPushDeliveryState,
 } from '@/utils/browserPushNotifications';
 import {
@@ -109,6 +110,10 @@ export function VaultNotificationSettings({
   const supported = browserNotificationsSupported();
   const { data: serverPrefs, isFetching } = useGetNotificationPreferencesQuery();
   const [updatePrefs] = useUpdateNotificationPreferencesMutation();
+
+  useEffect(() => {
+    return listenForPushSubscriptionChange();
+  }, []);
 
   useEffect(() => {
     const refresh = () => setPrefs(getNotificationPreferences());

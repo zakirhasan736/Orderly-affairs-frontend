@@ -343,6 +343,28 @@ export default function Section7InsurancePolicies({
   const show7A = !activeSubsection || activeSubsection === '7A';
 
   // One-time collapse of duplicate cards created by repeated Accept / partner seeds.
+  // Re-run when length OR a cheap fingerprint of identity fields changes so
+  // OCR policy-number noise still merges BMW/Kia/homeowner duplicates on load.
+  const policiesCollapseKey = useMemo(() => {
+    if (!Array.isArray(policies) || policies.length === 0) return '0';
+    return policies
+      .map(item => {
+        const row = (item && typeof item === 'object' ? item : {}) as Record<
+          string,
+          unknown
+        >;
+        return [
+          String(row.policy_company || row.insurance_company || ''),
+          String(row.policy_type || ''),
+          String(row.policy_number || ''),
+          String(row.notes || row.additional_notes || ''),
+          String(row.make || ''),
+          String(row.policy_name || ''),
+        ].join('|');
+      })
+      .join('||');
+  }, [policies]);
+
   useEffect(() => {
     if (!Array.isArray(policies) || policies.length <= 1) return;
     const collapsed = collapseInsurancePolicies(
@@ -353,9 +375,8 @@ export default function Section7InsurancePolicies({
       ...data,
       '7A': collapsed,
     });
-    // Only re-run when the card count changes; avoid fighting live edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [policies.length]);
+  }, [policiesCollapseKey]);
 
   const reminderRecipientOptions = useMemo(() => {
     const options: ReminderRecipientOption[] = [];

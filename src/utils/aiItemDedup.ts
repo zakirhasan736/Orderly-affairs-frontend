@@ -75,7 +75,28 @@ function getInsuranceCompany(item: Record<string, unknown>): string {
 }
 
 function getPolicyType(item: Record<string, unknown>): string {
-  return normalizeComparable(item.policy_type ?? item.type);
+  const raw = normalizeComparable(item.policy_type ?? item.type);
+  if (!raw) return '';
+  if (
+    raw === 'auto' ||
+    raw === 'automobile' ||
+    raw === 'car' ||
+    raw === 'motor vehicle' ||
+    raw.includes('auto') ||
+    raw.includes('vehicle')
+  ) {
+    return 'vehicle';
+  }
+  if (
+    raw.includes('homeowner') ||
+    raw.includes('home owner') ||
+    raw.includes('renter') ||
+    raw.includes('dwelling') ||
+    raw === 'home'
+  ) {
+    return 'homeowner/renter';
+  }
+  return raw;
 }
 
 function companiesMatch(a: string, b: string): boolean {
@@ -476,7 +497,11 @@ function insuranceTypesCompatible(
   existingOther: string,
   incomingOther: string,
 ): boolean {
-  if (!existingType || !incomingType || existingType !== incomingType) {
+  // Missing type on one side must not block same-vehicle / same-carrier merges.
+  if (!existingType || !incomingType) {
+    return true;
+  }
+  if (existingType !== incomingType) {
     return false;
   }
   if (
@@ -499,6 +524,7 @@ function insuranceTypesCompatible(
  * - thin seed ↔ fuller extract for the same company+type
  *
  * Distinct Honda / Jeep / Toyota Vehicle policies stay separate cards.
+ * OCR policy-number noise must NOT keep creating a second Toyota / BMW card.
  */
 export function insurancePoliciesAreDuplicates(
   existing: Record<string, unknown>,
@@ -511,10 +537,6 @@ export function insurancePoliciesAreDuplicates(
 
   const existingPolicy = normalizePolicyNumber(existing.policy_number);
   const incomingPolicy = normalizePolicyNumber(incoming.policy_number);
-
-  if (existingPolicy && incomingPolicy) {
-    return existingPolicy === incomingPolicy;
-  }
 
   const existingCompany = getInsuranceCompany(existing);
   const incomingCompany = getInsuranceCompany(incoming);
@@ -545,24 +567,53 @@ export function insurancePoliciesAreDuplicates(
 
   const vehicleA = getInsuranceVehicleFingerprint(existing);
   const vehicleB = getInsuranceVehicleFingerprint(incoming);
+
+  // Exact policy number match (unless identity already conflicted above).
+  if (existingPolicy && incomingPolicy && existingPolicy === incomingPolicy) {
+    return true;
+  }
+
+  // Same insured vehicle (Toyota / Honda / BMW…) — merge even when OCR invented
+  // different policy numbers on re-accepts.
   if (vehicleA && vehicleB) {
     if (!insuranceVehicleFingerprintsMatch(vehicleA, vehicleB)) {
       return false;
     }
-    // Same car: merge when types align and companies don't contradict.
-    // Sidebar often shows "Bmw · Vehicle" cards with no policy_company.
     return typesMatch && companiesCompatible;
   }
 
+  // Differing policy numbers with no shared vehicle identity → likely distinct.
+  if (
+    existingPolicy &&
+    incomingPolicy &&
+    existingPolicy !== incomingPolicy &&
+    !vehicleA &&
+    !vehicleB
+  ) {
+    // Still merge non-vehicle same carrier+type (homeowner OCR number noise).
+    if (companyAndTypeMatch) {
+      const isVehicleType =
+        existingType === 'vehicle' || incomingType === 'vehicle';
+      if (!isVehicleType) return true;
+    }
+    return false;
+  }
+
   if (!companyAndTypeMatch) {
+    // Same vehicle brand on one side only + compatible company: absorb thin seed.
+    if (
+      (vehicleA || vehicleB) &&
+      companiesCompatible &&
+      typesMatch &&
+      (isThinInsuranceCard(existing) || isThinInsuranceCard(incoming))
+    ) {
+      return true;
+    }
     return false;
   }
 
   const isVehicleType =
-    existingType === 'vehicle' ||
-    existingType === 'auto' ||
-    incomingType === 'vehicle' ||
-    incomingType === 'auto';
+    existingType === 'vehicle' || incomingType === 'vehicle';
 
   // Home / life / health / etc.: same carrier + type is the same policy card.
   if (!isVehicleType) {
@@ -609,6 +660,32 @@ export function collapseInsurancePolicies(
   items: Record<string, unknown>[],
 ): Record<string, unknown>[] {
   return collapseItemsByMatcher(items, insurancePoliciesAreDuplicates);
+}
+
+/**
+ * Normalize section 7 payload so sidebar + form share one card per vehicle /
+ * insurer (Toyota once, Honda once, one homeowner per carrier, etc.).
+ */
+export function normalizeInsuranceSectionData(
+  data: unknown,
+): Record<string, unknown> | unknown {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+  const section = data as Record<string, unknown>;
+  const raw = section['7A'];
+  if (!Array.isArray(raw) || raw.length <= 1) return data;
+
+  const items = raw.filter(
+    item => item && typeof item === 'object' && !Array.isArray(item),
+  ) as Record<string, unknown>[];
+  if (items.length <= 1) return data;
+
+  const collapsed = collapseInsurancePolicies(items);
+  if (collapsed.length >= items.length) return data;
+
+  return {
+    ...section,
+    '7A': collapsed,
+  };
 }
 
 /**

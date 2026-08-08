@@ -77,3 +77,26 @@ self.addEventListener('notificationclick', event => {
     })(),
   );
 });
+
+/**
+ * Browser rotated the push endpoint — ask open pages to re-subscribe.
+ */
+self.addEventListener('pushsubscriptionchange', event => {
+  event.waitUntil(
+    (async () => {
+      const allClients = await clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
+      for (const client of allClients) {
+        try {
+          client.postMessage({
+            type: 'orderly-pushsubscriptionchange',
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+    })(),
+  );
+});

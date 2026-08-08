@@ -20,17 +20,18 @@ import {
 } from '@/utils/sectionCompletion';
 import { cn } from '@common/ui/utils';
 
+type FillTab = 'empty' | 'area';
+
 export type FillGapsTarget = {
   sectionId: string;
   subsectionId: string;
   itemIndex?: number;
   groupId?: string;
   title: string;
+  initialTab?: FillTab;
   sectionData: Record<string, unknown> | undefined;
   onApplySectionData: (next: Record<string, unknown>) => void;
 };
-
-type FillTab = 'empty' | 'area';
 
 type IncompleteFieldsFillDialogProps = {
   open: boolean;
@@ -102,7 +103,13 @@ export function IncompleteFieldsFillDialog({
       { itemIndex: target.itemIndex, groupId: target.groupId },
     );
     const empty = all.filter(item => !isMeaningfulFilled(item.value));
-    setTab(empty.length > 0 ? 'empty' : 'area');
+    if (target.initialTab === 'area') {
+      setTab('area');
+    } else if (target.initialTab === 'empty') {
+      setTab(empty.length > 0 ? 'empty' : 'area');
+    } else {
+      setTab(empty.length > 0 ? 'empty' : 'area');
+    }
 
     const next: Record<string, unknown> = {};
     for (const item of all) {
@@ -168,7 +175,9 @@ export function IncompleteFieldsFillDialog({
             {target?.title || 'This part of your vault'}
           </DialogTitle>
           <DialogDescription className="text-[13px] text-slate-600">
-            {description}
+            {description} You can close anytime and open this again from{' '}
+            <span className="font-semibold text-[#213D59]">Review fields</span>{' '}
+            on the section bar or from <span className="font-semibold text-[#213D59]">New data</span> on the dashboard.
           </DialogDescription>
 
           <div

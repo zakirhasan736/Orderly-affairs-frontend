@@ -1,14 +1,18 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, ClipboardList, Eye, Sparkles } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import {
+  listAllNewFills,
   listUnseenNewFills,
   NEW_FILLS_CHANGED,
+  unmarkSectionFillsSeen,
   type NewFillMarker,
 } from '@/utils/newFillMarkers';
 import { getAiSectionLabel } from '@/utils/aiSectionRegistry';
+import { useVaultFillGaps } from '@/components/vault/VaultFillGapsContext';
+import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
 
 type OverviewRecentlyFilledProps = {
   onOpenFill: (marker: NewFillMarker) => void;
@@ -16,30 +20,68 @@ type OverviewRecentlyFilledProps = {
 };
 
 /**
- * Above-the-fold jump list for AI fills — chip strip first so users do not
- * hunt the long vault nav after leaving overview uploads.
+ * One-view “New in your vault” hub — chips + list so users (often 50+) do not
+ * hunt the long sidebar for New markers. Also re-open Quick fill / revive New.
  */
 export function OverviewRecentlyFilled({
   onOpenFill,
   className,
 }: OverviewRecentlyFilledProps) {
-  const [fills, setFills] = useState<NewFillMarker[]>(() =>
-    listUnseenNewFills(),
-  );
+  const fillGaps = useVaultFillGaps();
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    const refresh = () => setFills(listUnseenNewFills());
+    const refresh = () => setTick(value => value + 1);
     window.addEventListener(NEW_FILLS_CHANGED, refresh);
     return () => window.removeEventListener(NEW_FILLS_CHANGED, refresh);
   }, []);
 
-  if (!fills.length) return null;
+  const unseen = useMemo(() => {
+    void tick;
+    return listUnseenNewFills();
+  }, [tick]);
 
-  const visible = fills.slice(0, 10);
+  const recent = useMemo(() => {
+    void tick;
+    return listAllNewFills().slice(0, 12);
+  }, [tick]);
+
+  if (!recent.length) return null;
+
+  const visibleUnseen = unseen.slice(0, 10);
+  const display = visibleUnseen.length ? visibleUnseen : recent.slice(0, 8);
+
+  const openReviewFields = (marker: NewFillMarker) => {
+    const section = VAULT_NAVIGATION.find(s => s.id === marker.sectionId);
+    const subsectionId =
+      marker.subsectionId || section?.subsections?.[0]?.id || null;
+    if (!subsectionId || !fillGaps) {
+      onOpenFill(marker);
+      return;
+    }
+    const title =
+      marker.label ||
+      getAiSectionLabel(marker.sectionId) ||
+      `Section ${marker.sectionId}`;
+    fillGaps.openFillGaps({
+      sectionId: marker.sectionId,
+      subsectionId,
+      itemIndex: typeof marker.index === 'number' ? marker.index : undefined,
+      groupId: marker.topicGroupKey,
+      title,
+      initialTab: 'empty',
+    });
+  };
+
+  const reviveAndOpen = (marker: NewFillMarker) => {
+    unmarkSectionFillsSeen(marker.sectionId);
+    onOpenFill(marker);
+  };
 
   return (
     <section
       id="overview-recently-filled"
+      data-tour="tour-new-data-hub"
       className={cn(
         'overflow-hidden rounded-2xl border border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-white shadow-sm ring-1 ring-amber-100/80',
         className,
@@ -50,24 +92,27 @@ export function OverviewRecentlyFilled({
           <div className="flex flex-wrap items-center gap-2">
             <Sparkles className="h-5 w-5 text-amber-600" />
             <h2 className="text-[17px] font-semibold text-[#213D59]">
-              New in your vault
+              New data — one place
             </h2>
             <span className="rounded-full bg-amber-500 px-2.5 py-1 text-[12px] font-bold text-white">
-              {fills.length === 1
-                ? '1 new document'
-                : `${fills.length} new documents`}
+              {unseen.length > 0
+                ? unseen.length === 1
+                  ? '1 new to review'
+                  : `${unseen.length} new to review`
+                : `${recent.length} recent`}
             </span>
           </div>
-          <p className="mt-1.5 text-[13.5px] leading-snug text-slate-600">
-            Tap any item below to jump straight to that filled card — no hunting
-            through the long list.
+          <p className="mt-1.5 max-w-2xl text-[13.5px] leading-snug text-slate-600">
+            Tap <span className="font-semibold">Open</span> to jump to the card,
+            or <span className="font-semibold">Review fields</span> for the same
+            empty / already-filled popup used on every section — even if you
+            skipped it earlier.
           </p>
         </div>
       </div>
 
-      {/* Horizontal chips — always visible without scrolling the page list */}
       <div className="flex gap-2 overflow-x-auto px-4 py-3.5 sm:px-5">
-        {visible.map(marker => (
+        {display.map(marker => (
           <button
             key={`chip-${marker.id}`}
             type="button"
@@ -86,29 +131,58 @@ export function OverviewRecentlyFilled({
       </div>
 
       <ul className="divide-y divide-amber-100/80 border-t border-amber-100/80">
-        {visible.map(marker => (
-          <li key={marker.id}>
-            <button
-              type="button"
-              onClick={() => onOpenFill(marker)}
-              className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition hover:bg-amber-50/80 sm:px-5"
-            >
-              <span className="min-w-0">
-                <span className="block truncate text-[15px] font-semibold text-slate-900">
-                  {marker.label}
-                </span>
-                <span className="mt-0.5 block truncate text-[13px] text-slate-600">
-                  {getAiSectionLabel(marker.sectionId)}
-                  {marker.subsectionId ? ` · ${marker.subsectionId}` : ''}
-                </span>
-              </span>
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-[13px] font-bold text-white">
-                Open
-                <ArrowRight className="h-3.5 w-3.5" />
-              </span>
-            </button>
-          </li>
-        ))}
+        {display.map(marker => {
+          const isSeen = Boolean(marker.seenAt);
+          return (
+            <li key={marker.id}>
+              <div className="flex flex-col gap-2 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                <button
+                  type="button"
+                  onClick={() => onOpenFill(marker)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <span className="block truncate text-[15px] font-semibold text-slate-900">
+                    {marker.label}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[13px] text-slate-600">
+                    {getAiSectionLabel(marker.sectionId)}
+                    {marker.subsectionId ? ` · ${marker.subsectionId}` : ''}
+                    {isSeen ? ' · opened before' : ' · new'}
+                  </span>
+                </button>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openReviewFields(marker)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#213D59]/20 bg-white px-3 py-1.5 text-[13px] font-semibold text-[#213D59] transition hover:bg-[#eef3f9]"
+                  >
+                    <ClipboardList className="h-3.5 w-3.5" />
+                    Review fields
+                  </button>
+                  {isSeen ? (
+                    <button
+                      type="button"
+                      onClick={() => reviveAndOpen(marker)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-[13px] font-semibold text-amber-900 transition hover:bg-amber-100"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      Show New again
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onOpenFill(marker)}
+                      className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-[13px] font-bold text-white"
+                    >
+                      Open
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

@@ -72,8 +72,10 @@ export const SUBSECTION_TOPIC_CONFIG: Record<
         const company = str(item.policy_company || item.insurance_company);
         const type = str(item.policy_type);
         const notes = str(item.notes || item.additional_notes);
-        const brandMatch = notes.match(
-          /\b(toyota|honda|jeep|ford|chevrolet|chevy|bmw|nissan|hyundai|kia|subaru|mazda|lexus|gmc|ram|dodge|tesla)\b/i,
+        const make = str(item.make || item.vehicle_make);
+        const brandSource = [make, notes, str(item.policy_name)].join(' ');
+        const brandMatch = brandSource.match(
+          /\b(toyota|honda|jeep|ford|chevrolet|chevy|bmw|nissan|hyundai|kia|subaru|mazda|lexus|gmc|ram|dodge|tesla|mercedes|volkswagen|vw|audi)\b/i,
         );
         const brand = brandMatch?.[1]
           ? brandMatch[1].charAt(0).toUpperCase() +
@@ -82,7 +84,10 @@ export const SUBSECTION_TOPIC_CONFIG: Record<
         const name = str(
           item.policy_name || item.named_insured || item.insured_name,
         );
-        const parts = [company, brand || name, type].filter(Boolean);
+        // Vehicle policies: lead with brand so "Toyota" / "Honda" read as one card.
+        const parts = brand
+          ? [brand, company, type].filter(Boolean)
+          : [company, name, type].filter(Boolean);
         return parts.join(' · ') || `Policy #${index + 1}`;
       },
     },
