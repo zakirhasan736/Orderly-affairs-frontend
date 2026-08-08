@@ -55,6 +55,7 @@ import {
 } from '@/components/ai/AiInboxDocumentReviewDialog';
 import {
   deleteAIDocument,
+  invalidateOwnerAiDocumentsCache,
   type OwnerAiDocument,
 } from '@/services/aiDocumentUpload';
 import { useListOwnerAiDocumentsQuery } from '@/services/aiDocumentsApi';
@@ -1646,7 +1647,9 @@ export function AiReviewInboxPanel({
         fileName={previewFile?.fileName}
         mimeType={previewFile?.mimeType}
         onNotFound={fileId => {
-          setServerDocs(prev => prev.filter(d => d.file_id !== fileId));
+          removeAiUploadHistoryItem({ fileId });
+          clearAiUploadMeta(fileId);
+          invalidateOwnerAiDocumentsCache();
           setPreviewFile(null);
         }}
       />
