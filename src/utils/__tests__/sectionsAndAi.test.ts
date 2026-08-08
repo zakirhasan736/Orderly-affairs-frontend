@@ -49,6 +49,7 @@ import {
 } from '@/utils/aiSemanticFieldMatch';
 import { smartPlaceOntoFields } from '@/utils/smartFieldPlacement';
 import {
+  asPlainFieldText,
   coerceAiFieldValue,
   createEmptyItemFromFields,
   humanizeFieldKey,
@@ -565,7 +566,153 @@ describe('aiItemDedup', () => {
     ).toHaveLength(3);
   });
 
-  it('keeps separate full Vehicle policies from the same carrier without numbers', () => {
+  it('merges repeated same-vehicle Allstate cards and homeowner duplicates', () => {
+    expect(
+      insurancePoliciesAreDuplicates(
+        {
+          policy_company: 'Allstate',
+          policy_type: 'Vehicle',
+          notes: 'Bmw Ix VIN ABC',
+          coverage_amount: '50k',
+          premium_info: '$100',
+        },
+        {
+          policy_company: 'Allstate',
+          policy_type: 'Vehicle',
+          notes: 'Bmw Ix coverage details',
+          coverage_amount: '55k',
+          premium_info: '$110',
+        },
+      ),
+    ).toBe(true);
+
+    expect(
+      insurancePoliciesAreDuplicates(
+        {
+          policy_company: 'Allstate',
+          policy_type: 'Homeowner/Renter',
+          coverage_amount: '300k',
+          premium_info: '$200',
+        },
+        {
+          policy_company: 'Allstate',
+          policy_type: 'Homeowner/Renter',
+          coverage_amount: '310k',
+          notes: 'Lookout mountain',
+        },
+      ),
+    ).toBe(true);
+
+    // OCR title noise must not block Allstate merges.
+    expect(
+      insurancePoliciesAreDuplicates(
+        {
+          policy_company: 'Allstate',
+          policy_type: 'Vehicle',
+          policy_name: 'Allstate Insurance Declarations',
+          notes: 'Bmw',
+          coverage_amount: '1',
+        },
+        {
+          policy_company: 'Allstate',
+          policy_type: 'Vehicle',
+          policy_name: 'Allstate Auto Policy Packet',
+          notes: 'Bmw Ix',
+          coverage_amount: '2',
+        },
+      ),
+    ).toBe(true);
+
+    // Sidebar-style cards often omit policy_company ("Bmw · Vehicle").
+    expect(
+      insurancePoliciesAreDuplicates(
+        {
+          policy_type: 'Vehicle',
+          notes: 'Bmw Ix',
+          coverage_amount: '50k',
+        },
+        {
+          policy_type: 'Vehicle',
+          notes: 'Bmw',
+          premium_info: '$90',
+        },
+      ),
+    ).toBe(true);
+
+    // ymm fingerprint vs brand-from-notes must still merge.
+    expect(
+      insurancePoliciesAreDuplicates(
+        {
+          policy_company: 'Allstate',
+          policy_type: 'Vehicle',
+          make: 'Bmw',
+          model: 'Ix',
+          coverage_amount: '1',
+        },
+        {
+          policy_company: 'Allstate',
+          policy_type: 'Vehicle',
+          notes: 'Bmw coverage',
+          coverage_amount: '2',
+        },
+      ),
+    ).toBe(true);
+
+    const collapsed = collapseInsurancePolicies([
+      {
+        policy_company: 'Allstate',
+        policy_type: 'Vehicle',
+        notes: 'Bmw',
+        coverage_amount: '1',
+      },
+      {
+        policy_type: 'Vehicle',
+        notes: 'Bmw Ix',
+        coverage_amount: '2',
+      },
+      {
+        policy_company: 'Allstate',
+        policy_type: 'Vehicle',
+        notes: 'Kia Sorento',
+        coverage_amount: '3',
+      },
+      {
+        policy_type: 'Vehicle',
+        notes: 'Kia',
+        coverage_amount: '4',
+      },
+      {
+        policy_company: 'Allstate',
+        policy_type: 'Homeowner/Renter',
+        coverage_amount: '5',
+      },
+      {
+        policy_company: 'Allstate',
+        policy_type: 'Homeowner/Renter',
+        notes: 'dwelling',
+        coverage_amount: '6',
+      },
+      {
+        policy_company: 'Allstate Insurance',
+        policy_type: 'Vehicle',
+        policy_name: 'Allstate Insurance',
+        coverage_amount: '7',
+        premium_info: '$1',
+      },
+      {
+        policy_company: 'Allstate',
+        policy_type: 'Vehicle',
+        policy_name: 'Allstate Policy Docs',
+        coverage_amount: '8',
+        premium_info: '$2',
+      },
+    ]);
+    // Bmw, Kia, Homeowner, and one company-only Allstate Vehicle (no brand).
+    expect(collapsed).toHaveLength(4);
+  });
+
+  it('merges same-carrier Vehicle shells that omit vehicle identity', () => {
+    // Anonymous OCR re-accepts of the same Allstate/State Farm shell.
     expect(
       insurancePoliciesAreDuplicates(
         {
@@ -581,7 +728,7 @@ describe('aiItemDedup', () => {
           premium_info: '$120/mo',
         },
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('does not absorb a thin same-policy seed into an identified vehicle', () => {
@@ -736,6 +883,12 @@ describe('aiSemanticFieldMatch', () => {
 });
 
 describe('sectionUploadFields + aiPatchNormalizer', () => {
+  it('keeps spaces in plain field text so typing multi-word values works', () => {
+    expect(asPlainFieldText('hello ')).toBe('hello ');
+    expect(asPlainFieldText(' Rotary Club')).toBe(' Rotary Club');
+    expect(asPlainFieldText({ text: 'First  ' })).toBe('First  ');
+  });
+
   it('normalizes upload fields and sanitizes payloads', () => {
     expect(createEmptyUploadField()).toEqual({
       text: '',

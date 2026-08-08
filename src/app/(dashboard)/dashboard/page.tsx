@@ -10,12 +10,10 @@ import { GuidedTour } from '@/onboarding/components/GuidedTour';
 import { useOnboarding } from '@/onboarding/components/OnboardingProvider';
 
 import { deleteUpload } from '@/libs/api/upload';
-import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
 import {
   formatVaultSectionTitle,
   formatVaultSubsectionTitle,
-  getVaultSectionDisplayNumber,
-  getVaultSubsectionDisplayId,
+  VAULT_NAVIGATION,
 } from '@/utils/vaultNavigation';
 import {
   findDynamicTopic,
@@ -2857,7 +2855,7 @@ export default function DashboardPage() {
           onAccountClick={() => setMobileMoreOpen(prev => !prev)}
           notices={headerNotices}
           onNoticeSelect={handleNoticeSelect}
-          onOpenReviewInbox={() => openReviewInbox('dues')}
+          onOpenReviewInbox={() => openReviewInbox('alerts')}
           onOpenNotificationSettings={openNotificationSettings}
         />
 
@@ -2939,7 +2937,7 @@ export default function DashboardPage() {
               onLogout={handleOwnerLogout}
               notices={headerNotices}
               onNoticeSelect={handleNoticeSelect}
-              onOpenReviewInbox={() => openReviewInbox('dues')}
+              onOpenReviewInbox={() => openReviewInbox('alerts')}
               onOpenNotificationSettings={openNotificationSettings}
             />
 
@@ -3318,14 +3316,19 @@ export default function DashboardPage() {
                         <div className="min-w-0 flex-1">
                           <div className="mb-3 flex flex-wrap items-center gap-2">
                             <span className="rounded-full bg-[#213D59] px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-white">
-                              Section{' '}
-                              {getVaultSectionDisplayNumber(currentSection.id)}
+                              Current section
                             </span>
                             {activeSubsection && (
                               <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-500">
-                                {getVaultSubsectionDisplayId(
+                                {formatVaultSubsectionTitle(
                                   currentSection.id,
-                                  activeSubsection,
+                                  {
+                                    id: activeSubsection,
+                                    title:
+                                      currentSection.subsections?.find(
+                                        s => s.id === activeSubsection,
+                                      )?.title || activeSubsection,
+                                  },
                                 )}
                               </span>
                             )}
@@ -3835,6 +3838,7 @@ export default function DashboardPage() {
           onOpenChange={setReviewInboxOpen}
           initialTab={reviewInboxTab}
           onNavigateToSection={sectionId => goToSection(sectionId)}
+          onOpenNotificationSettings={openNotificationSettings}
           ownerName={
             currentUser?.full_name || currentUser?.email || 'You'
           }

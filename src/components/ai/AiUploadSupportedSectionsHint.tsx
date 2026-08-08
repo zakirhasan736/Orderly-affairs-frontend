@@ -48,20 +48,22 @@ export function AiUploadSupportedSectionsHint({
         <span>{AI_UPLOAD_DETECTION_HINT}</span>
       </p>
 
-      <div
-        className={cn(AI_MOBILE_CHIP_ROW, 'mt-1.5')}
-        aria-label="Supported document types"
-      >
-        {AI_SUPPORTED_UPLOAD_CATEGORIES.map(category => (
-          <span
-            key={category}
-            title={category}
-            className="inline-flex shrink-0 items-center rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-medium leading-none text-slate-600 ring-1 ring-slate-200/80 sm:rounded-md sm:px-1.5 sm:py-0.5 sm:text-[10px]"
-          >
-            {CHIP_LABELS[category]}
-          </span>
-        ))}
-      </div>
+      {!compact ? (
+        <div
+          className={cn(AI_MOBILE_CHIP_ROW, 'mt-1.5')}
+          aria-label="Supported document types"
+        >
+          {AI_SUPPORTED_UPLOAD_CATEGORIES.map(category => (
+            <span
+              key={category}
+              title={category}
+              className="inline-flex shrink-0 items-center rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-medium leading-none text-slate-600 ring-1 ring-slate-200/80 sm:rounded-md sm:px-1.5 sm:py-0.5 sm:text-[10px]"
+            >
+              {CHIP_LABELS[category]}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

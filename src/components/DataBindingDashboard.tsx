@@ -588,9 +588,10 @@ export function DataBindingDashboard({
   };
 
   useEffect(() => {
-    const onOpenPeople = () => {
+    const onOpenPeople = (event: Event) => {
+      const detail = (event as CustomEvent<{ tab?: PeopleTab }>).detail;
       setMobileHubTab('people');
-      setActiveTab('access');
+      setActiveTab(detail?.tab ?? 'access');
     };
     window.addEventListener('orderly-open-people-hub', onOpenPeople);
     return () =>
@@ -933,6 +934,7 @@ export function DataBindingDashboard({
                     {showAccessPeople && (
                       <TabsTrigger
                         value="access"
+                        data-tour="tour-people-tab-access"
                         className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
                       >
                         Access ({accessPeople.length})
@@ -941,6 +943,7 @@ export function DataBindingDashboard({
                     {showNokLetters && (
                       <TabsTrigger
                         value="nok-letters"
+                        data-tour="tour-people-tab-letter"
                         className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
                       >
                         Letter ({nokLetter ? 1 : 0})
@@ -949,6 +952,7 @@ export function DataBindingDashboard({
                     {showMessages && (
                       <TabsTrigger
                         value="messages"
+                        data-tour="tour-people-tab-messages"
                         className="min-h-10 rounded-lg text-[11px] font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
                       >
                         Messages ({pendingMessages.length})
@@ -962,6 +966,7 @@ export function DataBindingDashboard({
                       title="People you trust"
                       action={readOnly ? 'View' : 'Manage'}
                       onAction={() => onNavigateToSection('2')}
+                      actionTourId="tour-people-manage-access"
                     />
                     {accessPeople.length > 0 ? (
                       <div className="overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-sm">
@@ -1165,6 +1170,7 @@ export function DataBindingDashboard({
               {showAccessPeople && (
                 <TabsTrigger
                   value="access"
+                  data-tour="tour-people-tab-access"
                   className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
                 >
                   <Users className="mr-1.5 h-4 w-4" />
@@ -1174,6 +1180,7 @@ export function DataBindingDashboard({
               {showNokLetters && (
                 <TabsTrigger
                   value="nok-letters"
+                  data-tour="tour-people-tab-letter"
                   className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
                 >
                   <FileText className="mr-1.5 h-4 w-4" />
@@ -1183,6 +1190,7 @@ export function DataBindingDashboard({
               {showMessages && (
                 <TabsTrigger
                   value="messages"
+                  data-tour="tour-people-tab-messages"
                   className="min-h-11 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#213D59]"
                 >
                   <MessageSquare className="mr-1.5 h-4 w-4" />
@@ -1242,6 +1250,7 @@ export function DataBindingDashboard({
                   <Button
                     type="button"
                     onClick={() => onNavigateToSection('2')}
+                    data-tour="tour-people-manage-access"
                     className="mt-4 h-11 w-full rounded-xl bg-[#213D59] text-white hover:bg-[#00305C]"
                   >
                     {readOnly ? 'View Access' : 'Manage Access'}
@@ -1441,10 +1450,12 @@ function ListPanelHeader({
   title,
   action,
   onAction,
+  actionTourId,
 }: {
   title: string;
   action: string;
   onAction: () => void;
+  actionTourId?: string;
 }) {
   return (
     <div className="flex items-center justify-between gap-2 px-0.5">
@@ -1452,6 +1463,7 @@ function ListPanelHeader({
       <button
         type="button"
         onClick={onAction}
+        data-tour={actionTourId}
         className="inline-flex items-center gap-0.5 rounded-lg px-2 py-1 text-[11px] font-semibold text-sky-700 active:bg-sky-50"
       >
         {action}

@@ -263,6 +263,14 @@ export function OverviewAiUploadCard({
         onClick={openPicker}
         onKeyDown={event => {
           if (event.key === 'Enter' || event.key === ' ') {
+            const target = event.target as HTMLElement | null;
+            if (
+              target?.closest(
+                'input, textarea, select, [contenteditable="true"]',
+              )
+            ) {
+              return;
+            }
             event.preventDefault();
             openPicker();
           }

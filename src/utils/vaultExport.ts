@@ -279,7 +279,7 @@ export function buildVaultTxt(rows: VaultExportRow[], exportDate: string) {
   let currentSubsection = '';
 
   rows.forEach(row => {
-    const sectionHeading = `Section ${getVaultSectionDisplayNumber(row.sectionId)}: ${row.sectionTitle}`;
+    const sectionHeading = row.sectionTitle;
     if (sectionHeading !== currentSection) {
       currentSection = sectionHeading;
       currentSubsection = '';
@@ -288,7 +288,7 @@ export function buildVaultTxt(rows: VaultExportRow[], exportDate: string) {
       lines.push('');
     }
 
-    const subsectionHeading = `${getVaultSubsectionDisplayId(row.sectionId, row.subsectionId)} - ${row.subsectionTitle}`;
+    const subsectionHeading = row.subsectionTitle;
     if (subsectionHeading !== currentSubsection) {
       currentSubsection = subsectionHeading;
       lines.push(subsectionHeading);
@@ -350,7 +350,7 @@ export async function buildVaultPdf(rows: VaultExportRow[], exportDate: string) 
   let currentSubsection = '';
 
   rows.forEach(row => {
-    const sectionHeading = `Section ${getVaultSectionDisplayNumber(row.sectionId)}: ${row.sectionTitle}`;
+    const sectionHeading = row.sectionTitle;
     if (sectionHeading !== currentSection) {
       currentSection = sectionHeading;
       currentSubsection = '';
@@ -361,7 +361,7 @@ export async function buildVaultPdf(rows: VaultExportRow[], exportDate: string) 
       y += 18;
     }
 
-    const subsectionHeading = `${getVaultSubsectionDisplayId(row.sectionId, row.subsectionId)} - ${row.subsectionTitle}`;
+    const subsectionHeading = row.subsectionTitle;
     if (subsectionHeading !== currentSubsection) {
       currentSubsection = subsectionHeading;
       ensureSpace(22);

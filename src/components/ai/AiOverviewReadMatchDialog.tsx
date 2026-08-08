@@ -38,6 +38,10 @@ import {
 } from '@/utils/aiReadSourceLabels';
 import type { IdentityPersonChoice } from '@/utils/aiIdentityDocument';
 import { getVaultSectionDisplayNumber } from '@/utils/vaultNavigation';
+import {
+  fieldShouldMask,
+  maskSensitiveDisplay,
+} from '@/utils/sensitiveFields';
 
 export type OverviewMatchedSection = {
   sectionId: string;
@@ -327,7 +331,7 @@ export function AiOverviewReadMatchDialog({
                                 .trim()
                                 .toLowerCase();
                               if (!q) return true;
-                              const label = `${getVaultSectionDisplayNumber(section.id)}. ${section.label}`.toLowerCase();
+                              const label = section.label.toLowerCase();
                               return label.includes(q);
                             })
                             .map(section => {
@@ -343,7 +347,10 @@ export function AiOverviewReadMatchDialog({
                                     className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm transition hover:border-[#213D59]/35 hover:bg-[#e7eef7]/50 disabled:opacity-60"
                                   >
                                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#213D59] text-[11px] font-bold text-white">
-                                      {getVaultSectionDisplayNumber(section.id)}
+                                      {(section.label || '?')
+                                        .trim()
+                                        .charAt(0)
+                                        .toUpperCase()}
                                     </span>
                                     <span className="min-w-0 flex-1 font-medium text-[#213D59]">
                                       {section.label}
@@ -422,7 +429,15 @@ export function AiOverviewReadMatchDialog({
                               {aiNoFieldsMessage()}
                             </li>
                           ) : (
-                            facts.map(fact => (
+                            facts.map(fact => {
+                              const sensitive = fieldShouldMask({
+                                key: fact.field_key,
+                                label: fact.label,
+                              });
+                              const display = sensitive
+                                ? maskSensitiveDisplay(String(fact.value || ''))
+                                : fact.value;
+                              return (
                               <li
                                 key={`${fact.label}:${fact.value}`}
                                 className="rounded-lg bg-slate-50 px-2.5 py-2 text-sm text-slate-700"
@@ -430,9 +445,10 @@ export function AiOverviewReadMatchDialog({
                                 <span className="font-semibold text-[#213D59]">
                                   {fact.label}:
                                 </span>{' '}
-                                <span className="break-all">{fact.value}</span>
+                                <span className="break-all">{display}</span>
                               </li>
-                            ))
+                              );
+                            })
                           )}
                         </ul>
                       </section>

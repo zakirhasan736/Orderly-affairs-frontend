@@ -54,8 +54,47 @@ export const formConfig: FormConfig = {
                   label:
                     'Social Security Number (last 4 digits or location of your full SSN)',
                   type: 'TextInput',
+                  inputType: 'password',
                   helperText:
                     'Last 4 digits of SSN or location where full SSN can be found',
+                },
+
+                {
+                  key: 'drivers_license_header',
+                  label: "Driver's License / State ID",
+                  type: 'Instructions',
+                  content: '',
+                },
+                {
+                  key: 'drivers_license_number',
+                  label: "Driver's License Number (DL #)",
+                  type: 'TextInput',
+                  helperText: 'License or state ID number as printed on the card',
+                },
+                {
+                  key: 'drivers_license_dd_number',
+                  label: 'DD / Audit Number',
+                  type: 'TextInput',
+                  helperText:
+                    'Document discriminator / audit number (often labeled DD on Texas licenses)',
+                },
+                {
+                  key: 'drivers_license_class',
+                  label: 'License Class',
+                  type: 'TextInput',
+                  helperText: 'e.g. Class C, A, B, or M',
+                },
+                {
+                  key: 'drivers_license_issue_date',
+                  label: 'Issue Date',
+                  type: 'DatePicker',
+                  helperText: 'Date the license was issued (ISS)',
+                },
+                {
+                  key: 'drivers_license_expiration_date',
+                  label: 'Expiration Date',
+                  type: 'DatePicker',
+                  helperText: 'Date the license expires (EXP)',
                 },
 
                 {

@@ -54,7 +54,6 @@ import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { militaryServicePeriodsAreDuplicates, collapseMilitaryServicePeriods } from '@/utils/aiItemDedup';
 import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
 
-import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -544,7 +543,7 @@ export default function Section11MilitaryService({
               <div className="min-w-0 flex-1">
                 <CardTitle className="flex min-w-0 items-center gap-2 text-lg tracking-tight text-slate-900 sm:text-xl">
                   <ShieldCheck className="h-5 w-5 shrink-0 text-indigo-600" />
-                  <span className="min-w-0">{getVaultSubsectionDisplayId('11', '11A')}. {SECTION_11A.title}</span>
+                  <span className="min-w-0">{SECTION_11A.title}</span>
                 </CardTitle>
               </div>
 

@@ -55,7 +55,6 @@ import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { educationEntriesAreDuplicates } from '@/utils/aiItemDedup';
 
-import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -481,7 +480,7 @@ export default function Section10EducationAccomplishments({
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
                   <GraduationCap className="h-5 w-5 text-sky-600" />
-                  {getVaultSubsectionDisplayId('10', '10A')}. {SECTION_10A.title}
+                  {SECTION_10A.title}
                 </CardTitle>
                 <p className="max-w-2xl text-sm leading-6 text-slate-600">
                   {SUBSECTION_SUBTITLE}

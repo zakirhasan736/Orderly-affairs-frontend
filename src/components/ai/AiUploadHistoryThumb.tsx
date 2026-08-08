@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { FileText, FileType2, ImageIcon, Loader2 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import { fetchAiDocumentPreviewBlobCached } from '@/utils/aiDocumentPreviewCache';
-import { getAiDocumentPreviewUrl } from '@/services/aiDocumentUpload';
 import {
   resolveAiPreviewKind,
   resolveAiPreviewMime,
@@ -17,15 +16,11 @@ type AiUploadHistoryThumbProps = {
   className?: string;
 };
 
-function buildPdfFrameSrc(fileId: string, blobUrl?: string | null) {
-  const hash = '#toolbar=0&navpanes=0&scrollbar=0&view=FitH';
-  if (blobUrl) return `${blobUrl}${hash}`;
-  const api = getAiDocumentPreviewUrl(fileId);
-  return api ? `${api}${hash}` : null;
-}
-
 /**
  * Document thumbnail for overview history cards (image or first-page PDF).
+ *
+ * Important: never put CSS `transform` on the PDF iframe (or ancestors).
+ * Chrome's built-in PDF viewer paints blank inside transformed layers.
  */
 export function AiUploadHistoryThumb({
   fileId,
@@ -34,7 +29,6 @@ export function AiUploadHistoryThumb({
   className,
 }: AiUploadHistoryThumbProps) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
-  const [pdfFrameUrl, setPdfFrameUrl] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState<string>(mimeHint || '');
   const [loading, setLoading] = useState(Boolean(fileId));
   const [failed, setFailed] = useState(false);
@@ -54,7 +48,6 @@ export function AiUploadHistoryThumb({
       setLoading(true);
       setFailed(false);
       setPreviewKind(null);
-      setPdfFrameUrl(null);
       setObjectUrl(prev => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
@@ -96,8 +89,6 @@ export function AiUploadHistoryThumb({
           );
           setPreviewKind('pdf');
           setObjectUrl(createdUrl);
-          // iframe + API URL matches the full preview dialog (object embed is unreliable).
-          setPdfFrameUrl(buildPdfFrameSrc(fileId, createdUrl));
         } else {
           setObjectUrl(null);
         }
@@ -145,14 +136,20 @@ export function AiUploadHistoryThumb({
           alt=""
           className="h-full w-full object-cover object-top"
         />
-      ) : pdfFrameUrl && !failed && previewKind === 'pdf' ? (
-        <div className="relative h-full w-full overflow-hidden bg-white">
+      ) : objectUrl && !failed && previewKind === 'pdf' ? (
+        <div className="relative h-full w-full overflow-hidden bg-[#eef3f9]">
+          {/* No translate/scale — those blank Chrome's PDF plugin. */}
           <iframe
             title=""
-            src={pdfFrameUrl}
-            className="pointer-events-none absolute left-1/2 top-0 h-[175%] w-[175%] max-w-none -translate-x-1/2 border-0 bg-white"
+            src={`${objectUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+            className="pointer-events-none absolute inset-0 h-full w-full border-0 bg-white"
             aria-hidden
           />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#213D59]/70 to-transparent px-1.5 pb-1 pt-4">
+            <p className="truncate text-center text-[9px] font-bold uppercase tracking-wide text-white">
+              PDF
+            </p>
+          </div>
         </div>
       ) : (
         <div

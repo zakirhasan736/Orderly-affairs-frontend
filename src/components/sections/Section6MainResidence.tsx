@@ -54,7 +54,6 @@ import {
   validateAiDocumentFile,
 } from '@/utils/aiDocumentUploadUi';
 
-import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -795,8 +794,8 @@ export default function Section6MainResidence({
     return (
       <SectionAiDocumentUploader
         title="Upload document for Main Residence"
-        description={`Property deed, mortgage statement, tax bill, insurance declaration, utility bill, or home inventory — AI will fill Section ${getVaultSubsectionDisplayId('6', '6A')}.`}
-        buttonLabel="Auto-fill 6A"
+        description={`Property deed, mortgage statement, tax bill, insurance declaration, utility bill, or home inventory — AI will fill Home Information.`}
+        buttonLabel="Auto-fill Home Information"
         uploadLabel="Drag and drop or click to upload main residence document"
         disabled={isAnyAIActionRunning}
         isUploading={uploadingScope === scope}
@@ -845,7 +844,7 @@ export default function Section6MainResidence({
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
                   <Home className="h-5 w-5 text-emerald-600" />
-                  {getVaultSubsectionDisplayId('6', '6A')}. {SECTION_6A.title}
+                  {SECTION_6A.title}
                 </CardTitle>
                 <p className="max-w-2xl text-sm leading-6 text-slate-600">
                   {SUBSECTION_SUBTITLE}

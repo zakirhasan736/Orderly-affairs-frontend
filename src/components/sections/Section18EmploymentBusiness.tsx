@@ -48,7 +48,6 @@ import {
 } from '@/utils/vaultTopicNavigation';
 import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 
-import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ============================================================
    SECTION 18A — CURRENT EMPLOYMENT
 ============================================================ */
@@ -998,7 +997,7 @@ export default function Section18EmploymentBusiness({
           >
             <CardTitle className="flex items-center gap-2">
               <Icon className={`h-5 w-5 ${config.tone.icon}`} />
-              {getVaultSubsectionDisplayId('18', '18A')}. {SECTION_18A.title}
+              {SECTION_18A.title}
             </CardTitle>
           </CardHeader>
 
@@ -1045,7 +1044,7 @@ export default function Section18EmploymentBusiness({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Icon className={`h-5 w-5 ${config.tone.icon}`} />
-                {getVaultSubsectionDisplayId('18', subsection)}. {section.title}
+                {section.title}
               </CardTitle>
 
               <Button

@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Badge } from '@common/ui/badge';
 import { Button } from '@common/ui/button';
 import { cn } from '@common/ui/utils';
-import { EnhancedCalendar } from '@/components/EnhancedCalendar';
 import {
   Dialog,
   DialogContent,
@@ -37,7 +36,6 @@ import {
   UserRound,
   Users,
   X,
-  Zap,
 } from 'lucide-react';
 import { DatePicker } from '@/components/DatePicker';
 import { toast } from 'sonner';
@@ -129,7 +127,7 @@ const EDITOR_STEPS = [
     id: 'recipient',
     label: 'Recipient',
     icon: UserRound,
-    helper: 'Delivery timing and recipient details',
+    helper: 'Who receives this letter',
   },
   {
     id: 'message',
@@ -337,149 +335,6 @@ function LetterWizardStepper({
   );
 }
 
-function DeliveryTimingSelector({
-  letterDate,
-  onSetUponDeath,
-  onSetSpecificDate,
-  onDateChange,
-  isMobile,
-  disabled = false,
-}: {
-  letterDate?: string | null;
-  onSetUponDeath: () => void;
-  onSetSpecificDate: () => void;
-  onDateChange: (value: string | undefined) => void;
-  isMobile: boolean;
-  disabled?: boolean;
-}) {
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const isUponDeath = !letterDate;
-
-  return (
-    <div className="space-y-3">
-      <Label className="text-sm font-semibold">Delivery Timing</Label>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <LetterSelectableCard
-          selected={isUponDeath}
-          disabled={disabled}
-          onSelect={onSetUponDeath}
-          title="Hold for passing"
-          description="Keep the letter on file — portal access still waits until after you've passed."
-          icon={Zap}
-          iconClassName="bg-emerald-100 text-emerald-700"
-        />
-        <LetterSelectableCard
-          selected={!isUponDeath}
-          disabled={disabled}
-          onSelect={onSetSpecificDate}
-          title="Schedule email"
-          description="Pick a future date — Orderly Affairs emails it automatically then."
-          icon={CalendarIcon}
-          iconClassName="bg-amber-100 text-amber-700"
-        />
-      </div>
-
-      {!isUponDeath &&
-        (isMobile ? (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={disabled}
-              className={cn('h-auto w-full justify-start rounded-2xl px-4 py-3', MIN_TOUCH)}
-              onClick={() => !disabled && setCalendarOpen(true)}
-            >
-              <span className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <CalendarIcon className="h-5 w-5" />
-              </span>
-              <span className="flex min-w-0 flex-col text-left">
-                <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                  Selected date
-                </span>
-                <span className="truncate text-sm font-semibold">
-                  {formatLetterDate(letterDate) || 'Tap to choose date'}
-                </span>
-              </span>
-            </Button>
-
-            <MobileBottomSheet
-              open={calendarOpen}
-              onClose={() => setCalendarOpen(false)}
-              className="max-h-[85dvh]"
-              labelledBy="letter-date-picker-title"
-              zClassName="z-[85]"
-            >
-              <div className="flex h-full min-h-0 flex-col">
-                <MobileSheetHandle />
-                <div className="flex shrink-0 items-center justify-between border-b px-4 pb-3 pt-1">
-                  <h3 id="letter-date-picker-title" className="text-lg font-semibold">
-                    Choose delivery date
-                  </h3>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setCalendarOpen(false)}
-                    className="h-10 w-10 rounded-full"
-                    aria-label="Close calendar"
-                  >
-                    <X className="h-5 w-5" />
-                  </Button>
-                </div>
-                <div className="flex flex-1 flex-col items-center overflow-y-auto px-3 py-4">
-                  <EnhancedCalendar
-                    mode="single"
-                    selected={
-                      letterDate ? new Date(letterDate) : undefined
-                    }
-                    onSelect={date => {
-                      if (date) {
-                        onDateChange(date.toISOString());
-                        setCalendarOpen(false);
-                      }
-                    }}
-                  />
-                  <div className="mt-4 flex w-full gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1 rounded-xl"
-                      onClick={() => {
-                        onDateChange(new Date().toISOString());
-                        setCalendarOpen(false);
-                      }}
-                    >
-                      Today
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="flex-1 rounded-xl"
-                      onClick={() => {
-                        onSetUponDeath();
-                        setCalendarOpen(false);
-                      }}
-                    >
-                      Upon Death
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </MobileBottomSheet>
-          </>
-        ) : (
-          <DatePicker
-            value={letterDate || undefined}
-            onChange={onDateChange}
-            placeholder="Select delivery date"
-            className="rounded-2xl"
-            sheetTitle="Choose delivery date"
-          />
-        ))}
-    </div>
-  );
-}
-
 function mergeAccessManagementAutofill(
   letter: LetterData,
   person?: NextKinAccessResponse | null,
@@ -601,6 +456,23 @@ export function NextOfKinLetterField({
   const mountedRef = useRef(false);
   const hydratedRef = useRef(false);
 
+  /** Persist response id into form state so section 3 can mark complete. */
+  const applySavedLetter = useCallback(
+    (saved: NOKLetter, base?: LetterData) => {
+      const merged: LetterData = {
+        ...(base || localData),
+        ...saved,
+        id: saved.id,
+      };
+      setLocalData(merged);
+      if (!isReadOnly) {
+        onChange(merged);
+      }
+      return merged;
+    },
+    [isReadOnly, localData, onChange],
+  );
+
   useEffect(() => {
     hydratedRef.current = false;
     setWizardStep(0);
@@ -665,7 +537,7 @@ export function NextOfKinLetterField({
 
     debounceRef.current = setTimeout(async () => {
       try {
-        await saveLetter({
+        const saved = await saveLetter({
           nokId: selectedNokId,
           body: {
             letter_date: localData.letter_date || null,
@@ -695,6 +567,7 @@ export function NextOfKinLetterField({
             signer_name: localData.signer_name || undefined,
           },
         }).unwrap();
+        applySavedLetter(saved, localData);
       } catch {
         toast.error('Could not save NOK letter');
       }
@@ -703,7 +576,7 @@ export function NextOfKinLetterField({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [JSON.stringify(localData), isFetching, selectedNokId, saveLetter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(localData), isFetching, selectedNokId, saveLetter, applySavedLetter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFieldChange = <K extends keyof LetterData>(
     field: K,
@@ -825,7 +698,7 @@ export function NextOfKinLetterField({
       toast.error('Select a next of kin recipient first.');
       return null;
     }
-    return saveLetter({
+    const saved = await saveLetter({
       nokId: selectedNokId,
       body: {
         letter_date: localData.letter_date || null,
@@ -849,6 +722,7 @@ export function NextOfKinLetterField({
         signer_name: localData.signer_name || undefined,
       },
     }).unwrap();
+    return applySavedLetter(saved, localData);
   };
 
   const handleSendNow = async () => {
@@ -893,13 +767,11 @@ export function NextOfKinLetterField({
     if (!localData.letter_date) {
       toast.error('Pick a future delivery date first.');
       setDeliveryAction('schedule');
-      setWizardStep(0);
       return;
     }
     const sendAt = Date.parse(localData.letter_date);
     if (!Number.isFinite(sendAt) || sendAt <= Date.now()) {
       toast.error('Choose a future date to schedule the email.');
-      setWizardStep(0);
       return;
     }
     setDeliveryBusy(true);
@@ -934,6 +806,31 @@ export function NextOfKinLetterField({
       return;
     }
     await handleSchedule();
+  };
+
+  const handleSaveLetter = async () => {
+    if (isReadOnly) {
+      toast.error('Your family role is view-only.');
+      return;
+    }
+    setDeliveryBusy(true);
+    try {
+      const saved = await persistLetterNow();
+      if (saved) {
+        setLocalData(prev => ({ ...prev, ...saved }));
+        onChange({ ...localData, ...saved });
+      }
+      toast.success('Letter saved.');
+      onClose?.();
+    } catch (error: any) {
+      toast.error(
+        error?.data?.detail ||
+          error?.message ||
+          'Could not save the letter. Please try again.',
+      );
+    } finally {
+      setDeliveryBusy(false);
+    }
   };
 
   const handleEmail = () => {
@@ -981,32 +878,9 @@ export function NextOfKinLetterField({
         return (
           <>
             {stepIntro(
-              'Recipient & delivery timing',
+              'Recipient',
               'Confirm who receives this letter. You can still email it now — portal login waits until after your passing.',
             )}
-
-            <DeliveryTimingSelector
-              letterDate={localData.letter_date}
-              isMobile={isMobile}
-              disabled={isReadOnly}
-              onSetUponDeath={() =>
-                handleFieldChange('letter_date', null as any)
-              }
-              onSetSpecificDate={() => {
-                if (!localData.letter_date) {
-                  handleFieldChange(
-                    'letter_date',
-                    new Date().toISOString() as any,
-                  );
-                }
-              }}
-              onDateChange={value =>
-                handleFieldChange(
-                  'letter_date',
-                  (value || null) as any,
-                )
-              }
-            />
 
             <div className="grid gap-4 sm:grid-cols-2">
               <FieldBlock
@@ -1326,15 +1200,49 @@ export function NextOfKinLetterField({
                   iconClassName="bg-amber-100 text-amber-700"
                 />
               </div>
-              {deliveryAction === 'schedule' && !localData.letter_date ? (
+              {deliveryAction === 'schedule' ? (
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">
+                    Schedule send date
+                  </Label>
+                  <DatePicker
+                    value={localData.letter_date || undefined}
+                    onChange={value =>
+                      handleFieldChange(
+                        'letter_date',
+                        (value || null) as any,
+                      )
+                    }
+                    placeholder="Select send date"
+                    className="rounded-2xl"
+                    sheetTitle="Choose schedule date"
+                    disabled={isReadOnly}
+                  />
+                </div>
+              ) : null}
+              {!isReadOnly ? (
                 <Button
                   type="button"
+                  data-oa-mutate
                   variant="outline"
+                  onClick={() => void handleDeliveryAction()}
+                  disabled={deliveryBusy || isSaving || isSendingNow}
                   className="w-full rounded-2xl"
-                  onClick={() => setWizardStep(0)}
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  Choose schedule date
+                  {deliveryBusy || isSendingNow ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : deliveryAction === 'export' ? (
+                    <Download className="mr-2 h-4 w-4" />
+                  ) : deliveryAction === 'schedule' ? (
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  {deliveryAction === 'export'
+                    ? 'Export letter'
+                    : deliveryAction === 'schedule'
+                      ? 'Schedule send'
+                      : 'Send now'}
                 </Button>
               ) : null}
               {localData.delivery_status === 'sent' ? (
@@ -1449,34 +1357,20 @@ export function NextOfKinLetterField({
         <Button
           type="button"
           data-oa-mutate
-          onClick={() => void handleDeliveryAction()}
-          disabled={deliveryBusy || isSaving || isSendingNow}
+          onClick={() => void handleSaveLetter()}
+          disabled={deliveryBusy || isSaving}
           className={cn(
             'rounded-2xl',
             MIN_TOUCH,
             compactSheet ? 'flex-[1.4]' : isMobile && embeddedInSheet ? 'w-full' : 'w-auto',
           )}
         >
-          {deliveryBusy || isSendingNow ? (
+          {deliveryBusy || isSaving ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : deliveryAction === 'export' ? (
-            <Download className="mr-2 h-4 w-4" />
-          ) : deliveryAction === 'schedule' ? (
-            <CalendarIcon className="mr-2 h-4 w-4" />
           ) : (
-            <Send className="mr-2 h-4 w-4" />
+            <Check className="mr-2 h-4 w-4" />
           )}
-          {deliveryAction === 'export'
-            ? compactSheet
-              ? 'Export'
-              : 'Export letter'
-            : deliveryAction === 'schedule'
-              ? compactSheet
-                ? 'Schedule'
-                : 'Schedule send'
-              : compactSheet
-                ? 'Send now'
-                : 'Send now'}
+          Save
         </Button>
       )}
     </div>
@@ -1561,24 +1455,16 @@ export function NextOfKinLetterField({
           <Button
             type="button"
             data-oa-mutate
-            onClick={() => void handleDeliveryAction()}
-            disabled={deliveryBusy || isSaving || isSendingNow}
+            onClick={() => void handleSaveLetter()}
+            disabled={deliveryBusy || isSaving}
             className={cn('rounded-2xl', MIN_TOUCH, 'w-full sm:w-auto')}
           >
-            {deliveryBusy || isSendingNow ? (
+            {deliveryBusy || isSaving ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : deliveryAction === 'export' ? (
-              <Download className="mr-2 h-4 w-4" />
-            ) : deliveryAction === 'schedule' ? (
-              <CalendarIcon className="mr-2 h-4 w-4" />
             ) : (
-              <Send className="mr-2 h-4 w-4" />
+              <Check className="mr-2 h-4 w-4" />
             )}
-            {deliveryAction === 'export'
-              ? 'Export'
-              : deliveryAction === 'schedule'
-                ? 'Schedule send'
-                : 'Send now'}
+            Save
           </Button>
         )}
       </div>

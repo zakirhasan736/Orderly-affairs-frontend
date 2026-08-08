@@ -287,6 +287,7 @@ export async function runAiSectionAutofill({
       additional_sections: json.additional_sections,
       section_previews: json.section_previews,
       document_deleted: json.document_deleted,
+      partner_results: json.partner_results,
     };
   } catch (error) {
     if (error instanceof AiDocumentMismatchError) {

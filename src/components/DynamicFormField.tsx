@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { Input } from '@common/ui/input';
 import { Textarea } from '@common/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@common/ui/select';
@@ -19,6 +20,8 @@ import { AccessManagement } from './AccessManagement';
 import { LettersToNextOfKinField } from './LettersToNextOfKinField';
 import { NextOfKinLetterField } from './NextOfKinLetterField';
 import { useFamilyAcl } from '@/contexts/FamilyAclContext';
+import { fieldShouldMask } from '@/utils/sensitiveFields';
+import { cn } from '@common/ui/utils';
 
 
 interface DynamicFormFieldProps {
@@ -43,8 +46,8 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
     field.type === 'DateInput'
       ? asPlainFieldText(rawValue)
       : rawValue;
-  const isPassword = field.inputType === 'password';
-  const [showPassword, setShowPassword] = useState(false);
+  const isMaskedField = fieldShouldMask(field);
+  const [showSecret, setShowSecret] = useState(false);
   // If there's a default value and no current value, set it
   React.useEffect(() => {
     if (isReadOnly) return;
@@ -52,6 +55,11 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
       onChange(field.defaultValue);
     }
   }, [field.defaultValue, value, onChange, isReadOnly]);
+
+  // Re-mask when navigating to another row/field so secrets don't stay revealed.
+  React.useEffect(() => {
+    setShowSecret(false);
+  }, [field.key, rowId]);
 
   const lockedOnChange = (next: any) => {
     if (isReadOnly) return;
@@ -111,7 +119,6 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
   const renderField = () => {
     switch (field.type) {
       case 'TextInput': {
-        
         return (
           <div className="relative w-full">
             <Input
@@ -119,78 +126,83 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
               onChange={e => lockedOnChange(e.target.value)}
               placeholder={field.placeholder}
               readOnly={isReadOnly}
+              autoComplete={isMaskedField ? 'off' : undefined}
               type={
-                isPassword
-                  ? showPassword
+                isMaskedField
+                  ? showSecret
                     ? 'text'
                     : 'password'
                   : field.inputType || 'text'
               }
-              className={`${className || 'w-full'}${isReadOnly ? ' cursor-default bg-slate-50' : ''}`}
+              className={cn(
+                className || 'w-full',
+                isReadOnly && 'cursor-default bg-slate-50',
+                isMaskedField && 'pr-20',
+              )}
             />
-            {isPassword && (
+            {isMaskedField && (
               <button
                 type="button"
                 data-oa-view-ok
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                onClick={() => setShowSecret(prev => !prev)}
+                className="absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label={showSecret ? 'Hide value' : 'Show value'}
+                title={showSecret ? 'Hide' : 'Show'}
               >
-                {showPassword ? (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-4.477-10-10a9.967 9.967 0 012.163-6.125m4.687 4.687A3 3 0 1112 15a3 3 0 01-1.313-5.438M15 12a3 3 0 01-3 3m0-6a3 3 0 013 3m6.627 6.627L3.373 3.373"
-                    />
-                  </svg>
+                {showSecret ? (
+                  <EyeOff className="h-3.5 w-3.5" />
                 ) : (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                    />
-                  </svg>
+                  <Eye className="h-3.5 w-3.5" />
                 )}
+                <span>{showSecret ? 'Hide' : 'Show'}</span>
               </button>
             )}
           </div>
         );
-      };
+      }
 
       case 'TextArea':
         return (
-          <Textarea
-            value={currentValue}
-            onChange={e => lockedOnChange(e.target.value)}
-            placeholder={field.placeholder}
-            className={`w-full min-h-30${isReadOnly ? ' cursor-default bg-slate-50' : ''}`}
-            readOnly={
-              isReadOnly ||
-              (field.defaultValue !== undefined &&
-                field.defaultValue.includes('•'))
-            }
-          />
+          <div className="relative w-full">
+            <Textarea
+              value={
+                isMaskedField && !showSecret && currentValue
+                  ? '•'.repeat(Math.min(String(currentValue).length || 8, 24))
+                  : currentValue
+              }
+              onChange={e => {
+                if (isMaskedField && !showSecret) return;
+                lockedOnChange(e.target.value);
+              }}
+              onFocus={() => {
+                if (isMaskedField && !showSecret) setShowSecret(true);
+              }}
+              placeholder={field.placeholder}
+              className={`w-full min-h-30${isReadOnly ? ' cursor-default bg-slate-50' : ''}${isMaskedField ? ' pr-20' : ''}`}
+              readOnly={
+                isReadOnly ||
+                (isMaskedField && !showSecret) ||
+                (field.defaultValue !== undefined &&
+                  field.defaultValue.includes('•'))
+              }
+            />
+            {isMaskedField && (
+              <button
+                type="button"
+                data-oa-view-ok
+                onClick={() => setShowSecret(prev => !prev)}
+                className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label={showSecret ? 'Hide value' : 'Show value'}
+              >
+                {showSecret ? (
+                  <EyeOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" />
+                )}
+                <span>{showSecret ? 'Hide' : 'Show'}</span>
+              </button>
+            )}
+          </div>
         );
 
       case 'TextInputWithUpload':
@@ -202,6 +214,7 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
             placeholder={field.placeholder}
             helperText={field.helperText}
             disabled={isReadOnly}
+            sensitive={isMaskedField}
           />
         );
 
@@ -428,13 +441,39 @@ export function DynamicFormField({ field, value, onChange, formData, rowId, isVi
 
       default:
         return (
-          <Input
-            value={value || ''}
-            onChange={e => lockedOnChange(e.target.value)}
-            placeholder={field.placeholder}
-            readOnly={isReadOnly}
-            className={`w-full${isReadOnly ? ' cursor-default bg-slate-50' : ''}`}
-          />
+          <div className="relative w-full">
+            <Input
+              value={asPlainFieldText(value) || ''}
+              onChange={e => lockedOnChange(e.target.value)}
+              placeholder={field.placeholder}
+              readOnly={isReadOnly}
+              autoComplete={isMaskedField ? 'off' : undefined}
+              type={
+                isMaskedField ? (showSecret ? 'text' : 'password') : 'text'
+              }
+              className={cn(
+                'w-full',
+                isReadOnly && 'cursor-default bg-slate-50',
+                isMaskedField && 'pr-20',
+              )}
+            />
+            {isMaskedField && (
+              <button
+                type="button"
+                data-oa-view-ok
+                onClick={() => setShowSecret(prev => !prev)}
+                className="absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label={showSecret ? 'Hide value' : 'Show value'}
+              >
+                {showSecret ? (
+                  <EyeOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" />
+                )}
+                <span>{showSecret ? 'Hide' : 'Show'}</span>
+              </button>
+            )}
+          </div>
         );
     }
   };

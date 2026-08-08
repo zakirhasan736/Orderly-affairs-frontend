@@ -16,7 +16,6 @@ import { Checkbox } from '@common/ui/checkbox';
 import { formConfig } from '../config/formConfig';
 import {
   formatVaultSectionTitle,
-  getVaultSubsectionDisplayId,
 } from '@/utils/vaultNavigation';
 import {
   getNOKSectionConfig,
@@ -777,7 +776,7 @@ const sectionHasData = useMemo(() => {
                   >
                     <div className="flex items-center gap-2.5 border-b border-slate-100 px-4 py-3.5">
                       <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#213D59] text-[11px] font-bold text-white">
-                        {getVaultSubsectionDisplayId(sectionId, subsection.id)}
+                        {(subsection.title || '?').trim().charAt(0).toUpperCase()}
                       </span>
                       <h2 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[#213D59]">
                         {hasDoveTag(sectionId, subsection.id) ? '🕊️ ' : ''}

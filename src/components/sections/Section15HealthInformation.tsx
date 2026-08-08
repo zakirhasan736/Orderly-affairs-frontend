@@ -67,7 +67,6 @@ import {
   buildUpsertAutofillNotice,
 } from '@/utils/aiItemDedup';
 
-import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG — 15A                                                        */
 /* ------------------------------------------------------------------ */
@@ -911,7 +910,7 @@ export default function Section15HealthInformation({
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
                   <HeartPulse className="h-5 w-5 text-red-600" />
-                  {getVaultSubsectionDisplayId('15', '15A')}. {SECTION_15A.title}
+                  {SECTION_15A.title}
                 </CardTitle>
                 <p className="max-w-2xl text-sm leading-6 text-slate-600">
                   {SECTION_15A_SUBTITLE}
@@ -981,7 +980,7 @@ export default function Section15HealthInformation({
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-xl tracking-tight text-slate-900">
                   <Stethoscope className="h-5 w-5 text-cyan-600" />
-                  {getVaultSubsectionDisplayId('15', '15B')}. {SECTION_15B.title}
+                  {SECTION_15B.title}
                 </CardTitle>
                 <p className="max-w-2xl text-sm leading-6 text-slate-600">
                   {SECTION_15B_SUBTITLE}

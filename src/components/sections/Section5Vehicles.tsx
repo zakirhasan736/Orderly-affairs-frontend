@@ -46,7 +46,6 @@ import {
 } from '@/utils/vaultTopicNavigation';
 import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 
-import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -413,7 +412,17 @@ export default function Section5Vehicles({
       if (!json) return;
 
       const patch = json?.result?.patch ?? {};
-      const extractedVehicles = extractVehicleArrayFromPatch(patch);
+      let extractedVehicles = extractVehicleArrayFromPatch(patch);
+
+      // Partner insurance→vehicles seed when primary 5A came back empty.
+      if (
+        extractedVehicles.length === 0 &&
+        json?.partner_results?.vehicles
+      ) {
+        extractedVehicles = extractVehicleArrayFromPatch(
+          json.partner_results.vehicles?.patch ?? json.partner_results.vehicles,
+        );
+      }
 
       if (extractedVehicles.length === 0) {
         const hasInsuranceFollowUp = (json.additional_sections || []).some(
@@ -421,12 +430,14 @@ export default function Section5Vehicles({
         );
         if (hasInsuranceFollowUp) {
           setAiNotice(
-            'No new vehicle fields were found, but insurance details are ready in the Insurance section.',
+            'No vehicle details (year/make/model or VIN) were readable on this document yet. Insurance details are ready in the Insurance section — try Auto-fill again, or add a vehicle card manually.',
           );
           releaseDeferredAiRoutingDialog(aiRouting);
           return;
         }
-        setAiError('AI could not find vehicle information in this document.');
+        setAiError(
+          'AI could not find vehicle information (year, make, model, or VIN) in this document. Try a clearer insurance card or registration, or add a vehicle manually.',
+        );
         releaseDeferredAiRoutingDialog(aiRouting);
         return;
       }
@@ -521,7 +532,7 @@ export default function Section5Vehicles({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
               <Car className="h-5 w-5 text-blue-600" />
-              {getVaultSubsectionDisplayId('5', '5A')}. {SECTION_5.title}
+              {SECTION_5.title}
             </CardTitle>
 
             <Button

@@ -27,6 +27,7 @@ import {
 import type { DetectedAiFact } from '@/utils/aiDashboardPatchCache';
 import { getAiSectionLabel } from '@/utils/aiSectionRegistry';
 import { buildAiUploadReviewSummary } from '@/utils/aiUploadReviewSummary';
+import { fieldShouldMask } from '@/utils/sensitiveFields';
 
 export type AiInboxReviewDocument = {
   id: string;
@@ -78,10 +79,7 @@ function uniqueEditableFacts(facts: DetectedAiFact[]): EditableFact[] {
 }
 
 function looksSensitive(label: string, fieldKey?: string) {
-  const blob = `${label} ${fieldKey || ''}`.toLowerCase();
-  return /account\s*number|routing|ssn|social|password|vin|policy\s*number|card\s*number/.test(
-    blob,
-  );
+  return fieldShouldMask({ key: fieldKey, label });
 }
 
 /**
@@ -242,6 +240,10 @@ export function AiInboxDocumentReviewDialog({
         className={cn(
           AI_ROUTING_DIALOG_SHEET,
           'gap-0 overflow-hidden border-0 bg-[#f3f5f7] p-0 sm:max-w-xl md:max-w-2xl',
+          // Chrome blanks PDF iframes inside CSS-transformed ancestors.
+          '!translate-x-0 !translate-y-0 sm:!translate-x-0 sm:!translate-y-0',
+          '!left-2 !right-2 !w-auto sm:!left-[max(0.75rem,calc(50%-min(24rem,calc(50vw-0.75rem))))] sm:!right-auto sm:!w-[min(100vw-1.5rem,42rem)]',
+          'data-[state=open]:!zoom-in-100 data-[state=closed]:!zoom-out-100',
         )}
       >
         <div className="flex items-center gap-2 border-b border-black/5 bg-white px-3 py-3 pr-12 sm:px-4">
@@ -318,11 +320,24 @@ export function AiInboxDocumentReviewDialog({
             !previewError &&
             objectUrl &&
             previewKind === 'pdf' ? (
-              <iframe
-                title={document.fileName}
-                src={`${objectUrl}#toolbar=1&navpanes=0&view=FitH`}
-                className="h-[min(42dvh,360px)] w-full border-0 bg-white"
-              />
+              <div className="overflow-hidden bg-white">
+                <iframe
+                  title={document.fileName}
+                  src={`${objectUrl}#toolbar=1&navpanes=0&view=FitH`}
+                  className="h-[min(42dvh,360px)] w-full border-0 bg-white"
+                />
+                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t border-slate-100 px-3 py-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.open(objectUrl, '_blank', 'noopener,noreferrer')
+                    }
+                    className="text-xs font-medium text-[#2B5A8C] underline-offset-2 hover:underline"
+                  >
+                    Open PDF in new tab
+                  </button>
+                </div>
+              </div>
             ) : null}
 
             {!loadingPreview &&

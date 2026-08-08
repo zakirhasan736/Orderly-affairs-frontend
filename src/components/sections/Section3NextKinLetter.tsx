@@ -30,7 +30,6 @@ import { NextOfKinLetterField } from '@/components/NextOfKinLetterField';
 import { NokLetterPreviewDialog } from '@/components/NokLetterPreviewDialog';
 import {
   getVaultSectionDisplayNumber,
-  getVaultSubsectionDisplayId,
 } from '@/utils/vaultNavigation';
 import {
   MobileBottomSheet,
@@ -316,8 +315,8 @@ function RecipientCard({
                   <h4 className="line-clamp-1 text-base font-semibold tracking-tight sm:text-lg">
                     {name}
                   </h4>
-                  <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 ring-1 ring-emerald-200/70">
-                    NOK ready
+                  <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-800 ring-1 ring-emerald-200/70">
+                    Assigned Next of Kin
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -569,9 +568,6 @@ export default function Section3NextOfKinLetter({
       <CardHeader className="border-b px-4 py-4 sm:px-6 sm:py-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="flex items-center gap-2.5 text-base sm:gap-3 sm:text-xl">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-xs font-bold text-primary-foreground sm:h-9 sm:w-9 sm:text-sm">
-              {getVaultSubsectionDisplayId('3', SECTION_3A.id)}
-            </span>
             <span>{SECTION_3A.title}</span>
           </CardTitle>
           <span

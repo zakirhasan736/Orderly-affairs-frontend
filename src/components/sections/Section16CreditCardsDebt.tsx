@@ -62,7 +62,6 @@ import {
   buildUpsertAutofillNotice,
 } from '@/utils/aiItemDedup';
 
-import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG — 16A CREDIT CARDS                                           */
 /* ------------------------------------------------------------------ */
@@ -869,7 +868,7 @@ export default function Section16CreditCardsDebt({
                     isCreditCard ? 'text-rose-600' : 'text-orange-600',
                   ].join(' ')}
                 />
-                {getVaultSubsectionDisplayId('16', subsection)}. {config.title}
+                {config.title}
               </CardTitle>
 
               <Button

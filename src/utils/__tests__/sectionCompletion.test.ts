@@ -16,7 +16,23 @@ describe('sectionCompletion', () => {
     expect(isMeaningfulFilled('Hall closet')).toBe(true);
   });
 
-  it('marks section 3 incomplete for empty auto-created letter stubs', () => {
+  it('marks section 3 incomplete for template drafts that were never saved', () => {
+    const progress = getSectionProgress('3', {
+      formData: {
+        '3': {
+          next_of_kin_letter_data: {
+            letter_to: 'Alex',
+            nok_email: 'a@b.com',
+            letter_opening: NOK_LETTER_DEFAULTS.letter_opening,
+          },
+        },
+      },
+    });
+    expect(progress.complete).toBe(false);
+    expect(progress.percent).toBe(0);
+  });
+
+  it('marks section 3 complete when a letter has been saved (has id)', () => {
     const progress = getSectionProgress('3', {
       formData: {},
       dashboardNokLetter: {
@@ -29,8 +45,8 @@ describe('sectionCompletion', () => {
         updated_at: '2026-01-01',
       },
     });
-    expect(progress.complete).toBe(false);
-    expect(progress.percent).toBe(0);
+    expect(progress.complete).toBe(true);
+    expect(progress.percent).toBe(100);
   });
 
   it('marks section 3 complete when a letter has customized message content', () => {

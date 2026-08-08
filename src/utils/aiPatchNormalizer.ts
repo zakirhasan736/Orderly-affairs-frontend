@@ -295,11 +295,14 @@ function isTruthyFlag(value: unknown): boolean | null {
   return null;
 }
 
-/** Plain text for TextInput / TextArea — never leave `{ text, files }` objects. */
+/** Plain text for TextInput / TextArea — never leave `{ text, files }` objects.
+ * Do not trim: controlled inputs call this on every render, and trimming
+ * swallows spaces while the user is typing the next word.
+ */
 export function asPlainFieldText(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return String(value).trim();
+    return String(value);
   }
   if (Array.isArray(value)) {
     return value.map(asPlainFieldText).filter(Boolean).join(', ');

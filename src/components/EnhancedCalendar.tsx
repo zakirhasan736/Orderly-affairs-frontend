@@ -3,6 +3,7 @@ import { Calendar } from '@common/ui/calendar';
 import { Button } from '@common/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@common/ui/utils';
+import { formatDateOnly } from '@/utils/dateOnly';
 
 interface EnhancedCalendarProps {
   mode?: 'single';
@@ -13,7 +14,7 @@ interface EnhancedCalendarProps {
 
 function toDateKey(date?: Date) {
   if (!date || Number.isNaN(date.getTime())) return '';
-  return date.toISOString().slice(0, 10);
+  return formatDateOnly(date);
 }
 
 const nativeSelectClass = cn(

@@ -294,10 +294,19 @@ function upsertCardSubsection(
     .filter(item =>
       sectionId === '5' ? !isJunkVehicleCard(item) : true,
     );
+  // Collapse stale duplicate cards already in the vault (repeated Accept).
+  const matcher =
+    duplicateMatcherForSection(sectionId, key) ||
+    ((a: Record<string, unknown>, b: Record<string, unknown>) =>
+      namedItemsAreDuplicates(a, b));
+  const normalizedCurrent =
+    sectionId === '7'
+      ? collapseInsurancePolicies(currentItems)
+      : collapseItemsByMatcher(currentItems, matcher);
   return mergeArraySubsection(
     sectionId,
     key,
-    currentItems,
+    normalizedCurrent,
     incomingItems,
     conflictMode,
   );

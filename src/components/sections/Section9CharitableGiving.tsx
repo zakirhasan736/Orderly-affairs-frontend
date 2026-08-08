@@ -46,7 +46,6 @@ import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { namedItemsAreDuplicates } from '@/utils/aiItemDedup';
 
-import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -481,7 +480,7 @@ const createEmptyCharity = () => createEmptyItemFromFields(SECTION_9A.fields);
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
               <HeartHandshake className="h-5 w-5 text-rose-600" />
-              {getVaultSubsectionDisplayId('9', '9A')}. {SECTION_9A.title}
+              {SECTION_9A.title}
             </CardTitle>
 
             <Button

@@ -10,7 +10,6 @@ import {
 import { useVaultFillGaps } from '@/components/vault/VaultFillGapsContext';
 import {
   formatVaultSubsectionTitle,
-  getVaultSubsectionDisplayId,
   VAULT_NAVIGATION,
 } from '@/utils/vaultNavigation';
 import { cn } from '@common/ui/utils';
@@ -60,10 +59,9 @@ export function ActiveSubsectionFillBar({
 
     let itemIndex = hasTopic ? topicRef.itemIndex : undefined;
     let groupId = topicRef.groupId;
-    const displayId = getVaultSubsectionDisplayId(sectionId, subsectionId);
     let title = subsection
       ? formatVaultSubsectionTitle(sectionId, subsection)
-      : `${displayId}. Subsection`;
+      : 'Subsection';
 
     const bucket = sectionData?.[subsectionId];
     if (!hasTopic && Array.isArray(bucket)) {
@@ -77,7 +75,7 @@ export function ActiveSubsectionFillBar({
         );
         if (!itemProgress.complete && itemProgress.total > 0) {
           itemIndex = i;
-          title = `${displayId} · Item ${i + 1}`;
+          title = `${title} · Item ${i + 1}`;
           break;
         }
       }
@@ -100,7 +98,7 @@ export function ActiveSubsectionFillBar({
     });
 
     if (hasTopic) {
-      title = `${displayId} · Item ${(topicRef.itemIndex ?? 0) + 1}`;
+      title = `${title} · Item ${(topicRef.itemIndex ?? 0) + 1}`;
     }
 
     return {

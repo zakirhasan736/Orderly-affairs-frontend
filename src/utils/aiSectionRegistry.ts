@@ -1,5 +1,3 @@
-import { getVaultSectionDisplayNumber } from '@/utils/vaultNavigation';
-
 export type AiSectionRegistryEntry = {
   key: string;
   id: string;
@@ -129,5 +127,5 @@ export const AI_SECTION_BY_ID = Object.fromEntries(
 export function getAiSectionLabel(sectionId: string) {
   const label = AI_SECTION_BY_ID[sectionId]?.label;
   if (!label) return `Section ${sectionId}`;
-  return `${getVaultSectionDisplayNumber(sectionId)}. ${label}`;
+  return label;
 }

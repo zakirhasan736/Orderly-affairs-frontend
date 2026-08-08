@@ -15,7 +15,8 @@ export interface VaultSection {
 
 /**
  * Sidebar / product order. Internal `id` values stay stable for API, DB, and
- * ACL (Family remains `"17"`). Use display helpers below for user-facing numbers.
+ * ACL (Family remains `"17"`). Display helpers remain for cross-references
+ * and export IDs; section titles themselves are shown without numeric prefixes.
  */
 export const VAULT_NAVIGATION: VaultSection[] = [
   {
@@ -187,12 +188,13 @@ export function getVaultSubsectionDisplayId(
 export function formatVaultSectionTitle(
   section: Pick<VaultSection, 'id' | 'title'>,
 ): string {
-  return `${getVaultSectionDisplayNumber(section.id)}. ${section.title}`;
+  return section.title;
 }
 
 export function formatVaultSubsectionTitle(
   sectionId: string,
   subsection: Pick<VaultSubsection, 'id' | 'title'>,
 ): string {
-  return `${getVaultSubsectionDisplayId(sectionId, subsection.id)}. ${subsection.title}`;
+  void sectionId;
+  return subsection.title;
 }

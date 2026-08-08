@@ -216,6 +216,59 @@ function formatFileSize(size?: number) {
   return `${(size / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+/** Local HH:mm from an ISO datetime, for `<input type="time">`. */
+function getLocalTimeValue(iso?: string | null): string {
+  if (!iso) return '';
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return `${String(parsed.getHours()).padStart(2, '0')}:${String(
+    parsed.getMinutes(),
+  ).padStart(2, '0')}`;
+}
+
+/** Current device local time as HH:mm. */
+function getDeviceLocalTimeValue(): string {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(
+    now.getMinutes(),
+  ).padStart(2, '0')}`;
+}
+
+/** Merge calendar date + local HH:mm into an ISO string in the device timezone. */
+function applyLocalTimeToDate(
+  dateIso: string,
+  timeHHmm?: string | null,
+): string {
+  const base = new Date(dateIso);
+  if (Number.isNaN(base.getTime())) return dateIso;
+  const [hoursRaw, minutesRaw] = String(timeHHmm || '09:00').split(':');
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  const next = new Date(
+    base.getFullYear(),
+    base.getMonth(),
+    base.getDate(),
+    Number.isFinite(hours) ? hours : 9,
+    Number.isFinite(minutes) ? minutes : 0,
+    0,
+    0,
+  );
+  return next.toISOString();
+}
+
+function formatScheduledDelivery(iso?: string | null): string {
+  if (!iso) return 'Date not set';
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return 'Date not set';
+  return parsed.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 function MessageMediaPreview({
   messageType,
   media,
@@ -2136,9 +2189,7 @@ function MessageMobileDetails({
           <p className="mt-1 text-sm font-semibold">
             {letter.deliveryTrigger === 'death'
               ? 'Upon death'
-              : letter.deliveryDate
-                ? new Date(letter.deliveryDate).toLocaleDateString()
-                : 'Date not set'}
+              : formatScheduledDelivery(letter.deliveryDate)}
           </p>
         </div>
       </div>
@@ -2539,16 +2590,64 @@ function DeliverySection({
         <div
           className={cn(
             'grid gap-4 rounded-2xl border bg-muted/30 p-4',
-            compact ? 'grid-cols-1 sm:grid-cols-2' : 'md:grid-cols-2',
+            compact
+              ? 'grid-cols-1 sm:grid-cols-2'
+              : 'md:grid-cols-3',
           )}
         >
           <FieldBlock label="Delivery Date">
             <DatePicker
               value={letter.deliveryDate || ''}
-              onChange={value => onChange({ deliveryDate: value || '' })}
+              onChange={value => {
+                if (!value) {
+                  onChange({ deliveryDate: '' });
+                  return;
+                }
+                const time =
+                  getLocalTimeValue(letter.deliveryDate) ||
+                  getDeviceLocalTimeValue();
+                onChange({
+                  deliveryDate: applyLocalTimeToDate(value, time),
+                });
+              }}
               placeholder="Select delivery date"
               sheetTitle="Choose delivery date"
             />
+          </FieldBlock>
+
+          <FieldBlock label="Delivery Time">
+            <Input
+              type="time"
+              value={getLocalTimeValue(letter.deliveryDate)}
+              onChange={event => {
+                const time = event.target.value;
+                if (!letter.deliveryDate) {
+                  const today = new Date();
+                  const seed = new Date(
+                    today.getFullYear(),
+                    today.getMonth(),
+                    today.getDate(),
+                  ).toISOString();
+                  onChange({
+                    deliveryDate: applyLocalTimeToDate(
+                      seed,
+                      time || getDeviceLocalTimeValue(),
+                    ),
+                  });
+                  return;
+                }
+                onChange({
+                  deliveryDate: applyLocalTimeToDate(
+                    letter.deliveryDate,
+                    time || getDeviceLocalTimeValue(),
+                  ),
+                });
+              }}
+              className="h-11 rounded-xl"
+            />
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              Uses your device&apos;s local time zone.
+            </p>
           </FieldBlock>
 
           <FieldBlock label="Occasion">
@@ -2693,7 +2792,7 @@ function PreviewSidebar({
               value={
                 letter.deliveryTrigger === 'death'
                   ? 'Upon death'
-                  : letter.deliveryDate || 'Date not selected'
+                  : formatScheduledDelivery(letter.deliveryDate)
               }
             />
 
@@ -3055,13 +3154,7 @@ function formatDeliverySummary(letter: Letter) {
   if (letter.deliveryTrigger === 'death') {
     return 'Upon death';
   }
-  const datePart = letter.deliveryDate
-    ? new Date(letter.deliveryDate).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : 'Date not set';
+  const datePart = formatScheduledDelivery(letter.deliveryDate);
   return letter.deliveryOccasion
     ? `${datePart} · ${letter.deliveryOccasion}`
     : datePart;

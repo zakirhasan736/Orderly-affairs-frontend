@@ -241,13 +241,17 @@ export function getNokLetterProgress(
 }
 
 /**
- * A letter "exists" only when the owner customized at least one message field.
- * Auto-created API stubs + Access Management autofill (name/email alone) do NOT
- * count — otherwise section 3 shows Done for brand-new accounts.
+ * A letter "exists" when:
+ * - it was saved to the API (has an id), or
+ * - the owner customized at least one message field.
+ *
+ * Access Management autofill alone (name/email) without a save does NOT count.
+ * GET no longer auto-creates stubs, so an id means the owner added a letter.
  */
 function isPresentNokLetter(letter: unknown): boolean {
   if (!letter || typeof letter !== 'object') return false;
   const doc = letter as Record<string, unknown>;
+  if (typeof doc.id === 'string' && doc.id.trim()) return true;
   for (const key of NOK_LETTER_MESSAGE_KEYS) {
     if (isLetterContentFilled(key, doc[key])) return true;
   }

@@ -1,8 +1,28 @@
+import { toDateOnlyString } from '@/utils/dateOnly';
+
+const VITAL_DATE_KEYS = [
+  'date_of_birth',
+  'drivers_license_issue_date',
+  'drivers_license_expiration_date',
+] as const;
+
+function normalizeVitalDates(
+  vital: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  if (!vital || typeof vital !== 'object') return {};
+  const next = { ...vital };
+  for (const key of VITAL_DATE_KEYS) {
+    const normalized = toDateOnlyString(next[key] as string | Date | null | undefined);
+    if (normalized) next[key] = normalized;
+  }
+  return next;
+}
+
 export function applySection1AIPatch(currentData: any, patch: any) {
-  const nextVital = {
+  const nextVital = normalizeVitalDates({
     ...(currentData?.vital_info || {}),
     ...(patch?.vital_info || {}),
-  };
+  });
 
   const hasExistingVital = Object.values(currentData?.vital_info || {}).some(
     value => value !== null && value !== undefined && String(value).trim() !== '',
@@ -42,7 +62,7 @@ export function applySection1AIPatch(currentData: any, patch: any) {
       }
       return {
         ...currentData,
-        vital_info: mergedVital,
+        vital_info: normalizeVitalDates(mergedVital),
         next_of_kin: currentData?.next_of_kin || [],
         executor_trustee: currentData?.executor_trustee || [],
         additional_contacts: currentData?.additional_contacts || [],

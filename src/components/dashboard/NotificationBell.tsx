@@ -6,6 +6,7 @@ import { Bell, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@common/ui/utils';
 import { useIsMobile } from '@/components/MobileBottomSheet';
+import { listDashboardAiPatches } from '@/utils/aiDashboardPatchCache';
 import {
   filterVisibleNotices,
   getReadNoticeIds,
@@ -15,6 +16,8 @@ import {
   markNoticeToasted,
   type DashboardNotice,
 } from '@/utils/dashboardNotifications';
+import { isAiReviewRead } from '@/utils/vaultAlertState';
+import { useListOwnerAiDocumentsQuery } from '@/services/aiDocumentsApi';
 
 const MAX_COUNT = 12;
 
@@ -107,6 +110,14 @@ export function NotificationBell({
   const panelRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
 
+  // Warm RTK document cache so vault activity opens without a loading spinner.
+  useListOwnerAiDocumentsQuery(undefined, {
+    pollingInterval: 60_000,
+    refetchOnMountOrArgChange: 60,
+    refetchOnFocus: false,
+    refetchOnReconnect: true,
+  });
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -140,8 +151,17 @@ export function NotificationBell({
   useEffect(() => {
     const refresh = () => setStorageTick(n => n + 1);
     window.addEventListener('orderly-notices-read-changed', refresh);
-    return () =>
+    window.addEventListener('orderly-vault-alerts-changed', refresh);
+    window.addEventListener('orderly-ai-patch-stashed', refresh);
+    window.addEventListener('orderly-ai-section-reviewed', refresh);
+    window.addEventListener('orderly-ai-section-persisted', refresh);
+    return () => {
       window.removeEventListener('orderly-notices-read-changed', refresh);
+      window.removeEventListener('orderly-vault-alerts-changed', refresh);
+      window.removeEventListener('orderly-ai-patch-stashed', refresh);
+      window.removeEventListener('orderly-ai-section-reviewed', refresh);
+      window.removeEventListener('orderly-ai-section-persisted', refresh);
+    };
   }, []);
 
   useEffect(() => {
@@ -159,10 +179,23 @@ export function NotificationBell({
     return getReadNoticeIds();
   }, [storageTick]);
 
-  const unreadCount = useMemo(
+  const unreadNoticeCount = useMemo(
     () => visibleNotices.filter(notice => !readIds.has(notice.id)).length,
     [visibleNotices, readIds],
   );
+
+  const unreadAiReviewCount = useMemo(() => {
+    void storageTick;
+    return listDashboardAiPatches().filter(entry => {
+      const sectionId = String(entry.section_id || '').trim();
+      const fileId = String(entry.file_id || '').trim();
+      if (!sectionId || sectionId === 'overview' || !fileId) return false;
+      return !isAiReviewRead(sectionId, fileId);
+    }).length;
+  }, [storageTick]);
+
+  // Bell badge = notices + AI fills waiting in the review inbox.
+  const unreadCount = unreadNoticeCount + unreadAiReviewCount;
 
   const needsYouCount = useMemo(
     () =>
@@ -170,11 +203,14 @@ export function NotificationBell({
         notice =>
           !readIds.has(notice.id) &&
           (notice.tone === 'warn' || notice.tone === 'critical'),
-      ).length,
-    [visibleNotices, readIds],
+      ).length + unreadAiReviewCount,
+    [visibleNotices, readIds, unreadAiReviewCount],
   );
 
   const badge = unreadCount > 9 ? '9+' : String(unreadCount);
+
+  /** Prefer the vault review inbox over the lightweight notices tray. */
+  const openViaReviewInbox = Boolean(onOpenReviewInbox);
 
   useEffect(() => {
     if (!toastReady) return;
@@ -247,16 +283,16 @@ export function NotificationBell({
     onSelect(notice);
   };
 
-  // Opening the tray counts as seeing the list — clear the badge so it
-  // does not stick after the user has reviewed notifications.
+  // Opening the lightweight tray counts as seeing notices — clear that badge
+  // slice. Vault activity dialog marks notices + AI reviews when it opens.
   useEffect(() => {
-    if (!open) return;
+    if (!open || openViaReviewInbox) return;
     const ids = visibleNotices.map(notice => notice.id);
     if (ids.length === 0) return;
     const unreadIds = ids.filter(id => !getReadNoticeIds().has(id));
     if (unreadIds.length === 0) return;
     markAllNoticesRead(ids);
-  }, [open, visibleNotices]);
+  }, [open, visibleNotices, openViaReviewInbox]);
 
   const highlightId = useMemo(() => {
     const firstUrgent = visibleNotices.find(
@@ -528,7 +564,7 @@ export function NotificationBell({
   );
 
   const mobilePanel =
-    open && isMobile && mounted
+    open && !openViaReviewInbox && isMobile && mounted
       ? createPortal(
           <div
             ref={panelRef}
@@ -545,7 +581,7 @@ export function NotificationBell({
       : null;
 
   const desktopPanel =
-    open && !isMobile && mounted
+    open && !openViaReviewInbox && !isMobile && mounted
       ? createPortal(
           <div className="fixed inset-0 z-[120]" role="presentation">
             <button
@@ -582,19 +618,27 @@ export function NotificationBell({
         type="button"
         onClick={event => {
           event.stopPropagation();
+          if (onOpenReviewInbox) {
+            onOpenReviewInbox();
+            return;
+          }
           setOpen(prev => !prev);
         }}
         className={cn(
           'relative flex h-10 w-10 items-center justify-center rounded-full text-[#213D59] transition active:scale-95',
-          open ? 'bg-slate-100' : 'hover:bg-slate-50',
+          open && !openViaReviewInbox ? 'bg-slate-100' : 'hover:bg-slate-50',
           buttonClassName,
         )}
         aria-label={
           unreadCount
-            ? `Notifications, ${unreadCount} unread`
-            : 'Notifications'
+            ? openViaReviewInbox
+              ? `What needs attention, ${unreadCount} waiting`
+              : `Notifications, ${unreadCount} unread`
+            : openViaReviewInbox
+              ? 'What needs attention'
+              : 'Notifications'
         }
-        aria-expanded={open}
+        aria-expanded={openViaReviewInbox ? undefined : open}
       >
         <Bell className="h-[18px] w-[18px]" />
         {unreadCount > 0 ? (

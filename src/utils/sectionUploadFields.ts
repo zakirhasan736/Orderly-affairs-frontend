@@ -25,10 +25,11 @@ export function createEmptyItemFromFields(fields: SectionFieldConfig[]) {
 function plainUploadText(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return String(value).trim();
+    // Keep spaces — callers that need emptiness should trim at the call site.
+    return String(value);
   }
   if (Array.isArray(value)) {
-    return value.map(plainUploadText).filter(Boolean).join(', ');
+    return value.map(plainUploadText).filter(part => part.trim()).join(', ');
   }
   if (typeof value === 'object') {
     const record = value as Record<string, unknown>;

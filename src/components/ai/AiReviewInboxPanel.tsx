@@ -55,9 +55,9 @@ import {
 } from '@/components/ai/AiInboxDocumentReviewDialog';
 import {
   deleteAIDocument,
-  listOwnerAiDocuments,
   type OwnerAiDocument,
 } from '@/services/aiDocumentUpload';
+import { useListOwnerAiDocumentsQuery } from '@/services/aiDocumentsApi';
 import { clearAiUploadMeta } from '@/utils/aiDocumentUploadUi';
 import { buildAiUploadReviewSummary } from '@/utils/aiUploadReviewSummary';
 import { applyEditedFactsToStash } from '@/utils/aiReviewAcceptSave';
@@ -455,6 +455,7 @@ function AlertActions({
  */
 export function AiReviewInboxPanel({
   onNavigateToSection,
+  onOpenNotificationSettings,
   ownerName,
   ownerEmail,
   reminders = [],
@@ -462,6 +463,7 @@ export function AiReviewInboxPanel({
   className,
 }: {
   onNavigateToSection?: (sectionId: string) => void;
+  onOpenNotificationSettings?: () => void;
   ownerName?: string | null;
   ownerEmail?: string | null;
   reminders?: OverviewExpiryAlert[];
@@ -480,13 +482,28 @@ export function AiReviewInboxPanel({
     null,
   );
   const [fileSearch, setFileSearch] = useState('');
-  const [serverDocs, setServerDocs] = useState<OwnerAiDocument[]>([]);
-  const [filesLoading, setFilesLoading] = useState(false);
   const [previewFile, setPreviewFile] = useState<{
     fileId: string;
     fileName: string;
     mimeType?: string;
   } | null>(null);
+
+  // RTK cache — reopen vault activity / switch tabs won't re-hit the API
+  // unless data is older than 60s (uploads/deletes invalidate tags).
+  const {
+    data: serverDocs = [],
+    isLoading: filesLoading,
+  } = useListOwnerAiDocumentsQuery(undefined, {
+    pollingInterval: 45_000,
+    refetchOnMountOrArgChange: 60,
+    refetchOnFocus: false,
+    refetchOnReconnect: true,
+  });
+
+  useEffect(() => {
+    if (filesLoading && serverDocs.length === 0) return;
+    hydrateAiUploadHistoryFromServer(serverDocs);
+  }, [serverDocs, filesLoading]);
 
   useEffect(() => {
     const onStash = () => {
@@ -534,26 +551,6 @@ export function AiReviewInboxPanel({
       window.removeEventListener(OPEN_VAULT_ACTIVITY_TAB_EVENT, onOpenTab);
     };
   }, [routing]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadServerDocs = async () => {
-      setFilesLoading(true);
-      try {
-        const docs = await listOwnerAiDocuments();
-        if (!cancelled) {
-          setServerDocs(docs);
-          hydrateAiUploadHistoryFromServer(docs);
-        }
-      } finally {
-        if (!cancelled) setFilesLoading(false);
-      }
-    };
-    void loadServerDocs();
-    return () => {
-      cancelled = true;
-    };
-  }, [stashTick, batch.jobs.length, tab]);
 
   const patches = useMemo(
     () => listDashboardAiPatches(),
@@ -994,20 +991,13 @@ export function AiReviewInboxPanel({
       routing?.clearAllPendingForFile(fileId);
       clearAiUploadMeta(fileId);
       try {
-        await deleteAIDocument(fileId);
-      } catch {
-        // still clear local UI
-      }
+      await deleteAIDocument(fileId);
+    } catch {
+      // still clear local UI
+    }
       removeAiUploadHistoryItem({ fileId });
     } else {
       routing?.clearPendingForSection(reviewDoc.sectionId);
-    }
-    try {
-      const docs = await listOwnerAiDocuments();
-      setServerDocs(docs);
-      hydrateAiUploadHistoryFromServer(docs);
-    } catch {
-      // ignore
     }
     setReviewTick(value => value + 1);
     setReviewDoc(null);
@@ -1035,9 +1025,6 @@ export function AiReviewInboxPanel({
       } else {
         removeAiUploadHistoryItem({ id: item.id });
       }
-      const docs = await listOwnerAiDocuments();
-      setServerDocs(docs);
-      hydrateAiUploadHistoryFromServer(docs);
       toast.success('Document deleted');
     } catch {
       toast.error('Could not delete document');
@@ -1120,13 +1107,24 @@ export function AiReviewInboxPanel({
               clear what you&apos;re done with.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={markAllCurrentRead}
-            className="shrink-0 rounded-md border border-white/20 bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-white/15"
-          >
-            Mark all read
-          </button>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <button
+              type="button"
+              onClick={markAllCurrentRead}
+              className="rounded-md border border-white/20 bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-white/15"
+            >
+              Mark all read
+            </button>
+            {onOpenNotificationSettings ? (
+              <button
+                type="button"
+                onClick={onOpenNotificationSettings}
+                className="text-[11px] font-medium text-white/70 underline-offset-2 transition hover:text-white hover:underline"
+              >
+                Notification settings
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <nav

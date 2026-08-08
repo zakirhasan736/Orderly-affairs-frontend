@@ -1,12 +1,13 @@
 
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@common/ui/button';
 import { Input } from '@common/ui/input';
 import { Label } from '@common/ui/label';
-import { Eye, FileText, Upload, X } from 'lucide-react';
+import { Eye, EyeOff, FileText, Upload, X } from 'lucide-react';
 import { getSignedUploadUrl, uploadFile } from '@/libs/api/upload';
 import { VaultFieldUploadThumb } from '@/components/vault/VaultFieldUploadThumb';
+import { cn } from '@common/ui/utils';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
@@ -53,8 +54,14 @@ export function TextInputWithUpload({
   helperText,
   placeholder,
   disabled = false,
+  sensitive = false,
 }: any) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [showSecret, setShowSecret] = useState(false);
+
+  useEffect(() => {
+    setShowSecret(false);
+  }, [label, sensitive]);
 
   const unwrapText = (raw: unknown): string => {
     if (raw === null || raw === undefined) return '';
@@ -182,13 +189,37 @@ export function TextInputWithUpload({
       )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-        <Input
-          value={normalizedValue?.text || ''}
-          onChange={handleTextChange}
-          placeholder={placeholder}
-          readOnly={disabled}
-          className={`w-full flex-1${disabled ? ' cursor-default bg-slate-50' : ''}`}
-        />
+        <div className="relative min-w-0 flex-1">
+          <Input
+            value={normalizedValue?.text || ''}
+            onChange={handleTextChange}
+            placeholder={placeholder}
+            readOnly={disabled}
+            autoComplete={sensitive ? 'off' : undefined}
+            type={sensitive && !showSecret ? 'password' : 'text'}
+            className={cn(
+              'w-full',
+              disabled && 'cursor-default bg-slate-50',
+              sensitive && 'pr-20',
+            )}
+          />
+          {sensitive ? (
+            <button
+              type="button"
+              data-oa-view-ok
+              onClick={() => setShowSecret(prev => !prev)}
+              className="absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              aria-label={showSecret ? 'Hide value' : 'Show value'}
+            >
+              {showSecret ? (
+                <EyeOff className="h-3.5 w-3.5" />
+              ) : (
+                <Eye className="h-3.5 w-3.5" />
+              )}
+              <span>{showSecret ? 'Hide' : 'Show'}</span>
+            </button>
+          ) : null}
+        </div>
         {!disabled && (
           <Button
             type="button"

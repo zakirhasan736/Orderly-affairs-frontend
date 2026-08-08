@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -48,7 +48,6 @@ import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { insurancePoliciesAreDuplicates, collapseInsurancePolicies } from '@/utils/aiItemDedup';
 
-import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -342,6 +341,21 @@ export default function Section7InsurancePolicies({
       ? [data['7A']]
       : [];
   const show7A = !activeSubsection || activeSubsection === '7A';
+
+  // One-time collapse of duplicate cards created by repeated Accept / partner seeds.
+  useEffect(() => {
+    if (!Array.isArray(policies) || policies.length <= 1) return;
+    const collapsed = collapseInsurancePolicies(
+      policies as Record<string, unknown>[],
+    );
+    if (collapsed.length >= policies.length) return;
+    onChange({
+      ...data,
+      '7A': collapsed,
+    });
+    // Only re-run when the card count changes; avoid fighting live edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [policies.length]);
 
   const reminderRecipientOptions = useMemo(() => {
     const options: ReminderRecipientOption[] = [];
@@ -721,7 +735,7 @@ export default function Section7InsurancePolicies({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-purple-600" />
-              {getVaultSubsectionDisplayId('7', '7A')}. {SECTION_7A.title}
+              {SECTION_7A.title}
             </CardTitle>
 
             <Button

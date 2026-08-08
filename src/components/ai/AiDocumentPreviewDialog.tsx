@@ -138,9 +138,26 @@ export function AiDocumentPreviewDialog({
     resolvedMime || mimeType || undefined,
   );
 
+  const openPdfInBrowser = () => {
+    if (!objectUrl) return;
+    // Blob URL without the download attribute opens Chrome's built-in viewer.
+    window.open(objectUrl, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92dvh] w-[min(100vw-1.5rem,44rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+      {/*
+        Avoid CSS transform on this dialog: Chrome's PDF viewer paints blank
+        inside transformed ancestors (Radix centers with translate + zoom).
+      */}
+      <DialogContent
+        className={cn(
+          'flex max-h-[92dvh] w-[min(100vw-1.5rem,44rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl',
+          '!left-[max(0.75rem,calc(50%-min(22rem,calc(50vw-0.75rem))))] !right-auto !top-[4vh]',
+          '!translate-x-0 !translate-y-0',
+          'data-[state=open]:!zoom-in-100 data-[state=closed]:!zoom-out-100',
+        )}
+      >
         <DialogHeader className="shrink-0 border-b border-slate-100 px-4 py-3.5 pr-12 text-left sm:px-5">
           <DialogTitle className="truncate text-[15px] font-semibold text-[#213D59]">
             {title}
@@ -190,20 +207,32 @@ export function AiDocumentPreviewDialog({
 
           {!loading && !error && objectUrl && kind === 'pdf' ? (
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <iframe
+              <object
+                data={`${objectUrl}#toolbar=1&navpanes=0&view=FitH`}
+                type="application/pdf"
                 title={title}
-                src={`${objectUrl}#toolbar=1&navpanes=0&view=FitH`}
                 className="h-[min(70dvh,560px)] w-full border-0 bg-white"
-              />
-              <div className="border-t border-slate-100 px-3 py-2 text-center">
+              >
+                <iframe
+                  title={title}
+                  src={`${objectUrl}#toolbar=1&navpanes=0&view=FitH`}
+                  className="h-[min(70dvh,560px)] w-full border-0 bg-white"
+                />
+              </object>
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t border-slate-100 px-3 py-2 text-center">
+                <button
+                  type="button"
+                  onClick={openPdfInBrowser}
+                  className="text-xs font-medium text-[#2B5A8C] underline-offset-2 hover:underline"
+                >
+                  Open PDF in new tab
+                </button>
                 <a
                   href={objectUrl}
                   download={title}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs font-medium text-[#2B5A8C] underline-offset-2 hover:underline"
+                  className="text-xs font-medium text-slate-500 underline-offset-2 hover:underline"
                 >
-                  Open / download PDF
+                  Download
                 </a>
               </div>
             </div>

@@ -76,17 +76,6 @@ function getTypeConfig(type: MessageData['messageType']) {
   }
 }
 
-function formatDate(dateString?: string) {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  if (Number.isNaN(date.valueOf())) return dateString;
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
 function formatDateTime(dateString?: string) {
   if (!dateString) return 'Not saved yet';
   const date = new Date(dateString);
@@ -122,7 +111,7 @@ export function MessageCard({
   const typeConfig = getTypeConfig(item.messageType);
   const deliveryLabel =
     item.deliveryTrigger === 'date'
-      ? formatDate(item.deliveryDate) || 'Scheduled date'
+      ? formatDateTime(item.deliveryDate) || 'Scheduled date'
       : 'Upon death';
   const actionLabel = item.messageType === 'letter' ? 'View' : 'Play';
 

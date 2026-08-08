@@ -4,7 +4,6 @@ import React, { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import {
-  getVaultSectionDisplayNumber,
   VAULT_NAVIGATION,
 } from '@/utils/vaultNavigation';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
@@ -161,7 +160,7 @@ export function OverviewSectionShortcuts({
                       : 'bg-[#213D59] text-white',
                 )}
               >
-                {getVaultSectionDisplayNumber(sectionId)}
+                {(title || '?').trim().charAt(0).toUpperCase()}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-slate-900">

@@ -27,6 +27,15 @@ export function inferIdentityDocumentLabel(args: {
   if (/school|student|campus/i.test(text)) return 'School ID';
   if (/birth\s*certificate/i.test(text)) return 'Birth certificate';
   if (/social\s*security|ssn\s*card/i.test(text)) return 'Social Security card';
+  // State ID backs often print a roadside assistance line — still a license/ID.
+  if (
+    /\broadside\s*assistance\b/i.test(text) &&
+    /\b(dob|date\s*of\s*birth|class\s*:|magnetic|barcode|identification)\b/i.test(
+      text,
+    )
+  ) {
+    return "Driver's license / ID";
+  }
   if (/driver|licen[cs]e|state\s*id|identification|photo\s*id|id\s*card/i.test(text)) {
     return "Driver's license / ID";
   }

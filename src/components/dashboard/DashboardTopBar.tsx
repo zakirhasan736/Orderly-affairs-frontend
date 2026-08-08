@@ -31,7 +31,10 @@ function HeaderProgressRing({
   const offset = circumference - (pct / 100) * circumference;
 
   return (
-    <div className="flex items-center gap-2.5 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm">
+    <div
+      data-tour="tour-progress-explain"
+      className="flex items-center gap-2.5 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm"
+    >
       <div className="relative h-10 w-10 shrink-0">
         <svg className="h-10 w-10 -rotate-90" viewBox="0 0 44 44" aria-hidden>
           <circle
@@ -316,7 +319,10 @@ export function MobileTopBar({
       </div>
 
       {showProgress ? (
-        <div className="flex items-end justify-between gap-3 border-t border-[rgba(33, 61, 89,0.08)] bg-[var(--paper)] px-4 py-2.5">
+        <div
+          data-tour="tour-progress-explain"
+          className="flex items-end justify-between gap-3 border-t border-[rgba(33, 61, 89,0.08)] bg-[var(--paper)] px-4 py-2.5"
+        >
           <div className="min-w-0">
             <h1 className="text-[18px] font-bold leading-tight text-[#213D59]">
               {title}

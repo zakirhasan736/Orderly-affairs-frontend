@@ -23,8 +23,13 @@ export const OwnerLetterModal: React.FC<OwnerLetterModalProps> = ({
     // In real implementation, this would download the actual PDF
   };
 
+  const firstName =
+    String(nokData.full_name || '')
+      .trim()
+      .split(/\s+/)[0] || 'Friend';
+
   const ownerLetter = `
-Dear ${nokData.full_name},
+Dear ${firstName},
 
 If you are reading this letter, it means you have been granted access to my Orderly Affairs Vault. Thank you for taking on this important responsibility during what I know is a difficult time.
 

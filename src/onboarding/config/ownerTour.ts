@@ -5,6 +5,10 @@ export type OwnerTourStep = {
   description: string;
   /** Force this vault section visible before spotlight (usually dashboard). */
   ensureSection?: string;
+  /** Switch the People & messages hub to this tab before spotlight. */
+  peopleTab?: 'access' | 'nok-letters' | 'messages';
+  /** Force tooltip placement relative to the spotlight target. */
+  tooltipPlacement?: 'auto' | 'beside' | 'below';
 };
 
 /**
@@ -50,20 +54,40 @@ export const ownerTour: OwnerTourStep[] = [
     ensureSection: 'dashboard',
     title: 'Continue where it matters',
     description:
-      'These cards group everyday vault work first — money & property, documents, and life details — with letters and final wishes for loved ones at the bottom. Open any card to fill that section, or review what AI already drafted from a document.',
+      "Start with the basics: money and property, documents, and key life details. Letters and final wishes for your loved ones are grouped at the bottom for when you're ready. Open any card to fill it in, or check what AI has already pulled from documents you've uploaded.",
   },
   {
-    section: 'People',
-    selector: '.overview-people-hub',
+    section: 'Access',
+    selector: '[data-tour="tour-people-manage-access"]',
     ensureSection: 'dashboard',
-    title: 'People, letter & messages',
+    peopleTab: 'access',
+    title: 'Access',
     description:
-      'This is the trust hub: who may access your vault, your Next of Kin letter (the note most people write first), and personal messages (text, audio, or video) for specific people. Keep this current — it is the most important information for the people you trust.',
+      "This is your trust hub — the three ways you share information with the people you choose.\n\nWho can see your vault, and what they're allowed to view or manage.",
+  },
+  {
+    section: 'Letter',
+    selector: '[data-tour="tour-people-tab-letter"]',
+    ensureSection: 'dashboard',
+    peopleTab: 'nok-letters',
+    title: 'Letter',
+    description:
+      'Your note to next of kin, usually the first thing people write here.',
+  },
+  {
+    section: 'Messages',
+    selector: '[data-tour="tour-people-tab-messages"]',
+    ensureSection: 'dashboard',
+    peopleTab: 'messages',
+    title: 'Messages',
+    description:
+      "Text, audio, or video for specific people, saved for when they need it.\n\nKeep this current. It's the information your loved ones will rely on most.",
   },
   {
     section: 'Sidebar',
     selector: '.sidebar-navigation',
     ensureSection: 'dashboard',
+    tooltipPlacement: 'beside',
     title: 'All vault sections',
     description:
       'Open any of the 21 sections here anytime. Hover an added item (Pet #1, a policy card, etc.) and the grip becomes trash if you need to remove it. You do not have to finish in order.',
@@ -72,9 +96,10 @@ export const ownerTour: OwnerTourStep[] = [
     section: 'Progress',
     selector: '[data-tour="tour-progress-explain"]',
     ensureSection: 'dashboard',
+    tooltipPlacement: 'below',
     title: 'What the % means',
     description:
-      'This bar and the rings beside each section show field-fill progress — how many tracked fields have a value. 100% means the fields are filled, not that a document was uploaded.',
+      'This % and the rings beside each section show field-fill progress — how many tracked fields have a value. 100% means the fields are filled, not that a document was uploaded.',
   },
   {
     section: 'After upload',
@@ -82,12 +107,13 @@ export const ownerTour: OwnerTourStep[] = [
     ensureSection: 'dashboard',
     title: 'Finish blanks after AI fills',
     description:
-      'Path: upload a document → Accept the AI fill → open that section. Remaining blanks show a sticky “Fill empty fields” bar (and a sparkle on incomplete items). Use it to walk through only what’s still empty.',
+      "After AI fills a section from your documents, open it to check the work. Anything still empty shows a sparkle icon, and a 'Fill empty fields' bar lets you jump straight to just what's missing — no need to redo the whole section.",
   },
   {
     section: 'Home',
     selector: '.owner-dashboard-item',
     ensureSection: 'dashboard',
+    tooltipPlacement: 'beside',
     title: 'Back to overview anytime',
     description:
       'Tap Dashboard to return to this overview — progress, document inbox, tasks, and people. When you are ready, upload another document or open a task card and keep going.',

@@ -101,8 +101,8 @@ export function resolveNokLetterSignerName(
 }
 
 /**
- * Build "Dear Amber Furst," without duplicating a first name that was already
- * typed into the greeting field (e.g. greeting "Dear Amber" + to "Amber Furst").
+ * Build "Dear Amber," using only the recipient's first name, without duplicating
+ * a first name that was already typed into the greeting field.
  */
 export function formatNokLetterSalutation(
   greeting?: string | null,
@@ -114,39 +114,38 @@ export function formatNokLetterSalutation(
   const rawTo = dedupeConsecutiveNameWords(
     String(letterTo || '').trim() || '[Next of Kin Name]',
   );
+  const firstName = rawTo.split(/\s+/)[0] || rawTo;
 
   const withComma = (value: string) =>
     value.endsWith(',') ? value : `${value},`;
 
   const greetingLower = rawGreeting.toLowerCase();
+  const firstLower = firstName.toLowerCase();
   const toLower = rawTo.toLowerCase();
 
-  // Greeting already includes the full recipient name.
+  // Greeting already includes the first name or full recipient name.
   if (
+    greetingLower === firstLower ||
     greetingLower === toLower ||
+    greetingLower.endsWith(` ${firstLower}`) ||
     greetingLower.endsWith(` ${toLower}`) ||
     greetingLower.endsWith(toLower)
   ) {
+    // If greeting still has a full name, trim to first name only.
+    if (
+      greetingLower.endsWith(` ${toLower}`) ||
+      greetingLower === toLower
+    ) {
+      const withoutFull = rawGreeting
+        .slice(0, rawGreeting.length - rawTo.length)
+        .trimEnd();
+      const base = withoutFull || NOK_LETTER_DEFAULTS.letter_greeting;
+      return withComma(`${base} ${firstName}`.trim());
+    }
     return withComma(rawGreeting);
   }
 
-  const firstName = rawTo.split(/\s+/)[0] || '';
-  if (firstName && firstName.toLowerCase() !== toLower) {
-    const firstLower = firstName.toLowerCase();
-    // "Dear Amber" + "Amber Furst" → "Dear Amber Furst"
-    if (
-      greetingLower === firstLower ||
-      greetingLower.endsWith(` ${firstLower}`)
-    ) {
-      const withoutFirst = rawGreeting
-        .slice(0, rawGreeting.length - firstName.length)
-        .trimEnd();
-      const base = withoutFirst || NOK_LETTER_DEFAULTS.letter_greeting;
-      return withComma(`${base} ${rawTo}`);
-    }
-  }
-
-  return withComma(`${rawGreeting} ${rawTo}`);
+  return withComma(`${rawGreeting} ${firstName}`);
 }
 
 export function buildNokLetterPreviewText(

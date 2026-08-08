@@ -363,9 +363,63 @@ function getInsuranceVehicleFingerprint(item: Record<string, unknown>): string {
   return '';
 }
 
+/** Parse brand/make (+ optional model) from vin/ymm/brand fingerprints. */
+function parseInsuranceVehicleFingerprint(fp: string): {
+  vin: string;
+  brand: string;
+  model: string;
+} {
+  if (!fp) return { vin: '', brand: '', model: '' };
+  if (fp.startsWith('vin:')) {
+    return { vin: fp.slice(4), brand: '', model: '' };
+  }
+  if (fp.startsWith('brand:')) {
+    return { vin: '', brand: fp.slice(6), model: '' };
+  }
+  if (fp.startsWith('ymm:')) {
+    const [, make = '', model = ''] = fp.slice(4).split('|');
+    return { vin: '', brand: make, model };
+  }
+  return { vin: '', brand: '', model: '' };
+}
+
+/**
+ * Treat ymm:|bmw|ix and brand:bmw as the same car; only conflict when both
+ * sides name different makes/models (or different VINs).
+ */
+function insuranceVehicleFingerprintsMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+
+  const parsedA = parseInsuranceVehicleFingerprint(a);
+  const parsedB = parseInsuranceVehicleFingerprint(b);
+
+  if (parsedA.vin || parsedB.vin) {
+    return Boolean(parsedA.vin && parsedB.vin && parsedA.vin === parsedB.vin);
+  }
+
+  if (!parsedA.brand || !parsedB.brand || parsedA.brand !== parsedB.brand) {
+    return false;
+  }
+
+  if (
+    parsedA.model &&
+    parsedB.model &&
+    parsedA.model !== parsedB.model &&
+    !parsedA.model.includes(parsedB.model) &&
+    !parsedB.model.includes(parsedA.model)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * Honda / Jeep / Toyota vehicle policies must not collapse into one card when
- * notes, display names, or insured vehicles differ — even if carrier + type match.
+ * insured vehicles clearly differ — even if carrier + type match.
+ *
+ * Same-vehicle re-uploads with slightly different OCR notes must still merge.
  */
 function insuranceIdentityConflicts(
   existing: Record<string, unknown>,
@@ -373,7 +427,13 @@ function insuranceIdentityConflicts(
 ): boolean {
   const vehicleA = getInsuranceVehicleFingerprint(existing);
   const vehicleB = getInsuranceVehicleFingerprint(incoming);
-  if (vehicleA && vehicleB && vehicleA !== vehicleB) return true;
+  if (vehicleA && vehicleB) {
+    if (insuranceVehicleFingerprintsMatch(vehicleA, vehicleB)) {
+      // Same insured vehicle → ignore noisy note/name differences.
+      return false;
+    }
+    return true;
+  }
 
   const nameA = getInsuranceDisplayName(existing);
   const nameB = getInsuranceDisplayName(incoming);
@@ -384,7 +444,12 @@ function insuranceIdentityConflicts(
     !nameA.includes(nameB) &&
     !nameB.includes(nameA)
   ) {
-    return true;
+    // Names that both embed different vehicle brands are distinct policies.
+    // Generic OCR title differences ("Allstate Insurance" vs "Allstate Policy")
+    // must not block company+type merges.
+    const brandA = nameA.match(VEHICLE_BRAND_RE)?.[1]?.toLowerCase() || '';
+    const brandB = nameB.match(VEHICLE_BRAND_RE)?.[1]?.toLowerCase() || '';
+    if (brandA && brandB && brandA !== brandB) return true;
   }
 
   const notesA = getInsuranceNotes(existing);
@@ -396,25 +461,50 @@ function insuranceIdentityConflicts(
     !notesA.includes(notesB) &&
     !notesB.includes(notesA)
   ) {
-    return true;
+    const brandA = notesA.match(VEHICLE_BRAND_RE)?.[1]?.toLowerCase() || '';
+    const brandB = notesB.match(VEHICLE_BRAND_RE)?.[1]?.toLowerCase() || '';
+    // Only treat notes as a conflict when they clearly name different vehicles.
+    if (brandA && brandB && brandA !== brandB) return true;
   }
 
   return false;
 }
 
+function insuranceTypesCompatible(
+  existingType: string,
+  incomingType: string,
+  existingOther: string,
+  incomingOther: string,
+): boolean {
+  if (!existingType || !incomingType || existingType !== incomingType) {
+    return false;
+  }
+  if (
+    existingType === 'other' &&
+    existingOther &&
+    incomingOther &&
+    existingOther !== incomingOther
+  ) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * Same insurance policy (renewal / re-upload) when:
- * - both have the same policy number (and no conflicting vehicle/notes/name), OR
- * - thin seed ↔ fuller extract for the same company+type (non-conflicting identity)
+ * - both have the same policy number (and no conflicting vehicle), OR
+ * - same company+type with the same vehicle fingerprint, OR
+ * - same vehicle fingerprint + type even when company is missing on a card, OR
+ * - same company+type for non-vehicle policies, OR
+ * - thin seed ↔ fuller extract for the same company+type
  *
- * Conflicting policy numbers, notes, names, or insured vehicles → separate cards.
- * Three Vehicle policies (Honda / Jeep / Toyota) stay three cards.
+ * Distinct Honda / Jeep / Toyota Vehicle policies stay separate cards.
  */
 export function insurancePoliciesAreDuplicates(
   existing: Record<string, unknown>,
   incoming: Record<string, unknown>,
 ): boolean {
-  // Different cars / notes / policy names → never the same card.
+  // Different cars / strongly conflicting names → never the same card.
   if (insuranceIdentityConflicts(existing, incoming)) {
     return false;
   }
@@ -437,28 +527,57 @@ export function insurancePoliciesAreDuplicates(
     incoming.policy_type_other ?? incoming.type_other,
   );
 
+  const typesMatch = insuranceTypesCompatible(
+    existingType,
+    incomingType,
+    existingOther,
+    incomingOther,
+  );
+  const companiesCompatible =
+    !existingCompany ||
+    !incomingCompany ||
+    companiesMatch(existingCompany, incomingCompany);
   const companyAndTypeMatch =
     Boolean(existingCompany) &&
     Boolean(incomingCompany) &&
-    Boolean(existingType) &&
-    Boolean(incomingType) &&
-    companiesMatch(existingCompany, incomingCompany) &&
-    existingType === incomingType &&
-    !(
-      existingType === 'other' &&
-      existingOther &&
-      incomingOther &&
-      existingOther !== incomingOther
-    );
+    typesMatch &&
+    companiesMatch(existingCompany, incomingCompany);
+
+  const vehicleA = getInsuranceVehicleFingerprint(existing);
+  const vehicleB = getInsuranceVehicleFingerprint(incoming);
+  if (vehicleA && vehicleB) {
+    if (!insuranceVehicleFingerprintsMatch(vehicleA, vehicleB)) {
+      return false;
+    }
+    // Same car: merge when types align and companies don't contradict.
+    // Sidebar often shows "Bmw · Vehicle" cards with no policy_company.
+    return typesMatch && companiesCompatible;
+  }
 
   if (!companyAndTypeMatch) {
-    // Numbers already handled; without company+type never soft-merge.
     return false;
   }
 
-  // One-sided policy number or no numbers: only thin seed ↔ fuller extract.
-  // Two full Vehicle policies (Honda / Jeep / Toyota) with notes stay separate.
-  return isThinInsuranceCard(existing) || isThinInsuranceCard(incoming);
+  const isVehicleType =
+    existingType === 'vehicle' ||
+    existingType === 'auto' ||
+    incomingType === 'vehicle' ||
+    incomingType === 'auto';
+
+  // Home / life / health / etc.: same carrier + type is the same policy card.
+  if (!isVehicleType) {
+    return true;
+  }
+
+  // One side identified the vehicle; only absorb a thin company/type seed into it.
+  if (vehicleA || vehicleB) {
+    return isThinInsuranceCard(existing) || isThinInsuranceCard(incoming);
+  }
+
+  // Neither card identifies a vehicle. Prefer collapsing OCR re-accepts of the
+  // same carrier shell (see Allstate sidebar duplicates) over keeping anonymous
+  // multi-car placeholders. Distinct cars should carry brand/VIN in notes.
+  return true;
 }
 
 /** Collapse near-duplicate extracted items into one card before apply. */

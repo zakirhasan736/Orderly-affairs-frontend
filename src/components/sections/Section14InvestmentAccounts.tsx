@@ -55,7 +55,6 @@ import { useAiMultiItemAutofill } from '@/hooks/useAiMultiItemAutofill';
 import { investmentAccountsAreDuplicates } from '@/utils/aiItemDedup';
 import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
 
-import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -544,7 +543,7 @@ export default function Section14InvestmentAccounts({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="flex items-center gap-2">
                 <PiggyBank className="h-5 w-5 text-teal-600" />
-                {getVaultSubsectionDisplayId('14', '14A')}. {SECTION_14A.title}
+                {SECTION_14A.title}
               </CardTitle>
 
               <Button

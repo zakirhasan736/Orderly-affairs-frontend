@@ -56,7 +56,6 @@ import { createEmptyItemFromFields } from '@/utils/sectionUploadFields';
 
 import {
   getVaultSectionDisplayNumber,
-  getVaultSubsectionDisplayId,
 } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
@@ -699,7 +698,7 @@ export default function Section13PasswordsOnlineAccounts({
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2">
                   <KeyRound className="h-5 w-5 text-violet-600" />
-                  {getVaultSubsectionDisplayId('13', '13A')}. {SECTION_13A.title}
+                  {SECTION_13A.title}
                 </CardTitle>
                 <p className="text-sm text-slate-600">{SUBSECTION_SUBTITLE}</p>
               </div>

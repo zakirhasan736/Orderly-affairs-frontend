@@ -241,10 +241,17 @@ function ReorderableNavItem({
         onNavigate();
       }}
       onKeyDown={event => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          if (!didDragRef.current) onNavigate();
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const target = event.target as HTMLElement | null;
+        if (
+          target?.closest(
+            'input, textarea, select, [contenteditable="true"]',
+          )
+        ) {
+          return;
         }
+        event.preventDefault();
+        if (!didDragRef.current) onNavigate();
       }}
       role="button"
       tabIndex={0}
@@ -486,7 +493,7 @@ export function VaultSidebarNavigation({
             </button>
           </div>
 
-          <div className="mt-6" data-tour="tour-progress-explain">
+          <div className="mt-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
               Vault Navigation
             </p>

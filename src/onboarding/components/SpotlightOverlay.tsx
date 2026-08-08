@@ -1,11 +1,20 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+
+export type SpotlightRect = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  right: number;
+  bottom: number;
+};
 
 interface Props {
   targetSelector: string;
-  children: React.ReactNode;
+  children: ReactNode | ((rect: SpotlightRect) => ReactNode);
   onClose?: () => void;
 }
 
@@ -14,12 +23,23 @@ const SCROLL_SETTLE_MS = 140;
 /** Fallback if the browser never fires scroll (target already in view). */
 const ALIGN_FALLBACK_MS = 420;
 
+function toSpotlightRect(box: DOMRect): SpotlightRect {
+  return {
+    top: box.top,
+    left: box.left,
+    width: box.width,
+    height: box.height,
+    right: box.right,
+    bottom: box.bottom,
+  };
+}
+
 export const SpotlightOverlay = ({
   targetSelector,
   children,
   onClose,
 }: Props) => {
-  const [rect, setRect] = useState<DOMRect | null>(null);
+  const [rect, setRect] = useState<SpotlightRect | null>(null);
   /** Hide hole + tooltip until the target has been scrolled into place. */
   const [aligned, setAligned] = useState(false);
 
@@ -43,7 +63,7 @@ export const SpotlightOverlay = ({
 
     const update = () => {
       if (!el || cancelled) return;
-      setRect(el.getBoundingClientRect());
+      setRect(toSpotlightRect(el.getBoundingClientRect()));
     };
 
     const reveal = () => {
@@ -126,6 +146,13 @@ export const SpotlightOverlay = ({
     };
   }, [targetSelector]);
 
+  const content =
+    typeof children === 'function'
+      ? aligned && rect
+        ? children(rect)
+        : null
+      : children;
+
   return (
     <div className="fixed inset-0 z-[999]" onClick={onClose}>
       {/* Solid dim while scrolling — no hole/tooltip until the target settles */}
@@ -170,7 +197,7 @@ export const SpotlightOverlay = ({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22, ease: 'easeOut', delay: 0.04 }}
           >
-            {children}
+            {content}
           </motion.div>
         ) : null}
       </div>

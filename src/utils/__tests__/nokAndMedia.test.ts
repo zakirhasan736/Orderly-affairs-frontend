@@ -50,24 +50,28 @@ describe('nokLetterPreview (Next of Kin letter)', () => {
       { letter_greeting: 'Dear', letter_to: '' },
       person,
     );
-    expect(text).toContain('Alex Casey');
+    expect(text).toContain('Dear Alex,');
+    expect(text).not.toContain('Dear Alex Casey,');
     expect(text).toContain('alex@example.com');
     expect(text).toContain(NOK_LETTER_DEFAULTS.access_url);
     expect(text).toContain('Hall closet');
   });
 
-  it('does not duplicate first name when greeting already includes it', async () => {
+  it('uses only the first name in the letter salutation', async () => {
     const { formatNokLetterSalutation, dedupeConsecutiveNameWords } =
       await import('@/utils/nokLetterPreview');
 
     expect(formatNokLetterSalutation('Dear Amber', 'Amber Furst')).toBe(
-      'Dear Amber Furst,',
+      'Dear Amber,',
     );
     expect(formatNokLetterSalutation('Dear', 'Amber Amber Furst')).toBe(
-      'Dear Amber Furst,',
+      'Dear Amber,',
     );
     expect(formatNokLetterSalutation('Dear Amber Furst', 'Amber Furst')).toBe(
-      'Dear Amber Furst,',
+      'Dear Amber,',
+    );
+    expect(formatNokLetterSalutation('Dear', 'Amber Furstenberg')).toBe(
+      'Dear Amber,',
     );
     expect(dedupeConsecutiveNameWords('Amber Amber Furst')).toBe(
       'Amber Furst',
@@ -77,8 +81,9 @@ describe('nokLetterPreview (Next of Kin letter)', () => {
       { letter_greeting: 'Dear Amber', letter_to: 'Amber Furst' },
       null,
     );
-    expect(text).toContain('Dear Amber Furst,');
-    expect(text).not.toContain('Dear Amber Amber Furst,');
+    expect(text).toContain('Dear Amber,');
+    expect(text).not.toContain('Dear Amber Furst,');
+    expect(text).not.toContain('Dear Amber Amber');
   });
 
   it('shows owner name on the signature line', () => {

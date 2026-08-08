@@ -23,6 +23,7 @@ import {
   Globe,
   ShieldCheck,
   Info,
+  IdCard,
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
@@ -56,7 +57,6 @@ import {
   applySection1SubsectionPatch,
 } from '@/utils/applySection1AIPatch';
 
-import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ------------------------------------------------------------------ */
 /* CONFIG                                                              */
 /* ------------------------------------------------------------------ */
@@ -100,8 +100,46 @@ const SECTION_1 = {
       label:
         'Social Security Number (last 4 digits or location of your full SSN)',
       type: 'TextInput',
+      inputType: 'password',
       helperText:
         'Last 4 digits of SSN or location where full SSN can be found',
+    },
+    {
+      key: 'drivers_license_header',
+      label: "Driver's License / State ID",
+      type: 'Instructions',
+      content: '',
+    },
+    {
+      key: 'drivers_license_number',
+      label: "Driver's License Number (DL #)",
+      type: 'TextInput',
+      helperText: 'License or state ID number as printed on the card',
+    },
+    {
+      key: 'drivers_license_dd_number',
+      label: 'DD / Audit Number',
+      type: 'TextInput',
+      helperText:
+        'Document discriminator / audit number (often labeled DD on Texas licenses)',
+    },
+    {
+      key: 'drivers_license_class',
+      label: 'License Class',
+      type: 'TextInput',
+      helperText: 'e.g. Class C, A, B, or M',
+    },
+    {
+      key: 'drivers_license_issue_date',
+      label: 'Issue Date',
+      type: 'DatePicker',
+      helperText: 'Date the license was issued (ISS)',
+    },
+    {
+      key: 'drivers_license_expiration_date',
+      label: 'Expiration Date',
+      type: 'DatePicker',
+      helperText: 'Date the license expires (EXP)',
     },
     {
       key: 'phone_device_header',
@@ -510,6 +548,22 @@ const VITAL_INFO_GROUPS: VitalInfoGroup[] = [
       'other_names',
       'date_of_birth',
       'social_security_number',
+    ],
+  },
+  {
+    key: 'drivers_license',
+    title: "Driver's License / State ID",
+    subtitle: 'Numbers and dates printed on your license or ID',
+    icon: IdCard,
+    accent: 'from-sky-500/[0.07] to-blue-500/[0.03]',
+    iconWrap: 'bg-sky-500/10 text-sky-700',
+    layout: 'grid',
+    fieldKeys: [
+      'drivers_license_number',
+      'drivers_license_dd_number',
+      'drivers_license_class',
+      'drivers_license_issue_date',
+      'drivers_license_expiration_date',
     ],
   },
   {
@@ -1261,7 +1315,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-1">
                 <CardTitle className="text-xl tracking-tight text-slate-900">
-                  {getVaultSubsectionDisplayId('1', '1A')}. Vital Information
+                  Vital Information
                 </CardTitle>
                 <p className="max-w-2xl text-sm leading-6 text-slate-600">
                   Grouped essentials so you can fill personal, device, email, and
@@ -1295,7 +1349,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
 
             {renderUploader({
               scope: 'vital_info',
-              title: 'Auto-fill 1A Vital Information only',
+              title: 'Auto-fill Vital Information only',
               description:
                 'Use this for documents that cover just this subsection — personal details, device access, email accounts, safe locations, digital IDs, and security notes. It does not fill other contact groups.',
               buttonLabel: 'Auto-fill Vital Information (1A only)',
@@ -1349,7 +1403,7 @@ const [uploadedFiles, setUploadedFiles] = useState<
       {contactGroupsToRender.length > 0 && (
         <Card id="subsection-1B" className="border-slate-200 shadow-sm">
           <CardHeader>
-            <CardTitle>{getVaultSubsectionDisplayId('1', '1B')}. Key Contacts</CardTitle>
+            <CardTitle>Key Contacts</CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-8">
@@ -1373,27 +1427,18 @@ const [uploadedFiles, setUploadedFiles] = useState<
                     <Button
                       type="button"
                       size="sm"
-            data-ai-autofill-trigger
-            onClick={() => addGroupItem(group.key, group.fields)}
+                      data-ai-autofill-trigger
+                      onClick={() => addGroupItem(group.key, group.fields)}
                       className="rounded-xl"
                     >
                       <Plus className="mr-1 h-4 w-4" />
-                      Add {group.title}
+                      Add
                     </Button>
                   </div>
 
                   {items.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
-                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
-                        <Plus className="h-5 w-5 text-slate-500" />
-                      </div>
-                      <p className="font-medium text-slate-800">
-                        No {group.title.toLowerCase()} form added yet.
-                      </p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Click “Add {group.title}” first, then upload a document
-                        inside that specific form to autofill it.
-                      </p>
+                    <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-center text-sm text-slate-500">
+                      None added yet — tap <span className="font-semibold text-slate-700">Add</span>, then upload a document inside that form.
                     </div>
                   )}
 

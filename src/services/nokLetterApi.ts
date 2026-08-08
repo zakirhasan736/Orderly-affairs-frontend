@@ -41,6 +41,7 @@ export type NOKLetterIn = Omit<
 export const nokLetterApi = createApi({
   reducerPath: 'nokLetterApi',
   baseQuery: createSecureBaseQuery('/nok-letter'),
+  tagTypes: ['NokLetter'],
   endpoints: b => ({
     getNokLetter: b.query<NOKLetter, { nokId?: string } | void>({
       query: arg => {
@@ -52,6 +53,13 @@ export const nokLetterApi = createApi({
         };
       },
       keepUnusedDataFor: 0,
+      providesTags: (_result, _error, arg) => {
+        const nokId =
+          arg && typeof arg === 'object' && 'nokId' in arg
+            ? String((arg as { nokId?: string }).nokId || '')
+            : '';
+        return [{ type: 'NokLetter', id: nokId || 'default' }];
+      },
     }),
     saveNokLetter: b.mutation<NOKLetter, { body: any; nokId?: string }>({
       query: ({ body, nokId }) => ({
@@ -59,6 +67,9 @@ export const nokLetterApi = createApi({
         method: 'POST',
         body,
       }),
+      invalidatesTags: (_result, _error, arg) => [
+        { type: 'NokLetter', id: arg.nokId || 'default' },
+      ],
     }),
     updateNokLetter: b.mutation<NOKLetter, { body: any; nokId?: string }>({
       query: ({ body, nokId }) => ({
@@ -66,6 +77,9 @@ export const nokLetterApi = createApi({
         method: 'PUT',
         body,
       }),
+      invalidatesTags: (_result, _error, arg) => [
+        { type: 'NokLetter', id: arg.nokId || 'default' },
+      ],
     }),
     sendNokLetterNow: b.mutation<NOKLetter, { nokId?: string } | void>({
       query: arg => {
@@ -79,6 +93,13 @@ export const nokLetterApi = createApi({
             : '/send-now',
           method: 'POST',
         };
+      },
+      invalidatesTags: (_result, _error, arg) => {
+        const nokId =
+          arg && typeof arg === 'object' && 'nokId' in arg
+            ? String((arg as { nokId?: string }).nokId || '')
+            : '';
+        return [{ type: 'NokLetter', id: nokId || 'default' }];
       },
     }),
   }),

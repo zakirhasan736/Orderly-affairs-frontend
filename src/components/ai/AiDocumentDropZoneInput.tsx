@@ -16,7 +16,7 @@ type AiDocumentDropZoneInputProps = {
   uploadTitle?: string;
   uploadSubtitle?: string;
   showSupportedHint?: boolean;
-  /** When set, shows bottom-right attachments chip for this section. */
+  /** When set, shows attachments chip for this section. */
   sectionId?: string | null;
   children?: React.ReactNode;
 };
@@ -26,8 +26,8 @@ export function AiDocumentDropZoneInput({
   disabled = false,
   className,
   iconClassName,
-  uploadTitle = 'Drop document here',
-  uploadSubtitle = 'PDF, TXT, PNG, JPG, JPEG, WEBP · Max 15MB',
+  uploadTitle = 'Upload document',
+  uploadSubtitle = 'PDF, images · max 15MB',
   showSupportedHint = false,
   sectionId = null,
   children,
@@ -41,9 +41,12 @@ export function AiDocumentDropZoneInput({
     <label
       {...dropZoneProps}
       className={cn(
+        // Callers may still pass legacy flex-col / py-3.5; layout utilities below win.
         className,
-        'touch-manipulation active:scale-[0.99] transition-transform sm:active:scale-100',
+        'group flex min-w-0 flex-1 cursor-pointer flex-row items-center justify-start gap-2.5 rounded-lg border border-dashed px-2.5 py-2 text-left transition touch-manipulation active:scale-[0.99]',
+        'border-slate-200 bg-white/80 hover:border-indigo-300 hover:bg-indigo-50/50',
         isDragging && 'border-indigo-400 bg-indigo-50/80 ring-2 ring-indigo-200',
+        disabled && 'pointer-events-none opacity-60',
       )}
     >
       <input
@@ -59,30 +62,36 @@ export function AiDocumentDropZoneInput({
       />
 
       {children ?? (
-        <div className="flex w-full items-center gap-3 text-left sm:flex-col sm:items-center sm:justify-center sm:gap-2 sm:text-center">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 ring-1 ring-indigo-100 sm:h-12 sm:w-12 sm:rounded-2xl">
-            <UploadCloud className={cn('h-5 w-5 shrink-0', iconClassName)} />
+        <>
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 ring-1 ring-indigo-100">
+            <UploadCloud
+              className={cn('h-4 w-4 shrink-0 text-indigo-600', iconClassName)}
+            />
           </div>
-          <div className="min-w-0 flex-1 space-y-0.5 sm:flex-none">
-            <p className="text-[15px] font-semibold text-slate-900 sm:text-sm">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold leading-tight text-slate-900">
               <span className="sm:hidden">Tap to choose document</span>
               <span className="hidden sm:inline">{uploadTitle}</span>
             </p>
-            <p className="text-xs text-slate-500">{uploadSubtitle}</p>
+            <p className="truncate text-[11px] leading-snug text-slate-500">
+              {uploadSubtitle}
+            </p>
           </div>
-        </div>
+        </>
       )}
     </label>
   );
 
   const withAttachments =
     sectionId != null && String(sectionId).trim() !== '' ? (
-      <div className="relative pb-[4.75rem] sm:pb-16">
+      <div className="flex flex-wrap items-center gap-2">
         {dropZone}
         <AiUploadHistoryPopup
-          absolute
+          absolute={false}
+          dense
           sectionId={String(sectionId)}
           variant="inline"
+          className="shrink-0"
         />
       </div>
     ) : (
@@ -94,9 +103,9 @@ export function AiDocumentDropZoneInput({
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       {withAttachments}
-      <AiUploadSupportedSectionsHint compact />
+      <AiUploadSupportedSectionsHint compact className="!mt-0 opacity-80" />
     </div>
   );
 }

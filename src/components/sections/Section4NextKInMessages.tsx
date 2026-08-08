@@ -22,7 +22,6 @@ import {
   Video,
 } from 'lucide-react';
 import { DynamicFormField } from '@/components/DynamicFormField';
-import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 
 const SECTION_4A = {
   id: '4A',
@@ -189,9 +188,6 @@ export default function Section4NextOfKinMessages({
       <CardHeader className="border-b px-4 py-4 sm:px-6 sm:py-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="flex items-center gap-2.5 text-base sm:gap-3 sm:text-xl">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-xs font-bold text-primary-foreground sm:h-9 sm:w-9 sm:text-sm">
-              {getVaultSubsectionDisplayId('4', SECTION_4A.id)}
-            </span>
             <span>{SECTION_4A.title}</span>
           </CardTitle>
           <span

@@ -10,6 +10,11 @@ import {
   useIsMobile,
 } from './MobileBottomSheet';
 import { cn } from '@common/ui/utils';
+import {
+  formatDateOnly,
+  formatDateOnlyDisplay,
+  parseDateOnly,
+} from '@/utils/dateOnly';
 
 interface DatePickerProps {
   /** Current selected date value */
@@ -50,11 +55,7 @@ export function DatePicker({
   const [open, setOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const selectedDate = useMemo(() => {
-    if (!value) return undefined;
-    const parsed = value instanceof Date ? value : new Date(value);
-    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-  }, [value]);
+  const selectedDate = useMemo(() => parseDateOnly(value), [value]);
 
   const handleSelect = (date: Date | undefined) => {
     if (!date) {
@@ -64,11 +65,14 @@ export function DatePicker({
       return;
     }
 
-    const nextValue = date.toISOString();
+    // Store calendar dates as YYYY-MM-DD so DOB never shifts across timezones.
+    const nextValue = formatDateOnly(date);
     const currentValue =
-      value instanceof Date ? value.toISOString() : String(value || '');
+      value instanceof Date
+        ? formatDateOnly(value)
+        : String(value || '').slice(0, 10);
 
-    if (currentValue.slice(0, 10) === nextValue.slice(0, 10)) {
+    if (currentValue === nextValue) {
       setOpen(false);
       setSheetOpen(false);
       return;
@@ -79,13 +83,7 @@ export function DatePicker({
     setSheetOpen(false);
   };
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-  };
+  const formatDate = (date: Date) => formatDateOnlyDisplay(date);
 
   const baseClasses = cn(
     'w-full justify-start text-left font-normal enhanced-field-frame touch-manipulation',

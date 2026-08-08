@@ -48,7 +48,6 @@ import {
 } from '@/utils/vaultTopicNavigation';
 import { getItemDisplayLabel } from '@/utils/dynamicVaultTopics';
 
-import { getVaultSubsectionDisplayId } from '@/utils/vaultNavigation';
 /* ============================================================
    REPEATABLE SECTION FACTORY
 ============================================================ */
@@ -806,7 +805,7 @@ export default function Section19AssetsValuables({
                     isValuable ? 'text-amber-600' : 'text-indigo-600',
                   ].join(' ')}
                 />
-                {getVaultSubsectionDisplayId('19', subsection)}. {config.title}
+                {config.title}
               </CardTitle>
 
               <Button
