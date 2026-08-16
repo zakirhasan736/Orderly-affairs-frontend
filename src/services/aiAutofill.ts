@@ -90,6 +90,10 @@ export async function autofillSectionFromDocument(
         additional_sections?: import('@/utils/aiDocumentRouting').AiAdditionalSection[];
         section_previews?: import('@/utils/aiDocumentRouting').AiSectionPreview[];
         document_summary?: string;
+        document_kind?: string;
+        document_topic?: string;
+        fill_section_keys?: string[];
+        skip_section_keys?: string[];
         file_kept?: boolean;
         from_cache?: boolean;
         extract_reuse?: boolean;

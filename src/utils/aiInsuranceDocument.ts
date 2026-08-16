@@ -1,12 +1,45 @@
 /**
  * Health insurance cards: ask whose card it is, then stamp relationship on the policy.
+ * Auto / vehicle insurance is a different kind — never treat it as Healthcare.
  */
 
 import { unwrapAiAutofillPatch } from '@/utils/aiPatchNormalizer';
 import type { IdentityPersonChoice } from '@/utils/aiIdentityDocument';
 
+const AUTO_INSURANCE_RE =
+  /\b(auto(?:mobile)?\s*(?:insurance|policy|card)?|vehicle\s*(?:insurance|policy|card)?|(?:car|truck|suv|jeep|honda|motorcycle)\s*(?:insurance|policy)|vin\b|license\s*plate|garaging|collision|comprehensive|bodily\s*injury|year\s*make\s*model)\b/i;
+
 const HEALTH_CARD_RE =
-  /\b(health\s*insurance|medical\s*insurance|dental\s*insurance|insurance\s*card|member\s*id|group\s*(?:number|#|no\.?)|rx\s*bin|rxbin|rx\s*pcn|rxpcn|optum|united\s*healthcare|u\.?h\.?c\.?|aetna|cigna|blue\s*cross|blue\s*shield|anthem|humana|kaiser|medicare|medicaid|payer\s*id)\b/i;
+  /\b(health\s*insurance|medical\s*insurance|dental\s*insurance|member\s*id|group\s*(?:number|#|no\.?)|rx\s*bin|rxbin|rx\s*pcn|rxpcn|optum|united\s*healthcare|u\.?h\.?c\.?|aetna|cigna|blue\s*cross|blue\s*shield|anthem|humana|kaiser|medicare|medicaid|payer\s*id)\b/i;
+
+function insuranceBlob(args: {
+  sectionKey?: string | null;
+  sectionId?: string | null;
+  documentSummary?: string | null;
+  fileName?: string | null;
+  result?: unknown;
+  documentKind?: string | null;
+}): string {
+  return [
+    args.documentKind || '',
+    args.documentSummary || '',
+    args.fileName || '',
+    JSON.stringify(unwrapAiAutofillPatch(args.result) || {}),
+  ].join(' ');
+}
+
+export function isVehicleInsuranceDocument(args: {
+  sectionKey?: string | null;
+  sectionId?: string | null;
+  documentSummary?: string | null;
+  fileName?: string | null;
+  result?: unknown;
+  documentKind?: string | null;
+}): boolean {
+  const kind = String(args.documentKind || '').toLowerCase();
+  if (kind.includes('auto') || kind.includes('vehicle')) return true;
+  return AUTO_INSURANCE_RE.test(insuranceBlob(args));
+}
 
 export function isHealthInsuranceCardCandidate(args: {
   sectionKey?: string | null;
@@ -14,13 +47,16 @@ export function isHealthInsuranceCardCandidate(args: {
   documentSummary?: string | null;
   fileName?: string | null;
   result?: unknown;
+  documentKind?: string | null;
 }): boolean {
-  const text = [
-    args.documentSummary || '',
-    args.fileName || '',
-    JSON.stringify(unwrapAiAutofillPatch(args.result) || {}),
-  ].join(' ');
+  if (isVehicleInsuranceDocument(args)) return false;
 
+  const kind = String(args.documentKind || '').toLowerCase();
+  if (kind.includes('health') || kind.includes('medical') || kind.includes('dental')) {
+    return true;
+  }
+
+  const text = insuranceBlob(args);
   if (HEALTH_CARD_RE.test(text)) return true;
 
   if (
@@ -39,7 +75,12 @@ export function isHealthInsuranceCardCandidate(args: {
     const healthish = rows.some(row => {
       const type = String(row.policy_type || '').toLowerCase();
       return (
-        Boolean(row.member_id || row.group_number || row.rx_bin || row.plan_name) ||
+        Boolean(row.rx_bin || row.rx_pcn || row.group_number) ||
+        (Boolean(row.member_id) &&
+          (type.includes('health') ||
+            type.includes('medical') ||
+            type.includes('dental') ||
+            type.includes('medicaid'))) ||
         type.includes('health') ||
         type.includes('medical') ||
         type.includes('dental') ||
@@ -47,11 +88,6 @@ export function isHealthInsuranceCardCandidate(args: {
       );
     });
     if (healthish) return true;
-
-    const primary = patch?.primary_health_insurance;
-    if (typeof primary === 'string' && /member|group|rxbin|insurance/i.test(primary)) {
-      return true;
-    }
   }
 
   return false;
@@ -119,7 +155,15 @@ export function applyInsurancePersonChoice(
           next.plan_name ||
           next.member_name
         ) {
-          next.policy_type = 'Health';
+          if (
+            !isVehicleInsuranceDocument({
+              sectionId: args.sectionId,
+              sectionKey: args.sectionKey,
+              result: args.result,
+            })
+          ) {
+            next.policy_type = 'Health';
+          }
         }
       }
       next.covered_relationship = relationshipLabel(choice);

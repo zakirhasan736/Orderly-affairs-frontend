@@ -48,25 +48,16 @@ import {
   isAiBusyMessage,
   toAiUserFacingMessage,
 } from '@/utils/aiUserFacingError';
-import { isHealthInsuranceCardCandidate } from '@/utils/aiInsuranceDocument';
+import { isHealthInsuranceCardCandidate, isVehicleInsuranceDocument } from '@/utils/aiInsuranceDocument';
 import { correctBankStatementSectionKey } from '@/utils/aiBankDocument';
 // Person/section approval happens in AiOverviewReadMatchDialog after stash.
 
 /** Always also fill related sections when one of the pair is targeted. */
 const FORCE_BACKGROUND_PARTNERS: Record<string, string[]> = {
-  // Vehicles docs always carry policy fields → fill Insurance.
+  // Only document-kind partners. Conceptual pairs (employment→bank,
+  // residence→insurance, legal↔estate) wait for Sol's fill_section_keys.
   vehicles: ['insurance_policies'],
-  // Insurance → Vehicles only via classifier additional_sections (auto docs).
   health_information: ['insurance_policies'],
-  // Health cards often classify as insurance first — also fill Health.
-  insurance_policies: ['health_information'],
-  employment_business: ['banking_financial_accounts'],
-  banking_financial_accounts: ['investment_accounts'],
-  investment_accounts: ['banking_financial_accounts'],
-  main_residence: ['insurance_policies'],
-  legal_documents_records: ['estate_planning_final_wishes'],
-  estate_planning_final_wishes: ['legal_documents_records'],
-  assets_valuables: ['insurance_policies'],
 };
 
 function factsFromFill(filled: {
@@ -83,8 +74,16 @@ function factsFromFill(filled: {
   );
 }
 
-/** Build a Healthcare 15A summary card from an Insurance policy extract. */
+/** Build a Healthcare 15A summary card from a HEALTH insurance extract only. */
 function seedHealthFromInsuranceResult(insuranceResult: unknown): unknown | null {
+  if (
+    !isHealthInsuranceCardCandidate({
+      sectionKey: 'insurance_policies',
+      result: insuranceResult,
+    })
+  ) {
+    return null;
+  }
   const patch = unwrapAiAutofillPatch(insuranceResult);
   const raw = patch?.['7A'];
   const policy =
@@ -247,6 +246,7 @@ async function fillPartnerSectionsFast(args: {
   sectionKey: string;
   documentSummary?: string;
   additionalSections?: any[];
+  skipSectionKeys?: string[];
   partnerResults?: Record<string, unknown>;
   patchJob: (id: string, patch: Record<string, unknown>) => void;
   notifySectionFilled: (sectionId: string) => void;
@@ -261,6 +261,7 @@ async function fillPartnerSectionsFast(args: {
     sectionKey,
     documentSummary,
     additionalSections,
+    skipSectionKeys,
     partnerResults,
     patchJob,
     notifySectionFilled,
@@ -275,29 +276,46 @@ async function fillPartnerSectionsFast(args: {
     ...Object.keys(partnerResults || {}),
   ]);
   partnerKeys.delete(sectionKey);
+  for (const skipped of skipSectionKeys || []) {
+    partnerKeys.delete(skipped);
+  }
+
+  const looksVehicle = isVehicleInsuranceDocument({
+    sectionKey,
+    documentSummary,
+    fileName,
+  });
+  const looksHealth = isHealthInsuranceCardCandidate({
+    sectionKey,
+    documentSummary,
+    fileName,
+  });
+  if (looksVehicle || !looksHealth) {
+    partnerKeys.delete('health_information');
+  }
+  if (looksHealth) {
+    partnerKeys.add('health_information');
+    partnerKeys.delete('vehicles');
+  }
 
   const partnerList = [...partnerKeys].slice(0, 4);
   if (!partnerList.length) return;
 
   // Soft progress nudge only — job may already be marked done.
   patchJob(jobId, {
-    message: 'Filling related sections one by one…',
+    message: 'Filling related sections together…',
   });
 
-  // Sequential: full document → related section A (catalog map) → B → …
-  // Prefer a full extract; fall back to insurance→vehicles cross-seed so
-  // "New data" still appears when the partner LLM returns empty.
-  for (const partnerKey of partnerList) {
+  const fillOnePartner = async (partnerKey: string) => {
     const partnerMeta = AI_SECTION_BY_KEY[partnerKey];
-    if (!partnerMeta) continue;
+    if (!partnerMeta) return;
 
     let seedHint = partnerResults?.[partnerKey];
-    // Health cards often fill Insurance first; if partner extract fails later,
-    // still badge Healthcare from the insurance policy fields.
     if (
       !seedHint &&
       partnerKey === 'health_information' &&
-      sectionKey === 'insurance_policies'
+      sectionKey === 'insurance_policies' &&
+      looksHealth
     ) {
       const insuranceStash = listDashboardAiPatchesForSection('7').find(
         item => item.file_id === file_id,
@@ -307,7 +325,6 @@ async function fillPartnerSectionsFast(args: {
     }
     const summaryFallback = documentSummary;
 
-    // Stash seed immediately so Vehicles badges before the slower partner extract.
     if (seedHint && aiPatchHasValues(unwrapAiAutofillPatch(seedHint))) {
       try {
         await stashAndPersist({
@@ -363,7 +380,6 @@ async function fillPartnerSectionsFast(args: {
             file_id,
             subsection: partnerMeta.defaultSubsection || null,
             use_routed_cache: true,
-            // Server cannot merge E2EE v3 ciphertext — client persists immediately.
             defer_persist: true,
             field_catalog: catalogForSection(partnerKey, null),
           },
@@ -381,7 +397,6 @@ async function fillPartnerSectionsFast(args: {
 
       let result = partnerFilled.result;
       const extractPatch = unwrapAiAutofillPatch(result);
-      // Empty / missing extract → keep the cross-seed bridge.
       if (!aiPatchHasValues(extractPatch) && seedHint) {
         result = seedHint;
       }
@@ -391,7 +406,7 @@ async function fillPartnerSectionsFast(args: {
           'Partner fill produced no values; skipping empty stash',
           partnerKey,
         );
-        continue;
+        return;
       }
 
       const summary = partnerFilled.document_summary || summaryFallback;
@@ -441,7 +456,6 @@ async function fillPartnerSectionsFast(args: {
         partnerKey,
         partnerError,
       );
-      // Capacity wait already retried inside autofill. Continue other partners.
       if (
         isAiBusyMessage(
           partnerError instanceof Error
@@ -449,12 +463,11 @@ async function fillPartnerSectionsFast(args: {
             : String(partnerError || ''),
         )
       ) {
-        continue;
+        return;
       }
-      // If live partner extract 404'd (doc status ready) but we have a seed,
-      // ensure Healthcare still has a reviewable stash.
       if (
         partnerKey === 'health_information' &&
+        looksHealth &&
         !listDashboardAiPatchesForSection('15').some(
           item => item.file_id === file_id,
         )
@@ -506,12 +519,15 @@ async function fillPartnerSectionsFast(args: {
         }
       }
     }
-  }
+  };
+
+  await Promise.allSettled(partnerList.map(fillOnePartner));
 
   patchJob(jobId, {
     activeFillSectionId: undefined,
   });
 }
+
 
 export type DashboardAiJobStatus =
   | 'queued'
@@ -653,6 +669,7 @@ export function useDashboardAiBatchRunner() {
       sectionLabel?: string;
       documentSummary?: string;
       additionalSections?: any[];
+      skipSectionKeys?: string[];
       alreadyExtracted?: boolean;
       extractedResult?: unknown;
       readSource?: 'system' | 'gemini' | 'cache';
@@ -669,6 +686,7 @@ export function useDashboardAiBatchRunner() {
         sectionLabel,
         documentSummary,
         additionalSections,
+        skipSectionKeys,
         alreadyExtracted,
         extractedResult,
         readSource,
@@ -828,6 +846,7 @@ export function useDashboardAiBatchRunner() {
             documentSummary: opts.documentSummary || documentSummary,
             additionalSections:
               opts.additionalSections || additionalSections || [],
+            skipSectionKeys: skipSectionKeys || [],
             partnerResults: opts.partnerResults,
             patchJob,
             notifySectionFilled,
@@ -1146,6 +1165,7 @@ export function useDashboardAiBatchRunner() {
           documentSummary: classified.document_summary,
           fileName: job.fileName,
           sectionKey: bestKey,
+          documentKind: classified.document_kind,
         });
         if (looksHealthCard) {
           bestKey = 'insurance_policies';
@@ -1216,7 +1236,25 @@ export function useDashboardAiBatchRunner() {
           subsection,
           sectionLabel: classified.best_section_label || bestMeta?.label,
           documentSummary: classified.document_summary,
-          additionalSections: classified.additional_sections,
+          additionalSections: (classified.additional_sections || []).filter(
+            (item: { section_key?: string }) => {
+              const key = item?.section_key;
+              if (!key) return false;
+              if ((classified.skip_section_keys || []).includes(key)) return false;
+              if (
+                isVehicleInsuranceDocument({
+                  fileName: job.fileName,
+                  documentSummary: classified.document_summary,
+                  documentKind: classified.document_kind,
+                }) &&
+                key === 'health_information'
+              ) {
+                return false;
+              }
+              return true;
+            },
+          ),
+          skipSectionKeys: classified.skip_section_keys || [],
           alreadyExtracted: false,
           readSource:
             classified.extract_reuse || classified.from_cache
@@ -1239,6 +1277,7 @@ export function useDashboardAiBatchRunner() {
             documentSummary: error.detail.document_summary,
             fileName: job.fileName,
             sectionKey: suggestedKey,
+            documentKind: (error.detail as { document_kind?: string }).document_kind,
           });
           if (looksHealthCard) {
             suggestedKey = 'insurance_policies';
