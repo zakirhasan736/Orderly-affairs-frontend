@@ -171,7 +171,7 @@ export function pickDocsByFileId<T>(
 function factsFromVaultItem(
   item: Record<string, unknown>,
   subsection?: string | null,
-): StashedAiPatch['detectedFields'] {
+): NonNullable<StashedAiPatch['detectedFields']> {
   return Object.entries(item)
     .filter(([key, value]) => key !== '__rowId' && extractDisplay(value))
     .map(([key, value]) => ({

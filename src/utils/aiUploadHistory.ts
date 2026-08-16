@@ -736,7 +736,7 @@ export function removeReplacedAiUploadFileIds(fileIds: string[]): void {
 
 /** History, review stash, and popup cards drop the replaced S3 file. */
 export function applyReplacedAiDocuments(
-  fileIds: Array<string | null | undefined>,
+  fileIds?: Array<string | null | undefined> | null,
 ): string[] {
   const ids = Array.from(
     new Set((fileIds || []).map(id => String(id || '').trim()).filter(Boolean)),
