@@ -30,7 +30,7 @@ import { useFamilyAcl } from '@/contexts/FamilyAclContext';
 import {
   hydrateAiUploadHistoryFromServer,
   listAiUploadHistory,
-  removeReplacedAiUploadFileIds,
+  applyReplacedAiDocuments,
   upsertAiUploadHistory,
 } from '@/utils/aiUploadHistory';
 import { listOwnerAiDocuments } from '@/services/aiDocumentUpload';
@@ -199,9 +199,7 @@ export function SectionAiDocumentUploader({
                 String,
               )
             : [];
-        if (replacedIds.length) {
-          removeReplacedAiUploadFileIds(replacedIds);
-        }
+        applyReplacedAiDocuments(replacedIds);
         upsertAiUploadHistory({
           id: historyId,
           fileName: file.name,

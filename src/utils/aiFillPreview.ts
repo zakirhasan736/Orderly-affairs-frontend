@@ -118,7 +118,15 @@ export function previewAiFillAgainstVault(args: {
   sectionData?: unknown;
 }): AiFillPreview {
   const incoming = factsToItem(args.facts);
-  const items = collectItems(args.sectionData);
+  const hasIdentity = Boolean(
+    norm(incoming.vin) ||
+      norm(incoming.make) ||
+      norm(incoming.model) ||
+      norm(incoming.license_plate) ||
+      norm(incoming.policy_number) ||
+      norm(incoming.policy_company || incoming.insurance_company),
+  );
+  const items = hasIdentity ? collectItems(args.sectionData) : [];
   const matcher = duplicateMatcherForSection(args.sectionId);
   const match =
     matcher && items.length

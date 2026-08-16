@@ -135,17 +135,7 @@ export function takeDashboardAiPatch(
   if (fileId) {
     const key = stashKey(sectionId, fileId);
     const entry = map[key];
-    if (!entry) {
-      // Legacy / missing file key — fall back to section scan.
-      const fallback = entriesForSection(sectionId).find(
-        item => !item.file_id || item.file_id === fileId,
-      );
-      if (!fallback) return null;
-      const fallbackKey = stashKey(fallback.section_id, fallback.file_id);
-      delete map[fallbackKey];
-      writeMap(map);
-      return fallback;
-    }
+    if (!entry) return null;
     delete map[key];
     writeMap(map);
     return entry;
@@ -164,13 +154,7 @@ export function peekDashboardAiPatch(
   fileId?: string | null,
 ): StashedAiPatch | null {
   if (fileId) {
-    const exact = readMap()[stashKey(sectionId, fileId)];
-    if (exact) return exact;
-    return (
-      entriesForSection(sectionId).find(
-        item => !item.file_id || item.file_id === fileId,
-      ) || null
-    );
+    return readMap()[stashKey(sectionId, fileId)] || null;
   }
   return entriesForSection(sectionId)[0] || null;
 }
@@ -227,4 +211,25 @@ export function listAllDetectedFields(): DetectedAiFact[] {
   });
 
   return facts;
+}
+
+/** Drop stashes for files that were replaced on S3 / Mongo. */
+export function removeDashboardAiPatchesByFileIds(fileIds: string[]): void {
+  const ids = new Set(
+    (fileIds || []).map(id => String(id || '').trim()).filter(Boolean),
+  );
+  if (!ids.size) return;
+  const map = readMap();
+  let changed = false;
+  Object.entries(map).forEach(([key, entry]) => {
+    if (entry?.file_id && ids.has(String(entry.file_id))) {
+      delete map[key];
+      changed = true;
+    }
+  });
+  if (!changed) return;
+  writeMap(map);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('orderly-ai-patch-stashed'));
+  }
 }

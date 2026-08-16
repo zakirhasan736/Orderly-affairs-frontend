@@ -8,6 +8,11 @@ import { fieldViewKey, type SchemaSub } from '@/vault-prototype/types';
 import { SchemaIcon } from '@/vault-prototype/icons';
 import { SchemaFieldControl } from '@/components/vault-prototype/SchemaFieldControl';
 import { VaultDetailDrawer } from '@/components/vault-prototype/VaultDetailDrawer';
+import {
+  FillEmptyFieldsSheet,
+  type FillEmptyFieldsTarget,
+} from '@/components/vault-prototype/FillEmptyFieldsSheet';
+import { schemaValueIsFilled } from '@/vault-prototype/schemaFieldPreview';
 import { LegalDisclaimer, ProgressBar } from '@/components/vault-ui';
 import { SectionActivityStrip } from '@/components/vault/SectionActivityStrip';
 import { UploadedDocumentsButton } from '@/components/vault/UploadedDocumentsButton';
@@ -32,12 +37,29 @@ type Props = {
   onOpenReview?: () => void;
 };
 
-function isFilled(value: unknown): boolean {
-  if (value === true) return true;
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === 'string') return value.trim().length > 0;
-  if (typeof value === 'number') return true;
-  return false;
+function FillEmptyButton({
+  emptyCount,
+  onClick,
+  disabled,
+}: {
+  emptyCount: number;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  if (emptyCount <= 0 || disabled) return null;
+  return (
+    <button
+      type="button"
+      onClick={event => {
+        event.stopPropagation();
+        onClick();
+      }}
+      className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full bg-[#EAF6FD] px-3 text-[12.5px] font-semibold text-[#213D59] ring-1 ring-[#3EB1E5]/55 hover:bg-[#D8F0FB] md:h-[34px] md:min-h-[34px]"
+    >
+      <Sparkles className="h-3.5 w-3.5 text-[#3EB1E5]" />
+      Fill empty fields
+    </button>
+  );
 }
 
 function subProgress(sub: SchemaSub, bucket: unknown) {
@@ -55,7 +77,9 @@ function subProgress(sub: SchemaSub, bucket: unknown) {
           ? (row as Record<string, unknown>)
           : {};
       total += sub.fields.length || 1;
-      filled += sub.fields.filter(field => isFilled(record[fieldViewKey(field)])).length;
+      filled += sub.fields.filter(field =>
+        schemaValueIsFilled(record[fieldViewKey(field)]),
+      ).length;
     }
     return {
       count: rows.length,
@@ -68,7 +92,9 @@ function subProgress(sub: SchemaSub, bucket: unknown) {
     bucket && typeof bucket === 'object' && !Array.isArray(bucket) ? bucket : {}
   ) as Record<string, unknown>;
   const total = sub.fields.length || 1;
-  const filled = sub.fields.filter(field => isFilled(record[fieldViewKey(field)])).length;
+  const filled = sub.fields.filter(field =>
+    schemaValueIsFilled(record[fieldViewKey(field)]),
+  ).length;
   return { count: filled, filled, total, pct: Math.round((filled / total) * 100) };
 }
 
@@ -95,8 +121,61 @@ export function VaultSchemaSection({
   );
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'empty' | 'dove'>('all');
+  const [fillTarget, setFillTarget] = useState<FillEmptyFieldsTarget | null>(
+    null,
+  );
   const headerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const autoOpenedFor = useRef<string | null>(null);
+
+  const openFillEmpty = (
+    sub: SchemaSub,
+    bucket: unknown,
+    opts?: { rowIndex?: number; title?: string },
+  ) => {
+    if (readOnly) return;
+    if (sub.kind === 'entries') {
+      const rows = Array.isArray(bucket)
+        ? (bucket as Record<string, unknown>[])
+        : [];
+      let index =
+        typeof opts?.rowIndex === 'number'
+          ? opts.rowIndex
+          : rows.findIndex(row =>
+              sub.fields.some(
+                field => !schemaValueIsFilled(row[fieldViewKey(field)]),
+              ),
+            );
+      if (index < 0 && rows.length) index = 0;
+      if (index < 0) return;
+      const row = rows[index] || {};
+      setFillTarget({
+        title: opts?.title || `Fill empty · ${entryCardTitle(sub, row, index)}`,
+        iconName: section?.icon,
+        sub,
+        values: { ...row },
+        sectionId: apiSectionId,
+        onSave: next => {
+          const copy = rows.slice();
+          copy[index] = next;
+          writeSub(sub.id, copy);
+        },
+      });
+      return;
+    }
+    const record = (
+      bucket && typeof bucket === 'object' && !Array.isArray(bucket)
+        ? bucket
+        : {}
+    ) as Record<string, unknown>;
+    setFillTarget({
+      title: opts?.title || `Fill empty · ${sub.name}`,
+      iconName: section?.icon,
+      sub,
+      values: { ...record },
+      sectionId: apiSectionId,
+      onSave: next => writeSub(sub.id, next),
+    });
+  };
 
   const states = useMemo(() => {
     if (!section) return [];
@@ -300,13 +379,14 @@ export function VaultSchemaSection({
                   : 'overflow-hidden border-[#E4EAF0]',
               )}
             >
+            <div className="flex items-center gap-2 px-2 py-2">
               <button
                 type="button"
                 ref={node => {
                   headerRefs.current[sub.id] = node;
                 }}
                 onClick={() => toggleOpen(sub.id, open)}
-                className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-[#F6F8FA]"
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-[12px] px-2 py-2 text-left hover:bg-[#F6F8FA]"
               >
                 <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[10px] bg-[#EAF6FD] text-[#213D59]">
                   <SchemaIcon name={section.icon} className="h-4 w-4" />
@@ -316,24 +396,38 @@ export function VaultSchemaSection({
                     {sub.name}
                     {sub.dove ? <span title="Obituary source">🕊️</span> : null}
                   </span>
-                  <span className="mt-0.5 block text-[12.5px] text-[#7A8794]">{sub.desc}</span>
+                  <span className="mt-0.5 block text-[12.5px] text-[#7A8794]">
+                    {sub.kind === 'entries' && count > 0
+                      ? `${count} ${plural(sub.entry || 'item', count)} · ${filled} of ${total} filled`
+                      : sub.desc}
+                  </span>
                 </span>
                 <span
                   className={cn(
                     'rounded-full px-2.5 py-0.5 text-[11.5px] font-bold',
-                    (sub.kind === 'entries' ? filled : count)
-                      ? 'bg-[#E8F6F0] text-[#1F9D6B]'
+                    filled
+                      ? filled >= total
+                        ? 'bg-[#E8F6F0] text-[#1F9D6B]'
+                        : 'bg-[#EAF6FD] text-[#213D59]'
                       : 'bg-[#FDF4E4] text-[#B4761A]',
                   )}
                 >
-                  {sub.kind === 'entries' && count > 0
-                    ? `${count} ${plural(sub.entry || 'item', count)}`
-                    : `${filled} of ${total}`}
+                  {filled} of {total}
                 </span>
                 <ChevronDown
                   className={cn('h-4 w-4 shrink-0 text-[#7A8794] transition', open && 'rotate-180')}
                 />
               </button>
+              <FillEmptyButton
+                emptyCount={
+                  sub.kind === 'entries' && count === 0
+                    ? 0
+                    : Math.max(0, total - filled)
+                }
+                disabled={readOnly}
+                onClick={() => openFillEmpty(sub, bucket)}
+              />
+            </div>
               {open ? (
                 <div className="border-t border-[#EFF3F7] px-4 pb-4 pt-4">
                   {onOpenReview && pendingReviewCount > 0 && openId === sub.id ? (
@@ -362,6 +456,7 @@ export function VaultSchemaSection({
                     onChange={next => writeSub(sub.id, next)}
                     iconName={section.icon}
                     sectionId={apiSectionId}
+                    onFillEmpty={opts => openFillEmpty(sub, bucket, opts)}
                   />
                 </div>
               ) : null}
@@ -369,6 +464,12 @@ export function VaultSchemaSection({
           );
         })}
       </div>
+
+      <FillEmptyFieldsSheet
+        open={Boolean(fillTarget)}
+        target={fillTarget}
+        onClose={() => setFillTarget(null)}
+      />
     </div>
   );
 }
@@ -424,6 +525,7 @@ function SubBody({
   onChange,
   iconName,
   sectionId,
+  onFillEmpty,
 }: {
   sub: SchemaSub;
   bucket: unknown;
@@ -431,6 +533,7 @@ function SubBody({
   onChange: (next: unknown) => void;
   iconName: string;
   sectionId: string;
+  onFillEmpty?: (opts?: { rowIndex?: number; title?: string }) => void;
 }) {
   const record = (
     bucket && typeof bucket === 'object' && !Array.isArray(bucket) ? bucket : {}
@@ -478,7 +581,7 @@ function SubBody({
             const title = entryCardTitle(sub, row, index);
             const total = sub.fields.length || 1;
             const filled = sub.fields.filter(field =>
-              isFilled(row[fieldViewKey(field)]),
+              schemaValueIsFilled(row[fieldViewKey(field)]),
             ).length;
             return (
               <div
@@ -495,13 +598,26 @@ function SubBody({
                 <span
                   className={cn(
                     'shrink-0 rounded-full px-2.5 py-0.5 text-[11.5px] font-bold',
-                    filled
+                    filled >= total
                       ? 'bg-[#E8F6F0] text-[#1F9D6B]'
-                      : 'bg-[#FDF4E4] text-[#B4761A]',
+                      : filled
+                        ? 'bg-[#EAF6FD] text-[#213D59]'
+                        : 'bg-[#FDF4E4] text-[#B4761A]',
                   )}
                 >
                   {filled} of {total}
                 </span>
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                <FillEmptyButton
+                  emptyCount={total - filled}
+                  disabled={disabled}
+                  onClick={() =>
+                    onFillEmpty?.({
+                      rowIndex: index,
+                      title: `Fill empty · ${title}`,
+                    })
+                  }
+                />
                 <button
                   type="button"
                   className="inline-flex min-h-11 items-center rounded-full border border-[#E4EAF0] px-3.5 text-[13px] font-semibold text-[#213D59] md:h-[34px] md:min-h-[34px]"
@@ -512,6 +628,7 @@ function SubBody({
                 >
                   Edit
                 </button>
+                </div>
               </div>
             );
           })
@@ -542,7 +659,7 @@ function SubBody({
           subtitle={
             sub.fields.length
               ? `${
-                  sub.fields.filter(field => isFilled(draft[fieldViewKey(field)])).length
+                  sub.fields.filter(field => schemaValueIsFilled(draft[fieldViewKey(field)])).length
                 } of ${sub.fields.length} filled`
               : sub.name
           }
@@ -595,7 +712,7 @@ function SubBody({
       {(() => {
         const total = sub.fields.length || 1;
         const filled = sub.fields.filter(field =>
-          isFilled(record[fieldViewKey(field)]),
+          schemaValueIsFilled(record[fieldViewKey(field)]),
         ).length;
         return (
           <div className="mb-2 flex items-center gap-3 rounded-[11px] border border-[#E4EAF0] bg-white px-3.5 py-3">
@@ -610,6 +727,14 @@ function SubBody({
                 {filled ? `${filled} of ${total} filled` : 'No details yet'}
               </p>
             </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            <FillEmptyButton
+              emptyCount={total - filled}
+              disabled={disabled}
+              onClick={() =>
+                onFillEmpty?.({ title: `Fill empty · ${sub.name}` })
+              }
+            />
             <button
               type="button"
               disabled={disabled}
@@ -621,6 +746,7 @@ function SubBody({
             >
               {filled ? 'Edit' : 'Add'}
             </button>
+            </div>
           </div>
         );
       })()}
@@ -629,12 +755,12 @@ function SubBody({
         open={mode?.kind === 'form'}
         wide
         title={
-          sub.fields.some(field => isFilled(record[fieldViewKey(field)]))
+          sub.fields.some(field => schemaValueIsFilled(record[fieldViewKey(field)]))
             ? `Edit ${sub.name}`
             : `Add ${sub.name}`
         }
         subtitle={`${
-          sub.fields.filter(field => isFilled(draft[fieldViewKey(field)])).length
+          sub.fields.filter(field => schemaValueIsFilled(draft[fieldViewKey(field)])).length
         } of ${sub.fields.length} filled`}
         icon={<SchemaIcon name={iconName} className="h-5 w-5" />}
         onClose={closeDraft}

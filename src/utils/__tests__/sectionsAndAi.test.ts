@@ -24,7 +24,7 @@ import {
   vehiclesAreDuplicates,
   normalizeCardSectionData,
 } from '@/utils/aiItemDedup';
-import { selectMatchReviewDocuments, pickDocsByFileId, synthesizeReviewStashFromVault } from '@/utils/aiMatchReviewDocs';
+import { selectMatchReviewDocuments, pickDocsByFileId, synthesizeReviewStashFromVault, factsFromStashForReview } from '@/utils/aiMatchReviewDocs';
 import {
   applyAiResultToSectionForm,
   applyAiResultToSectionFormDetailed,
@@ -525,6 +525,80 @@ describe('aiItemDedup', () => {
     expect(stash?.detectedFields?.some(fact => /jeep/i.test(fact.value))).toBe(
       false,
     );
+  });
+
+  it('does not attach Jeep vault data to a Toyota registration review', () => {
+    const stash = synthesizeReviewStashFromVault({
+      sectionId: '5',
+      fileId: 'toyota-file',
+      fileName: 'Vehicle_Registration_Toyota_RAV4_SAMPLE.pdf',
+      documentSummary: 'Vehicle registration for a Toyota RAV4',
+      sectionData: {
+        '5A': [
+          {
+            year: '2017',
+            make: 'Jeep',
+            model: 'Wrangler Sport',
+            vin: '1C4HJXDG7HW552907',
+            insurance_company: 'MERIDIAN MUTUAL INSURANCE CO.',
+          },
+          { year: '2017', make: 'Honda', model: 'CR-V' },
+        ],
+      },
+    });
+    expect(stash).toBeNull();
+  });
+
+  it('rebuilds Toyota review from the Toyota card, not the first Jeep', () => {
+    const stash = synthesizeReviewStashFromVault({
+      sectionId: '5',
+      fileId: 'toyota-file',
+      fileName: 'Vehicle Registration Toyota RAV4 Sample.pdf',
+      documentSummary: 'Toyota RAV4 registration',
+      sectionData: {
+        '5A': [
+          { year: '2017', make: 'Jeep', model: 'Wrangler Sport' },
+          { year: '2018', make: 'Toyota', model: 'RAV4', vin: 'JTMRFREV0JD123456' },
+        ],
+      },
+    });
+    expect(stash?.detectedFields?.some(fact => /toyota/i.test(String(fact.value)))).toBe(
+      true,
+    );
+    expect(stash?.detectedFields?.some(fact => /jeep/i.test(String(fact.value)))).toBe(
+      false,
+    );
+  });
+
+  it('drops sibling Jeep fields from a mixed Toyota stash', () => {
+    const facts = factsFromStashForReview(
+      {
+        file_id: 'toyota-file',
+        section_id: '5',
+        section_key: 'vehicles',
+        file_name: 'Vehicle Registration Toyota RAV4 Sample.pdf',
+        createdAt: 1,
+        detectedFields: [
+          { label: 'Make', field_key: 'make', value: 'Jeep' },
+          { label: 'Model', field_key: 'model', value: 'Wrangler Sport' },
+          { label: 'VIN', field_key: 'vin', value: '1C4HJXDG7HW552907' },
+          { label: 'Make', field_key: 'make', value: 'Toyota' },
+          { label: 'Model', field_key: 'model', value: 'RAV4' },
+        ],
+        result: {
+          patch: {
+            '5A': [
+              { year: '2017', make: 'Jeep', model: 'Wrangler Sport' },
+              { year: '2018', make: 'Toyota', model: 'RAV4' },
+            ],
+          },
+        },
+      },
+      'Vehicle Registration Toyota RAV4 Sample.pdf',
+    );
+    expect(facts.some(fact => /toyota/i.test(fact.value))).toBe(true);
+    expect(facts.some(fact => /jeep/i.test(fact.value))).toBe(false);
+    expect(facts.some(fact => /1C4HJXDG/i.test(fact.value))).toBe(false);
   });
 
   it('collapses two same Jeeps but keeps 2017 Honda and 2022 Honda', () => {

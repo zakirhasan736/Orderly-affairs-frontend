@@ -13,6 +13,7 @@ type Props = {
   disabled?: boolean;
   onFilePicked?: (file: File) => void;
   compact?: boolean;
+  hideLabel?: boolean;
 };
 
 export function SchemaFieldControl({
@@ -22,6 +23,7 @@ export function SchemaFieldControl({
   disabled,
   onFilePicked,
   compact = false,
+  hideLabel = false,
 }: Props) {
   const slug = fieldViewKey(field);
   const required = Boolean(field.req);
@@ -316,7 +318,7 @@ export function SchemaFieldControl({
       className={schemaFieldIsHalf(field) ? '' : 'col-span-full'}
       title={compact ? field.hint || undefined : undefined}
     >
-      {field.t === 'toggle' ? null : label}
+      {hideLabel || field.t === 'toggle' ? null : label}
       {control}
       {hint}
     </div>

@@ -48,11 +48,11 @@ import { useFamilyAcl } from '@/contexts/FamilyAclContext';
 import { AiUploadHistoryThumb } from '@/components/ai/AiUploadHistoryThumb';
 import { openVaultUploadDrawer } from '@/components/vault-prototype/VaultUploadDrawer';
 
-/** Timeouts / blips / AI backlog — still treat as in progress in the UI. */
+/** Timeouts / blips — still treat as in progress in the UI. Never show busy/429. */
 function looksLikeTransientIssue(error?: string | null) {
   const msg = String(error || '').toLowerCase();
   if (!msg) return false;
-  return /timeout|timed out|took too long|network|temporarily|try again|aborted|fetch failed|gateway|502|503|504|busy|quota|finishing other|high demand|wait about a minute|second pass/.test(
+  return /still processing|please wait|timeout|timed out|took too long|network|temporarily|aborted|fetch failed|gateway|waiting for the next/.test(
     msg,
   );
 }
@@ -118,7 +118,7 @@ function statusLabel(
   if (rawStatus === 'needs_section_choice') return 'Choose section';
   if (status === 'done') return 'Complete';
   if (status === 'attention') return 'Needs attention';
-  if (status === 'queued') return 'In queue';
+  if (status === 'queued') return 'Waiting';
   return 'Processing';
 }
 
@@ -129,8 +129,8 @@ function statusFootnote(
   if (rawStatus === 'needs_section_choice') return 'Choose section';
   if (status === 'done') return 'Complete';
   if (status === 'attention') return 'Needs attention';
-  if (status === 'queued') return 'In queue';
-  return 'Processing';
+  if (status === 'queued') return 'Waiting for the next document';
+  return 'Still processing your document. Please wait...';
 }
 
 function mergeHistoryWithJobs(

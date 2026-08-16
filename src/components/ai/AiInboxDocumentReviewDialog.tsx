@@ -166,8 +166,7 @@ export function AiInboxDocumentReviewDialog({
           </button>
           <div className="min-w-0 flex-1">
             <DialogTitle className="truncate text-[15px] font-semibold text-[#213D59]">
-              Review & fill · {title}
-              {document.subsectionLabel ? ` · ${document.subsectionLabel}` : ''}
+              Review & fill · {displayFile || title}
             </DialogTitle>
             <DialogDescription className="truncate text-[12px] text-[#6A7481]">
               {document.fileName}

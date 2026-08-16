@@ -68,7 +68,7 @@ import {
   OPEN_AI_REVIEW_FILL,
   type OpenAiReviewFillDetail,
 } from '@/utils/vaultActivityTabs';
-import { pickDocsByFileId, synthesizeReviewStashFromVault } from '@/utils/aiMatchReviewDocs';
+import { factsFromStashForReview, pickDocsByFileId, synthesizeReviewStashFromVault } from '@/utils/aiMatchReviewDocs';
 
 interface DataBindingDashboardProps {
   formData: any;
@@ -319,7 +319,13 @@ export function DataBindingDashboard({
       const facts = fileId
         ? listDashboardAiPatches()
             .filter(entry => entry.file_id === fileId)
-            .flatMap(entry => entry.detectedFields || [])
+            .flatMap(entry =>
+              factsFromStashForReview(
+                entry,
+                job.fileName,
+                job.documentSummary,
+              ),
+            )
         : [];
 
       const byId = new Map<
@@ -453,7 +459,13 @@ export function DataBindingDashboard({
           fileName: first.file_name || hist?.fileName || 'Uploaded document',
           mimeType: hist?.mimeType,
           documentSummary: first.document_summary,
-          facts: entries.flatMap(entry => entry.detectedFields || []),
+          facts: entries.flatMap(entry =>
+            factsFromStashForReview(
+              entry,
+              first.file_name || hist?.fileName,
+              first.document_summary || hist?.documentSummary,
+            ),
+          ),
           matchedSections: entries.map(entry => ({
             sectionId: entry.section_id,
             sectionLabel: getAiSectionLabel(entry.section_id),
@@ -506,7 +518,11 @@ export function DataBindingDashboard({
             synthesized.file_name || history?.fileName || 'Uploaded document',
           mimeType: history?.mimeType,
           documentSummary: synthesized.document_summary,
-          facts: synthesized.detectedFields || [],
+          facts: factsFromStashForReview(
+            synthesized,
+            history?.fileName,
+            history?.documentSummary,
+          ),
           matchedSections: [
             {
               sectionId: synthesized.section_id,

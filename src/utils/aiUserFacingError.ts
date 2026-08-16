@@ -1,21 +1,36 @@
 /**
- * Clear, US-English AI error copy for document upload / autofill.
- * Prefer plain language over technical "busy / quota / 503" wording.
+ * Clear, US-English AI copy for document upload / autofill.
+ * Never show technical busy / quota / 429 / model names to normal users.
  */
 
-export const AI_BUSY_USER_MESSAGE =
-  "Our AI is finishing other documents right now. Please wait about a minute, then try again. Your upload is saved — nothing is wrong with your file.";
+export const AI_WAITING_USER_MESSAGE =
+  'Still processing your document. Please wait...';
+
+/** @deprecated Use AI_WAITING_USER_MESSAGE — kept so older imports keep working. */
+export const AI_BUSY_USER_MESSAGE = AI_WAITING_USER_MESSAGE;
 
 export const AI_GENERIC_FAIL_USER_MESSAGE =
   "We couldn't finish reading that document. Please try again in a moment.";
 
+const TRANSIENT_CAPACITY =
+  /\b(busy|quota|rate.?limit|too many requests|resource.?exhausted|503|429|temporarily unavailable|finishing other|high demand|try again in (a )?minute|ai service unavailable)\b/i;
+
 export function isAiBusyMessage(raw?: string | null): boolean {
-  const msg = String(raw || '').toLowerCase();
+  const msg = String(raw || '');
   if (!msg) return false;
   return (
-    /\b(busy|quota|rate.?limit|too many requests|resource.?exhausted|503|temporarily unavailable|finishing other|high demand|try again in (a )?minute)\b/.test(
-      msg,
-    ) || msg.includes('ai service unavailable')
+    TRANSIENT_CAPACITY.test(msg) ||
+    msg.toLowerCase().includes(AI_WAITING_USER_MESSAGE.toLowerCase())
+  );
+}
+
+export function isAiTransientWaitMessage(raw?: string | null): boolean {
+  return isAiBusyMessage(raw);
+}
+
+function leaksTechnicalAiDetail(message: string): boolean {
+  return /\b(sol|terra|luna|gpt-?4o|gpt-?5|openai|model|provider|429|503|rate.?limit|quota)\b/i.test(
+    message,
   );
 }
 
@@ -37,18 +52,22 @@ export function toAiUserFacingMessage(
           : '';
 
   if (isAiBusyMessage(message)) {
-    return AI_BUSY_USER_MESSAGE;
+    return AI_WAITING_USER_MESSAGE;
   }
 
   const lower = message.toLowerCase();
   if (/timeout|timed out|took too long/.test(lower)) {
-    return "This document is taking longer than usual to read. Please wait a minute and try again — large scans often need a second pass.";
+    return AI_WAITING_USER_MESSAGE;
   }
   if (/expired|no longer available|not found|deleted/.test(lower)) {
-    return "That upload expired or was removed. Please upload the document again.";
+    return 'That upload expired or was removed. Please upload the document again.';
   }
   if (/login expired|token invalid|unauthorized|401/.test(lower)) {
-    return "Your session expired. Please sign in again, then retry the upload.";
+    return 'Your session expired. Please sign in again, then retry the upload.';
+  }
+
+  if (leaksTechnicalAiDetail(message)) {
+    return fallback;
   }
 
   // Keep already-friendly product copy; rewrite terse/technical leftovers.

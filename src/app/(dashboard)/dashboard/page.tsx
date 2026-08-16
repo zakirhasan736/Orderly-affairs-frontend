@@ -1390,6 +1390,7 @@ export default function DashboardPage() {
         stashes,
         opts?.fileId,
         stash => stash.file_id,
+        { strict: Boolean(opts?.fileId) },
       );
       const shownKey = `${sectionId}:${focused
         .map(item => `${item.file_id}:${item.createdAt}`)
@@ -1457,12 +1458,32 @@ export default function DashboardPage() {
       }
     };
     const onReviewed = () => setAiPatchTick(tick => tick + 1);
+    const onReplaced = (event: Event) => {
+      const ids = new Set(
+        ((event as CustomEvent<{ fileIds?: string[] }>).detail?.fileIds || []).map(
+          String,
+        ),
+      );
+      if (!ids.size) return;
+      setSectionMatchReview(prev => {
+        if (!prev) return prev;
+        const documents = prev.documents.filter(
+          item => !item.file_id || !ids.has(String(item.file_id)),
+        );
+        if (documents.length === prev.documents.length) return prev;
+        if (!documents.length) return null;
+        return { ...prev, documents };
+      });
+      setAiPatchTick(tick => tick + 1);
+    };
 
     window.addEventListener('orderly-ai-patch-stashed', onAiPatch);
     window.addEventListener('orderly-ai-section-reviewed', onReviewed);
+    window.addEventListener('orderly-ai-documents-replaced', onReplaced);
     return () => {
       window.removeEventListener('orderly-ai-patch-stashed', onAiPatch);
       window.removeEventListener('orderly-ai-section-reviewed', onReviewed);
+      window.removeEventListener('orderly-ai-documents-replaced', onReplaced);
     };
   }, [activeSection, appMode, openSectionMatchReview]);
 

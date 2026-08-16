@@ -182,33 +182,149 @@ function factsFromVaultItem(
     }));
 }
 
-function scoreVaultItemForDocument(
-  item: Record<string, unknown>,
-  haystack: string,
-): number {
-  const blob = haystack.toLowerCase();
-  if (!blob.trim()) return 0;
-  const title = composeEntryTitle(item).toLowerCase();
-  let score = 0;
-  if (title && blob.includes(title)) score += 50;
-  const vin = extractDisplay(item.vin).toLowerCase();
+const VEHICLE_BRANDS = [
+  'toyota',
+  'honda',
+  'jeep',
+  'ford',
+  'chevrolet',
+  'chevy',
+  'bmw',
+  'mercedes',
+  'nissan',
+  'hyundai',
+  'kia',
+  'subaru',
+  'mazda',
+  'lexus',
+  'gmc',
+  'ram',
+  'dodge',
+  'volkswagen',
+  'vw',
+  'audi',
+  'tesla',
+  'chrysler',
+  'buick',
+  'cadillac',
+  'acura',
+  'infiniti',
+  'lincoln',
+  'volvo',
+  'porsche',
+  'mini',
+  'mitsubishi',
+] as const;
+
+function brandsInText(text: string): string[] {
+  const blob = String(text || '').toLowerCase();
+  return VEHICLE_BRANDS.filter(brand =>
+    new RegExp(`\\b${brand}\\b`, 'i').test(blob),
+  );
+}
+
+function itemMakeBrand(item: Record<string, unknown>): string | null {
   const make = extractDisplay(item.make).toLowerCase();
   const model = extractDisplay(item.model).toLowerCase();
-  const year = extractDisplay(item.year).toLowerCase();
-  const company = extractDisplay(
-    item.policy_company || item.insurance_company,
-  ).toLowerCase();
-  const number = normalizePolicyNumber(item.policy_number);
-  if (vin && vin.length >= 6 && blob.includes(vin.slice(-6))) score += 40;
-  if (year && blob.includes(year)) score += 12;
-  if (make && blob.includes(make)) score += 10;
-  if (model) {
-    const first = model.split(/[\s/]+/)[0];
-    if (first && blob.includes(first)) score += 16;
+  return (
+    VEHICLE_BRANDS.find(brand => make.includes(brand) || model.includes(brand)) ||
+    null
+  );
+}
+
+/**
+ * Pick the vault/extract card that belongs to this filename — never the
+ * first Jeep just because it shares a year or insurance company.
+ */
+export function pickVaultItemForDocument(
+  items: Record<string, unknown>[],
+  haystack: string,
+): Record<string, unknown> | null {
+  if (!items.length) return null;
+  const blob = haystack.toLowerCase();
+  const hayBrands = brandsInText(blob);
+
+  let best: { item: Record<string, unknown>; score: number } | null = null;
+  for (const item of items) {
+    const make = extractDisplay(item.make).toLowerCase();
+    const model = extractDisplay(item.model).toLowerCase();
+    const vin = extractDisplay(item.vin).toLowerCase();
+    const makeBrand = itemMakeBrand(item);
+
+    if (hayBrands.length && makeBrand && !hayBrands.includes(makeBrand)) {
+      continue;
+    }
+
+    let score = 0;
+    const title = composeEntryTitle(item).toLowerCase();
+    if (title && blob.includes(title)) score += 50;
+    if (vin && vin.length >= 6 && blob.includes(vin.slice(-6))) score += 40;
+    if (make && blob.includes(make)) score += 20;
+    if (model) {
+      const first = model.split(/[\s/]+/)[0];
+      if (first && first.length >= 3 && blob.includes(first)) score += 24;
+    }
+    if (score < 20) continue;
+    if (!best || score > best.score) best = { item, score };
   }
-  if (company && blob.includes(company)) score += 12;
-  if (number && blob.includes(number)) score += 20;
-  return score;
+
+  return best?.item || null;
+}
+
+function filterFactsToDocument(
+  facts: NonNullable<StashedAiPatch['detectedFields']>,
+  haystack: string,
+): NonNullable<StashedAiPatch['detectedFields']> {
+  const hayBrands = brandsInText(haystack);
+  if (!hayBrands.length || !facts.length) return facts;
+
+  const hasConflictingBrand = facts.some(fact => {
+    const brands = brandsInText(String(fact.value || ''));
+    return brands.length > 0 && !brands.some(brand => hayBrands.includes(brand));
+  });
+  if (!hasConflictingBrand) return facts;
+
+  return facts.filter(fact => {
+    const brands = brandsInText(String(fact.value || ''));
+    if (brands.length) return brands.some(brand => hayBrands.includes(brand));
+    const key = String(fact.field_key || fact.label || '').toLowerCase();
+    if (
+      /vin|policy|insurance|year|model|plate|registration|company/.test(key)
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
+/** Facts for Review & fill: this file only, not sibling Toyota/Jeep/Honda cards. */
+export function factsFromStashForReview(
+  stash: StashedAiPatch,
+  fileName?: string,
+  documentSummary?: string,
+): NonNullable<StashedAiPatch['detectedFields']> {
+  const haystack = [fileName || stash.file_name, documentSummary || stash.document_summary]
+    .filter(Boolean)
+    .join(' ');
+  const items = cardItemsFromStash(stash.section_id, stash);
+  const picked = pickVaultItemForDocument(items, haystack);
+  if (picked) {
+    return factsFromVaultItem(picked, stash.subsection);
+  }
+  if (items.length > 1) {
+    return filterFactsToDocument(stash.detectedFields || [], haystack);
+  }
+  if (items.length === 1 && haystack && itemMakeBrand(items[0])) {
+    const brand = itemMakeBrand(items[0]);
+    const hayBrands = brandsInText(haystack);
+    if (brand && hayBrands.length && !hayBrands.includes(brand)) {
+      return [];
+    }
+  }
+  if ((stash.detectedFields || []).length) {
+    return filterFactsToDocument(stash.detectedFields || [], haystack);
+  }
+  return items[0] ? factsFromVaultItem(items[0], stash.subsection) : [];
 }
 
 /** Rebuild Review & fill after Accept when the stash was already persisted. */
@@ -241,20 +357,9 @@ export function synthesizeReviewStashFromVault(args: {
 
   const haystack = [args.fileName, args.documentSummary]
     .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-  let picked = items[0];
-  if (items.length > 1 && haystack) {
-    let best = -1;
-    items.forEach(item => {
-      const score = scoreVaultItemForDocument(item, haystack);
-      if (score > best) {
-        best = score;
-        picked = item;
-      }
-    });
-    if (best < 10) return null;
-  }
+    .join(' ');
+  const picked = pickVaultItemForDocument(items, haystack);
+  if (!picked) return null;
 
   const facts = factsFromVaultItem(picked, subsection);
   if (!facts?.length) return null;

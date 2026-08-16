@@ -170,7 +170,7 @@ export function IncompleteFieldsFillDialog({
       <DialogContent className="flex max-h-[min(92dvh,42rem)] w-[min(100vw-1.25rem,36rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[36rem]">
         <DialogHeader className="shrink-0 space-y-1 border-b border-slate-100 bg-gradient-to-b from-[#f7f9fc] to-white px-5 pb-3 pt-5 pr-12 text-left sm:px-6">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2E7FAD]">
-            Quick fill
+            Fill empty fields
           </p>
           <DialogTitle className="text-lg font-semibold text-[#213D59]">
             {target?.title || 'This part of your vault'}

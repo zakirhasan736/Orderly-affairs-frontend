@@ -38,12 +38,14 @@ import {
 } from '@/utils/aiAutofillDoneSections';
 import { resolveUploadDisplayTitle } from '@/utils/aiUploadDisplayTitle';
 import {
+  applyReplacedAiDocuments,
   linkAiUploadHistorySections,
-  removeReplacedAiUploadFileIds,
   toVaultSectionId,
   upsertAiUploadHistory,
 } from '@/utils/aiUploadHistory';
 import {
+  AI_GENERIC_FAIL_USER_MESSAGE,
+  AI_WAITING_USER_MESSAGE,
   isAiBusyMessage,
   toAiUserFacingMessage,
 } from '@/utils/aiUserFacingError';
@@ -356,17 +358,26 @@ async function fillPartnerSectionsFast(args: {
       });
 
       const partnerFilled = await withTimeout(
-        autofillSectionFromDocument({
-          section: partnerKey,
-          file_id,
-          subsection: partnerMeta.defaultSubsection || null,
-          use_routed_cache: true,
-          // Server cannot merge E2EE v3 ciphertext — client persists immediately.
-          defer_persist: true,
-          field_catalog: catalogForSection(partnerKey, null),
-        }),
-        60000,
+        autofillSectionFromDocument(
+          {
+            section: partnerKey,
+            file_id,
+            subsection: partnerMeta.defaultSubsection || null,
+            use_routed_cache: true,
+            // Server cannot merge E2EE v3 ciphertext — client persists immediately.
+            defer_persist: true,
+            field_catalog: catalogForSection(partnerKey, null),
+          },
+          {
+            onWaiting: () =>
+              patchJob(jobId, { message: AI_WAITING_USER_MESSAGE }),
+          },
+        ),
+        PARTNER_FILL_TIMEOUT_MS,
         `Partner fill ${partnerKey}`,
+      );
+      applyReplacedAiDocuments(
+        (partnerFilled as { replaced_file_ids?: string[] }).replaced_file_ids,
       );
 
       let result = partnerFilled.result;
@@ -431,7 +442,7 @@ async function fillPartnerSectionsFast(args: {
         partnerKey,
         partnerError,
       );
-      // AI provider busy/unavailable — stop partner chain to avoid 503 storms.
+      // Capacity wait already retried inside autofill. Continue other partners.
       if (
         isAiBusyMessage(
           partnerError instanceof Error
@@ -439,7 +450,7 @@ async function fillPartnerSectionsFast(args: {
             : String(partnerError || ''),
         )
       ) {
-        break;
+        continue;
       }
       // If live partner extract 404'd (doc status ready) but we have a seed,
       // ensure Healthcare still has a reviewable stash.
@@ -541,7 +552,11 @@ export type DashboardAiJob = {
   updatedAt: string;
 };
 
-const MAX_CONCURRENT = 1;
+const MAX_CONCURRENT = 3;
+const CLASSIFY_TIMEOUT_MS = 240000;
+const FILL_TIMEOUT_MS = 240000;
+const PARTNER_FILL_TIMEOUT_MS = 240000;
+const JOB_WATCHDOG_MS = 600000;
 const PROBE_SECTION_KEY = 'vital_information';
 const PROBE_SECTION_ID = '1';
 
@@ -564,7 +579,7 @@ const ACTIVE_STATUSES: DashboardAiJobStatus[] = [
 function statusLabel(status: DashboardAiJobStatus) {
   switch (status) {
     case 'queued':
-      return 'In queue…';
+      return 'Waiting for the next document…';
     case 'starting':
       return 'Preparing secure upload…';
     case 'uploading':
@@ -572,11 +587,11 @@ function statusLabel(status: DashboardAiJobStatus) {
     case 'reading':
       return 'Reading your document…';
     case 'almost':
-      return 'Finishing the read…';
+      return AI_WAITING_USER_MESSAGE;
     case 'routing':
-      return 'Matching vault sections…';
+      return 'Analyzing document information…';
     case 'filling':
-      return 'Filling matched fields…';
+      return 'Matching information…';
     case 'needs_section_choice':
       return 'Choose a section';
     case 'done':
@@ -584,7 +599,7 @@ function statusLabel(status: DashboardAiJobStatus) {
     case 'error':
       return 'Needs attention';
     default:
-      return 'Working…';
+      return AI_WAITING_USER_MESSAGE;
   }
 }
 
@@ -877,23 +892,32 @@ export function useDashboardAiBatchRunner() {
       try {
         await ensureFreshSession();
         const filled = await withTimeout(
-          autofillSectionFromDocument({
-            section: sectionKey,
-            file_id,
-            subsection: subsection || null,
-            use_routed_cache: true,
-            // Server cannot merge E2EE v3 ciphertext — client persists immediately.
-            defer_persist: true,
-            field_catalog: catalogForSection(sectionKey, null),
-          }),
-          90000,
+          autofillSectionFromDocument(
+            {
+              section: sectionKey,
+              file_id,
+              subsection: subsection || null,
+              use_routed_cache: true,
+              // Server cannot merge E2EE v3 ciphertext — client persists immediately.
+              defer_persist: true,
+              field_catalog: catalogForSection(sectionKey, null),
+            },
+            {
+              onWaiting: () =>
+                patchJob(jobId, { message: AI_WAITING_USER_MESSAGE }),
+            },
+          ),
+          FILL_TIMEOUT_MS,
           'Primary autofill',
+        );
+        applyReplacedAiDocuments(
+          (filled as { replaced_file_ids?: string[] }).replaced_file_ids,
         );
 
         patchJob(jobId, {
           status: 'filling',
           progress: 94,
-          message: 'Ready for your review…',
+          message: 'Validating information…',
           activeFillSectionId: sectionId,
         });
 
@@ -986,9 +1010,23 @@ export function useDashboardAiBatchRunner() {
       });
 
       const uploaded = await uploadAIDocument(job.file);
-      if (Array.isArray(uploaded.replaced_file_ids) && uploaded.replaced_file_ids.length) {
-        removeReplacedAiUploadFileIds(uploaded.replaced_file_ids.map(String));
-      }
+      const dropReplaced = (raw: unknown) => {
+        const list = Array.isArray(raw)
+          ? raw.map(id => String(id || '')).filter(Boolean)
+          : [];
+        const ids = applyReplacedAiDocuments(list);
+        if (!ids.length) return;
+        const gone = new Set(ids);
+        setJobs(prev =>
+          prev.filter(
+            item =>
+              item.id === job.id ||
+              !item.file_id ||
+              !gone.has(String(item.file_id)),
+          ),
+        );
+      };
+      dropReplaced(uploaded.replaced_file_ids);
       buildUploadedAiFile(uploaded, job.file, {
         sectionId: 'overview',
         source: 'overview',
@@ -1048,11 +1086,7 @@ export function useDashboardAiBatchRunner() {
                   status: 'error',
                   progress: 100,
                   message: statusLabel('error'),
-                  error:
-                    item.error ||
-                    toAiUserFacingMessage(
-                      'Document processing took too long. Please try uploading again.',
-                    ),
+                  error: item.error || AI_GENERIC_FAIL_USER_MESSAGE,
                   updatedAt: new Date().toISOString(),
                 }
               : item,
@@ -1060,21 +1094,30 @@ export function useDashboardAiBatchRunner() {
         );
         activeIdsRef.current.delete(job.id);
         pumpRef.current();
-      }, 180000);
+      }, JOB_WATCHDOG_MS);
 
       try {
         await ensureFreshSession();
         // Classify first — never extract into Vital unless the doc is actually Vital.
         const classified = await withTimeout(
-          autofillSectionFromDocument({
-            section: PROBE_SECTION_KEY,
-            file_id: uploaded.file_id,
-            subsection: null,
-            use_routed_cache: false,
-            classify_only: true,
-          }),
-          75000,
+          autofillSectionFromDocument(
+            {
+              section: PROBE_SECTION_KEY,
+              file_id: uploaded.file_id,
+              subsection: null,
+              use_routed_cache: false,
+              classify_only: true,
+            },
+            {
+              onWaiting: () =>
+                patchJob(job.id, { message: AI_WAITING_USER_MESSAGE }),
+            },
+          ),
+          CLASSIFY_TIMEOUT_MS,
           'Document classify',
+        );
+        dropReplaced(
+          (classified as { replaced_file_ids?: string[] }).replaced_file_ids,
         );
 
         clearAlmostTimer(job.id);

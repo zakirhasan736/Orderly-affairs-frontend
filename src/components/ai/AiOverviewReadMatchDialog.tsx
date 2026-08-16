@@ -401,7 +401,6 @@ export function AiOverviewReadMatchDialog({
   const fillKind: AiFillKind = combineAiFillKinds(
     fillPreviews.map(preview => preview.kind),
   );
-  const fillHeadline = fillPreviews.map(preview => preview.title).filter(Boolean)[0];
   const fieldKindByKey = useMemo(() => {
     const map: Record<string, string> = {};
     fillPreviews.forEach(preview => {
@@ -448,11 +447,11 @@ export function AiOverviewReadMatchDialog({
             </div>
             <div className="min-w-0">
               <DialogTitle className="text-[#213D59]">
-                {documents.length <= 1
-                  ? fillHeadline
-                    ? `Review & fill · ${fillHeadline}`
-                    : 'Review & fill'
-                  : `Review & fill · ${documents.length} documents`}
+                {displayName
+                  ? `Review & fill · ${displayName}`
+                  : documents.length > 1
+                    ? `Review & fill · ${documents.length} documents`
+                    : 'Review & fill'}
               </DialogTitle>
               <DialogDescription className="text-[13px] text-[#6A7481]">
                 Check the document, confirm the summary, then fill any missing

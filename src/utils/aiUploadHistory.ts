@@ -2,6 +2,7 @@ import {
   AI_SECTION_BY_ID,
   AI_SECTION_BY_KEY,
 } from '@/utils/aiSectionRegistry';
+import { removeDashboardAiPatchesByFileIds } from '@/utils/aiDashboardPatchCache';
 
 export type AiUploadHistoryItem = {
   id: string;
@@ -56,6 +57,57 @@ function normalizeFileName(name: string): string {
     .replace(/[_-]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+const TOPIC_INSURANCE_RE =
+  /\b(insurance|insurer|policy|premium|geico|allstate|progressive|state\s*farm|coverage)\b/i;
+const TOPIC_REGISTRATION_RE =
+  /\b(registration|reg(?:istration)?\s*card|title)\b/i;
+const TOPIC_MAKES = [
+  'jeep',
+  'honda',
+  'toyota',
+  'ford',
+  'chevrolet',
+  'chevy',
+  'bmw',
+  'mercedes',
+  'tesla',
+  'hyundai',
+  'kia',
+  'nissan',
+  'subaru',
+  'mazda',
+  'volkswagen',
+  'audi',
+  'lexus',
+  'ram',
+  'gmc',
+  'dodge',
+];
+
+export function filenameDocumentTopic(name: string): {
+  stem: string;
+  kind: string;
+  make: string;
+} {
+  const stem = normalizeFileName(name);
+  let kind = '';
+  if (TOPIC_INSURANCE_RE.test(stem)) kind = 'insurance';
+  else if (TOPIC_REGISTRATION_RE.test(stem)) kind = 'registration';
+  const make = TOPIC_MAKES.find(item => stem.includes(item)) || '';
+  return { stem, kind, make };
+}
+
+function sameFilenameTopic(
+  a: ReturnType<typeof filenameDocumentTopic>,
+  b: ReturnType<typeof filenameDocumentTopic>,
+): boolean {
+  if (a.stem && a.stem === b.stem) return true;
+  if (a.kind && b.kind && a.kind === b.kind && a.make && b.make && a.make === b.make) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -162,8 +214,12 @@ export function sameDocumentTopic(
   const sameBytes = Boolean(aHash && bHash && aHash === bHash);
   const sameName =
     normalizeFileName(a.fileName) === normalizeFileName(b.fileName);
+  const sameTopicName = sameFilenameTopic(
+    filenameDocumentTopic(a.fileName),
+    filenameDocumentTopic(b.fileName),
+  );
 
-  if (!sameBytes && !sameName) {
+  if (!sameBytes && !sameName && !sameTopicName) {
     return false;
   }
 
@@ -676,6 +732,26 @@ export function removeReplacedAiUploadFileIds(fileIds: string[]): void {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('orderly-ai-upload-history'));
   }
+}
+
+/** History, review stash, and popup cards drop the replaced S3 file. */
+export function applyReplacedAiDocuments(
+  fileIds: Array<string | null | undefined>,
+): string[] {
+  const ids = Array.from(
+    new Set((fileIds || []).map(id => String(id || '').trim()).filter(Boolean)),
+  );
+  if (!ids.length) return [];
+  removeReplacedAiUploadFileIds(ids);
+  removeDashboardAiPatchesByFileIds(ids);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('orderly-ai-documents-replaced', {
+        detail: { fileIds: ids },
+      }),
+    );
+  }
+  return ids;
 }
 
 /** Remove one footprint by job id and/or backend file id. */

@@ -4,6 +4,7 @@ import {
   itemMatchesSection,
   listAiUploadHistory,
   mapServerDocumentsToHistory,
+  sameDocumentTopic,
   toVaultSectionId,
   clearAiUploadHistory,
 } from '@/utils/aiUploadHistory';
@@ -58,5 +59,20 @@ describe('aiUploadHistory section mapping', () => {
     expect(mapped[0].fileId).toBe('s3-1');
     expect(mapped[0].fileName).toBe('Passport.pdf');
     expect(itemMatchesSection(mapped[0], '1')).toBe(true);
+  });
+
+  it('treats renamed Jeep insurance files as the same replaceable topic', () => {
+    expect(
+      sameDocumentTopic(
+        { fileName: 'Jeep_Wrangler_Insurance.pdf', source: 'overview' },
+        { fileName: 'Geico_Jeep_Policy.pdf', source: 'overview' },
+      ),
+    ).toBe(true);
+    expect(
+      sameDocumentTopic(
+        { fileName: 'Jeep_Insurance.pdf', source: 'overview' },
+        { fileName: 'Vehicle_Registration_Jeep_Wrangler.pdf', source: 'overview' },
+      ),
+    ).toBe(false);
   });
 });

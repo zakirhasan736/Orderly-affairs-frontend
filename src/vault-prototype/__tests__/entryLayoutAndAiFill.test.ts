@@ -129,4 +129,27 @@ describe('AI fill preview', () => {
     expect(preview.matchedItem).toBeUndefined();
     expect(preview.title).toBe('Toyota Camry');
   });
+
+  it('does not treat empty Toyota review fields as the Jeep already on file', () => {
+    const preview = previewAiFillAgainstVault({
+      sectionId: '5',
+      facts: [
+        { label: 'Year', field_key: 'year', value: '' },
+        { label: 'Make', field_key: 'make', value: '' },
+        { label: 'Model', field_key: 'model', value: '' },
+      ],
+      sectionData: {
+        '5A': [
+          {
+            year: '2017',
+            make: 'Jeep',
+            model: 'Wrangler Sport',
+            vin: '1C4HJXDG7HW552907',
+          },
+        ],
+      },
+    });
+    expect(preview.kind).toBe('new');
+    expect(preview.matchedItem).toBeUndefined();
+  });
 });

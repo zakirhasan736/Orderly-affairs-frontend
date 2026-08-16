@@ -164,10 +164,10 @@ export function VaultFillProgressChip({
                 ? 'px-2 py-0.5 text-[10px]'
                 : 'px-2.5 py-1 text-[11px]',
             )}
-            title="Quick fill — still empty or this whole area"
+            title="Fill empty fields"
           >
             <Sparkles className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-            Fill {emptyCount}
+            Fill empty
           </button>
         ) : progress.complete ? (
           <span

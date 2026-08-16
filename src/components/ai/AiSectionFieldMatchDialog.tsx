@@ -21,10 +21,13 @@ import {
   buildFieldMatchRows,
   averageMatchConfidence,
 } from '@/utils/aiFieldMatchReview';
+import {
+  factsFromStashForReview,
+  pickVaultItemForDocument,
+} from '@/utils/aiMatchReviewDocs';
 import { aiNoFieldsMessage } from '@/utils/aiReadSourceLabels';
 import { AI_SECTION_BY_ID } from '@/utils/aiSectionRegistry';
 import { unwrapAiAutofillPatch } from '@/utils/aiPatchNormalizer';
-import { flattenDetectedFactsFromPatch } from '@/utils/aiSemanticFieldMatch';
 import { describeAutofillItem } from '@/utils/aiMultiItemAutofill';
 import { AiReviewDocumentPane } from '@/components/ai/AiReviewDocumentPane';
 import { AiReviewDetailFields } from '@/components/ai/AiReviewDetailFields';
@@ -124,10 +127,20 @@ function itemFromMatchDocument(
 
   const tryCard = (raw: unknown) => {
     if (!raw || typeof raw !== 'object') return;
+    const haystack = [doc.fileName, doc.documentSummary]
+      .filter(Boolean)
+      .join(' ');
     const card = Array.isArray(raw)
-      ? (raw.find(entry => entry && typeof entry === 'object') as
-          | Record<string, unknown>
-          | undefined)
+      ? pickVaultItemForDocument(
+          raw.filter(
+            (entry): entry is Record<string, unknown> =>
+              !!entry && typeof entry === 'object' && !Array.isArray(entry),
+          ),
+          haystack,
+        ) ||
+        (raw.length === 1 && raw[0] && typeof raw[0] === 'object'
+          ? (raw[0] as Record<string, unknown>)
+          : undefined)
       : (raw as Record<string, unknown>);
     if (!card) return;
     Object.entries(card).forEach(([key, value]) => {
@@ -163,13 +176,7 @@ function tabLabel(
 }
 
 export function stashToMatchDocument(stash: StashedAiPatch): MatchReviewDocument {
-  const facts =
-    stash.detectedFields && stash.detectedFields.length
-      ? stash.detectedFields
-      : flattenDetectedFactsFromPatch(
-          unwrapAiAutofillPatch(stash.result),
-          stash.section_key,
-        );
+  const facts = factsFromStashForReview(stash);
   return {
     fileId: stash.file_id,
     fileName: stash.file_name,
@@ -303,9 +310,12 @@ export function AiSectionFieldMatchDialog({
   const hasDirtyEdits = Object.keys(dirtyEdits).length > 0;
 
   const fillKind = hasDirtyEdits ? 'update' : fillPreview.kind;
-  const itemHeadline =
-    (activeDoc ? tabLabel(activeDoc, safeIndex, sectionId) : '') ||
-    fillPreview.title;
+  const documentTitle =
+    (activeDoc
+      ? polishUploadedDocumentName(activeDoc.fileName) ||
+        String(activeDoc.fileName || '').trim()
+      : '') ||
+    sectionLabel;
 
   const handleClose = () => {
     onReviewLater?.();
@@ -356,7 +366,7 @@ export function AiSectionFieldMatchDialog({
             </div>
             <div className="min-w-0">
               <DialogTitle className="text-[#213D59]">
-                Review & fill · {itemHeadline || sectionLabel}
+                Review & fill · {documentTitle}
               </DialogTitle>
               <DialogDescription className="text-[13px] text-[#6A7481]">
                 Check the document, confirm the summary, then Add any number
@@ -372,7 +382,8 @@ export function AiSectionFieldMatchDialog({
               id: doc.fileId || `${doc.fileName}-${index}`,
               index: index + 1,
               active: index === safeIndex,
-              label: `${tabLabel(doc, index, sectionId)}${
+              label: `${polishUploadedDocumentName(doc.fileName) ||
+                tabLabel(doc, index, sectionId)}${
                 doc.alreadyAutoFilled ? ' · filled' : ''
               }`,
             }))}
@@ -399,8 +410,7 @@ export function AiSectionFieldMatchDialog({
 
             <div className="px-3 py-3 sm:px-5 sm:py-4">
               <p className="text-[18px] font-semibold leading-snug tracking-tight text-[#213D59] sm:text-[20px]">
-                {polishUploadedDocumentName(activeDoc.fileName) ||
-                  tabLabel(activeDoc, safeIndex, sectionId)}
+                {documentTitle}
               </p>
               {activeDoc.fileName ? (
                 <p className="mt-0.5 truncate text-[12px] text-[#7A8794]">
@@ -490,7 +500,7 @@ export function AiSectionFieldMatchDialog({
                     label: row.fieldLabel,
                     value: drafts[row.fieldKey] ?? '',
                     sectionId,
-                    sectionTitle: itemHeadline || sectionLabel,
+                    sectionTitle: sectionLabel,
                     badge: aiFieldBadge(fillPreview.fieldKind[row.fieldKey]),
                     placeholder: row.aiValue
                       ? `AI suggests: ${row.aiValue}`
