@@ -5,7 +5,7 @@ export type NokLetterData = Partial<NOKLetter & NOKLetterIn>;
 
 export const NOK_LETTER_DEFAULTS = {
   letter_greeting: 'Dear',
-  access_url: 'https://portal.orderly-affairs.com/next-kin',
+  access_url: 'https://vault.orderly-affairs.com/next-kin',
   letter_opening:
     "I'm writing you this note as someone I trust deeply.\n\nAs my next of kin, the executor of my will, a close friend, my attorney, or someone who cares—I want you to know that I've prepared something to help guide you through what comes next.",
   kit_description:

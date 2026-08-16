@@ -195,7 +195,8 @@ function isNokLetterTemplateDefault(key: string, value: unknown): boolean {
     if (
       lower === 'https://orderly-affairs.com' ||
       lower.endsWith('/next-kin') ||
-      lower.includes('portal.orderly-affairs.com/next-kin')
+      lower.includes('portal.orderly-affairs.com/next-kin') ||
+      lower.includes('vault.orderly-affairs.com/next-kin')
     ) {
       return true;
     }
