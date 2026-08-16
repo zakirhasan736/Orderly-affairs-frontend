@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarClock,
   Check,
@@ -104,10 +104,12 @@ import {
   markReminderUnread,
 } from '@/utils/vaultAlertState';
 import {
+  consumePendingVaultDocumentAction,
   normalizeVaultActivityTab,
   OPEN_VAULT_ACTIVITY_TAB_EVENT,
   type VaultActivityTab,
   type VaultActivityTabInput,
+  type VaultDocumentAction,
 } from '@/utils/vaultActivityTabs';
 
 function formatReminderDue(daysUntil: number): string {
@@ -514,6 +516,9 @@ export function AiReviewInboxPanel({
     fileName: string;
     mimeType?: string;
   } | null>(null);
+  const pendingDocActionRef = useRef<VaultDocumentAction | null>(
+    consumePendingVaultDocumentAction(),
+  );
 
   const openJustSavedHandoff = useCallback(
     (marker: {
@@ -549,19 +554,20 @@ export function AiReviewInboxPanel({
   // RTK cache — reopen vault activity / switch tabs won't re-hit the API
   // unless data is older than 60s (uploads/deletes invalidate tags).
   const {
-    data: serverDocs = [],
+    data: serverDocs,
     isLoading: filesLoading,
+    isSuccess: filesReady,
   } = useListOwnerAiDocumentsQuery(undefined, {
     pollingInterval: 45_000,
-    refetchOnMountOrArgChange: 60,
-    refetchOnFocus: false,
+    refetchOnMountOrArgChange: 15,
+    refetchOnFocus: true,
     refetchOnReconnect: true,
   });
 
   useEffect(() => {
-    if (filesLoading && serverDocs.length === 0) return;
+    if (!filesReady || !serverDocs) return;
     hydrateAiUploadHistoryFromServer(serverDocs);
-  }, [serverDocs, filesLoading]);
+  }, [serverDocs, filesReady]);
 
   useEffect(() => {
     const onStash = () => {
@@ -582,9 +588,30 @@ export function AiReviewInboxPanel({
     const onHistory = () => setStashTick(value => value + 1);
     const onAlerts = () => setAlertTick(value => value + 1);
     const onOpenTab = (event: Event) => {
-      const detail = (event as CustomEvent<{ tab?: VaultActivityTabInput }>)
-        .detail;
+      const detail = (
+        event as CustomEvent<
+          { tab?: VaultActivityTabInput } & Partial<VaultDocumentAction>
+        >
+      ).detail;
       if (detail?.tab) setTab(normalizeVaultActivityTab(detail.tab));
+      if (detail?.action === 'review') {
+        pendingDocActionRef.current = {
+          action: 'review',
+          fileId: detail.fileId,
+          sectionId: detail.sectionId,
+          fileName: detail.fileName,
+          mimeType: detail.mimeType,
+        };
+        consumePendingVaultDocumentAction();
+        setReviewTick(value => value + 1);
+      }
+      if (detail?.action === 'preview' && detail.fileId) {
+        setPreviewFile({
+          fileId: detail.fileId,
+          fileName: detail.fileName || 'Document',
+          mimeType: detail.mimeType,
+        });
+      }
     };
     window.addEventListener('orderly-ai-patch-stashed', onStash);
     window.addEventListener('orderly-ai-section-reviewed', onReviewed);
@@ -638,7 +665,7 @@ export function AiReviewInboxPanel({
       mergeInboxFiles({
         history: listAiUploadHistory(),
         jobs: batch.jobs,
-        serverDocs,
+        serverDocs: serverDocs || [],
       }),
     );
   }, [stashTick, alertTick, batch.jobs, serverDocs]);
@@ -699,7 +726,9 @@ export function AiReviewInboxPanel({
             item.file_id === row.fileId &&
             item.targetSectionId === row.sectionId,
         ) ||
-        routing?.getPendingUploadsForSection(row.sectionId)?.[0];
+        routing?.getPendingUploadsForSection(row.sectionId)?.find(
+          item => !row.fileId || item.file_id === row.fileId,
+        );
 
       const factsFromPending = (pending?.extractedFields || []).map(field => ({
         label: field.field_label || field.field_path || 'Field',
@@ -746,6 +775,50 @@ export function AiReviewInboxPanel({
     },
     [routing],
   );
+
+  useEffect(() => {
+    const pending = pendingDocActionRef.current;
+    if (!pending || pending.action !== 'review') return;
+
+    const byFile = pending.fileId
+      ? inboxRows.find(row => row.fileId && row.fileId === pending.fileId)
+      : undefined;
+    const bySection =
+      !byFile && pending.sectionId
+        ? inboxRows.find(
+            row =>
+              row.sectionId === pending.sectionId &&
+              row.status === 'ready' &&
+              (!pending.fileName || row.fileName === pending.fileName),
+          )
+        : undefined;
+    const row = byFile || bySection;
+    if (row && row.status !== 'ready') return;
+    if (row && row.status === 'ready') {
+      pendingDocActionRef.current = null;
+      openReviewDetail(row);
+      return;
+    }
+
+    if (!pending.fileId) return;
+    const patch = listDashboardAiPatches().find(
+      entry => entry.file_id === pending.fileId,
+    );
+    if (!patch?.section_id || patch.section_id === 'overview') return;
+
+    pendingDocActionRef.current = null;
+    openReviewDetail({
+      id: `pending-${patch.file_id}-${patch.section_id}`,
+      fileId: patch.file_id,
+      fileName:
+        patch.file_name || pending.fileName || 'Uploaded document',
+      sectionId: patch.section_id,
+      sectionLabel: getAiSectionLabel(patch.section_id),
+      subsectionLabel: subsectionDisplay(patch.section_id, patch.subsection),
+      createdAt: patch.createdAt || Date.now(),
+      status: 'ready',
+    });
+  }, [inboxRows, openReviewDetail, reviewTick]);
 
   const handleApprove = useCallback(
     async (row: InboxRow, editedFacts?: DetectedAiFact[]) => {
@@ -1140,7 +1213,7 @@ export function AiReviewInboxPanel({
       id="ai-review-inbox"
       data-ai-review-inbox
       className={cn(
-        'overflow-hidden rounded-xl border border-[#213D59]/15 bg-[#f4f6f8] shadow-sm',
+        'overflow-hidden rounded-xl border border-[#213D59]/15 bg-[#F6F8FA] shadow-sm',
         className,
       )}
     >

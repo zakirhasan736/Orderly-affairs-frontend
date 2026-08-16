@@ -1,25 +1,17 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  CheckCircle2,
-  CircleDashed,
-  FileSearch,
-  ListChecks,
-  Sparkles,
-} from 'lucide-react';
+import { ListChecks } from 'lucide-react';
 import { Button } from '@/components/common/ui/button';
-import { Input } from '@/components/common/ui/input';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/common/ui/dialog';
 import { cn } from '@common/ui/utils';
-import { AI_ROUTING_DIALOG_SHEET } from '@/utils/aiMobileUi';
+import { AI_REVIEW_FILL_DIALOG_SHEET, AI_REVIEW_FILL_FOOTER, AI_REVIEW_FILL_BUTTON, AI_REVIEW_DOC_PANE, AI_REVIEW_TWO_PANE } from '@/utils/aiMobileUi';
 import { getAiSectionLabel } from '@/utils/aiSectionRegistry';
 import type {
   DetectedAiFact,
@@ -28,14 +20,24 @@ import type {
 import {
   buildFieldMatchRows,
   averageMatchConfidence,
-  countEditableEmptyRows,
-  countUnfilledAiRows,
 } from '@/utils/aiFieldMatchReview';
 import { aiNoFieldsMessage } from '@/utils/aiReadSourceLabels';
 import { AI_SECTION_BY_ID } from '@/utils/aiSectionRegistry';
 import { unwrapAiAutofillPatch } from '@/utils/aiPatchNormalizer';
 import { flattenDetectedFactsFromPatch } from '@/utils/aiSemanticFieldMatch';
 import { describeAutofillItem } from '@/utils/aiMultiItemAutofill';
+import { AiReviewDocumentPane } from '@/components/ai/AiReviewDocumentPane';
+import { AiReviewDetailFields } from '@/components/ai/AiReviewDetailFields';
+import { AiReviewDocPills } from '@/components/ai/AiReviewDocPills';
+import { polishUploadedDocumentName } from '@/utils/aiUploadDisplayTitle';
+import { VaultPrivacySaveToggle } from '@/components/vault/VaultPrivacySaveToggle';
+import { highlightVaultSections } from '@/vault-prototype/navigate';
+import { composeEntryTitle } from '@/vault-prototype/entryDisplayTitle';
+import {
+  aiFieldBadge,
+  aiFillActionLabel,
+  previewAiFillAgainstVault,
+} from '@/utils/aiFillPreview';
 
 export type MatchReviewDocument = {
   fileId?: string;
@@ -66,32 +68,10 @@ type Props = {
   ) => void | Promise<void>;
   onCloseReviewed: () => void;
   applying?: boolean;
+  onReviewLater?: () => void;
+  /** Open this uploaded file, not the first Jeep/Honda/Toyota in the list. */
+  focusFileId?: string | null;
 };
-
-function StatusPill({ status }: { status: 'filled' | 'available' | 'empty' }) {
-  if (status === 'filled') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-        <CheckCircle2 className="h-3 w-3" />
-        From document
-      </span>
-    );
-  }
-  if (status === 'available') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
-        <Sparkles className="h-3 w-3" />
-        Can fill
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-      <CircleDashed className="h-3 w-3" />
-      Still empty
-    </span>
-  );
-}
 
 function asTabText(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -174,35 +154,9 @@ function tabLabel(
   sectionId: string,
 ) {
   const item = itemFromMatchDocument(doc, sectionId);
-
-  if (sectionId === '5') {
-    const parts = [item.make, item.model, item.year]
-      .map(asTabText)
-      .filter(Boolean);
-    if (parts.length) return parts.join(' · ');
-  }
-
-  if (sectionId === '7') {
-    const parts = [
-      item.policy_company || item.insurance_company,
-      item.policy_type,
-      item.policy_number,
-    ]
-      .map(asTabText)
-      .filter(Boolean);
-    if (parts.length) return parts.join(' · ');
-  }
-
-  const described = describeAutofillItem(item, [
-    'make',
-    'model',
-    'year',
-    'policy_company',
-    'insurance_company',
-    'policy_type',
-    'policy_number',
-    'vin',
-  ]);
+  const composed = composeEntryTitle(item);
+  if (composed) return composed;
+  const described = describeAutofillItem(item);
   if (described && described !== 'Entry') return described;
   if (doc.fileName) return doc.fileName.replace(/\.[^.]+$/, '');
   return `Document ${index + 1}`;
@@ -239,18 +193,30 @@ export function AiSectionFieldMatchDialog({
   onSaveEdits,
   onCloseReviewed,
   applying = false,
+  onReviewLater,
+  focusFileId,
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [activeIndex, setActiveIndex] = useState(0);
 
   const docs = documents.length ? documents : [];
+  const fileKey = docs.map(d => d.fileId).join('|');
   const safeIndex = Math.min(activeIndex, Math.max(0, docs.length - 1));
   const activeDoc = docs[safeIndex] || null;
 
   const facts = activeDoc?.facts || [];
-  const fileName = activeDoc?.fileName;
   const documentSummary = activeDoc?.documentSummary;
+
+  const fillPreview = useMemo(
+    () =>
+      previewAiFillAgainstVault({
+        sectionId,
+        facts: activeDoc?.facts || [],
+        sectionData,
+      }),
+    [activeDoc?.facts, sectionData, sectionId],
+  );
 
   const rows = useMemo(
     () =>
@@ -259,36 +225,58 @@ export function AiSectionFieldMatchDialog({
         subsection: activeDoc?.subsection || subsection,
         sectionData,
         facts,
+        matchedItem: fillPreview.matchedItem ?? null,
       }),
-    [sectionId, subsection, sectionData, facts, activeDoc?.subsection],
+    [
+      sectionId,
+      subsection,
+      sectionData,
+      facts,
+      activeDoc?.subsection,
+      fillPreview.matchedItem,
+    ],
   );
 
   useEffect(() => {
     if (!open) return;
-    setActiveIndex(0);
-  }, [open, sectionId, docs.map(d => d.fileId).join('|')]);
+    const wanted = String(focusFileId || '').trim();
+    const idx = wanted
+      ? docs.findIndex(doc => String(doc.fileId || '').trim() === wanted)
+      : 0;
+    setActiveIndex(idx >= 0 ? idx : 0);
+  }, [open, sectionId, focusFileId, fileKey]);
+
+  useEffect(() => {
+    if (!open || !sectionId) {
+      highlightVaultSections([]);
+      return;
+    }
+    highlightVaultSections([sectionId]);
+    return () => highlightVaultSections([]);
+  }, [open, sectionId]);
 
   useEffect(() => {
     if (!open || !activeDoc) return;
     const next: Record<string, string> = {};
+    const preview = previewAiFillAgainstVault({
+      sectionId,
+      facts: activeDoc.facts || [],
+      sectionData,
+    });
     const built = buildFieldMatchRows({
       sectionId,
       subsection: activeDoc.subsection || subsection,
       sectionData,
       facts: activeDoc.facts || [],
+      matchedItem: preview.matchedItem ?? null,
     });
     built.forEach(row => {
-      next[row.fieldKey] =
-        row.currentValue ||
-        (row.status === 'available' && row.aiValue ? row.aiValue : '') ||
-        '';
+      next[row.fieldKey] = String(row.aiValue || row.currentValue || '').trim();
     });
     setDrafts(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, sectionId, safeIndex, activeDoc?.fileId]);
 
-  const unfilledCount = countUnfilledAiRows(rows);
-  const editableCount = countEditableEmptyRows(rows);
   const filledFromDocCount = rows.filter(row => row.status === 'filled').length;
   const canFillCount = rows.filter(row => row.status === 'available').length;
   const stillEmptyCount = rows.filter(row => row.status === 'empty').length;
@@ -299,7 +287,6 @@ export function AiSectionFieldMatchDialog({
     subsection ||
     AI_SECTION_BY_ID[sectionId]?.defaultSubsection ||
     null;
-  const anyAlreadyAutoFilled = docs.some(doc => doc.alreadyAutoFilled);
 
   const dirtyEdits = useMemo(() => {
     const edits: Record<string, string> = {};
@@ -315,8 +302,13 @@ export function AiSectionFieldMatchDialog({
 
   const hasDirtyEdits = Object.keys(dirtyEdits).length > 0;
 
+  const fillKind = hasDirtyEdits ? 'update' : fillPreview.kind;
+  const itemHeadline =
+    (activeDoc ? tabLabel(activeDoc, safeIndex, sectionId) : '') ||
+    fillPreview.title;
+
   const handleClose = () => {
-    onCloseReviewed();
+    onReviewLater?.();
     onOpenChange(false);
   };
 
@@ -347,268 +339,236 @@ export function AiSectionFieldMatchDialog({
     <Dialog
       open={open}
       onOpenChange={next => {
-        if (!next) {
-          onCloseReviewed();
-        }
+        if (!next) onReviewLater?.();
         onOpenChange(next);
       }}
     >
-      <DialogContent className={cn(AI_ROUTING_DIALOG_SHEET, 'md:max-w-3xl')}>
-        <DialogHeader className="space-y-2 text-left">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#e7eef7] text-[#2B5A8C]">
+      <DialogContent
+        className={cn(AI_REVIEW_FILL_DIALOG_SHEET, 'bg-[#F6F8FA]')}
+      >
+        <DialogHeader className="shrink-0 space-y-1 border-b border-[#E4EAF0] bg-white px-4 py-3 pr-12 text-left sm:px-5">
+          <div className="flex justify-center md:hidden" aria-hidden>
+            <div className="-mt-1 mb-1 h-1.5 w-12 rounded-full bg-[#D5DDE5]" />
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#EAF6FD] text-[#3EB1E5]">
               <ListChecks className="h-5 w-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <DialogTitle className="text-[#213D59]">
-                Review & fill · {sectionLabel}
-                {subsectionLabel ? (
-                  <span className="font-normal text-slate-500">
-                    {' '}
-                    · {subsectionLabel}
-                  </span>
-                ) : null}
+                Review & fill · {itemHeadline || sectionLabel}
               </DialogTitle>
-              <DialogDescription className="text-slate-600">
-                {docs.length > 1
-                  ? `${docs.length} documents ready — tabs are named by vehicle/policy (Toyota, Honda, Jeep…).`
-                  : 'We read your uploaded document and matched it to this section.'}{' '}
-                Fields may already be filled from that read. Review them, fill
-                what is still empty, save edits, fill all documents, or skip to
-                keep the auto-filled data.
+              <DialogDescription className="text-[13px] text-[#6A7481]">
+                Check the document, confirm the summary, then Add any number
+                still missing.
               </DialogDescription>
             </div>
           </div>
-
-          <div className="flex flex-wrap gap-2 rounded-xl border border-[#c5d4e8] bg-[#eef3f9] px-3 py-2.5 text-xs text-[#213D59]">
-            {anyAlreadyAutoFilled || filledFromDocCount > 0 ? (
-              <span className="font-semibold">
-                {filledFromDocCount} already filled from document
-              </span>
-            ) : (
-              <span className="font-semibold">Ready to apply document data</span>
-            )}
-            {canFillCount > 0 ? (
-              <span className="text-[#8a6a1a]">
-                · {canFillCount} can still fill
-              </span>
-            ) : null}
-            {stillEmptyCount > 0 ? (
-              <span className="text-slate-600">
-                · {stillEmptyCount} still empty
-              </span>
-            ) : null}
-          </div>
-
-          {docs.length > 1 ? (
-            <div className="flex flex-wrap gap-2 pt-1">
-              {docs.map((doc, index) => (
-                <button
-                  key={doc.fileId || `${doc.fileName}-${index}`}
-                  type="button"
-                  onClick={() => setActiveIndex(index)}
-                  className={cn(
-                    'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
-                    index === safeIndex
-                      ? 'border-[#213D59] bg-[#213D59] text-white'
-                      : 'border-slate-200 bg-white text-[#213D59] hover:border-[#213D59]/40',
-                  )}
-                >
-                  {tabLabel(doc, index, sectionId)}
-                  {doc.alreadyAutoFilled ? ' · filled' : ''}
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          {documentSummary ? (
-            <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              {docs.length > 1 ? (
-                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#2B5A8C]">
-                  {tabLabel(activeDoc!, safeIndex, sectionId)}
-                  {fileName ? ` · ${fileName}` : ''}
-                </span>
-              ) : null}
-              {documentSummary}
-            </p>
-          ) : null}
-          {avgConfidence > 0 ? (
-            <p className="text-xs font-semibold text-[#213D59]">
-              Average field match confidence: {avgConfidence}%
-            </p>
-          ) : null}
         </DialogHeader>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <div className="flex items-center gap-2 border-b border-slate-100 bg-[#f5f8fc] px-3 py-2.5">
-              <FileSearch className="h-4 w-4 text-[#2B5A8C]" />
-              <h3 className="text-sm font-semibold text-[#213D59]">
-                What we read
-              </h3>
+        {docs.length > 1 ? (
+          <AiReviewDocPills
+            items={docs.map((doc, index) => ({
+              id: doc.fileId || `${doc.fileName}-${index}`,
+              index: index + 1,
+              active: index === safeIndex,
+              label: `${tabLabel(doc, index, sectionId)}${
+                doc.alreadyAutoFilled ? ' · filled' : ''
+              }`,
+            }))}
+            onSelect={id => {
+              const next = docs.findIndex(
+                (doc, index) =>
+                  (doc.fileId || `${doc.fileName}-${index}`) === id,
+              );
+              if (next >= 0) setActiveIndex(next);
+            }}
+          />
+        ) : null}
+
+        {activeDoc ? (
+          <div className={AI_REVIEW_TWO_PANE}>
+            <div className="min-h-0 px-3 pt-3 sm:px-5 sm:pt-4">
+              <AiReviewDocumentPane
+                fileId={activeDoc.fileId}
+                fileName={activeDoc.fileName}
+                active={open}
+                className={AI_REVIEW_DOC_PANE}
+              />
             </div>
-            <ul className="max-h-[min(44vh,340px)] space-y-1.5 overflow-y-auto p-3">
-              {facts.length === 0 ? (
-                <li className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-sm text-slate-500">
-                  {aiNoFieldsMessage()}
-                </li>
-              ) : (
-                facts.map(fact => (
-                  <li
-                    key={`${fact.label}:${fact.value}`}
-                    className="rounded-lg bg-slate-50 px-2.5 py-2 text-sm text-slate-700"
-                  >
-                    <span className="font-semibold text-[#213D59]">
-                      {fact.label}:
-                    </span>{' '}
-                    <span className="break-all">{fact.value}</span>
-                  </li>
-                ))
-              )}
-            </ul>
-          </section>
 
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <div className="flex items-center gap-2 border-b border-slate-100 bg-[#f5f8fc] px-3 py-2.5">
-              <ListChecks className="h-4 w-4 text-[#2B5A8C]" />
-              <h3 className="text-sm font-semibold text-[#213D59]">
-                This section’s fields
-              </h3>
+            <div className="px-3 py-3 sm:px-5 sm:py-4">
+              <p className="text-[18px] font-semibold leading-snug tracking-tight text-[#213D59] sm:text-[20px]">
+                {polishUploadedDocumentName(activeDoc.fileName) ||
+                  tabLabel(activeDoc, safeIndex, sectionId)}
+              </p>
+              {activeDoc.fileName ? (
+                <p className="mt-0.5 truncate text-[12px] text-[#7A8794]">
+                  {activeDoc.fileName}
+                  {subsectionLabel ? ` · ${subsectionLabel}` : ''}
+                </p>
+              ) : null}
+
+              {documentSummary ? (
+                <div className="mt-3 rounded-2xl border border-[#E4EAF0] bg-white px-3.5 py-3 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#7A8794]">
+                    AI summary
+                  </p>
+                  <p className="mt-1.5 whitespace-pre-wrap text-[14px] leading-relaxed text-[#213D59]">
+                    {documentSummary}
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="mt-3 rounded-2xl border border-[#E4EAF0] bg-white px-3.5 py-3 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[13px] font-semibold text-[#213D59]">
+                    Filing location
+                  </p>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F6F0] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#1F9D6B]">
+                    • {sectionLabel}
+                  </span>
+                </div>
+                <p className="mt-2 text-[14px] font-semibold text-[#213D59]">
+                  <span className="font-medium text-[#7A8794]">File to: </span>
+                  {sectionLabel}
+                  {subsectionLabel ? ` · ${subsectionLabel}` : ''}
+                </p>
+              </div>
+
+              <VaultPrivacySaveToggle
+                className="mt-3"
+                sectionId={sectionId}
+                subsectionId={subsectionLabel}
+              />
+
+              <p className="mt-2 flex flex-wrap items-center gap-x-1 text-[12px] text-[#7A8794]">
+                {filledFromDocCount > 0 ? (
+                  <span className="font-semibold text-[#1F9D6B]">
+                    {filledFromDocCount} from document
+                  </span>
+                ) : (
+                  <span className="font-semibold text-[#213D59]">
+                    Ready to fill
+                  </span>
+                )}
+                {canFillCount > 0 ? (
+                  <span className="text-[#B4761A]">· {canFillCount} can fill</span>
+                ) : null}
+                {stillEmptyCount > 0 ? (
+                  <span>· {stillEmptyCount} still empty</span>
+                ) : null}
+                {avgConfidence > 0 ? (
+                  <span>· Match {avgConfidence}%</span>
+                ) : null}
+              </p>
+
+              <div className="mt-3 rounded-2xl border border-[#E4EAF0] bg-white px-4 py-3.5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[16px] font-semibold tracking-tight text-[#213D59]">
+                      Details
+                    </p>
+                    <p className="mt-0.5 text-[12px] leading-snug text-[#6A7481]">
+                      {fillKind === 'same'
+                        ? 'This is already in your Vault. Nothing new to fill.'
+                        : fillKind === 'update'
+                          ? 'This item is already on file. New or changed values are marked.'
+                          : 'Empty rows show Add. Filled rows have an edit icon.'}
+                    </p>
+                  </div>
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#E8F6F0] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#1F9D6B]">
+                    • {stillEmptyCount} still empty
+                  </span>
+                </div>
+                <AiReviewDetailFields
+                  className="mt-1"
+                  splitEmpty
+                  emptyMessage={aiNoFieldsMessage()}
+                  fields={rows.map(row => ({
+                    id: row.fieldKey,
+                    label: row.fieldLabel,
+                    value: drafts[row.fieldKey] ?? '',
+                    sectionId,
+                    sectionTitle: itemHeadline || sectionLabel,
+                    badge: aiFieldBadge(fillPreview.fieldKind[row.fieldKey]),
+                    placeholder: row.aiValue
+                      ? `AI suggests: ${row.aiValue}`
+                      : 'Type the value from the document',
+                    hint:
+                      row.status === 'filled'
+                        ? 'From document'
+                        : row.status === 'available'
+                          ? 'Can fill'
+                          : undefined,
+                    onChange: value =>
+                      setDrafts(prev => ({
+                        ...prev,
+                        [row.fieldKey]: value,
+                      })),
+                  }))}
+                />
+              </div>
             </div>
-            <ul className="max-h-[min(44vh,340px)] space-y-2 overflow-y-auto p-3">
-              {rows.length === 0 ? (
-                <li className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-sm text-slate-500">
-                  No fields listed for this section.
-                </li>
-              ) : (
-                rows.map(row => {
-                  const editable =
-                    row.status === 'empty' || row.status === 'available';
-                  return (
-                    <li
-                      key={row.fieldKey}
-                      className={cn(
-                        'rounded-lg px-2.5 py-2 text-sm',
-                        row.status === 'filled' && 'bg-emerald-50/80',
-                        row.status === 'available' && 'bg-amber-50/80',
-                        row.status === 'empty' && 'bg-slate-50',
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="font-semibold text-[#213D59]">
-                          {row.fieldLabel}
-                        </span>
-                        <div className="flex shrink-0 flex-col items-end gap-1">
-                          <StatusPill status={row.status} />
-                          {row.matchConfidence > 0 ? (
-                            <span className="text-[10px] font-semibold tabular-nums text-slate-500">
-                              Match {row.matchConfidence}%
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
+          </div>
+        ) : null}
 
-                      {editable ? (
-                        <div className="mt-2 space-y-1.5">
-                          <Input
-                            value={drafts[row.fieldKey] ?? ''}
-                            onChange={event =>
-                              setDrafts(prev => ({
-                                ...prev,
-                                [row.fieldKey]: event.target.value,
-                              }))
-                            }
-                            placeholder={
-                              row.aiValue
-                                ? `AI suggests: ${row.aiValue}`
-                                : 'Type value…'
-                            }
-                            className="h-9 rounded-lg bg-white text-sm"
-                          />
-                          {row.aiValue &&
-                          (drafts[row.fieldKey] || '').trim() !==
-                            row.aiValue.trim() ? (
-                            <button
-                              type="button"
-                              className="text-[11px] font-semibold text-[#2B5A8C] hover:underline"
-                              onClick={() =>
-                                setDrafts(prev => ({
-                                  ...prev,
-                                  [row.fieldKey]: row.aiValue || '',
-                                }))
-                              }
-                            >
-                              Use AI value
-                            </button>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <p className="mt-1 break-all text-xs text-slate-600">
-                          {row.currentValue || (
-                            <span className="italic text-slate-400">
-                              Not filled
-                            </span>
-                          )}
-                        </p>
-                      )}
-                    </li>
-                  );
-                })
+        <div className={cn(AI_REVIEW_FILL_FOOTER, 'shrink-0')}>
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(
+                AI_REVIEW_FILL_BUTTON,
+                'border-[#E4EAF0] text-[#213D59]',
               )}
-            </ul>
-          </section>
-        </div>
-
-        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
-          <p className="text-xs text-slate-500">
-            {docs.length > 1
-              ? 'Fill all applies each document. Skip keeps values already filled from the document read.'
-              : editableCount > 0
-                ? `${editableCount} field${editableCount === 1 ? '' : 's'} can still be filled or edited. Skip keeps what the document already filled.`
-                : 'All listed fields already have document values. Skip to keep them, or update if you changed anything.'}
-          </p>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            {docs.length > 0 ? (
+              onClick={handleClose}
+            >
+              {hasDirtyEdits
+                ? 'Review later without saving edits'
+                : 'Review later'}
+            </Button>
+            {docs.length > 1 ? (
               <Button
                 type="button"
                 variant="outline"
-                className="rounded-xl"
+                className={cn(
+                  AI_REVIEW_FILL_BUTTON,
+                  'border-[#213D59]/20 text-[#213D59]',
+                )}
                 disabled={busy || applying}
                 onClick={() => void handleApplyAi()}
               >
                 {busy || applying
                   ? 'Filling…'
-                  : docs.length > 1
-                    ? `Fill all ${docs.length} documents`
-                    : unfilledCount > 0
-                      ? 'Fill remaining from document'
-                      : 'Update from document'}
+                  : `Fill all ${docs.length} documents`}
               </Button>
             ) : null}
             {hasDirtyEdits && activeDoc ? (
               <Button
                 type="button"
-                className="rounded-xl bg-[#213D59] hover:bg-[#1a3148]"
+                className={cn(
+                  AI_REVIEW_FILL_BUTTON,
+                  'bg-[#213D59] text-white hover:bg-[#2C4B6B]',
+                )}
                 disabled={busy || applying}
                 onClick={() => void handleSaveEdits()}
               >
-                {busy || applying ? 'Saving…' : 'Save edits'}
+                {busy || applying ? 'Saving…' : aiFillActionLabel(fillKind)}
+              </Button>
+            ) : docs.length > 0 ? (
+              <Button
+                type="button"
+                className={cn(
+                  AI_REVIEW_FILL_BUTTON,
+                  'bg-[#213D59] text-white hover:bg-[#2C4B6B]',
+                )}
+                disabled={busy || applying}
+                onClick={() => void handleApplyAi()}
+              >
+                {busy || applying ? 'Filling…' : aiFillActionLabel(fillKind)}
               </Button>
             ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-xl"
-              onClick={handleClose}
-            >
-              {hasDirtyEdits
-                ? 'Skip without saving edits'
-                : filledFromDocCount > 0 || anyAlreadyAutoFilled
-                  ? 'Skip — keep filled data'
-                  : 'Skip'}
-            </Button>
-          </div>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

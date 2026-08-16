@@ -8,6 +8,7 @@ import {
   resolveAiPreviewKind,
   resolveAiPreviewMime,
 } from '@/utils/aiPreviewKind';
+import { AiPdfCanvas } from '@/components/ai/AiPdfCanvas';
 
 type AiUploadHistoryThumbProps = {
   fileId?: string;
@@ -29,6 +30,7 @@ export function AiUploadHistoryThumb({
   className,
 }: AiUploadHistoryThumbProps) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
   const [mimeType, setMimeType] = useState<string>(mimeHint || '');
   const [loading, setLoading] = useState(Boolean(fileId));
   const [failed, setFailed] = useState(false);
@@ -48,6 +50,7 @@ export function AiUploadHistoryThumb({
       setLoading(true);
       setFailed(false);
       setPreviewKind(null);
+      setPdfBytes(null);
       setObjectUrl(prev => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
@@ -84,11 +87,8 @@ export function AiUploadHistoryThumb({
           setPreviewKind('image');
           setObjectUrl(createdUrl);
         } else if (kind === 'pdf') {
-          createdUrl = URL.createObjectURL(
-            new Blob([buffer], { type: 'application/pdf' }),
-          );
           setPreviewKind('pdf');
-          setObjectUrl(createdUrl);
+          setPdfBytes(new Uint8Array(buffer));
         } else {
           setObjectUrl(null);
         }
@@ -126,7 +126,7 @@ export function AiUploadHistoryThumb({
       )}
     >
       {loading ? (
-        <div className="flex h-full items-center justify-center bg-[#f4f6f8]">
+        <div className="flex h-full items-center justify-center bg-[#F6F8FA]">
           <Loader2 className="h-5 w-5 animate-spin text-[#213D59]/50" />
         </div>
       ) : objectUrl && !failed && previewKind === 'image' ? (
@@ -136,20 +136,12 @@ export function AiUploadHistoryThumb({
           alt=""
           className="h-full w-full object-cover object-top"
         />
-      ) : objectUrl && !failed && previewKind === 'pdf' ? (
-        <div className="relative h-full w-full overflow-hidden bg-[#eef3f9]">
-          {/* No translate/scale — those blank Chrome's PDF plugin. */}
-          <iframe
-            title=""
-            src={`${objectUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
-            className="pointer-events-none absolute inset-0 h-full w-full border-0 bg-white"
-            aria-hidden
-          />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#213D59]/70 to-transparent px-1.5 pb-1 pt-4">
-            <p className="truncate text-center text-[9px] font-bold uppercase tracking-wide text-white">
-              PDF
-            </p>
-          </div>
+      ) : pdfBytes && !failed && previewKind === 'pdf' ? (
+        <div className="relative h-full w-full">
+          <AiPdfCanvas data={pdfBytes} thumb title={fileName} />
+          <span className="pointer-events-none absolute bottom-1.5 left-1.5 rounded bg-[#213D59]/80 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+            PDF
+          </span>
         </div>
       ) : (
         <div
@@ -158,7 +150,7 @@ export function AiUploadHistoryThumb({
             kind === 'pdf' && 'bg-gradient-to-b from-[#eef3f9] to-white',
             kind === 'text' && 'bg-gradient-to-b from-[#f7f5f0] to-white',
             kind === 'image' && 'bg-gradient-to-b from-[#eef8f4] to-white',
-            kind === 'other' && 'bg-gradient-to-b from-[#f4f6f8] to-white',
+            kind === 'other' && 'bg-gradient-to-b from-[#F6F8FA] to-white',
           )}
         >
           {kind === 'pdf' ? (

@@ -504,7 +504,7 @@ export const formConfig: FormConfig = {
           subsections: [
             {
               id: '2A',
-              title: 'Kit Access Control',
+              title: 'Access Control',
               fields: [
                 {
                   key: 'access_control_header',

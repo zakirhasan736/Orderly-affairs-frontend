@@ -13,16 +13,9 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/common/ui/dialog';
-import { Button } from '@/components/common/ui/button';
 import { cn } from '@common/ui/utils';
 import { useIsMobile } from '@/components/MobileBottomSheet';
+import { VaultDetailDrawer } from '@/components/vault-prototype/VaultDetailDrawer';
 import { uploadFile, deleteUpload } from '@/libs/api/upload';
 import {
   submitFeedback,
@@ -178,8 +171,10 @@ export function LeaveFeedbackWidget() {
           },
         ]);
       }
-    } catch {
-      toast.error('Could not upload screenshot. Please try again.');
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Could not upload screenshot. Please try again.',
+      );
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -286,275 +281,238 @@ export function LeaveFeedbackWidget() {
           )
         : null}
 
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent
-          className={cn(
-            'flex flex-col gap-0 overflow-hidden border-slate-200/90 bg-white p-0 shadow-2xl',
-            // Mobile: bottom sheet, compact
-            'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:max-h-[min(90dvh,calc(100dvh-env(safe-area-inset-bottom)))] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-2xl max-sm:rounded-b-none max-sm:pb-[env(safe-area-inset-bottom)]',
-            // Desktop: centered card
-            'sm:max-h-[min(88dvh,40rem)] sm:w-[min(100vw-2rem,34rem)] sm:max-w-[34rem] sm:rounded-2xl',
-          )}
-        >
-          {sent ? (
-            <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center sm:px-8 sm:py-12">
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-4 ring-emerald-50/60 sm:mb-4 sm:h-14 sm:w-14">
-                <CheckCircle2 className="h-6 w-6 sm:h-7 sm:w-7" />
-              </div>
-              <h3 className="text-lg font-semibold tracking-tight text-[#213D59] sm:text-xl">
-                Thanks — sent
-              </h3>
-              <p className="mt-1.5 text-sm text-slate-500">
-                We read every note.
-              </p>
-              <Button
-                className="mt-6 h-10 min-w-[7.5rem] rounded-full bg-[#213D59] px-5 hover:bg-[#00305C]"
-                onClick={() => handleOpenChange(false)}
-              >
-                Close
-              </Button>
-            </div>
+      <VaultDetailDrawer
+        open={open}
+        onClose={() => handleOpenChange(false)}
+        title={sent ? 'Thanks — sent' : 'Leave feedback'}
+        subtitle={
+          sent
+            ? 'We read every note.'
+            : 'Share an idea, a bug, or anything that would make the Vault clearer.'
+        }
+        icon={
+          sent ? (
+            <CheckCircle2 className="h-5 w-5 text-[#1F9D6B]" />
+          ) : (
+            <MessageSquarePlus className="h-5 w-5" />
+          )
+        }
+        footer={
+          sent ? (
+            <button
+              type="button"
+              onClick={() => handleOpenChange(false)}
+              className="inline-flex min-h-12 flex-1 items-center justify-center rounded-full bg-[#213D59] px-5 text-[14px] font-semibold text-white"
+            >
+              Close
+            </button>
           ) : (
             <>
-              <div className="flex shrink-0 justify-center pt-2.5 sm:hidden" aria-hidden>
-                <div className="h-1 w-10 rounded-full bg-slate-300/90" />
-              </div>
-
-              <DialogHeader className="shrink-0 space-y-0 border-b border-slate-100 px-4 pb-3 pt-2 text-left sm:px-5 sm:pb-3.5 sm:pt-4">
-                <DialogTitle className="pr-8 text-base font-semibold tracking-tight text-[#213D59] sm:text-lg">
-                  Leave feedback
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                  Share an idea, bug, or note about Orderly Affairs.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3.5 sm:px-5 sm:py-4">
-                <div className="space-y-4 sm:space-y-5">
-                  <section>
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                      Type
-                    </p>
-                    <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                      {CATEGORIES.map(item => {
-                        const Icon = item.icon;
-                        const active = category === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            title={item.hint}
-                            onClick={() => setCategory(item.id)}
-                            className={cn(
-                              'flex flex-col items-center gap-1 rounded-xl border px-1.5 py-2.5 transition sm:py-3',
-                              active
-                                ? 'border-[#213D59] bg-[#213D59] text-white shadow-sm'
-                                : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50',
-                            )}
-                          >
-                            <Icon
-                              className={cn(
-                                'h-4 w-4',
-                                active ? 'text-white' : 'text-[#213D59]',
-                              )}
-                            />
-                            <span className="text-[11px] font-semibold leading-none sm:text-xs">
-                              {item.label}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-
-                  <section>
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                      Feeling <span className="font-normal normal-case tracking-normal text-slate-400">· optional</span>
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {RATINGS.map(item => {
-                        const active = rating === item.value;
-                        return (
-                          <button
-                            key={item.value}
-                            type="button"
-                            onClick={() =>
-                              setRating(prev =>
-                                prev === item.value ? null : item.value,
-                              )
-                            }
-                            className={cn(
-                              'rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition sm:px-3 sm:text-xs',
-                              active
-                                ? 'border-[#213D59] bg-[#213D59] text-white'
-                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
-                            )}
-                          >
-                            {item.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-
-                  <section className="space-y-3">
-                    <div>
-                      <label
-                        htmlFor="feedback-subject"
-                        className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-                      >
-                        Title{' '}
-                        <span className="font-normal normal-case tracking-normal text-slate-400">
-                          · optional
-                        </span>
-                      </label>
-                      <input
-                        id="feedback-subject"
-                        value={subject}
-                        onChange={e => setSubject(e.target.value)}
-                        maxLength={200}
-                        placeholder="Short summary"
-                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none ring-[#213D59]/15 placeholder:text-slate-400 focus:border-[#213D59] focus:ring-2"
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="feedback-message"
-                        className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-                      >
-                        Details{' '}
-                        <span className="font-normal normal-case tracking-normal text-rose-500">
-                          · required
-                        </span>
-                      </label>
-                      <textarea
-                        id="feedback-message"
-                        value={message}
-                        onChange={e => setMessage(e.target.value)}
-                        maxLength={4000}
-                        rows={3}
-                        placeholder="What should we change?"
-                        className="min-h-[5.5rem] w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-slate-900 outline-none ring-[#213D59]/15 placeholder:text-slate-400 focus:border-[#213D59] focus:ring-2 sm:min-h-[6.5rem]"
-                      />
-                      <p className="mt-1 text-right text-[10px] tabular-nums text-slate-400">
-                        {message.trim().length}/4000
-                      </p>
-                    </div>
-                  </section>
-
-                  <section>
-                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                      Screenshot{' '}
-                      <span className="font-normal normal-case tracking-normal text-slate-400">
-                        · optional
-                      </span>
-                    </p>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif"
-                      multiple
-                      className="hidden"
-                      onChange={e => void onPickFiles(e.target.files)}
-                    />
-                    <button
-                      type="button"
-                      disabled={uploading || attachments.length >= 3}
-                      onClick={() => fileInputRef.current?.click()}
-                      className={cn(
-                        'flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-[#f8fafc] px-3 py-3 text-xs font-medium text-slate-600 transition sm:text-sm',
-                        'hover:border-[#213D59]/40 hover:bg-[#213D59]/[0.03]',
-                        'disabled:cursor-not-allowed disabled:opacity-60',
-                      )}
-                    >
-                      {uploading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Uploading…
-                        </>
-                      ) : (
-                        <>
-                          <ImagePlus className="h-4 w-4 text-[#213D59]" />
-                          Add screenshot
-                          {attachments.length > 0
-                            ? ` (${attachments.length}/3)`
-                            : ''}
-                        </>
-                      )}
-                    </button>
-
-                    {attachments.length > 0 ? (
-                      <ul className="mt-2.5 grid grid-cols-3 gap-2">
-                        {attachments.map((item, index) => (
-                          <li
-                            key={`${item.public_id || item.url}-${index}`}
-                            className="group relative overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={item.previewUrl || item.url}
-                              alt={item.name || 'Screenshot'}
-                              className="h-20 w-full object-cover"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => void removeAttachment(index)}
-                              className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white transition hover:bg-black"
-                              aria-label="Remove screenshot"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </section>
-                </div>
-              </div>
-
-              <div
+              <button
+                type="button"
+                onClick={() => handleOpenChange(false)}
+                disabled={submitting}
+                className="inline-flex min-h-12 items-center justify-center rounded-full border border-[#E4EAF0] bg-white px-4 text-[14px] font-semibold text-[#213D59]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!canSend}
+                onClick={() => void onSubmit()}
                 className={cn(
-                  'shrink-0 border-t border-slate-200/90 bg-white px-4 py-3 sm:px-5',
-                  'pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-3.5',
+                  'inline-flex min-h-12 flex-1 items-center justify-center rounded-full px-5 text-[14px] font-semibold text-white',
+                  canSend ? 'bg-[#213D59]' : 'bg-[#D7DEE5] text-white',
                 )}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-10 rounded-full px-3 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    onClick={() => handleOpenChange(false)}
-                    disabled={submitting}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    className={cn(
-                      'h-10 min-w-[8.5rem] rounded-full px-5 text-sm font-semibold shadow-sm',
-                      canSend
-                        ? 'bg-[#213D59] hover:bg-[#00305C]'
-                        : 'bg-slate-300 text-white hover:bg-slate-300',
-                    )}
-                    disabled={!canSend}
-                    onClick={() => void onSubmit()}
-                  >
-                    {submitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Sending…
-                      </>
-                    ) : (
-                      'Send'
-                    )}
-                  </Button>
-                </div>
-              </div>
+                {submitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending…
+                  </>
+                ) : (
+                  'Send feedback'
+                )}
+              </button>
             </>
-          )}
-        </DialogContent>
-      </Dialog>
+          )
+        }
+      >
+        {sent ? (
+          <p className="text-[13.5px] leading-relaxed text-[#7A8794]">
+            Your note is with the team. You can keep using your Vault while we
+            read it.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            <section>
+              <p className="mb-2.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#7A8794]">
+                Type
+              </p>
+              <div className="grid grid-cols-4 gap-2">
+                {CATEGORIES.map(item => {
+                  const Icon = item.icon;
+                  const active = category === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      title={item.hint}
+                      onClick={() => setCategory(item.id)}
+                      className={cn(
+                        'flex flex-col items-center gap-1.5 rounded-[12px] border px-1.5 py-3 transition',
+                        active
+                          ? 'border-[#213D59] bg-[#213D59] text-white'
+                          : 'border-[#E4EAF0] bg-white text-[#213D59] hover:border-[#3EB1E5] hover:bg-[#EAF6FD]',
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span className="text-[11.5px] font-semibold leading-none">
+                        {item.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section>
+              <p className="mb-2.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#7A8794]">
+                Feeling
+                <span className="font-semibold normal-case tracking-normal text-[#7A8794]">
+                  {' '}
+                  · optional
+                </span>
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {RATINGS.map(item => {
+                  const active = rating === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() =>
+                        setRating(prev =>
+                          prev === item.value ? null : item.value,
+                        )
+                      }
+                      className={cn(
+                        'rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition',
+                        active
+                          ? 'border-[#213D59] bg-[#213D59] text-white'
+                          : 'border-[#E4EAF0] bg-white text-[#6A7481] hover:border-[#3EB1E5]',
+                      )}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <div>
+                <label
+                  htmlFor="feedback-subject"
+                  className="mb-1.5 block text-[12.5px] font-semibold text-[#6A7481]"
+                >
+                  Title
+                </label>
+                <input
+                  id="feedback-subject"
+                  value={subject}
+                  onChange={e => setSubject(e.target.value)}
+                  maxLength={200}
+                  placeholder="Short summary"
+                  className="h-11 w-full rounded-[10px] border border-[#E4EAF0] bg-white px-3.5 text-[14.5px] text-[#213D59] outline-none placeholder:text-[#7A8794] focus:border-[#3EB1E5] focus:shadow-[0_0_0_3px_rgba(62,177,229,.14)]"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="feedback-message"
+                  className="mb-1.5 block text-[12.5px] font-semibold text-[#6A7481]"
+                >
+                  Details <span className="text-[#C2442E]">*</span>
+                </label>
+                <textarea
+                  id="feedback-message"
+                  value={message}
+                  onChange={e => setMessage(e.target.value)}
+                  maxLength={4000}
+                  rows={5}
+                  placeholder="What should we change?"
+                  className="min-h-[104px] w-full resize-y rounded-[10px] border border-[#E4EAF0] bg-white px-3.5 py-3 text-[14.5px] leading-[1.55] text-[#213D59] outline-none placeholder:text-[#7A8794] focus:border-[#3EB1E5] focus:shadow-[0_0_0_3px_rgba(62,177,229,.14)]"
+                />
+                <p className="mt-1.5 text-[12px] text-[#7A8794]">
+                  {message.trim().length}/4000
+                </p>
+              </div>
+            </section>
+
+            <section>
+              <p className="mb-1.5 text-[12.5px] font-semibold text-[#6A7481]">
+                Screenshot
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                multiple
+                className="hidden"
+                onChange={e => void onPickFiles(e.target.files)}
+              />
+              <button
+                type="button"
+                disabled={uploading || attachments.length >= 3}
+                onClick={() => fileInputRef.current?.click()}
+                className="flex w-full items-center gap-[18px] rounded-[16px] border-2 border-dashed border-[#E4EAF0] bg-[#F6F8FA] px-6 py-[18px] text-left hover:border-[#3EB1E5] hover:bg-[#EAF6FD] disabled:opacity-60"
+              >
+                <span className="grid h-[46px] w-[46px] shrink-0 place-items-center rounded-[13px] border border-[#E4EAF0] bg-white text-[#619FCE]">
+                  {uploading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <ImagePlus className="h-5 w-5" />
+                  )}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[15.5px] font-bold text-[#213D59]">
+                    {uploading ? 'Uploading…' : 'Add a screenshot'}
+                  </span>
+                  <span className="mt-0.5 block text-[13.5px] text-[#7A8794]">
+                    PNG, JPG, or WebP. Up to 3.
+                    {attachments.length ? ` ${attachments.length}/3` : ''}
+                  </span>
+                </span>
+              </button>
+              {attachments.length > 0 ? (
+                <ul className="mt-3 grid grid-cols-3 gap-2">
+                  {attachments.map((item, index) => (
+                    <li
+                      key={`${item.public_id || item.url}-${index}`}
+                      className="relative overflow-hidden rounded-[10px] border border-[#E4EAF0]"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={item.previewUrl || item.url}
+                        alt={item.name || 'Screenshot'}
+                        className="h-20 w-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void removeAttachment(index)}
+                        className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-[#213D59] text-white"
+                        aria-label="Remove screenshot"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </section>
+          </div>
+        )}
+      </VaultDetailDrawer>
     </>
   );
 }

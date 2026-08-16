@@ -16,6 +16,7 @@ import {
   collapseInsurancePolicies,
   collapseItemsByMatcher,
   isJunkVehicleCard,
+  normalizeCardSectionData,
   type AutofillConflictMode,
 } from '@/utils/aiItemDedup';
 import { applySemanticConceptsToPatch, applySemanticConceptsToItem } from '@/utils/aiSemanticFieldMatch';
@@ -446,10 +447,20 @@ export function applyAiResultToSectionFormDetailed(
   // Identical re-upload: still return data so callers can clear the stash,
   // but stats.unchanged tells them not to count it as a new fill.
   if (!changed && stats.unchanged > 0) {
-    return { data: next, stats };
+    const normalized = normalizeCardSectionData(sectionId, next);
+    return {
+      data: (normalized || next) as Record<string, unknown>,
+      stats,
+    };
   }
 
-  return { data: changed ? next : null, stats };
+  if (!changed) return { data: null, stats };
+
+  const normalized = normalizeCardSectionData(sectionId, next);
+  return {
+    data: (normalized || next) as Record<string, unknown>,
+    stats,
+  };
 }
 
 export function applyAiResultToSectionForm(

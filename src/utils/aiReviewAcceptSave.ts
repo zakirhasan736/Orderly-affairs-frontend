@@ -73,6 +73,7 @@ export function applyEditedFactsToStash(
     const value = String(fact.value ?? '').trim();
     const fieldKey = String(fact.field_key || '').trim();
     if (!fieldKey) continue;
+    if (!value) continue;
     setDeepField(patch, fieldKey, value);
   }
 

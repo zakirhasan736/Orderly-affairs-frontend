@@ -5,6 +5,7 @@ import {
   getSectionProgress,
   hasAtLeastOneNokLetter,
   isMeaningfulFilled,
+  vaultOverallPercent,
 } from '@/utils/sectionCompletion';
 import { NOK_LETTER_DEFAULTS } from '@/utils/nokLetterPreview';
 
@@ -170,6 +171,13 @@ describe('sectionCompletion', () => {
     });
     expect(progress.complete).toBe(false);
     expect(progress.percent).toBe(0);
+  });
+
+  it('computes vault percent from completed sections, not field averages', () => {
+    expect(vaultOverallPercent(2, 22)).toBe(9);
+    expect(vaultOverallPercent(0, 22)).toBe(0);
+    expect(vaultOverallPercent(22, 22)).toBe(100);
+    expect(vaultOverallPercent(1, 22)).toBe(5);
   });
 
   it('marks section 4 complete when any personal message exists', () => {

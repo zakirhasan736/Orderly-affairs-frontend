@@ -2227,7 +2227,7 @@ const backButtonLabel =
                         </div>
                         <button
                           type="button"
-                          className="hidden min-h-12 w-full items-center justify-center rounded-3xl border border-[#e4e6e1] bg-white text-[14px] font-medium text-[#213D59] transition hover:bg-[#f5f8fc] lg:inline-flex"
+                          className="hidden min-h-12 w-full items-center justify-center rounded-3xl border border-[#e4e6e1] bg-white text-[14px] font-medium text-[#213D59] transition hover:bg-[#F6F8FA] lg:inline-flex"
                           onClick={() =>
                             toast.message('Passkeys coming soon', {
                               description:
@@ -2352,7 +2352,7 @@ const backButtonLabel =
                               className={cn(
                                 'shrink-0 rounded-[5px] px-2 py-1 text-[11px] font-medium',
                                 selected || method === 'authenticator'
-                                  ? 'bg-[#e7eef7] text-[#1f5c52]'
+                                  ? 'bg-[#EAF6FD] text-[#1f5c52]'
                                   : 'bg-[#f2f1ec] text-[#5c6b66]',
                               )}
                             >
@@ -2765,7 +2765,7 @@ const backButtonLabel =
                       />
                     </div>
 
-                    <div className="mt-3.5 rounded-[14px] border border-[#f2f1ec] bg-[#f5f8fc] p-2">
+                    <div className="mt-3.5 rounded-[14px] border border-[#f2f1ec] bg-[#F6F8FA] p-2">
                       <div className="min-h-[62px] rounded-[10px] border border-[#e4e6e1] bg-white px-3 py-2">
                         <TurnstileCaptcha
                           gateMode
@@ -3040,7 +3040,7 @@ const backButtonLabel =
                               <button
                                 type="button"
                                 data-cy={`checkout-plan-details-${plan.id}`}
-                                className="mt-3 self-start text-[13px] font-semibold text-[#2B5A8C] underline-offset-2 hover:underline lg:text-[13.5px]"
+                                className="mt-3 self-start text-[13px] font-semibold text-[#2E7FAD] underline-offset-2 hover:underline lg:text-[13.5px]"
                                 aria-expanded={detailsOpen}
                                 onClick={() =>
                                   setPlanDetailsOpen(open => !open)
@@ -3221,7 +3221,7 @@ const backButtonLabel =
                       </div>
                     </div>
 
-                    <div className="shrink-0 space-y-[9px] bg-[#f5f8fc] px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-1 lg:hidden">
+                    <div className="shrink-0 space-y-[9px] bg-[#F6F8FA] px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-1 lg:hidden">
                       <Button
                         data-cy="checkout-continue-payment-mobile"
                         className="btn-primary h-[52px] w-full rounded-[26px] text-[15.5px] font-medium"
@@ -3259,14 +3259,7 @@ const backButtonLabel =
               <div className="relative z-10 flex min-h-0 flex-1 flex-col lg:flex-none">
                 <Elements
                   stripe={stripePromise}
-                  options={{
-                    fonts: [
-                      {
-                        cssSrc:
-                          'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap',
-                      },
-                    ],
-                  }}
+                  options={{}}
                 >
                   <StartTrialCheckout
                     isTrial={isTrial}

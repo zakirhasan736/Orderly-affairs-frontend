@@ -270,7 +270,7 @@ function writeHistory(items: AiUploadHistoryItem[]) {
   // Intentionally no localStorage — server list is the source of truth.
 }
 
-function itemMatchesSection(
+export function itemMatchesSection(
   item: AiUploadHistoryItem,
   sectionId: string,
 ): boolean {
@@ -512,47 +512,34 @@ export function clearAiUploadHistory() {
   }
 }
 
+export type ServerAiDocumentRow = {
+  file_id?: string;
+  name?: string;
+  original_filename?: string;
+  mime_type?: string;
+  status?: string;
+  filled?: boolean;
+  consumed_sections?: string[];
+  pending_sections?: string[];
+  created_at?: string | null;
+  updated_at?: string | null;
+  section?: string | null;
+  content_hash?: string | null;
+};
+
 /**
- * Replace durable history rows from GET /ai/documents.
- * Keeps in-flight (uploading/processing/queued) memory rows so progress UI stays live.
+ * Map GET /ai/documents rows to history items without touching memory cache.
+ * Used so document pills can show the server count as soon as RTK has data.
  */
-export function hydrateAiUploadHistoryFromServer(
-  docs: Array<{
-    file_id?: string;
-    name?: string;
-    original_filename?: string;
-    mime_type?: string;
-    status?: string;
-    filled?: boolean;
-    consumed_sections?: string[];
-    pending_sections?: string[];
-    created_at?: string | null;
-    updated_at?: string | null;
-    section?: string | null;
-    content_hash?: string | null;
-  }>,
+export function mapServerDocumentsToHistory(
+  docs: ServerAiDocumentRow[] | null | undefined,
+  existing: AiUploadHistoryItem[] = [],
 ): AiUploadHistoryItem[] {
-  const existing = readHistory();
   const existingByFileId = new Map(
     existing
       .filter(item => item.fileId)
       .map(item => [String(item.fileId), item] as const),
   );
-  const inFlight = existing.filter(item => {
-    const status = String(item.status || '').toLowerCase();
-    return (
-      status === 'uploading' ||
-      status === 'processing' ||
-      status === 'queued' ||
-      status === 'extracting' ||
-      status === 'classifying' ||
-      status === 'starting' ||
-      status === 'reading' ||
-      status === 'routing' ||
-      status === 'filling' ||
-      status === 'almost'
-    );
-  });
 
   const serverItems: AiUploadHistoryItem[] = [];
   for (const doc of docs || []) {
@@ -615,6 +602,34 @@ export function hydrateAiUploadHistoryFromServer(
       documentSummary: prev?.documentSummary,
     });
   }
+  return serverItems;
+}
+
+/**
+ * Replace durable history rows from GET /ai/documents.
+ * Keeps in-flight (uploading/processing/queued) memory rows so progress UI stays live.
+ */
+export function hydrateAiUploadHistoryFromServer(
+  docs: ServerAiDocumentRow[],
+): AiUploadHistoryItem[] {
+  const existing = readHistory();
+  const inFlight = existing.filter(item => {
+    const status = String(item.status || '').toLowerCase();
+    return (
+      status === 'uploading' ||
+      status === 'processing' ||
+      status === 'queued' ||
+      status === 'extracting' ||
+      status === 'classifying' ||
+      status === 'starting' ||
+      status === 'reading' ||
+      status === 'routing' ||
+      status === 'filling' ||
+      status === 'almost'
+    );
+  });
+
+  const serverItems = mapServerDocumentsToHistory(docs, existing);
 
   // Drop in-flight rows that already exist on the server (by fileId or same file name).
   const serverIds = new Set(

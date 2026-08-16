@@ -204,7 +204,7 @@ export function StartTrialCheckout({
     borderRadius: 26,
     background: '#213d59',
     color: '#fff',
-    font: "500 15.5px 'Manrope', sans-serif",
+    font: '600 15.5px system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif',
     cursor: loading || !canPay ? 'not-allowed' : 'pointer',
     opacity: loading || !canPay ? 0.55 : 1,
   };
@@ -295,7 +295,7 @@ export function StartTrialCheckout({
   );
 
   return (
-    <div className="stc flex min-h-0 w-full max-w-[880px] flex-1 flex-col overflow-hidden bg-[#f5f8fc] text-[16px] text-[#213d59] lg:flex lg:flex-none lg:overflow-visible lg:bg-transparent">
+    <div className="stc flex min-h-0 w-full max-w-[880px] flex-1 flex-col overflow-hidden bg-[#F6F8FA] text-[16px] text-[#213d59] lg:flex lg:flex-none lg:overflow-visible lg:bg-transparent">
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-4 lg:overflow-visible lg:p-[44px_52px]">
         {/* —— Desktop header (your HTML) —— */}
         <div className="hidden lg:block">
@@ -313,7 +313,7 @@ export function StartTrialCheckout({
           <h1
             style={{
               margin: '14px 0 0',
-              font: "400 34px/1.2 'Poppins', 'Manrope', sans-serif",
+              font: '750 34px/1.2 system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif',
             }}
           >
             {title}
@@ -347,7 +347,7 @@ export function StartTrialCheckout({
               {plan.label}
             </span>
             <span
-              style={{ font: "400 21px/1 'Poppins', 'Manrope', sans-serif" }}
+              style={{ font: '700 21px/1 system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif' }}
             >
               {plan.price}
             </span>
@@ -428,7 +428,7 @@ export function StartTrialCheckout({
                   fontSize: 12.5,
                   fontWeight: 500,
                   color: '#2b5a8c',
-                  background: '#e7eef7',
+                  background: '#EAF6FD',
                   borderRadius: 6,
                   padding: '4px 9px',
                 }}
@@ -471,7 +471,7 @@ export function StartTrialCheckout({
                 marginTop: 20,
                 padding: '15px 17px',
                 borderRadius: 12,
-                background: '#f5f8fc',
+                background: '#F6F8FA',
                 display: 'flex',
                 gap: 12,
               }}
@@ -481,7 +481,7 @@ export function StartTrialCheckout({
                   width: 30,
                   height: 30,
                   borderRadius: 9,
-                  background: '#e7eef7',
+                  background: '#EAF6FD',
                   color: '#2b5a8c',
                   display: 'flex',
                   alignItems: 'center',
@@ -621,7 +621,7 @@ export function StartTrialCheckout({
         {isTrial ? yellowWarning : null}
       </div>
 
-      <div className="shrink-0 bg-[#f5f8fc] px-4 pb-[22px] lg:hidden">
+      <div className="shrink-0 bg-[#F6F8FA] px-4 pb-[22px] lg:hidden">
         <button
           type="button"
           data-cy="checkout-submit-mobile"

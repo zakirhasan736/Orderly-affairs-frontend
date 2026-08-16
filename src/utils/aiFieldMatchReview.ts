@@ -171,13 +171,18 @@ export function buildFieldMatchRows(args: {
   subsection?: string | null;
   sectionData: unknown;
   facts: DetectedAiFact[];
+  /** When set (including null), only this vault card is compared — not every vehicle. */
+  matchedItem?: Record<string, unknown> | null;
 }): FieldMatchRow[] {
   const resolvedSub =
     args.subsection ||
     AI_SECTION_BY_ID[args.sectionId]?.defaultSubsection ||
     null;
   const fields = getSectionFieldDefinitions(args.sectionId, resolvedSub);
-  const currentMap = collectCurrentValues(args.sectionData, resolvedSub);
+  const currentMap =
+    args.matchedItem !== undefined
+      ? collectCurrentValues(args.matchedItem, null)
+      : collectCurrentValues(args.sectionData, resolvedSub);
   const rows: FieldMatchRow[] = [];
   const seen = new Set<string>();
 

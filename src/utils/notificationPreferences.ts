@@ -6,6 +6,17 @@
 
 export type PushDeliveryState = 'active' | 'paused' | 'off';
 
+export type SpecialDayKind = 'birthday' | 'anniversary' | 'custom';
+
+export type SpecialDayPref = {
+  kind: SpecialDayKind;
+  month: number;
+  day: number;
+  label: string;
+  enabled: boolean;
+  source?: string;
+};
+
 export type NotificationPreferences = {
   /** In-app header bell / toast notices */
   inAppEnabled: boolean;
@@ -18,6 +29,15 @@ export type NotificationPreferences = {
    * to enable push on their own devices (they still must grant browser permission).
    */
   pushForCollaborators: boolean;
+  /**
+   * People who should get a notice when a vault section is updated.
+   * null = every eligible immediate-access NOK and family collaborator.
+   */
+  sectionUpdateRecipientIds: string[] | null;
+  /** Per-section overrides. Missing key uses sectionUpdateRecipientIds. */
+  sectionUpdateRecipientsBySection: Record<string, string[]>;
+  specialDaysEnabled: boolean;
+  specialDays: SpecialDayPref[];
   /** Last known Notification.permission on this device */
   pushPermission: NotificationPermission | 'unsupported';
   updatedAt: number;
@@ -38,6 +58,10 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   emailRemindersEnabled: true,
   pushState: 'off',
   pushForCollaborators: true,
+  sectionUpdateRecipientIds: null,
+  sectionUpdateRecipientsBySection: {},
+  specialDaysEnabled: true,
+  specialDays: [],
   pushPermission: 'default',
   updatedAt: 0,
 };
@@ -63,6 +87,36 @@ function readRaw(): NotificationPreferences {
         typeof parsed.pushForCollaborators === 'boolean'
           ? parsed.pushForCollaborators
           : true,
+      sectionUpdateRecipientIds: Array.isArray(parsed.sectionUpdateRecipientIds)
+        ? parsed.sectionUpdateRecipientIds.map(String)
+        : parsed.sectionUpdateRecipientIds === null
+          ? null
+          : DEFAULT_NOTIFICATION_PREFERENCES.sectionUpdateRecipientIds,
+      sectionUpdateRecipientsBySection:
+        parsed.sectionUpdateRecipientsBySection &&
+        typeof parsed.sectionUpdateRecipientsBySection === 'object'
+          ? Object.fromEntries(
+              Object.entries(parsed.sectionUpdateRecipientsBySection).map(
+                ([key, value]) => [
+                  String(key),
+                  Array.isArray(value) ? value.map(String) : [],
+                ],
+              ),
+            )
+          : {},
+      specialDaysEnabled:
+        typeof parsed.specialDaysEnabled === 'boolean'
+          ? parsed.specialDaysEnabled
+          : true,
+      specialDays: Array.isArray(parsed.specialDays)
+        ? parsed.specialDays.filter(
+            (item): item is SpecialDayPref =>
+              Boolean(item) &&
+              typeof item === 'object' &&
+              Number(item.month) >= 1 &&
+              Number(item.day) >= 1,
+          )
+        : [],
     };
   } catch {
     return { ...DEFAULT_NOTIFICATION_PREFERENCES };
@@ -120,6 +174,17 @@ export function applyServerNotificationPrefs(server: {
   email_reminders_enabled?: boolean;
   push_state?: string;
   push_for_collaborators?: boolean;
+  section_update_recipient_ids?: string[] | null;
+  section_update_recipients_by_section?: Record<string, string[] | null> | null;
+  special_days_enabled?: boolean;
+  special_days?: Array<{
+    kind?: string;
+    month?: number;
+    day?: number;
+    label?: string;
+    enabled?: boolean;
+    source?: string;
+  }>;
 }): NotificationPreferences {
   const pushState =
     server.push_state === 'active' ||
@@ -127,6 +192,16 @@ export function applyServerNotificationPrefs(server: {
     server.push_state === 'off'
       ? server.push_state
       : getNotificationPreferences().pushState;
+
+  const bySection = server.section_update_recipients_by_section;
+  const mappedBySection =
+    bySection && typeof bySection === 'object'
+      ? Object.fromEntries(
+          Object.entries(bySection)
+            .filter(([, value]) => Array.isArray(value))
+            .map(([key, value]) => [String(key), (value as string[]).map(String)]),
+        )
+      : getNotificationPreferences().sectionUpdateRecipientsBySection;
 
   return setNotificationPreferences({
     inAppEnabled:
@@ -142,6 +217,29 @@ export function applyServerNotificationPrefs(server: {
       typeof server.push_for_collaborators === 'boolean'
         ? server.push_for_collaborators
         : getNotificationPreferences().pushForCollaborators,
+    sectionUpdateRecipientIds: Array.isArray(server.section_update_recipient_ids)
+      ? server.section_update_recipient_ids.map(String)
+      : server.section_update_recipient_ids === null
+        ? null
+        : getNotificationPreferences().sectionUpdateRecipientIds,
+    sectionUpdateRecipientsBySection: mappedBySection,
+    specialDaysEnabled:
+      typeof server.special_days_enabled === 'boolean'
+        ? server.special_days_enabled
+        : getNotificationPreferences().specialDaysEnabled,
+    specialDays: Array.isArray(server.special_days)
+      ? server.special_days.map(item => ({
+          kind:
+            item.kind === 'birthday' || item.kind === 'anniversary'
+              ? item.kind
+              : 'custom',
+          month: Number(item.month),
+          day: Number(item.day),
+          label: String(item.label || 'Special day'),
+          enabled: item.enabled !== false,
+          source: item.source,
+        }))
+      : getNotificationPreferences().specialDays,
   });
 }
 
@@ -152,13 +250,52 @@ export function toServerNotificationPrefsPatch(
   email_reminders_enabled: boolean;
   push_state: PushDeliveryState;
   push_for_collaborators: boolean;
+  section_update_recipient_ids: string[] | null;
+  section_update_recipients_by_section: Record<string, string[]>;
+  special_days_enabled: boolean;
+  special_days: SpecialDayPref[];
 } {
   return {
     in_app_enabled: prefs.inAppEnabled,
     email_reminders_enabled: prefs.emailRemindersEnabled,
     push_state: prefs.pushState,
     push_for_collaborators: prefs.pushForCollaborators,
+    section_update_recipient_ids: prefs.sectionUpdateRecipientIds,
+    section_update_recipients_by_section: prefs.sectionUpdateRecipientsBySection,
+    special_days_enabled: prefs.specialDaysEnabled,
+    special_days: prefs.specialDays,
   };
+}
+
+export function resolveSectionUpdateRecipientIds(
+  prefs: NotificationPreferences,
+  sectionId?: string | null,
+): string[] | null {
+  if (sectionId) {
+    const override = prefs.sectionUpdateRecipientsBySection?.[String(sectionId)];
+    if (Array.isArray(override)) return override;
+  }
+  return prefs.sectionUpdateRecipientIds;
+}
+
+export function parseMonthDayFromDate(
+  raw: string | null | undefined,
+): { month: number; day: number } | null {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    const month = Number(iso[2]);
+    const day = Number(iso[3]);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return { month, day };
+    }
+  }
+  const parsed = Date.parse(text);
+  if (!Number.isFinite(parsed)) return null;
+  const date = new Date(parsed);
+  if (Number.isNaN(date.getTime())) return null;
+  return { month: date.getUTCMonth() + 1, day: date.getUTCDate() };
 }
 
 type CollabPromptStore = Record<string, { dismissedAt?: number; enabledAt?: number }>;

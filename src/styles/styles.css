@@ -7,10 +7,11 @@
   /* iOS Glass Design System */
   --font-size: 16px;
   
-  /* Brand Colors */
+  /* Brand Colors — Elementor kit */
   --brand-primary: #213D59;
   --brand-primary-rgb: 33, 61, 89;
-  --accent-blue: #2B5A8C;
+  --accent-blue: #3EB1E5;
+  --accent-link: #2E7FAD;
   
   /* Glass Morphism Colors */
   --glass-light-fill: rgba(255, 255, 255, 1);
@@ -728,8 +729,8 @@
     --foreground: #ffffff;
     --card: var(--glass-light-fill);
     --card-foreground: #ffffff;
-    --primary: #2B5A8C;
-    --primary-foreground: #ffffff;
+    --primary: #3EB1E5;
+    --primary-foreground: #16293C;
     --secondary: rgba(0, 0, 0, 0.25);
     --secondary-foreground: #ffffff;
     --muted: rgba(0, 0, 0, 0.20);

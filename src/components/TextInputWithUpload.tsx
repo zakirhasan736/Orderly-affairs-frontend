@@ -26,6 +26,7 @@ type UploadFileEntry = {
   content_type?: string;
   version?: number;
   scan_status?: string;
+  scan_sanitized?: boolean;
   uploaded_by_name?: string;
   uploaded_by_email?: string;
   uploaded_by_role?: string;
@@ -130,30 +131,35 @@ export function TextInputWithUpload({
     return null;
   }
 
-  async function handleUpload(file: File) {
+    async function handleUpload(file: File) {
     if (disabled) return;
     const error = validateFile(file);
     if (error) {
-      alert(error);
+      toast.error(error);
       return;
     }
 
-    const uploaded = await uploadFile(file);
-    const previousPublicId = files[0]?.public_id;
+    try {
+      const uploaded = await uploadFile(file);
+      const previousPublicId = files[0]?.public_id;
 
-    onChange({
-      ...normalizedValue,
-      files: [
-        {
-          ...uploaded,
-          name: uploaded?.name || uploaded?.original_filename || file.name,
-          mime_type: uploaded?.mime_type || file.type,
-          version: 1,
-          scan_status: 'pending',
-        },
-      ],
-      _deleted_files: previousPublicId ? [previousPublicId] : [],
-    });
+      onChange({
+        ...normalizedValue,
+        files: [
+          {
+            ...uploaded,
+            name: uploaded?.name || uploaded?.original_filename || file.name,
+            mime_type: uploaded?.mime_type || file.type,
+            version: 1,
+            scan_status: uploaded.scan_status || 'clean',
+            scan_sanitized: uploaded.scan_sanitized,
+          },
+        ],
+        _deleted_files: previousPublicId ? [previousPublicId] : [],
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    }
   }
 
   function removeFile(file: UploadFileEntry, index: number) {

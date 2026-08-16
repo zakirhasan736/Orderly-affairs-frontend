@@ -110,7 +110,7 @@ export function VaultFieldUploadThumb({
             'flex h-full flex-col items-center justify-center gap-1 px-2 text-center',
             kind === 'pdf' && 'bg-gradient-to-b from-[#eef3f9] to-white',
             kind === 'image' && 'bg-gradient-to-b from-[#eef8f4] to-white',
-            kind === 'other' && 'bg-gradient-to-b from-[#f4f6f8] to-white',
+            kind === 'other' && 'bg-gradient-to-b from-[#F6F8FA] to-white',
           )}
         >
           {kind === 'pdf' ? (

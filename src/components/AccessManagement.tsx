@@ -25,14 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@common/ui/dialog';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@common/ui/sheet';
+import { VaultDetailDrawer } from '@/components/vault-prototype/VaultDetailDrawer';
 import { cn } from '@common/ui/utils';
 import {
   ArrowLeft,
@@ -1163,14 +1156,14 @@ function TrustedPersonCard({
   return (
     <article
       className={cn(
-        'group flex w-full max-w-full overflow-hidden rounded-2xl border bg-card shadow-sm transition hover:border-slate-300/80 hover:shadow-md',
-        hasNokLetter && 'border-emerald-200/80',
-        !person._id && 'border-amber-200/80 bg-amber-50/20',
+        'overflow-hidden rounded-[16px] border border-[#E4EAF0] border-t-[3px] bg-white p-5 max-md:rounded-[14px]',
+        hasNokLetter ? 'border-t-[#1F9D6B]' : 'border-t-[#213D59]',
+        !person._id && 'border-[#EBD9B4] bg-[#FDF4E4]',
       )}
     >
       <div
         className={cn(
-          'w-1 shrink-0',
+          'w-1 hidden',
           isFullAccess ? 'bg-emerald-500' : 'bg-blue-500',
         )}
         aria-hidden
@@ -1180,7 +1173,7 @@ function TrustedPersonCard({
         <div className="min-w-0 flex-1 p-4 sm:p-4 sm:pr-3">
           <div className="flex items-start gap-3">
             <div className="relative shrink-0">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-sm font-semibold text-white">
+              <div className="flex h-[46px] w-[46px] items-center justify-center rounded-full bg-[#213D59] text-sm font-bold text-white">
                 {initials}
               </div>
               {person._id && (
@@ -1196,37 +1189,51 @@ function TrustedPersonCard({
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <h4 className="truncate text-base font-semibold tracking-tight">
+                <h4 className="truncate text-[15.5px] font-bold tracking-tight text-[#213D59]">
                   {displayName}
                 </h4>
-                {person._id && (
-                  <span
-                    className={cn(
-                      'text-[11px] font-medium',
-                      isActiveAccess
-                        ? 'text-emerald-600'
-                        : 'text-muted-foreground',
-                    )}
-                  >
-                    {isActiveAccess ? 'Active' : 'Inactive'}
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <span className="rounded-full bg-[#EAF6FD] px-2.5 py-0.5 text-[11px] font-semibold text-[#213D59]">
+                  Next of kin
+                </span>
+                <span
+                  className={cn(
+                    'rounded-full px-2.5 py-0.5 text-[11px] font-semibold',
+                    person.immediate_access
+                      ? 'bg-[#E8F6F0] text-[#1F9D6B]'
+                      : 'bg-[#FDF4E4] text-[#B4761A]',
+                  )}
+                >
+                  {person.immediate_access
+                    ? 'Immediate login'
+                    : 'Unlocks upon death'}
+                </span>
+                {!person._id ? (
+                  <span className="rounded-full bg-[#F0F2F4] px-2.5 py-0.5 text-[11px] font-semibold text-[#6A7481]">
+                    Invite not saved
+                  </span>
+                ) : null}
+                {hasNokLetter ? (
+                  <span className="rounded-full bg-[#E8F6F0] px-2.5 py-0.5 text-[11px] font-semibold text-[#1F9D6B]">
+                    Letter ready
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-[#FDF4E4] px-2.5 py-0.5 text-[11px] font-semibold text-[#B4761A]">
+                    Letter unwritten
                   </span>
                 )}
               </div>
               {person.relationship && (
-                <p className="mt-0.5 text-sm capitalize text-muted-foreground">
+                <p className="mt-0.5 text-[12.5px] capitalize text-[#7A8794]">
                   {person.relationship}
+                  {person.email ? `, ${person.email}` : ''}
                 </p>
               )}
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">{accessLabel}</span>
-                <span className="mx-1.5 text-slate-300">·</span>
+              <p className="mt-1.5 text-[12.5px] text-[#7A8794]">
+                <span className="font-medium text-[#213D59]">{accessLabel}</span>
+                <span className="mx-1.5 text-[#D5DDE5]">·</span>
                 <span>{timingLabel}</span>
-                {hasNokLetter && (
-                  <>
-                    <span className="mx-1.5 text-slate-300">·</span>
-                    <span className="text-emerald-600">Next of Kin letter</span>
-                  </>
-                )}
               </p>
             </div>
           </div>
@@ -2834,12 +2841,11 @@ export function AccessManagement({
         embedded && !isMobile && 'space-y-4',
       )}
     >
+      {!embedded ? (
       <div
         className={cn(
           'flex gap-4',
-          embedded && !isMobile
-            ? 'items-center justify-between border-b border-slate-100 pb-4'
-            : isMobile
+          isMobile
               ? 'flex-row items-center justify-between gap-3'
               : 'flex-col sm:flex-row sm:items-start sm:justify-between',
         )}
@@ -2861,7 +2867,7 @@ export function AccessManagement({
           <div className="min-w-0">
             {!isMobile && !embedded && (
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                2A Kit Access Control
+                2A Access Control
               </p>
             )}
             <h2
@@ -2925,6 +2931,7 @@ export function AccessManagement({
           </Button>
         </div>
       </div>
+      ) : null}
 
       {needsDesignation && !embedded && (
         <div
@@ -2941,7 +2948,7 @@ export function AccessManagement({
             description={
               isMobile
                 ? undefined
-                : 'Please add at least one trusted person who can access your kit.'
+                : 'Please add at least one trusted person who can access your Vault.'
             }
           />
           {!isMobile && (
@@ -2982,7 +2989,7 @@ export function AccessManagement({
             >
               <h3 className="text-lg font-semibold">Trusted People</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                People who can access your kit
+                People who can access your Vault
               </p>
             </div>
             <div className={cn('w-full', isMobile ? 'pt-0' : 'p-4 sm:p-5')}>
@@ -3082,38 +3089,33 @@ export function AccessManagement({
       </div>
 
       {/* Add / Edit wizard */}
-      {isMobile ? (
-        <MobileBottomSheet
-          open={wizardOpen}
-          onClose={closeWizard}
-          className="h-[min(96dvh,100svh)]"
-          labelledBy="wizard-sheet-title"
-        >
-          <div className="flex h-full min-h-0 flex-col">
-            {renderWizardShell()}
-          </div>
-        </MobileBottomSheet>
-      ) : (
-        <Sheet open={wizardOpen} onOpenChange={open => !open && closeWizard()}>
-          <SheetContent
-            side="right"
-            className="flex h-full max-w-lg flex-col gap-0 p-0 sm:max-w-xl"
-          >
-            <div className="flex h-full min-h-0 flex-col">
-              {renderWizardShell()}
-            </div>
-          </SheetContent>
-        </Sheet>
-      )}
+      <VaultDetailDrawer
+        open={wizardOpen}
+        onClose={closeWizard}
+        title={wizardMode === 'add' ? 'Invite a person' : 'Edit trusted person'}
+        subtitle={`Step ${wizardStep + 1} of ${wizardSteps.length}`}
+        icon={<Users className="h-5 w-5" />}
+        hideHeader
+        padded={false}
+        wide
+      >
+        {renderWizardShell()}
+      </VaultDetailDrawer>
 
-      {/* Trusted person details (mobile) */}
-      {isMobile && (
-        <MobileBottomSheet
-          open={detailViewIndex !== null}
-          onClose={() => setDetailViewIndex(null)}
-          className="max-h-[92dvh]"
-          labelledBy="person-detail-title"
-        >
+      {/* Trusted person details */}
+      <VaultDetailDrawer
+        open={detailViewIndex !== null}
+        onClose={() => setDetailViewIndex(null)}
+        title="Trusted Person"
+        subtitle={
+          detailViewIndex !== null
+            ? authorizedPeople[detailViewIndex]?.full_name
+            : ''
+        }
+        icon={<Users className="h-5 w-5" />}
+        hideHeader
+        padded={false}
+      >
           <div className="flex h-full min-h-0 flex-col">
             <MobileSheetHandle />
             <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-3 pt-1">
@@ -3209,8 +3211,7 @@ export function AccessManagement({
                 );
               })()}
           </div>
-        </MobileBottomSheet>
-      )}
+      </VaultDetailDrawer>
 
       {/* Unlock login before opening password card */}
       <Dialog
@@ -3282,123 +3283,39 @@ export function AccessManagement({
       </Dialog>
 
       {/* Password card preview from list */}
-      {isMobile ? (
-        <MobileBottomSheet
-          open={cardPreviewIndex !== null}
-          onClose={() => setCardPreviewIndex(null)}
-          className="h-[88dvh]"
-          labelledBy="card-preview-title"
-        >
-          <MobileSheetHandle />
-          <div className="flex items-start justify-between gap-3 border-b px-4 pb-4 pt-1">
-            <div>
-              <h3 id="card-preview-title" className="text-lg font-semibold">
-                Password Card
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {cardPreviewIndex !== null
-                  ? authorizedPeople[cardPreviewIndex]?.full_name
-                  : ''}
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setCardPreviewIndex(null)}
-              className="h-10 w-10 shrink-0 rounded-full"
-              aria-label="Close"
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-          {cardPreviewIndex !== null && (
-            <div
-              className={cn(
-                'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-5',
-                MOBILE_SHEET_SCROLL_PADDING,
-              )}
-            >
-              <PasswordCard
-                personName={
-                  authorizedPeople[cardPreviewIndex].full_name ||
-                  'Trusted Person'
-                }
-                masterPassword={
-                  authorizedPeople[cardPreviewIndex].master_password
-                }
-                email={authorizedPeople[cardPreviewIndex].email}
-                phone={authorizedPeople[cardPreviewIndex].phone_number}
-                relationship={
-                  authorizedPeople[cardPreviewIndex].relationship
-                }
-                accessLevel={
-                  authorizedPeople[cardPreviewIndex].access_level
-                }
-                authorizedSections={authorizedPeople[
-                  cardPreviewIndex
-                ].authorized_sections.map(
-                  id => sectionLabelMap[id] || id,
-                )}
-                immediateAccess={
-                  authorizedPeople[cardPreviewIndex].immediate_access
-                }
-                card_storage_location={
-                  authorizedPeople[cardPreviewIndex].card_storage_location
-                }
-              />
-            </div>
-          )}
-        </MobileBottomSheet>
-      ) : (
-        <Sheet
-          open={cardPreviewIndex !== null}
-          onOpenChange={open => !open && setCardPreviewIndex(null)}
-        >
-          <SheetContent side="right" className="w-full max-w-md overflow-y-auto">
-            <SheetHeader>
-              <SheetTitle>Password Card</SheetTitle>
-              <SheetDescription>
-                {cardPreviewIndex !== null
-                  ? authorizedPeople[cardPreviewIndex]?.full_name
-                  : ''}
-              </SheetDescription>
-            </SheetHeader>
-            {cardPreviewIndex !== null && (
-              <div className="px-4 pb-6">
-                <PasswordCard
-                  personName={
-                    authorizedPeople[cardPreviewIndex].full_name ||
-                    'Trusted Person'
-                  }
-                  masterPassword={
-                    authorizedPeople[cardPreviewIndex].master_password
-                  }
-                  email={authorizedPeople[cardPreviewIndex].email}
-                  phone={authorizedPeople[cardPreviewIndex].phone_number}
-                  relationship={
-                    authorizedPeople[cardPreviewIndex].relationship
-                  }
-                  accessLevel={
-                    authorizedPeople[cardPreviewIndex].access_level
-                  }
-                  authorizedSections={authorizedPeople[
-                    cardPreviewIndex
-                  ].authorized_sections.map(
-                    id => sectionLabelMap[id] || id,
-                  )}
-                  immediateAccess={
-                    authorizedPeople[cardPreviewIndex].immediate_access
-                  }
-                  card_storage_location={
-                    authorizedPeople[cardPreviewIndex].card_storage_location
-                  }
-                />
-              </div>
-            )}
-          </SheetContent>
-        </Sheet>
-      )}
+      <VaultDetailDrawer
+        open={cardPreviewIndex !== null}
+        onClose={() => setCardPreviewIndex(null)}
+        title="Password Card"
+        subtitle={
+          cardPreviewIndex !== null
+            ? authorizedPeople[cardPreviewIndex]?.full_name
+            : ''
+        }
+        icon={<KeyRound className="h-5 w-5" />}
+      >
+        {cardPreviewIndex !== null ? (
+          <PasswordCard
+            personName={
+              authorizedPeople[cardPreviewIndex].full_name || 'Trusted Person'
+            }
+            masterPassword={authorizedPeople[cardPreviewIndex].master_password}
+            email={authorizedPeople[cardPreviewIndex].email}
+            phone={authorizedPeople[cardPreviewIndex].phone_number}
+            relationship={authorizedPeople[cardPreviewIndex].relationship}
+            accessLevel={authorizedPeople[cardPreviewIndex].access_level}
+            authorizedSections={authorizedPeople[
+              cardPreviewIndex
+            ].authorized_sections.map(id => sectionLabelMap[id] || id)}
+            immediateAccess={
+              authorizedPeople[cardPreviewIndex].immediate_access
+            }
+            card_storage_location={
+              authorizedPeople[cardPreviewIndex].card_storage_location
+            }
+          />
+        ) : null}
+      </VaultDetailDrawer>
 
       {/* Delete confirmation */}
       <BrandDangerConfirm

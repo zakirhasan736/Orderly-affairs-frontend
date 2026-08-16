@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 
 import { useGetNokLetterQuery } from '@/services/nokLetterApi';
 import { Button } from '@common/ui/button';
@@ -17,6 +18,10 @@ export default function NextKinLetterPage() {
         router.replace('/next-kin');
         return;
       }
+      if (String(session.access_type || '').toLowerCase() === 'family') {
+        router.replace('/dashboard');
+        return;
+      }
       setSessionReady(true);
     });
   }, [router]);
@@ -26,41 +31,61 @@ export default function NextKinLetterPage() {
   });
 
   if (!sessionReady || isLoading) {
-    return <div className="p-8">Loading letter…</div>;
+    return (
+      <div className="grid min-h-[100dvh] place-items-center bg-[#F6F8FA]">
+        <p className="text-sm text-[#7A8794]">Loading letter…</p>
+      </div>
+    );
   }
 
   if (!letter) {
     return (
-      <div className="p-8 text-muted-foreground">
-        No personal letter available.
+      <div className="min-h-[100dvh] bg-[#F6F8FA] px-6 py-10">
+        <Button
+          variant="ghost"
+          onClick={() => router.back()}
+          className="text-[#2E7FAD]"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+        <p className="mt-8 text-[#7A8794]">No personal letter available.</p>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-6 py-8 max-w-3xl">
-      <Button variant="ghost" onClick={() => router.back()}>
-        ← Back
-      </Button>
+    <div className="min-h-[100dvh] bg-[#F6F8FA] px-5 py-8 font-[family-name:var(--font-family)]">
+      <div className="mx-auto max-w-3xl">
+        <Button
+          variant="ghost"
+          onClick={() => router.back()}
+          className="text-[#2E7FAD]"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
 
-      <h1 className="text-2xl font-semibold mt-6 mb-4">
-        A Letter From Your Loved One
-      </h1>
+        <article className="mt-6 rounded-[16px] border border-[#E4EAF0] bg-white p-6 sm:p-8">
+          <h1 className="font-[family-name:var(--font-family-display)] text-[26px] font-normal text-[#213D59]">
+            A letter from your loved one
+          </h1>
+          <div className="mt-6 whitespace-pre-wrap text-[15.5px] leading-[1.7] text-[#414A55]">
+            {letter.letter_opening}
 
-      <div className="prose max-w-none whitespace-pre-wrap">
-        {letter.letter_opening}
+            {'\n\n'}
 
-        {'\n\n'}
+            {letter.closing_message}
 
-        {letter.closing_message}
+            {'\n\n'}
 
-        {'\n\n'}
+            {letter.letter_signature}
 
-        {letter.letter_signature}
+            {'\n\n'}
 
-        {'\n\n'}
-
-        {letter.signer_name}
+            {letter.signer_name}
+          </div>
+        </article>
       </div>
     </div>
   );

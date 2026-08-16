@@ -11,6 +11,7 @@ import {
 import { useAdminAuth } from '@/components/admin/AdminAuthProvider';
 import { BRAND_LOGO } from '@/constants/brand';
 import Image from 'next/image';
+import Link from 'next/link';
 import { SessionExpiredNotice } from '@/components/SessionExpiredNotice';
 import '@/app/admin/admin.css';
 
@@ -183,8 +184,19 @@ export default function AdminLoginPage() {
                   color: 'var(--oa-muted)',
                 }}
               >
-                Permitted admin emails only. Non-owner accounts are rejected at
-                this gate.
+                Permitted admin emails only. Next of Kin, family, and vault owner
+                sign-in cannot use this page.
+              </p>
+              <p
+                style={{
+                  fontSize: 12.5,
+                  marginTop: 12,
+                  textAlign: 'center',
+                }}
+              >
+                <Link href="/" style={{ color: 'var(--oa-gold)', fontWeight: 600 }}>
+                  Vault owner sign-in
+                </Link>
               </p>
             </form>
           )}

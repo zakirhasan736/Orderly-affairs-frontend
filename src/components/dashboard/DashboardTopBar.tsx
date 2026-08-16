@@ -2,13 +2,56 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { Menu, Play, User } from 'lucide-react';
+import { Menu, Upload, User } from 'lucide-react';
 import { VaultExportMenu } from '@/components/VaultExportMenu';
 import type { VaultExportPayload } from '@/utils/vaultExport';
 import { cn } from '@common/ui/utils';
 import { NotificationBell } from '@/components/dashboard/NotificationBell';
+import { UploadedDocumentsButton } from '@/components/vault/UploadedDocumentsButton';
+import { useUploadedDocuments } from '@/hooks/useUploadedDocuments';
 import type { DashboardNotice } from '@/utils/dashboardNotifications';
 import { BRAND_LOGO } from '@/constants/brand';
+import { GlobalSearch, ProgressRing, type GlobalSearchResult } from '@/components/vault-ui';
+import { VAULT_SCHEMA } from '@/vault-prototype';
+import { openVaultSubsection } from '@/vault-prototype/navigate';
+
+function buildVaultSearchResults(): GlobalSearchResult[] {
+  const rows: GlobalSearchResult[] = [
+    { id: 'dashboard', title: 'Dashboard', subtitle: 'Overview' },
+    {
+      id: 'vault-settings',
+      title: 'Vault Settings',
+      subtitle: 'Account, subscription, access',
+    },
+  ];
+  for (const section of VAULT_SCHEMA) {
+    rows.push({
+      id: section.apiId,
+      title: section.name,
+      subtitle: section.collection,
+      sectionId: section.apiId,
+    });
+    for (const sub of section.subs) {
+      rows.push({
+        id: `${section.apiId}::${sub.id}`,
+        title: sub.name,
+        subtitle: section.name,
+        sectionId: section.apiId,
+        subId: sub.id,
+      });
+      for (const field of sub.fields) {
+        rows.push({
+          id: `${section.apiId}::${sub.id}::${field.k}`,
+          title: field.k,
+          subtitle: `${section.name} · ${sub.name}`,
+          sectionId: section.apiId,
+          subId: sub.id,
+        });
+      }
+    }
+  }
+  return rows;
+}
 
 function HeaderProgressRing({
   completed,
@@ -26,46 +69,18 @@ function HeaderProgressRing({
       : total > 0
         ? Math.min(100, Math.round((completed / total) * 100))
         : 0;
-  const radius = 18;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (pct / 100) * circumference;
 
   return (
     <div
       data-tour="tour-progress-explain"
-      className="flex items-center gap-2.5 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm"
+      className="flex items-center gap-2.5 rounded-full border border-[#E4EAF0] bg-white py-1.5 pl-1.5 pr-3.5"
     >
-      <div className="relative h-10 w-10 shrink-0">
-        <svg className="h-10 w-10 -rotate-90" viewBox="0 0 44 44" aria-hidden>
-          <circle
-            cx="22"
-            cy="22"
-            r={radius}
-            fill="none"
-            stroke="#e8e6e0"
-            strokeWidth="3.5"
-          />
-          <circle
-            cx="22"
-            cy="22"
-            r={radius}
-            fill="none"
-            stroke="#2B5A8C"
-            strokeWidth="3.5"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-          />
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-[#213D59]">
-          {pct}%
-        </span>
-      </div>
-      <div className="pr-1.5 leading-tight">
-        <p className="text-[11px] font-semibold text-[#213D59]">
+      <ProgressRing value={pct} size="topbar" />
+      <div className="leading-tight">
+        <p className="text-[12.5px] font-bold text-[#213D59]">
           {completed} of {total}
         </p>
-        <p className="text-[10px] font-medium text-[rgba(33, 61, 89,0.55)]">completed</p>
+        <p className="text-[12px] font-semibold text-[#7A8794]">sections done</p>
       </div>
     </div>
   );
@@ -78,6 +93,7 @@ type DashboardTopBarProps = {
   /** Field-fill vault % — recalculates when data is added or removed. */
   progressPercent?: number;
   onRunTour: () => void;
+  onUpload?: () => void;
   exportPayload: VaultExportPayload;
   currentUserEmail?: string | null;
   onAccountInfo: () => void;
@@ -86,6 +102,7 @@ type DashboardTopBarProps = {
   onNoticeSelect?: (notice: DashboardNotice) => void;
   onOpenReviewInbox?: () => void;
   onOpenNotificationSettings?: () => void;
+  onNavigateToSection?: (sectionId: string) => void;
   className?: string;
 };
 
@@ -95,6 +112,7 @@ export function DashboardTopBar({
   totalSectionsCount,
   progressPercent,
   onRunTour,
+  onUpload,
   exportPayload,
   currentUserEmail,
   onAccountInfo,
@@ -103,84 +121,84 @@ export function DashboardTopBar({
   onNoticeSelect,
   onOpenReviewInbox,
   onOpenNotificationSettings,
+  onNavigateToSection,
   className,
 }: DashboardTopBarProps) {
+  const searchResults = React.useMemo(() => buildVaultSearchResults(), []);
+  const { count: uploadedCount } = useUploadedDocuments();
+
+  const handleSearchSelect = (result: GlobalSearchResult) => {
+    const sectionId = result.sectionId || result.id;
+    onNavigateToSection?.(sectionId);
+    if (result.subId) {
+      window.setTimeout(() => {
+        openVaultSubsection(sectionId, result.subId!);
+      }, 40);
+    }
+  };
+
   return (
     <header
       className={cn(
-        'sticky top-0 z-30 hidden border-b border-[rgba(33, 61, 89,0.1)] bg-[var(--paper)] md:block',
+        'sticky top-0 z-30 hidden border-b border-[#E4EAF0] bg-white/92 backdrop-blur-[10px] md:block',
         className,
       )}
     >
-      <div className="flex h-[72px] items-center justify-between gap-4 px-5 xl:px-8">
+      <div className="grid h-[70px] grid-cols-[minmax(0,1fr)_minmax(0,520px)_minmax(0,1fr)] items-center gap-4 px-[26px]">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[rgba(33, 61, 89,0.45)]">
-            Current Area
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#7A8794]">
+            Current area
           </p>
-          <h1 className="mt-0.5 truncate text-[18px] font-semibold tracking-tight text-[#213D59]">
+          <h1 className="truncate text-[18px] font-bold tracking-[-0.02em] text-[#213D59]">
             {currentSectionLabel}
           </h1>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2.5 xl:gap-3">
+        <div className="min-w-0">
+          {onNavigateToSection ? (
+            <GlobalSearch
+              results={searchResults}
+              onSelect={handleSearchSelect}
+              placeholder="Search your Vault"
+            />
+          ) : null}
+        </div>
+
+        <div className="ml-auto flex shrink-0 items-center justify-end gap-2.5">
           <HeaderProgressRing
             completed={completedSectionsCount}
             total={totalSectionsCount}
             progressPercent={progressPercent}
           />
 
-          <button
-            type="button"
-            onClick={onRunTour}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#213D59] px-4 text-[12px] font-semibold text-white transition hover:bg-[#2B5A8C] active:scale-[0.98]"
-          >
-            <Play className="h-3.5 w-3.5 fill-current" />
-            Run Tour
-          </button>
-
-          <VaultExportMenu
-            payload={exportPayload}
-            trigger={
-              <button
-                type="button"
-                className="owners-states-export inline-flex h-10 items-center gap-2 rounded-full border border-slate-300 bg-white px-4 text-[12px] font-semibold text-[#213D59] shadow-sm transition hover:bg-slate-50 active:scale-[0.98]"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  aria-hidden
-                >
-                  <path d="M12 3v12" strokeLinecap="round" />
-                  <path
-                    d="m8 11 4 4 4-4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path d="M5 19h14" strokeLinecap="round" />
-                </svg>
-                Export
-              </button>
-            }
-          />
+          {uploadedCount > 0 ? (
+            <UploadedDocumentsButton className="shadow-sm" />
+          ) : (
+            <button
+              type="button"
+              onClick={onUpload || onOpenReviewInbox}
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-[#E4EAF0] bg-white px-[18px] text-[14px] font-semibold text-[#213D59] hover:border-[#619FCE] hover:bg-[#EAF6FD]"
+            >
+              <Upload className="h-4 w-4" />
+              Upload
+            </button>
+          )}
 
           <NotificationBell
             notices={notices}
             onSelect={notice => onNoticeSelect?.(notice)}
             onOpenSettings={onOpenNotificationSettings || onAccountInfo}
             onOpenReviewInbox={onOpenReviewInbox}
-            buttonClassName="h-10 w-10 border border-slate-200 bg-white shadow-sm"
+            buttonClassName="h-[38px] w-[38px] rounded-full border border-[#E4EAF0] bg-white"
           />
 
           <div className="owner-state-information group relative">
             <button
               type="button"
-              className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-[#213D59] shadow-sm transition hover:ring-4 hover:ring-slate-100"
+              className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#213D59] text-white"
               aria-label="Account menu"
             >
-              <User className="h-5 w-5" />
+              <User className="h-4 w-4" />
             </button>
 
             <div className="invisible absolute right-0 top-full z-[60] mt-3 translate-y-2 opacity-0 transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
@@ -203,6 +221,24 @@ export function DashboardTopBar({
                 >
                   Account Info
                 </button>
+                <button
+                  type="button"
+                  onClick={onRunTour}
+                  className="w-full rounded-2xl px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#213D59]"
+                >
+                  Run Tour
+                </button>
+                <VaultExportMenu
+                  payload={exportPayload}
+                  trigger={
+                    <button
+                      type="button"
+                      className="w-full rounded-2xl px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-[#213D59]"
+                    >
+                      Export
+                    </button>
+                  }
+                />
 
                 <button
                   type="button"
@@ -243,6 +279,7 @@ type MobileTopBarProps = {
   onNoticeSelect?: (notice: DashboardNotice) => void;
   onOpenReviewInbox?: () => void;
   onOpenNotificationSettings?: () => void;
+  onNavigateToSection?: (sectionId: string) => void;
 };
 
 export function MobileTopBar({
@@ -259,6 +296,7 @@ export function MobileTopBar({
   onNoticeSelect,
   onOpenReviewInbox,
   onOpenNotificationSettings,
+  onNavigateToSection,
 }: MobileTopBarProps) {
   const pct =
     typeof progressPercent === 'number' && Number.isFinite(progressPercent)
@@ -266,6 +304,7 @@ export function MobileTopBar({
       : totalCount > 0
         ? Math.min(100, Math.round((completedCount / totalCount) * 100))
         : 0;
+  const { count: uploadedCount } = useUploadedDocuments();
 
   return (
     <header className="sticky top-0 z-40 border-b border-[rgba(33, 61, 89,0.1)] bg-[var(--paper)] md:hidden">
@@ -301,6 +340,9 @@ export function MobileTopBar({
         </button>
 
         <div className="flex shrink-0 items-center gap-0.5">
+          {uploadedCount > 0 ? (
+            <UploadedDocumentsButton dense className="mr-1 shadow-sm" />
+          ) : null}
           <NotificationBell
             notices={notices}
             onSelect={notice => onNoticeSelect?.(notice)}
@@ -317,6 +359,24 @@ export function MobileTopBar({
           </button>
         </div>
       </div>
+
+      {onNavigateToSection ? (
+        <div className="border-t border-[#E4EAF0] px-3 py-2">
+          <GlobalSearch
+            results={buildVaultSearchResults()}
+            onSelect={result => {
+              const sectionId = result.sectionId || result.id;
+              onNavigateToSection(sectionId);
+              if (result.subId) {
+                window.setTimeout(() => {
+                  openVaultSubsection(sectionId, result.subId!);
+                }, 40);
+              }
+            }}
+            placeholder="Search your Vault"
+          />
+        </div>
+      ) : null}
 
       {showProgress ? (
         <div

@@ -28,6 +28,8 @@ import {
   listenForPushSubscriptionChange,
   setPushDeliveryState,
 } from '@/utils/browserPushNotifications';
+import { SectionUpdateRecipientsPicker } from '@/components/vault/SectionUpdateRecipientsPicker';
+import { SpecialDaysSettings } from '@/components/vault/SpecialDaysSettings';
 import {
   useGetNotificationPreferencesQuery,
   useUpdateNotificationPreferencesMutation,
@@ -53,16 +55,16 @@ function ToggleRow({
       className={cn(
         'flex items-start gap-3 rounded-2xl border px-3.5 py-3.5 sm:items-center sm:px-4',
         enabled
-          ? 'border-emerald-200/90 bg-[linear-gradient(90deg,#ffffff_0%,#ecfdf5_100%)]'
-          : 'border-slate-200 bg-[#f5f8fc]',
+          ? 'border-[#CFE6F5] bg-[#EAF6FD]'
+          : 'border-[#E4EAF0] bg-[#F6F8FA]',
       )}
     >
       <div
         className={cn(
           'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl',
-          enabled
-            ? 'bg-emerald-600 text-white shadow-sm'
-            : 'bg-white text-[#213D59] ring-1 ring-slate-200',
+            enabled
+              ? 'bg-[#213D59] text-white shadow-sm'
+              : 'bg-white text-[#213D59] ring-1 ring-[#E4EAF0]',
         )}
       >
         {icon}
@@ -83,7 +85,7 @@ function ToggleRow({
         onClick={onToggle}
         className={cn(
           'relative h-8 w-[3.25rem] shrink-0 rounded-full transition',
-          enabled ? 'bg-emerald-600' : 'bg-slate-300',
+          enabled ? 'bg-[#213D59]' : 'bg-[#C9D4DE]',
           disabled && 'cursor-not-allowed opacity-60',
         )}
       >
@@ -186,30 +188,28 @@ export function VaultNotificationSettings({
       id="notification-settings"
       data-oa-notification-settings
       className={cn(
-        'w-full scroll-mt-24 overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[28px]',
+        'w-full scroll-mt-24 overflow-hidden rounded-[16px] border border-[#E4EAF0] bg-white shadow-[0_1px_2px_rgba(33,61,89,.06)]',
         className,
       )}
     >
-      <div className="relative overflow-hidden bg-[#1e3a5f] px-4 py-5 text-white sm:px-6 sm:py-6 md:px-8">
-        <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-sky-300/20 blur-2xl" />
-        <div className="relative flex items-start justify-between gap-3">
+      <div className="border-b border-[#EFF3F7] px-5 pb-4 pt-[22px] sm:px-6">
+        <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#619FCE]">
+          Alerts
+        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
-              Alerts
-            </p>
-            <h2 className="mt-1 text-[20px] font-bold tracking-tight sm:text-[22px]">
+            <h2 className="text-[19px] font-bold tracking-[-0.02em] text-[#213D59]">
               Notification settings
             </h2>
-            <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-white/75 sm:text-sm">
-              Choose how reminders reach you — in the app, by email, or as a
-              device popup. Each phone or computer still needs its own browser
-              permission.
+            <p className="mt-1 max-w-[620px] text-[13.5px] text-[#7A8794]">
+              Choose how reminders reach you: in the app, by email, or as a
+              device popup.
             </p>
           </div>
-          <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ring-1 ring-white/20">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EAF6FD] px-3 py-1 text-[11.5px] font-bold text-[#213D59]">
             <BellRing className="h-3.5 w-3.5" />
             {isFetching ? '…' : pushLabel}
-          </div>
+          </span>
         </div>
       </div>
 
@@ -226,7 +226,7 @@ export function VaultNotificationSettings({
 
         <ToggleRow
           title="Email reminders"
-          description="Expiry, renewal, and kit-review emails when a date is coming up."
+          description="Expiry, renewal, birthday, and Vault-review emails when a date is coming up."
           enabled={prefs.emailRemindersEnabled}
           icon={<Mail className="h-5 w-5" />}
           onToggle={() =>
@@ -241,7 +241,7 @@ export function VaultNotificationSettings({
             'rounded-2xl border px-3.5 py-3.5 sm:px-4',
             prefs.pushState === 'active'
               ? 'border-sky-200 bg-[linear-gradient(90deg,#ffffff_0%,#eff6ff_100%)]'
-              : 'border-slate-200 bg-[#f5f8fc]',
+              : 'border-slate-200 bg-[#F6F8FA]',
           )}
         >
           <div className="flex items-start gap-3">
@@ -347,11 +347,21 @@ export function VaultNotificationSettings({
           }
         />
 
+        <SectionUpdateRecipientsPicker />
+
+        <SpecialDaysSettings
+          days={prefs.specialDays || []}
+          enabled={prefs.specialDaysEnabled}
+          onChange={patch => void toggleLocalAndSync(patch)}
+        />
+
         <p className="px-1 text-[11px] leading-relaxed text-slate-400 sm:text-[12px]">
           Tip: keep push{' '}
           <span className="font-semibold text-slate-500">Active</span> so
-          renewals can alert you — and so people you already gave dashboard
-          access can opt in on their own phones after invite login.
+          renewals and special-day reminders can alert you — and so people you
+          already gave dashboard access can opt in on their own phones after
+          invite login. Each section page can also change who is notified when
+          that section is saved.
         </p>
       </div>
     </section>

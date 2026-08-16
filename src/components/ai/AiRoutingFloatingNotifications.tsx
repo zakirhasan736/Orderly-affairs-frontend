@@ -90,7 +90,7 @@ export function AiRoutingFloatingNotifications() {
         className="pointer-events-auto overflow-hidden rounded-2xl border border-[#7688a1]/50 bg-white shadow-xl shadow-[rgba(33, 61, 89,0.12)] sm:shadow-lg"
       >
         <div className="flex items-start gap-3 p-3.5 sm:p-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#e7eef7] text-[#2B5A8C] ring-1 ring-[#2B5A8C]/20">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EAF6FD] text-[#2E7FAD] ring-1 ring-[#2B5A8C]/20">
             <MapPin className="h-4 w-4" />
           </div>
 

@@ -36,9 +36,9 @@ export const ownerTour: OwnerTourStep[] = [
     section: 'Just saved',
     selector: '[data-tour="tour-new-data-hub"]',
     ensureSection: 'dashboard',
-    title: 'Just saved — one place for new data',
+    title: 'New data lives in the sidebar',
     description:
-      'After you Accept an AI fill, it lands here under Just saved. Tap Open to jump to the exact card, or Review fields to finish blanks — you stay on the Dashboard until you choose.',
+      'After you Accept an AI fill, the matching vault section rises under Review these first in the left sidebar. Tap it to open the section — you do not need a second copy on the dashboard.',
   },
   {
     section: 'Upload types',

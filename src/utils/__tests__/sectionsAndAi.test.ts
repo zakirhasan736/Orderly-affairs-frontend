@@ -22,8 +22,9 @@ import {
   normalizeInsuranceSectionData,
   upsertAutofillItems,
   vehiclesAreDuplicates,
+  normalizeCardSectionData,
 } from '@/utils/aiItemDedup';
-import { selectMatchReviewDocuments } from '@/utils/aiMatchReviewDocs';
+import { selectMatchReviewDocuments, pickDocsByFileId, synthesizeReviewStashFromVault } from '@/utils/aiMatchReviewDocs';
 import {
   applyAiResultToSectionForm,
   applyAiResultToSectionFormDetailed,
@@ -415,6 +416,134 @@ describe('aiItemDedup', () => {
     ]);
   });
 
+  it('keeps Jeep, Honda, and Toyota as separate review documents', () => {
+    const docs = selectMatchReviewDocuments('5', [
+      {
+        file_id: 'jeep',
+        section_id: '5',
+        section_key: 'vehicles',
+        createdAt: 1,
+        result: {
+          patch: {
+            '5A': [{ year: '2017', make: 'Jeep', model: 'Wrangler Sport' }],
+          },
+        },
+      },
+      {
+        file_id: 'honda',
+        section_id: '5',
+        section_key: 'vehicles',
+        createdAt: 2,
+        result: {
+          patch: {
+            '5A': [
+              {
+                year: '2022',
+                make: 'Honda',
+                model: 'CR-V EX-L',
+                vin: '5J8TB4H50NL014723',
+              },
+            ],
+          },
+        },
+      },
+      {
+        file_id: 'toyota',
+        section_id: '5',
+        section_key: 'vehicles',
+        createdAt: 3,
+        result: {
+          patch: { '5A': [{ year: '2020', make: 'Toyota', model: 'Camry' }] },
+        },
+      },
+      {
+        file_id: 'empty-a',
+        section_id: '5',
+        section_key: 'vehicles',
+        createdAt: 4,
+        result: { patch: {} },
+        document_summary: 'Card A',
+        detectedFields: [{ label: 'Summary', value: 'Card A' }],
+      },
+      {
+        file_id: 'empty-b',
+        section_id: '5',
+        section_key: 'vehicles',
+        createdAt: 5,
+        result: { patch: {} },
+        document_summary: 'Card B',
+        detectedFields: [{ label: 'Summary', value: 'Card B' }],
+      },
+    ]);
+    expect(docs.map(d => d.file_id).sort()).toEqual([
+      'empty-a',
+      'empty-b',
+      'honda',
+      'jeep',
+      'toyota',
+    ]);
+  });
+
+  it('Review click keeps only the pressed file', () => {
+    const docs = [
+      { fileId: 'jeep', name: 'Jeep' },
+      { fileId: 'honda', name: 'Honda' },
+      { fileId: 'toyota', name: 'Toyota' },
+    ];
+    expect(
+      pickDocsByFileId(docs, 'honda', doc => doc.fileId).map(d => d.name),
+    ).toEqual(['Honda']);
+    expect(
+      pickDocsByFileId(docs, undefined, doc => doc.fileId).map(d => d.name),
+    ).toEqual(['Jeep', 'Honda', 'Toyota']);
+    expect(
+      pickDocsByFileId(docs, 'missing', doc => doc.fileId, { strict: true }),
+    ).toEqual([]);
+  });
+
+  it('rebuilds a Review stash from the matching vault card after fill', () => {
+    const stash = synthesizeReviewStashFromVault({
+      sectionId: '5',
+      fileId: 'honda-file',
+      fileName: '2017 Honda CR-V insurance card.pdf',
+      documentSummary: 'Insurance card for a 2017 Honda CR-V',
+      sectionData: {
+        '5A': [
+          { year: '2017', make: 'Jeep', model: 'Wrangler' },
+          { year: '2017', make: 'Honda', model: 'CR-V', vin: '1HGCM82633A004352' },
+          { year: '2022', make: 'Honda', model: 'CR-V' },
+        ],
+      },
+    });
+    expect(stash?.file_id).toBe('honda-file');
+    expect(stash?.detectedFields?.some(fact => fact.value === 'Honda')).toBe(
+      true,
+    );
+    expect(stash?.detectedFields?.some(fact => fact.value === '2017')).toBe(
+      true,
+    );
+    expect(stash?.detectedFields?.some(fact => /jeep/i.test(fact.value))).toBe(
+      false,
+    );
+  });
+
+  it('collapses two same Jeeps but keeps 2017 Honda and 2022 Honda', () => {
+    const normalized = normalizeCardSectionData('5', {
+      '5A': [
+        { year: '2017', make: 'Jeep', model: 'Wrangler Sport' },
+        { make: 'Jeep', model: 'Wrangler' },
+        { year: '2017', make: 'Honda', model: 'CR-V' },
+        { year: '2022', make: 'Honda', model: 'CR-V' },
+      ],
+    }) as { '5A': Array<Record<string, unknown>> };
+    expect(normalized['5A']).toHaveLength(3);
+    const titles = normalized['5A'].map(
+      item => `${item.year || ''} ${item.make} ${item.model}`,
+    );
+    expect(titles.some(title => /jeep/i.test(title))).toBe(true);
+    expect(titles.filter(title => /honda/i.test(title))).toHaveLength(2);
+  });
+
   it('detects duplicate vehicles by VIN and year/make/model', () => {
     expect(
       vehiclesAreDuplicates(
@@ -430,8 +559,20 @@ describe('aiItemDedup', () => {
     ).toBe(true);
     expect(
       vehiclesAreDuplicates(
+        { year: '2017', make: 'Honda', model: 'CR-V' },
         { year: '2022', make: 'Honda', model: 'CR-V' },
-        { year: '2023', make: 'Honda', model: 'CR-V' },
+      ),
+    ).toBe(false);
+    expect(
+      vehiclesAreDuplicates(
+        { year: '2017', make: 'Jeep', model: 'Wrangler Sport' },
+        { make: 'Jeep', model: 'Wrangler' },
+      ),
+    ).toBe(true);
+    expect(
+      vehiclesAreDuplicates(
+        { year: '2022', make: 'Honda', model: 'CR-V' },
+        { make: 'Honda', model: 'Civic' },
       ),
     ).toBe(false);
     // Same policy number covering two different cars must not collapse.

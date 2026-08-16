@@ -47,7 +47,7 @@ export const VAULT_NAVIGATION: VaultSection[] = [
   {
     id: '2',
     title: 'Access Management',
-    subsections: [{ id: '2A', title: 'Kit Access Control' }],
+    subsections: [{ id: '2A', title: 'Access Control' }],
   },
   {
     id: '3',

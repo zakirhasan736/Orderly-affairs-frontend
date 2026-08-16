@@ -1,0 +1,5735 @@
+[
+  {
+    "id": "instructions",
+    "name": "Instructions",
+    "icon": "book",
+    "collection": "Start here",
+    "desc": "A short orientation so you know how the Vault works before you start filling it in.",
+    "subs": [
+      {
+        "id": "how-it-works",
+        "name": "How the Vault Works",
+        "kind": "form",
+        "desc": "The basics: what goes in, who sees it, and how to move through it.",
+        "fields": [
+          {
+            "k": "I understand the Vault saves as I go, so I can stop and come back anytime",
+            "t": "toggle"
+          },
+          {
+            "k": "I understand nobody sees my Vault while I am living unless I invite them",
+            "t": "toggle"
+          },
+          {
+            "k": "Where would you like to start?",
+            "t": "choice",
+            "opts": [
+              "Vital Information & Key Contacts",
+              "Passwords & Online Accounts",
+              "Main Residence",
+              "Bank Accounts",
+              "Estate Planning & Final Wishes",
+              "I will browse first"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "How much time can you give this at a sitting?",
+            "t": "choice",
+            "opts": [
+              "10 minutes",
+              "30 minutes",
+              "An hour",
+              "A whole afternoon"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Who is building this Vault with you?",
+            "t": "text",
+            "ph": "Just me, or \"me and my wife Carol\"",
+            "hint": "If someone helps you, add them as a contributor in Access Management."
+          },
+          {
+            "k": "What made you start?",
+            "t": "long",
+            "ph": "Dad passed last year and we could not find anything. I do not want to do that to the kids.",
+            "hint": "Nobody sees this. It helps when you lose momentum halfway through."
+          }
+        ]
+      },
+      {
+        "id": "dove-legend",
+        "name": "What the Dove Marks",
+        "kind": "form",
+        "desc": "The dove appears next to anything that helps your family write your obituary.",
+        "fields": [
+          {
+            "k": "I understand the dove marks information a next of kin needs to write my obituary",
+            "t": "toggle"
+          },
+          {
+            "k": "Do you want the Vault to build a first draft of your obituary from your dove fields?",
+            "t": "choice",
+            "opts": [
+              "Yes, build a draft my family can edit",
+              "No, leave that to them"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Who should write it if the Vault does not?",
+            "t": "text",
+            "ph": "My sister Denise, she is the writer in the family",
+            "w": "half"
+          },
+          {
+            "k": "Anything you want said, or not said",
+            "t": "long",
+            "ph": "Please do not use the word \"battle\". I would rather it be short and funny."
+          },
+          {
+            "k": "A photo you would want used",
+            "t": "doc",
+            "hint": "The one you actually like, not the last one anyone happened to take."
+          }
+        ]
+      },
+      {
+        "id": "keeping-current",
+        "name": "Keeping It Current",
+        "kind": "form",
+        "desc": "A Vault that is three years stale can be worse than no Vault at all.",
+        "fields": [
+          {
+            "k": "How often should we remind you to review?",
+            "t": "choice",
+            "opts": [
+              "Every month",
+              "Every 3 months",
+              "Every 6 months",
+              "Once a year",
+              "Never, I will handle it"
+            ],
+            "req": 1,
+            "w": "half"
+          },
+          {
+            "k": "Best day for the reminder",
+            "t": "choice",
+            "opts": [
+              "Monday",
+              "Friday",
+              "Saturday",
+              "Sunday",
+              "My birthday",
+              "New Year"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Where should reminders go?",
+            "t": "email",
+            "ph": "you@gmail.com",
+            "w": "half"
+          },
+          {
+            "k": "Also text me",
+            "t": "tel",
+            "ph": "(555) 214-8890",
+            "w": "half"
+          },
+          {
+            "k": "Last full review",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Send a nudge when a password or policy passes its expiry date",
+            "t": "toggle"
+          }
+        ]
+      },
+      {
+        "id": "disclaimer",
+        "name": "Not a Legal Document",
+        "kind": "form",
+        "desc": "What the Vault is, and the important thing it is not.",
+        "fields": [
+          {
+            "k": "I understand the Vault organizes my information and does not replace a will, trust, or power of attorney",
+            "t": "toggle",
+            "req": 1
+          },
+          {
+            "k": "I understand Orderly Affairs does not give legal, tax, or medical advice",
+            "t": "toggle"
+          },
+          {
+            "k": "I have a signed will",
+            "t": "choice",
+            "opts": [
+              "Yes",
+              "No",
+              "In progress",
+              "I am not sure"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Date I last spoke with an attorney about it",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Attorney or advisor name",
+            "t": "text",
+            "ph": "Ruth Kaminski, Kaminski & Doyle"
+          },
+          {
+            "k": "Notes for yourself",
+            "t": "long",
+            "ph": "Need to add the cabin to the trust before spring."
+          }
+        ]
+      }
+    ],
+    "apiId": "0"
+  },
+  {
+    "id": "vital-information",
+    "name": "Vital Information & Key Contacts",
+    "icon": "id",
+    "collection": "Identity",
+    "dove": 1,
+    "desc": "The core facts about you and the handful of people who should be called first.",
+    "subs": [
+      {
+        "id": "personal-details",
+        "name": "Personal Details",
+        "kind": "form",
+        "dove": 1,
+        "desc": "Your legal identity, exactly as it appears on official records.",
+        "fields": [
+          {
+            "k": "Full legal name",
+            "t": "text",
+            "req": 1,
+            "ph": "Margaret Ellen Vasquez"
+          },
+          {
+            "k": "Name you go by",
+            "t": "text",
+            "ph": "Peggy",
+            "w": "half"
+          },
+          {
+            "k": "Other names you have used",
+            "t": "text",
+            "ph": "Margaret Ellen Doyle (maiden), M.E. Vasquez",
+            "hint": "Maiden names, married names, and legal name changes. Banks and pensions often still hold an old one."
+          },
+          {
+            "k": "Date of birth",
+            "t": "date",
+            "req": 1,
+            "w": "half"
+          },
+          {
+            "k": "Social Security number",
+            "t": "masked",
+            "ph": "123-45-6789",
+            "w": "half"
+          },
+          {
+            "k": "Where the Social Security card is kept",
+            "t": "text",
+            "ph": "Fireproof box, top shelf of the hall closet"
+          },
+          {
+            "k": "Marital status",
+            "t": "choice",
+            "opts": [
+              "Single",
+              "Married",
+              "Domestic partnership",
+              "Separated",
+              "Divorced",
+              "Widowed"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Pronouns",
+            "t": "text",
+            "ph": "she / her",
+            "w": "half"
+          }
+        ]
+      },
+      {
+        "id": "drivers-license",
+        "name": "Driver's License / State ID",
+        "kind": "form",
+        "desc": "The card in your wallet, written down in case the wallet is gone.",
+        "fields": [
+          {
+            "k": "License or ID number",
+            "t": "masked",
+            "req": 1,
+            "ph": "V412-7788-3021",
+            "w": "half"
+          },
+          {
+            "k": "Issuing state",
+            "t": "text",
+            "ph": "Ohio",
+            "w": "half"
+          },
+          {
+            "k": "DD or audit number",
+            "t": "masked",
+            "ph": "0912345678901234",
+            "w": "half",
+            "hint": "A long number on the back or bottom of the card. Some states ask for it to renew online."
+          },
+          {
+            "k": "Class",
+            "t": "choice",
+            "opts": [
+              "Class D (regular)",
+              "Class M (motorcycle)",
+              "Commercial (CDL)",
+              "State ID, non-driver",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Issue date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Expiration date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Registered organ donor",
+            "t": "toggle"
+          },
+          {
+            "k": "Photo of the front and back",
+            "t": "doc"
+          }
+        ]
+      },
+      {
+        "id": "phone-device-access",
+        "name": "Phone & Device Access",
+        "kind": "form",
+        "desc": "Without the phone passcode, most of the rest of this is locked away.",
+        "fields": [
+          {
+            "k": "Mobile number",
+            "t": "tel",
+            "req": 1,
+            "ph": "(555) 214-8890",
+            "w": "half"
+          },
+          {
+            "k": "Phone passcode or PIN",
+            "t": "masked",
+            "ph": "4-digit or 6-digit code",
+            "w": "half"
+          },
+          {
+            "k": "Voicemail PIN",
+            "t": "masked",
+            "ph": "8021",
+            "w": "half"
+          },
+          {
+            "k": "Carrier and account PIN",
+            "t": "masked",
+            "ph": "Verizon, account PIN 4417",
+            "w": "half",
+            "hint": "Carriers will not discuss the account without this, even with a death certificate."
+          },
+          {
+            "k": "Computer login password",
+            "t": "masked",
+            "ph": "The password for the desktop in the den"
+          },
+          {
+            "k": "Tablet or second device passcode",
+            "t": "masked",
+            "ph": "iPad, 6-digit code"
+          },
+          {
+            "k": "Where the phone usually is",
+            "t": "text",
+            "ph": "Kitchen counter charger, or my purse"
+          }
+        ]
+      },
+      {
+        "id": "email-accounts",
+        "name": "Email Accounts",
+        "kind": "form",
+        "desc": "Your main inboxes, because password resets for everything else land there.",
+        "fields": [
+          {
+            "k": "Primary email address",
+            "t": "email",
+            "req": 1,
+            "ph": "peggy.vasquez@gmail.com"
+          },
+          {
+            "k": "Primary email password",
+            "t": "masked",
+            "ph": "The password, or \"in 1Password\""
+          },
+          {
+            "k": "Secondary email address",
+            "t": "email",
+            "ph": "mvasquez@sbcglobal.net"
+          },
+          {
+            "k": "Secondary email password",
+            "t": "masked"
+          },
+          {
+            "k": "Recovery phone on these accounts",
+            "t": "tel",
+            "ph": "(555) 214-8890",
+            "w": "half"
+          },
+          {
+            "k": "Recovery email on these accounts",
+            "t": "email",
+            "ph": "peggy.backup@outlook.com",
+            "w": "half"
+          },
+          {
+            "k": "Which one matters most",
+            "t": "long",
+            "ph": "Everything bills to the Gmail. The sbcglobal one is just family and church."
+          }
+        ]
+      },
+      {
+        "id": "secure-locations",
+        "name": "Secure Locations",
+        "kind": "form",
+        "desc": "Where the locked things are, and how to open them.",
+        "fields": [
+          {
+            "k": "Where the home safe is",
+            "t": "text",
+            "req": 1,
+            "ph": "Bolted to the floor of the primary bedroom closet, behind the shoe rack"
+          },
+          {
+            "k": "Safe code or combination",
+            "t": "masked",
+            "ph": "12-34-56",
+            "w": "half"
+          },
+          {
+            "k": "Safe key location, if it takes one",
+            "t": "text",
+            "ph": "Small brass key taped under the sock drawer",
+            "w": "half"
+          },
+          {
+            "k": "Lockbox or fire box location",
+            "t": "text",
+            "ph": "Grey Sentry box on the basement shelf"
+          },
+          {
+            "k": "Safe deposit box bank and number",
+            "t": "text",
+            "ph": "Huntington on Main St, box 214",
+            "w": "half"
+          },
+          {
+            "k": "Safe deposit box key location",
+            "t": "text",
+            "ph": "Two keys, both in the home safe",
+            "w": "half",
+            "hint": "The bank will need proof of authority to open it, not just the key."
+          },
+          {
+            "k": "Who else already knows these codes",
+            "t": "text",
+            "ph": "My husband Rafael, and Denise has the safe code only"
+          },
+          {
+            "k": "Spare house key location",
+            "t": "text",
+            "ph": "Denise next door has one, plus a magnet box inside the grill"
+          }
+        ]
+      },
+      {
+        "id": "birth-citizenship",
+        "name": "Birth & Citizenship",
+        "kind": "form",
+        "dove": 1,
+        "desc": "Where you were born and the papers that prove it.",
+        "fields": [
+          {
+            "k": "City and state of birth",
+            "t": "text",
+            "req": 1,
+            "ph": "Youngstown, Ohio"
+          },
+          {
+            "k": "Country of birth",
+            "t": "text",
+            "ph": "United States",
+            "w": "half"
+          },
+          {
+            "k": "Country of citizenship",
+            "t": "text",
+            "ph": "United States",
+            "w": "half"
+          },
+          {
+            "k": "Dual citizenship",
+            "t": "toggle",
+            "hint": "Turn this on if you hold a second passport; it changes what an estate has to file."
+          },
+          {
+            "k": "Second country and status",
+            "t": "text",
+            "ph": "Mexico, citizen by birth of parents"
+          },
+          {
+            "k": "Passport number",
+            "t": "masked",
+            "ph": "A12345678",
+            "w": "half"
+          },
+          {
+            "k": "Passport expiration",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Where the passport and birth certificate are kept",
+            "t": "text",
+            "ph": "Both in the fireproof box; a certified birth copy is with the will"
+          },
+          {
+            "k": "Naturalization certificate number",
+            "t": "masked",
+            "ph": "If you were naturalized"
+          },
+          {
+            "k": "Copy of the birth certificate",
+            "t": "doc"
+          }
+        ]
+      },
+      {
+        "id": "key-contacts",
+        "name": "Key Contacts",
+        "kind": "entries",
+        "entry": "contact",
+        "desc": "The short list of people to call first, and what each one handles.",
+        "fields": [
+          {
+            "k": "Full name",
+            "t": "text",
+            "req": 1,
+            "ph": "Rafael Vasquez"
+          },
+          {
+            "k": "Relationship",
+            "t": "text",
+            "ph": "Husband",
+            "w": "half"
+          },
+          {
+            "k": "Call order",
+            "t": "choice",
+            "opts": [
+              "Call first",
+              "Call second",
+              "Call soon",
+              "When there is time"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Phone",
+            "t": "tel",
+            "ph": "(555) 903-4412",
+            "w": "half"
+          },
+          {
+            "k": "Email",
+            "t": "email",
+            "ph": "rafael.v@gmail.com",
+            "w": "half"
+          },
+          {
+            "k": "Call them about",
+            "t": "multi",
+            "opts": [
+              "Anything",
+              "Medical decisions",
+              "Money and bills",
+              "The house",
+              "The kids",
+              "The pets",
+              "Funeral arrangements",
+              "Work",
+              "Legal matters"
+            ]
+          },
+          {
+            "k": "What they should know",
+            "t": "long",
+            "ph": "He has the medical power of attorney and knows where the will is. Do not call him at work before 5 unless it is urgent."
+          },
+          {
+            "k": "Best time to reach them",
+            "t": "text",
+            "ph": "Evenings after 6, he does not check texts at work",
+            "w": "half"
+          },
+          {
+            "k": "Has a key to the house",
+            "t": "toggle"
+          }
+        ]
+      }
+    ],
+    "apiId": "1"
+  },
+  {
+    "id": "passwords",
+    "name": "Passwords & Online Accounts",
+    "icon": "key",
+    "collection": "Identity",
+    "desc": "Every login your family would otherwise have to guess, plus what should happen to each account.",
+    "subs": [
+      {
+        "id": "password-manager",
+        "name": "Password Manager",
+        "kind": "form",
+        "desc": "If you keep passwords in one place, this is the key to that place.",
+        "fields": [
+          {
+            "k": "Which password manager do you use?",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "1Password",
+              "Bitwarden",
+              "LastPass",
+              "Dashlane",
+              "Apple Passwords (iCloud Keychain)",
+              "Google Password Manager",
+              "Written in a notebook",
+              "None yet"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Account email for it",
+            "t": "email",
+            "ph": "peggy.vasquez@gmail.com",
+            "w": "half"
+          },
+          {
+            "k": "Where the master password is written",
+            "t": "text",
+            "ph": "Sealed envelope in the home safe, marked \"1Password\"",
+            "hint": "Write where it lives, not the password itself, unless you are comfortable storing it here."
+          },
+          {
+            "k": "Master password",
+            "t": "masked",
+            "ph": "Only if you want it stored here"
+          },
+          {
+            "k": "Where the recovery kit or emergency kit is",
+            "t": "text",
+            "ph": "Printed sheet in the fireproof box with the passports"
+          },
+          {
+            "k": "Copy of the recovery kit",
+            "t": "doc"
+          },
+          {
+            "k": "Emergency access is set up inside the manager",
+            "t": "toggle",
+            "hint": "Most managers let you name someone who can request access after a waiting period. That is separate from this Vault."
+          },
+          {
+            "k": "Who is named for emergency access",
+            "t": "text",
+            "ph": "Rafael, with a 7 day wait"
+          }
+        ]
+      },
+      {
+        "id": "online-accounts",
+        "name": "Online Accounts",
+        "kind": "entries",
+        "entry": "online account",
+        "desc": "One card per login, with what you want done with it later.",
+        "fields": [
+          {
+            "k": "Service name",
+            "t": "text",
+            "req": 1,
+            "ph": "Chase Bank, Netflix, Delta SkyMiles"
+          },
+          {
+            "k": "Category",
+            "t": "choice",
+            "opts": [
+              "Email",
+              "Banking & money",
+              "Bills & utilities",
+              "Shopping",
+              "Streaming & media",
+              "Social media",
+              "Health",
+              "Work",
+              "Travel & loyalty",
+              "Government",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Website",
+            "t": "url",
+            "ph": "chase.com",
+            "w": "half"
+          },
+          {
+            "k": "Username or email",
+            "t": "text",
+            "req": 1,
+            "ph": "peggyv1954"
+          },
+          {
+            "k": "Password",
+            "t": "masked",
+            "ph": "Or write \"in 1Password\" if it lives there"
+          },
+          {
+            "k": "Two-factor method",
+            "t": "choice",
+            "opts": [
+              "None",
+              "Text message code",
+              "Authenticator app",
+              "Security key",
+              "Email code",
+              "Face or fingerprint",
+              "Backup codes only"
+            ],
+            "w": "half",
+            "hint": "If codes go to a phone, whoever handles this needs the phone passcode too."
+          },
+          {
+            "k": "Recovery or backup codes",
+            "t": "masked",
+            "ph": "4471-9920, 8812-0034"
+          },
+          {
+            "k": "What happens to this account after I pass",
+            "t": "choice",
+            "opts": [
+              "Close it",
+              "Transfer to someone",
+              "Memorialize it",
+              "Keep it running",
+              "Download everything first",
+              "Undecided"
+            ]
+          },
+          {
+            "k": "Who should handle it",
+            "t": "text",
+            "ph": "Rafael",
+            "w": "half"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "The mortgage autopays from here on the 3rd. Do not close it until that is moved."
+          }
+        ]
+      },
+      {
+        "id": "devices",
+        "name": "Devices",
+        "kind": "entries",
+        "entry": "device",
+        "desc": "Phones, laptops, tablets, and anything else with a lock screen.",
+        "fields": [
+          {
+            "k": "What it is",
+            "t": "text",
+            "req": 1,
+            "ph": "iPhone 15, my daily phone"
+          },
+          {
+            "k": "Make and model",
+            "t": "text",
+            "ph": "Apple iPhone 15, blue case",
+            "w": "half"
+          },
+          {
+            "k": "Type",
+            "t": "choice",
+            "opts": [
+              "Phone",
+              "Laptop",
+              "Desktop",
+              "Tablet",
+              "Smart watch",
+              "External drive",
+              "Home assistant",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Passcode or password",
+            "t": "masked",
+            "ph": "6-digit code"
+          },
+          {
+            "k": "Where it is kept",
+            "t": "text",
+            "ph": "Laptop lives in the den on the desk; the old one is in the closet bin"
+          },
+          {
+            "k": "Find My or device tracking is on",
+            "t": "toggle",
+            "hint": "Tracking can lock a device to my account after I pass. Whoever handles it may need my account password to clear it."
+          },
+          {
+            "k": "Backed up to",
+            "t": "choice",
+            "opts": [
+              "iCloud",
+              "Google",
+              "OneDrive",
+              "Dropbox",
+              "External hard drive",
+              "Not backed up",
+              "Not sure"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "What is on it that matters",
+            "t": "long",
+            "ph": "Every photo from 2008 onward, and the tax spreadsheets in Documents."
+          }
+        ]
+      },
+      {
+        "id": "digital-legacy",
+        "name": "Digital Legacy",
+        "kind": "form",
+        "desc": "The settings the big companies already offer, and your wishes for the rest.",
+        "fields": [
+          {
+            "k": "Apple Legacy Contact is set up",
+            "t": "toggle",
+            "hint": "Settings, then your name, then Sign-In & Security, then Legacy Contact. They get an access key and can request the account later."
+          },
+          {
+            "k": "Google Inactive Account Manager is set up",
+            "t": "toggle"
+          },
+          {
+            "k": "Facebook legacy contact is set up",
+            "t": "toggle"
+          },
+          {
+            "k": "People I named on those accounts",
+            "t": "text",
+            "ph": "Rafael on Apple and Google, Denise on Facebook"
+          },
+          {
+            "k": "Where the Apple access key is kept",
+            "t": "text",
+            "ph": "Printed and in the fireproof box"
+          },
+          {
+            "k": "What I want done with my social media",
+            "t": "choice",
+            "opts": [
+              "Memorialize the accounts",
+              "Delete them",
+              "Leave them as they are",
+              "Download the posts, then delete",
+              "Whatever the family prefers"
+            ]
+          },
+          {
+            "k": "Photos and files I want saved for the family",
+            "t": "long",
+            "ph": "The iCloud album called \"Vasquez Family\" and the shoebox of scanned slides on the external drive."
+          },
+          {
+            "k": "Anything I do not want anyone reading",
+            "t": "long",
+            "ph": "My journal folder on the laptop. Please delete it without opening it.",
+            "hint": "Say it plainly here. It is not legally binding, but it tells your family what you wanted."
+          },
+          {
+            "k": "Last reviewed",
+            "t": "date",
+            "w": "half"
+          }
+        ]
+      }
+    ],
+    "apiId": "13"
+  },
+  {
+    "id": "access-management",
+    "name": "Access Management",
+    "icon": "lock",
+    "collection": "People & access",
+    "desc": "Who gets into your Vault, when they get in, and how much of it they can see.",
+    "subs": [
+      {
+        "id": "next-of-kin",
+        "name": "Next of Kin",
+        "kind": "entries",
+        "entry": "next of kin",
+        "desc": "People who see nothing while you are living and take over once the Vault unlocks.",
+        "fields": [
+          {
+            "k": "Full name",
+            "t": "text",
+            "req": 1,
+            "ph": "Rafael Vasquez"
+          },
+          {
+            "k": "Relationship",
+            "t": "text",
+            "ph": "Husband",
+            "w": "half"
+          },
+          {
+            "k": "Phone",
+            "t": "tel",
+            "ph": "(555) 903-4412",
+            "w": "half"
+          },
+          {
+            "k": "Email",
+            "t": "email",
+            "req": 1,
+            "ph": "rafael.v@gmail.com",
+            "hint": "This is the address the unlock invitation goes to, so make sure it is one they still use."
+          },
+          {
+            "k": "Sections they see after unlock",
+            "t": "multi",
+            "opts": [
+              "Everything",
+              "Identity",
+              "People & access",
+              "Property",
+              "Money",
+              "Protection",
+              "Life",
+              "Legal & estate"
+            ]
+          },
+          {
+            "k": "What I want them to handle",
+            "t": "long",
+            "ph": "Rafael handles the house and the bank. Denise handles the funeral and telling people."
+          },
+          {
+            "k": "I have told them they are named",
+            "t": "toggle",
+            "hint": "Being surprised by this in the worst week of your life is unkind. Tell them now."
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "He is the executor too. The signed will is with Kaminski & Doyle."
+          }
+        ]
+      },
+      {
+        "id": "contributors",
+        "name": "Contributors",
+        "kind": "entries",
+        "entry": "contributor",
+        "desc": "People who help you build and keep the Vault today, while you are living.",
+        "fields": [
+          {
+            "k": "Full name",
+            "t": "text",
+            "req": 1,
+            "ph": "Denise Okafor"
+          },
+          {
+            "k": "Relationship or role",
+            "t": "text",
+            "ph": "Sister, and my bookkeeper Tom is the other one",
+            "w": "half"
+          },
+          {
+            "k": "Email",
+            "t": "email",
+            "req": 1,
+            "ph": "denise.okafor@gmail.com",
+            "w": "half"
+          },
+          {
+            "k": "Phone",
+            "t": "tel",
+            "ph": "(555) 771-2245",
+            "w": "half"
+          },
+          {
+            "k": "Starting access",
+            "t": "choice",
+            "opts": [
+              "No access yet",
+              "View only",
+              "Edit a few sections",
+              "Edit most sections"
+            ],
+            "w": "half",
+            "hint": "Per-section permissions (None, View, Edit) are set on this person's card after you add them."
+          },
+          {
+            "k": "Sections they mainly work in",
+            "t": "multi",
+            "opts": [
+              "Identity",
+              "People & access",
+              "Property",
+              "Money",
+              "Protection",
+              "Life",
+              "Legal & estate"
+            ]
+          },
+          {
+            "k": "Invitation sent",
+            "t": "toggle"
+          },
+          {
+            "k": "Date access granted",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Tom only needs Money. Give him Edit there and None everywhere else."
+          }
+        ]
+      },
+      {
+        "id": "unlock-conditions",
+        "name": "Unlock Conditions",
+        "kind": "form",
+        "desc": "What has to happen before your next of kin can get in.",
+        "fields": [
+          {
+            "k": "What triggers unlock",
+            "t": "multi",
+            "req": 1,
+            "opts": [
+              "A certified death certificate",
+              "Two named verifiers agree",
+              "Notice from a doctor or hospital",
+              "No response from me for a set period",
+              "A court order"
+            ]
+          },
+          {
+            "k": "First verifier",
+            "t": "text",
+            "ph": "Rafael Vasquez, husband",
+            "w": "half"
+          },
+          {
+            "k": "Second verifier",
+            "t": "text",
+            "ph": "Ruth Kaminski, attorney",
+            "w": "half",
+            "hint": "Pick two people who are unlikely to be in the same car accident as you."
+          },
+          {
+            "k": "Waiting period after the trigger",
+            "t": "choice",
+            "opts": [
+              "None, unlock right away",
+              "24 hours",
+              "3 days",
+              "7 days",
+              "14 days",
+              "30 days"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "If I do not respond for",
+            "t": "choice",
+            "opts": [
+              "Not used",
+              "30 days",
+              "60 days",
+              "90 days",
+              "6 months",
+              "1 year"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Tell every next of kin the moment it unlocks",
+            "t": "toggle"
+          },
+          {
+            "k": "Special instructions for the unlock",
+            "t": "long",
+            "ph": "Do not unlock on hearsay. Ruth has to see the certificate herself."
+          },
+          {
+            "k": "Death certificate or supporting document",
+            "t": "doc"
+          }
+        ]
+      },
+      {
+        "id": "recovery",
+        "name": "Recovery",
+        "kind": "form",
+        "desc": "What happens if you are the one locked out.",
+        "fields": [
+          {
+            "k": "Backup contact name",
+            "t": "text",
+            "req": 1,
+            "ph": "Denise Okafor"
+          },
+          {
+            "k": "Their phone",
+            "t": "tel",
+            "ph": "(555) 771-2245",
+            "w": "half"
+          },
+          {
+            "k": "Their email",
+            "t": "email",
+            "ph": "denise.okafor@gmail.com",
+            "w": "half"
+          },
+          {
+            "k": "What they are allowed to do",
+            "t": "choice",
+            "opts": [
+              "Confirm my identity only",
+              "Trigger a password reset",
+              "Both"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "They are not a next of kin, only a recovery contact",
+            "t": "toggle",
+            "w": "half"
+          },
+          {
+            "k": "Where my recovery codes are kept",
+            "t": "text",
+            "ph": "Printed card in the fireproof box, behind the passports"
+          },
+          {
+            "k": "Recovery codes",
+            "t": "masked",
+            "ph": "9021-4417, 3388-0192"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "My phone number changed in 2025. If the old one is on file, that is why the text never arrives."
+          }
+        ]
+      }
+    ],
+    "apiId": "2"
+  },
+  {
+    "id": "personal-messages",
+    "name": "Personal Messages",
+    "icon": "chat",
+    "collection": "People & access",
+    "desc": "The things you want to say to specific people, held until the right moment.",
+    "subs": [
+      {
+        "id": "messages",
+        "name": "Messages",
+        "kind": "entries",
+        "entry": "message",
+        "desc": "One message per person, with the moment it should reach them.",
+        "fields": [
+          {
+            "k": "Who it is for",
+            "t": "text",
+            "req": 1,
+            "ph": "My daughter Elena"
+          },
+          {
+            "k": "How to reach them",
+            "t": "text",
+            "ph": "elena.vasquez@gmail.com, or (555) 660-1183"
+          },
+          {
+            "k": "When it should be delivered",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "On my passing",
+              "On a specific date",
+              "On a milestone",
+              "Whenever they ask for it"
+            ]
+          },
+          {
+            "k": "The date",
+            "t": "date",
+            "w": "half",
+            "hint": "Only if you chose a specific date."
+          },
+          {
+            "k": "The milestone",
+            "t": "text",
+            "ph": "Her wedding day, or when she turns 30",
+            "w": "half"
+          },
+          {
+            "k": "Subject",
+            "t": "text",
+            "ph": "For Elena, on your wedding day"
+          },
+          {
+            "k": "The message",
+            "t": "long",
+            "ph": "Write it the way you talk. It does not have to be polished, it has to be yours."
+          },
+          {
+            "k": "Attach a photo or video",
+            "t": "doc",
+            "hint": "A short video of your voice is worth more than a perfect letter. Phone camera is fine."
+          },
+          {
+            "k": "Read privately or with family",
+            "t": "choice",
+            "opts": [
+              "Privately",
+              "With family present",
+              "Their choice"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Status",
+            "t": "choice",
+            "opts": [
+              "Draft",
+              "Finished and sealed"
+            ],
+            "w": "half"
+          }
+        ]
+      },
+      {
+        "id": "delivery-settings",
+        "name": "Delivery Settings",
+        "kind": "form",
+        "desc": "Who makes sure these actually arrive, and what to do if someone cannot be found.",
+        "fields": [
+          {
+            "k": "Who confirms the messages were delivered",
+            "t": "text",
+            "req": 1,
+            "ph": "Rafael, and Denise as the backup"
+          },
+          {
+            "k": "Their contact details",
+            "t": "text",
+            "ph": "rafael.v@gmail.com, (555) 903-4412"
+          },
+          {
+            "k": "How to deliver",
+            "t": "choice",
+            "opts": [
+              "Email",
+              "Printed and handed over",
+              "In person",
+              "Whichever is easiest"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "If the recipient cannot be reached",
+            "t": "choice",
+            "opts": [
+              "Hold and keep trying",
+              "Give it to the backup person",
+              "Read it aloud at the service",
+              "Destroy it unread"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "How long to keep trying",
+            "t": "choice",
+            "opts": [
+              "30 days",
+              "6 months",
+              "1 year",
+              "5 years",
+              "As long as it takes"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Backup person",
+            "t": "text",
+            "ph": "Denise Okafor, my sister",
+            "w": "half"
+          },
+          {
+            "k": "Deliver everything at once, or one at a time",
+            "t": "choice",
+            "opts": [
+              "All at once",
+              "One at a time as each trigger comes"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Anything else the deliverer should know",
+            "t": "long",
+            "ph": "Elena and her brother are not speaking. Give them their letters separately."
+          }
+        ]
+      },
+      {
+        "id": "recordings-keepsakes",
+        "name": "Recordings & Keepsakes",
+        "kind": "entries",
+        "entry": "recording",
+        "desc": "Voice notes, videos, and objects that go with a message.",
+        "fields": [
+          {
+            "k": "What it is",
+            "t": "text",
+            "req": 1,
+            "ph": "Video I recorded for the grandkids at Christmas 2025"
+          },
+          {
+            "k": "Who it is for",
+            "t": "text",
+            "ph": "All four grandchildren",
+            "w": "half"
+          },
+          {
+            "k": "Format",
+            "t": "choice",
+            "opts": [
+              "Video",
+              "Voice recording",
+              "Handwritten letter",
+              "Photo album",
+              "Physical object",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Where it is stored",
+            "t": "text",
+            "ph": "External drive in the den labeled \"Family\", folder called Christmas 25"
+          },
+          {
+            "k": "Passcode or password to open it",
+            "t": "masked",
+            "ph": "If the drive or file is locked"
+          },
+          {
+            "k": "Upload a copy here",
+            "t": "doc"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "The audio is quiet. Turn it up before you play it for the room."
+          }
+        ]
+      }
+    ],
+    "apiId": "4"
+  },
+  {
+    "id": "main-residence",
+    "name": "Main Residence",
+    "icon": "house",
+    "collection": "Property",
+    "dove": 1,
+    "desc": "Everything about the home you live in, from the address to who holds the spare key.",
+    "subs": [
+      {
+        "id": "property-identity",
+        "name": "Property Identity",
+        "kind": "form",
+        "dove": 1,
+        "desc": "The basics that identify this home on paper.",
+        "fields": [
+          {
+            "k": "Street address",
+            "t": "text",
+            "req": 1,
+            "ph": "412 Beechwood Lane, Asheville, NC 28801"
+          },
+          {
+            "k": "Type of residence",
+            "t": "choice",
+            "opts": [
+              "Single family house",
+              "Townhouse",
+              "Condo",
+              "Apartment",
+              "Mobile or manufactured home",
+              "Farm or acreage",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Do you own or rent",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Own",
+              "Rent",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Ownership type",
+            "t": "choice",
+            "opts": [
+              "Sole owner",
+              "Joint tenants with right of survivorship",
+              "Tenants in common",
+              "Community property",
+              "Held in a trust",
+              "Held by an LLC",
+              "Other"
+            ],
+            "hint": "How the title is held changes what happens to the home when you die."
+          },
+          {
+            "k": "Year purchased or leased",
+            "t": "num",
+            "ph": "2014",
+            "w": "half"
+          },
+          {
+            "k": "Joint owners or co-tenants",
+            "t": "text",
+            "ph": "Maria Ellison (spouse), listed on the deed"
+          },
+          {
+            "k": "County",
+            "t": "text",
+            "ph": "Buncombe County",
+            "hint": "Deeds and property tax records are filed at the county level.",
+            "w": "half"
+          }
+        ]
+      },
+      {
+        "id": "property-details",
+        "name": "Property Details",
+        "kind": "form",
+        "desc": "The physical facts anyone selling or insuring the home will ask for.",
+        "fields": [
+          {
+            "k": "Year built",
+            "t": "num",
+            "ph": "1978",
+            "w": "half"
+          },
+          {
+            "k": "Square footage",
+            "t": "num",
+            "ph": "2140",
+            "w": "half"
+          },
+          {
+            "k": "Lot size",
+            "t": "text",
+            "ph": "0.34 acres",
+            "w": "half"
+          },
+          {
+            "k": "Bedrooms",
+            "t": "num",
+            "ph": "4",
+            "w": "half"
+          },
+          {
+            "k": "Bathrooms",
+            "t": "num",
+            "ph": "2.5",
+            "w": "half"
+          },
+          {
+            "k": "Important features",
+            "t": "long",
+            "ph": "Septic tank in the back yard, well water, roof replaced 2021, crawl space floods after heavy rain"
+          },
+          {
+            "k": "Major appliances",
+            "t": "long",
+            "ph": "Trane heat pump (2019, still under warranty), Bosch dishwasher, gas water heater in the garage"
+          }
+        ]
+      },
+      {
+        "id": "mortgage-payments",
+        "name": "Mortgage & Payments",
+        "kind": "form",
+        "desc": "Who gets paid for this home, and when the next deadlines fall.",
+        "fields": [
+          {
+            "k": "Lienholder or landlord",
+            "t": "text",
+            "req": 1,
+            "ph": "Wells Fargo Home Mortgage, or Kestrel Property Management"
+          },
+          {
+            "k": "How payments are made",
+            "t": "long",
+            "ph": "Autopay on the 1st from the joint checking account ending 4412"
+          },
+          {
+            "k": "Loan maturity date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Lease end date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Next property tax due date",
+            "t": "date",
+            "hint": "Taxes keep coming due even while an estate is being settled.",
+            "w": "half"
+          }
+        ]
+      },
+      {
+        "id": "ownership-documents",
+        "name": "Ownership Documents",
+        "kind": "form",
+        "desc": "The papers that prove the home is yours.",
+        "fields": [
+          {
+            "k": "Deed",
+            "t": "doc",
+            "hint": "A photo of the recorded deed is fine, the original stays wherever you keep it."
+          },
+          {
+            "k": "Title or title insurance policy",
+            "t": "doc"
+          },
+          {
+            "k": "Where the originals are kept",
+            "t": "text",
+            "ph": "Fireproof box in the hall closet, second copy with the attorney"
+          },
+          {
+            "k": "Survey or plat map",
+            "t": "doc"
+          },
+          {
+            "k": "Is the home held in a trust",
+            "t": "toggle",
+            "hint": "If it is, the trust document controls what happens to it, not the will."
+          }
+        ]
+      },
+      {
+        "id": "current-financing",
+        "name": "Current Financing",
+        "kind": "form",
+        "desc": "The live paperwork on money owed against this home.",
+        "fields": [
+          {
+            "k": "Mortgage statement or lease agreement",
+            "t": "doc",
+            "req": 1
+          },
+          {
+            "k": "Second mortgage or HELOC documents",
+            "t": "doc"
+          },
+          {
+            "k": "Is there a HELOC drawn on the home",
+            "t": "toggle"
+          },
+          {
+            "k": "Property tax bills",
+            "t": "doc"
+          },
+          {
+            "k": "Notes on any of the above",
+            "t": "long",
+            "ph": "HELOC is open with a zero balance, we keep it for emergencies"
+          }
+        ]
+      },
+      {
+        "id": "historical-documents",
+        "name": "Historical Documents",
+        "kind": "form",
+        "desc": "Older paperwork worth keeping, even though it is settled.",
+        "fields": [
+          {
+            "k": "Closing or refinancing documents",
+            "t": "doc"
+          },
+          {
+            "k": "Paid-off liens and satisfaction letters",
+            "t": "doc",
+            "hint": "Proof a loan was cleared saves a lot of arguing later."
+          },
+          {
+            "k": "Reverse mortgage information",
+            "t": "doc"
+          },
+          {
+            "k": "Improvement receipts and permits",
+            "t": "doc",
+            "ph": "Kitchen remodel 2020, deck permit 2017"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Refinanced in 2021 with Truist, original 2014 loan was through Quicken"
+          }
+        ]
+      },
+      {
+        "id": "professional-contacts",
+        "name": "Professional Contacts",
+        "kind": "entries",
+        "entry": "contact",
+        "desc": "The people to call about this property.",
+        "fields": [
+          {
+            "k": "Name",
+            "t": "text",
+            "req": 1,
+            "ph": "Dana Whitfield"
+          },
+          {
+            "k": "Role",
+            "t": "choice",
+            "opts": [
+              "Real estate agent",
+              "Landlord",
+              "Property manager",
+              "Closing attorney",
+              "Home insurer",
+              "Handyman or contractor",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Company",
+            "t": "text",
+            "ph": "Blue Ridge Realty"
+          },
+          {
+            "k": "Phone",
+            "t": "tel",
+            "ph": "(828) 555-0142",
+            "w": "half"
+          },
+          {
+            "k": "Email",
+            "t": "email",
+            "ph": "dana@blueridgerealty.com",
+            "w": "half"
+          },
+          {
+            "k": "What they handle",
+            "t": "text",
+            "ph": "Sold us the house, still the person we would list with"
+          }
+        ]
+      },
+      {
+        "id": "utilities-services",
+        "name": "Utilities & Services",
+        "kind": "entries",
+        "entry": "service",
+        "desc": "The bills that keep the lights on and the water running.",
+        "fields": [
+          {
+            "k": "Provider",
+            "t": "text",
+            "req": 1,
+            "ph": "Duke Energy"
+          },
+          {
+            "k": "Service type",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Electric",
+              "Gas",
+              "Water and sewer",
+              "Trash and recycling",
+              "Internet",
+              "Phone or mobile",
+              "Cable or streaming TV",
+              "Lawn or landscaping",
+              "Cleaning",
+              "Pest control",
+              "Security monitoring",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Account number",
+            "t": "masked",
+            "ph": "9004-118-2277",
+            "w": "half"
+          },
+          {
+            "k": "On autopay",
+            "t": "toggle",
+            "hint": "Autopay keeps running after a death until someone stops it."
+          },
+          {
+            "k": "Which account it is paid from",
+            "t": "text",
+            "ph": "Joint checking ending 4412"
+          },
+          {
+            "k": "Phone",
+            "t": "tel",
+            "ph": "(800) 555-3355",
+            "w": "half"
+          },
+          {
+            "k": "Typical monthly cost",
+            "t": "money",
+            "ph": "145",
+            "w": "half"
+          }
+        ]
+      },
+      {
+        "id": "home-access-security",
+        "name": "Home Access & Security",
+        "kind": "entries",
+        "entry": "access detail",
+        "desc": "How someone gets into the house without breaking a window.",
+        "fields": [
+          {
+            "k": "What this is",
+            "t": "text",
+            "req": 1,
+            "ph": "Front door alarm panel"
+          },
+          {
+            "k": "Alarm code",
+            "t": "masked",
+            "ph": "4 digit disarm code"
+          },
+          {
+            "k": "Alarm company",
+            "t": "text",
+            "ph": "ADT, monitored account under Maria"
+          },
+          {
+            "k": "Gate or garage code",
+            "t": "masked",
+            "ph": "Keypad code on the garage door"
+          },
+          {
+            "k": "Where the spare key is",
+            "t": "text",
+            "ph": "Magnetic box under the propane tank behind the shed"
+          },
+          {
+            "k": "Who else has a key",
+            "t": "text",
+            "ph": "Neighbours Tom and Rose at 414, and my sister Anne"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Back slider does not lock properly, needs the dowel in the track"
+          }
+        ]
+      }
+    ],
+    "apiId": "6"
+  },
+  {
+    "id": "vehicles",
+    "name": "Vehicles",
+    "icon": "car",
+    "collection": "Property",
+    "desc": "Every car, truck, boat, and trailer you own, plus what it takes to keep them legal and running.",
+    "subs": [
+      {
+        "id": "current-vehicles",
+        "name": "Current Vehicles",
+        "kind": "entries",
+        "entry": "vehicle",
+        "desc": "One record for each vehicle in the household.",
+        "fields": [
+          {
+            "k": "Year, make and model",
+            "t": "text",
+            "req": 1,
+            "ph": "2019 Subaru Outback Premium"
+          },
+          {
+            "k": "VIN",
+            "t": "text",
+            "ph": "17 characters, on the dash or the driver door jamb",
+            "hint": "The VIN is what a dealer, insurer, or DMV will ask for first."
+          },
+          {
+            "k": "License plate",
+            "t": "text",
+            "ph": "HXK-4820",
+            "w": "half"
+          },
+          {
+            "k": "State registered in",
+            "t": "text",
+            "ph": "North Carolina",
+            "w": "half"
+          },
+          {
+            "k": "Where the title is kept",
+            "t": "text",
+            "ph": "Fireproof box in the hall closet"
+          },
+          {
+            "k": "Ownership",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Owned outright",
+              "Financed",
+              "Leased"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Primary driver",
+            "t": "text",
+            "ph": "Maria",
+            "w": "half"
+          },
+          {
+            "k": "Where the keys are kept",
+            "t": "text",
+            "ph": "Hook by the back door, spare fob in the kitchen junk drawer"
+          }
+        ]
+      },
+      {
+        "id": "vehicle-financing",
+        "name": "Financing & Leases",
+        "kind": "entries",
+        "entry": "loan or lease",
+        "desc": "What is still owed on a vehicle and to whom.",
+        "fields": [
+          {
+            "k": "Vehicle",
+            "t": "text",
+            "req": 1,
+            "ph": "2019 Subaru Outback"
+          },
+          {
+            "k": "Lender or leasing company",
+            "t": "text",
+            "req": 1,
+            "ph": "Subaru Motors Finance"
+          },
+          {
+            "k": "Account number",
+            "t": "masked",
+            "ph": "Loan number from the monthly statement"
+          },
+          {
+            "k": "Monthly payment",
+            "t": "money",
+            "ph": "412",
+            "w": "half"
+          },
+          {
+            "k": "Payoff or lease end date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "On autopay",
+            "t": "toggle"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Lease has a 12,000 mile a year cap, we are running over it"
+          }
+        ]
+      },
+      {
+        "id": "registration-insurance",
+        "name": "Registration & Insurance",
+        "kind": "entries",
+        "entry": "vehicle",
+        "desc": "What keeps each vehicle legal on the road.",
+        "fields": [
+          {
+            "k": "Vehicle",
+            "t": "text",
+            "req": 1,
+            "ph": "2019 Subaru Outback"
+          },
+          {
+            "k": "Registration expires",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Insurer",
+            "t": "text",
+            "req": 1,
+            "ph": "State Farm"
+          },
+          {
+            "k": "Policy number",
+            "t": "text",
+            "ph": "NC-772-4419-A",
+            "w": "half"
+          },
+          {
+            "k": "Agent phone",
+            "t": "tel",
+            "ph": "(828) 555-0199",
+            "w": "half"
+          },
+          {
+            "k": "Roadside assistance",
+            "t": "text",
+            "ph": "AAA Plus, member number on the card in the glovebox"
+          },
+          {
+            "k": "Inspection or emissions due",
+            "t": "date",
+            "w": "half"
+          }
+        ]
+      },
+      {
+        "id": "service-maintenance",
+        "name": "Service & Maintenance",
+        "kind": "entries",
+        "entry": "vehicle",
+        "desc": "Who works on it and what is still covered.",
+        "fields": [
+          {
+            "k": "Vehicle",
+            "t": "text",
+            "req": 1,
+            "ph": "2019 Subaru Outback"
+          },
+          {
+            "k": "Usual mechanic or shop",
+            "t": "text",
+            "ph": "Foothills Auto on Merrimon Avenue"
+          },
+          {
+            "k": "Phone",
+            "t": "tel",
+            "ph": "(828) 555-0177",
+            "w": "half"
+          },
+          {
+            "k": "Warranty coverage",
+            "t": "text",
+            "ph": "Powertrain to 60,000 miles, expires March 2027"
+          },
+          {
+            "k": "Last major service",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Timing belt done at 90k. Rear hatch strut is weak, needs replacing."
+          }
+        ]
+      }
+    ],
+    "apiId": "5"
+  },
+  {
+    "id": "assets",
+    "name": "Assets & Valuables",
+    "icon": "gem",
+    "collection": "Property",
+    "desc": "The things you own that are worth money or worth remembering, and where each one actually is.",
+    "subs": [
+      {
+        "id": "valuables-collections",
+        "name": "Valuables & Collections",
+        "kind": "entries",
+        "entry": "valuable",
+        "desc": "One record for each item that matters.",
+        "fields": [
+          {
+            "k": "Item",
+            "t": "text",
+            "req": 1,
+            "ph": "Grandmother's diamond engagement ring"
+          },
+          {
+            "k": "Category",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Jewelry",
+              "Art",
+              "Collectibles",
+              "Instruments",
+              "Equipment",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Where it is kept",
+            "t": "text",
+            "ph": "Safe deposit box at First Citizens, downtown branch"
+          },
+          {
+            "k": "Appraised value",
+            "t": "money",
+            "ph": "6500",
+            "w": "half"
+          },
+          {
+            "k": "Appraisal date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Who you want to have it",
+            "t": "text",
+            "ph": "My daughter Claire"
+          },
+          {
+            "k": "Named in the will",
+            "t": "toggle",
+            "hint": "A wish written here is not legally binding. If it matters, put it in the will too."
+          },
+          {
+            "k": "The story behind it",
+            "t": "long",
+            "ph": "My grandmother wore this every day for 51 years. She gave it to me the week before she died and asked that it stay with a granddaughter."
+          },
+          {
+            "k": "Photo or appraisal document",
+            "t": "doc"
+          }
+        ]
+      },
+      {
+        "id": "safe-deposit-boxes",
+        "name": "Safe Deposit Boxes",
+        "kind": "entries",
+        "entry": "safe deposit box",
+        "desc": "Boxes at a bank, and who is allowed to open them.",
+        "fields": [
+          {
+            "k": "Bank",
+            "t": "text",
+            "req": 1,
+            "ph": "First Citizens Bank"
+          },
+          {
+            "k": "Branch",
+            "t": "text",
+            "ph": "82 Patton Avenue, Asheville"
+          },
+          {
+            "k": "Box number",
+            "t": "text",
+            "ph": "Box 214",
+            "w": "half"
+          },
+          {
+            "k": "Where the key is",
+            "t": "text",
+            "req": 1,
+            "ph": "Small brass key taped inside the desk drawer, second key with Anne"
+          },
+          {
+            "k": "Who is on the signature card",
+            "t": "text",
+            "ph": "Me and my brother David",
+            "hint": "If nobody living is on the card, the bank may need a court order to open it."
+          },
+          {
+            "k": "What is inside",
+            "t": "long",
+            "ph": "Deed, birth certificates, the ring, two savings bonds"
+          },
+          {
+            "k": "Annual fee",
+            "t": "money",
+            "ph": "85",
+            "w": "half"
+          }
+        ]
+      },
+      {
+        "id": "storage-units",
+        "name": "Storage Units",
+        "kind": "entries",
+        "entry": "storage unit",
+        "desc": "Anything you are paying to keep somewhere else.",
+        "fields": [
+          {
+            "k": "Facility",
+            "t": "text",
+            "req": 1,
+            "ph": "Public Storage on Sweeten Creek Road"
+          },
+          {
+            "k": "Unit number",
+            "t": "text",
+            "ph": "Unit B-118",
+            "w": "half"
+          },
+          {
+            "k": "Gate code",
+            "t": "masked",
+            "ph": "Keypad code at the front gate",
+            "w": "half"
+          },
+          {
+            "k": "Monthly cost",
+            "t": "money",
+            "ph": "96",
+            "w": "half"
+          },
+          {
+            "k": "How it is paid",
+            "t": "text",
+            "ph": "Autopay on the Visa ending 8802",
+            "hint": "Unpaid units get auctioned, sometimes within 60 days."
+          },
+          {
+            "k": "What is stored there",
+            "t": "long",
+            "ph": "Dad's woodworking tools, boxes of photo albums, the dining set from the old house"
+          }
+        ]
+      }
+    ],
+    "apiId": "19"
+  },
+  {
+    "id": "bank-accounts",
+    "name": "Bank Accounts",
+    "icon": "bank",
+    "collection": "Money",
+    "desc": "Where the household money sits day to day, and what moves in and out of it automatically.",
+    "subs": [
+      {
+        "id": "checking-savings",
+        "name": "Checking & Savings",
+        "kind": "entries",
+        "entry": "bank account",
+        "desc": "One record for each account you hold.",
+        "fields": [
+          {
+            "k": "Institution",
+            "t": "text",
+            "req": 1,
+            "ph": "First Citizens Bank"
+          },
+          {
+            "k": "Account type",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Checking",
+              "Savings",
+              "Money market",
+              "CD"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Account number",
+            "t": "masked",
+            "ph": "Full number from a statement or cheque"
+          },
+          {
+            "k": "Routing number",
+            "t": "masked",
+            "ph": "9 digits, bottom left of a cheque",
+            "w": "half"
+          },
+          {
+            "k": "Online banking username",
+            "t": "text",
+            "ph": "m.ellison1974",
+            "hint": "Store the password in your password manager, not here."
+          },
+          {
+            "k": "Joint owner",
+            "t": "text",
+            "ph": "Maria Ellison"
+          },
+          {
+            "k": "Beneficiary on file",
+            "t": "text",
+            "ph": "Claire Ellison, payable on death",
+            "hint": "A payable on death beneficiary lets the money skip probate."
+          },
+          {
+            "k": "Approximate balance",
+            "t": "money",
+            "ph": "8400",
+            "w": "half"
+          },
+          {
+            "k": "What this account is used for",
+            "t": "text",
+            "ph": "Everyday bills and the mortgage"
+          }
+        ]
+      },
+      {
+        "id": "certificates-term-deposits",
+        "name": "Certificates & Term Deposits",
+        "kind": "entries",
+        "entry": "certificate",
+        "desc": "Money locked up until a set date.",
+        "fields": [
+          {
+            "k": "Institution",
+            "t": "text",
+            "req": 1,
+            "ph": "Marcus by Goldman Sachs"
+          },
+          {
+            "k": "Amount",
+            "t": "money",
+            "req": 1,
+            "ph": "25000",
+            "w": "half"
+          },
+          {
+            "k": "Interest rate",
+            "t": "text",
+            "ph": "4.35%",
+            "w": "half"
+          },
+          {
+            "k": "Maturity date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Auto-renews at maturity",
+            "t": "toggle",
+            "hint": "Auto-renew can lock the money up again for another full term."
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Early withdrawal costs 6 months of interest"
+          }
+        ]
+      },
+      {
+        "id": "automatic-payments",
+        "name": "Automatic Payments",
+        "kind": "entries",
+        "entry": "automatic payment",
+        "desc": "Everything that pulls money out on its own.",
+        "fields": [
+          {
+            "k": "What is paid",
+            "t": "text",
+            "req": 1,
+            "ph": "Netflix, or the gym membership, or the mortgage"
+          },
+          {
+            "k": "Paid from",
+            "t": "text",
+            "req": 1,
+            "ph": "Checking ending 4412",
+            "hint": "This is the list a next of kin needs first, because these keep charging long after everything else has stopped."
+          },
+          {
+            "k": "Amount",
+            "t": "money",
+            "ph": "22.99",
+            "w": "half"
+          },
+          {
+            "k": "Frequency",
+            "t": "choice",
+            "opts": [
+              "Weekly",
+              "Every two weeks",
+              "Monthly",
+              "Quarterly",
+              "Twice a year",
+              "Yearly",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Next date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "How to cancel it",
+            "t": "text",
+            "ph": "Log in at netflix.com, or call (866) 555-0110"
+          }
+        ]
+      }
+    ],
+    "apiId": "12"
+  },
+  {
+    "id": "investments",
+    "name": "Investments",
+    "icon": "chart",
+    "collection": "Money",
+    "desc": "Money you have put to work, where it is held, and who has been helping you manage it.",
+    "subs": [
+      {
+        "id": "brokerage-taxable",
+        "name": "Brokerage & Taxable",
+        "kind": "entries",
+        "entry": "brokerage account",
+        "desc": "Regular investment accounts, no retirement rules attached.",
+        "fields": [
+          {
+            "k": "Firm",
+            "t": "text",
+            "req": 1,
+            "ph": "Charles Schwab"
+          },
+          {
+            "k": "Account number",
+            "t": "masked",
+            "ph": "Number from the top of a statement"
+          },
+          {
+            "k": "Account type",
+            "t": "text",
+            "ph": "Individual taxable brokerage",
+            "w": "half"
+          },
+          {
+            "k": "Approximate value",
+            "t": "money",
+            "ph": "112000",
+            "w": "half"
+          },
+          {
+            "k": "Beneficiary",
+            "t": "text",
+            "ph": "Maria Ellison, transfer on death"
+          },
+          {
+            "k": "Advisor name",
+            "t": "text",
+            "ph": "Ben Okafor",
+            "w": "half"
+          },
+          {
+            "k": "Advisor phone",
+            "t": "tel",
+            "ph": "(704) 555-0128",
+            "w": "half"
+          }
+        ]
+      },
+      {
+        "id": "retirement-accounts",
+        "name": "Retirement Accounts",
+        "kind": "entries",
+        "entry": "retirement account",
+        "desc": "Anything set aside for retirement, including old plans from past jobs.",
+        "fields": [
+          {
+            "k": "Plan type",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "401k",
+              "403b",
+              "IRA",
+              "Roth IRA",
+              "SEP",
+              "Pension",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Provider",
+            "t": "text",
+            "req": 1,
+            "ph": "Fidelity",
+            "w": "half"
+          },
+          {
+            "k": "Account number",
+            "t": "masked",
+            "ph": "Number from the quarterly statement"
+          },
+          {
+            "k": "Approximate value",
+            "t": "money",
+            "ph": "340000",
+            "w": "half"
+          },
+          {
+            "k": "Primary beneficiary",
+            "t": "text",
+            "ph": "Maria Ellison, spouse"
+          },
+          {
+            "k": "Contingent beneficiary",
+            "t": "text",
+            "ph": "Claire Ellison and Sam Ellison, split evenly",
+            "hint": "Beneficiary designations override your will. Whoever is named here gets the money, even if the will says otherwise, so check these every few years."
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Rolled over from the Baxter job in 2016, still holds the old target date fund"
+          }
+        ]
+      },
+      {
+        "id": "other-holdings",
+        "name": "Other Holdings",
+        "kind": "entries",
+        "entry": "holding",
+        "desc": "The investments that do not arrive as a tidy monthly statement.",
+        "fields": [
+          {
+            "k": "What it is",
+            "t": "text",
+            "req": 1,
+            "ph": "Private company shares, crypto, or a real estate partnership"
+          },
+          {
+            "k": "Where it is held",
+            "t": "text",
+            "req": 1,
+            "ph": "Coinbase, or a Carta cap table, or a paper certificate in the safe"
+          },
+          {
+            "k": "How to access it",
+            "t": "long",
+            "ph": "Ledger hardware wallet in the safe, recovery phrase is with the attorney in a sealed envelope",
+            "hint": "Crypto with no recovery key is gone forever. Say plainly how someone gets in."
+          },
+          {
+            "k": "Approximate value",
+            "t": "money",
+            "ph": "18000",
+            "w": "half"
+          },
+          {
+            "k": "Contact person",
+            "t": "text",
+            "ph": "Priya Raman, managing partner"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Partnership pays out a K-1 every March"
+          }
+        ]
+      },
+      {
+        "id": "financial-advisors",
+        "name": "Financial Advisors",
+        "kind": "entries",
+        "entry": "advisor",
+        "desc": "The people who already know your money.",
+        "fields": [
+          {
+            "k": "Name",
+            "t": "text",
+            "req": 1,
+            "ph": "Ben Okafor"
+          },
+          {
+            "k": "Firm",
+            "t": "text",
+            "ph": "Okafor Wealth Partners",
+            "w": "half"
+          },
+          {
+            "k": "What they manage",
+            "t": "text",
+            "ph": "The Schwab brokerage and both IRAs"
+          },
+          {
+            "k": "Phone",
+            "t": "tel",
+            "ph": "(704) 555-0128",
+            "w": "half"
+          },
+          {
+            "k": "Email",
+            "t": "email",
+            "ph": "ben@okaforwealth.com",
+            "w": "half"
+          },
+          {
+            "k": "How long they have worked with you",
+            "t": "text",
+            "ph": "Since 2011"
+          }
+        ]
+      }
+    ],
+    "apiId": "14"
+  },
+  {
+    "id": "credit-cards",
+    "name": "Credit Cards & Debt",
+    "icon": "card",
+    "collection": "Money",
+    "desc": "Everything you owe, so nobody has to piece it together from the mail.",
+    "subs": [
+      {
+        "id": "credit-cards-list",
+        "name": "Credit Cards",
+        "kind": "entries",
+        "entry": "credit card",
+        "desc": "One record per card, including the ones you rarely use.",
+        "fields": [
+          {
+            "k": "Issuer",
+            "t": "text",
+            "req": 1,
+            "ph": "Chase"
+          },
+          {
+            "k": "Card nickname",
+            "t": "text",
+            "ph": "The blue Sapphire we use for travel",
+            "w": "half"
+          },
+          {
+            "k": "Last four digits",
+            "t": "text",
+            "ph": "8802",
+            "w": "half"
+          },
+          {
+            "k": "Approximate balance",
+            "t": "money",
+            "ph": "1240",
+            "w": "half"
+          },
+          {
+            "k": "On autopay",
+            "t": "toggle",
+            "hint": "Cards on autopay keep pulling from the bank account until someone calls the issuer."
+          },
+          {
+            "k": "Authorised users",
+            "t": "text",
+            "ph": "Maria has a card on this account, Sam had one until 2024"
+          },
+          {
+            "k": "Rewards program",
+            "t": "text",
+            "ph": "Ultimate Rewards, about 82,000 points sitting unused"
+          },
+          {
+            "k": "Customer service phone",
+            "t": "tel",
+            "ph": "(800) 555-0144",
+            "w": "half"
+          }
+        ]
+      },
+      {
+        "id": "loans-lines-of-credit",
+        "name": "Loans & Lines of Credit",
+        "kind": "entries",
+        "entry": "loan",
+        "desc": "Borrowed money with a formal lender behind it.",
+        "fields": [
+          {
+            "k": "Lender",
+            "t": "text",
+            "req": 1,
+            "ph": "Navient"
+          },
+          {
+            "k": "Loan type",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Personal",
+              "Auto",
+              "Student",
+              "HELOC",
+              "Business",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Account number",
+            "t": "masked",
+            "ph": "Number from the statement"
+          },
+          {
+            "k": "Balance",
+            "t": "money",
+            "ph": "14300",
+            "w": "half"
+          },
+          {
+            "k": "Monthly payment",
+            "t": "money",
+            "ph": "218",
+            "w": "half"
+          },
+          {
+            "k": "Payoff date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Is anyone a co-signer",
+            "t": "text",
+            "ph": "My father co-signed this in 2009",
+            "hint": "A co-signer usually still owes the balance after a death. Federal student loans are often the exception."
+          }
+        ]
+      },
+      {
+        "id": "other-obligations",
+        "name": "Other Obligations",
+        "kind": "entries",
+        "entry": "obligation",
+        "desc": "The informal debts that never show up on a credit report.",
+        "fields": [
+          {
+            "k": "Who is owed",
+            "t": "text",
+            "req": 1,
+            "ph": "My brother David"
+          },
+          {
+            "k": "What it is for",
+            "t": "text",
+            "req": 1,
+            "ph": "He lent us 5,000 toward the roof in 2022"
+          },
+          {
+            "k": "Amount",
+            "t": "money",
+            "ph": "3200",
+            "w": "half"
+          },
+          {
+            "k": "Is it in writing",
+            "t": "toggle",
+            "hint": "Debts do not disappear when someone dies, they get paid out of the estate. A next of kin needs this whole list early, before money gets distributed."
+          },
+          {
+            "k": "Repayment arrangement",
+            "t": "text",
+            "ph": "200 a month, no interest, whenever we can"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "David has said more than once he would forgive it, but nothing is written down"
+          }
+        ]
+      }
+    ],
+    "apiId": "16"
+  },
+  {
+    "id": "employment",
+    "name": "Employment & Income",
+    "icon": "brief",
+    "collection": "Money",
+    "dove": 1,
+    "desc": "What you do for a living, what you have done before, and every stream of money coming in.",
+    "subs": [
+      {
+        "id": "current-employment",
+        "name": "Current Employment",
+        "kind": "form",
+        "dove": 1,
+        "desc": "Where you work right now and who to call there.",
+        "fields": [
+          {
+            "k": "Employment status",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Employed full-time",
+              "Employed part-time",
+              "Self-employed",
+              "Business owner",
+              "Retired",
+              "Unemployed",
+              "Disabled",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Employer",
+            "t": "text",
+            "ph": "Grove Park Medical Group",
+            "w": "half"
+          },
+          {
+            "k": "Job title",
+            "t": "text",
+            "ph": "Registered Nurse, Cardiac Unit"
+          },
+          {
+            "k": "Work address",
+            "t": "text",
+            "ph": "900 Hendersonville Road, Asheville, NC 28803"
+          },
+          {
+            "k": "Work phone",
+            "t": "tel",
+            "ph": "(828) 555-0166",
+            "w": "half"
+          },
+          {
+            "k": "Supervisor or HR contact",
+            "t": "text",
+            "ph": "Lena Ortiz, HR Director, lena.ortiz@grovepark.com"
+          },
+          {
+            "k": "Employee ID",
+            "t": "text",
+            "ph": "GP-40218",
+            "w": "half"
+          },
+          {
+            "k": "Start date",
+            "t": "date",
+            "w": "half"
+          }
+        ]
+      },
+      {
+        "id": "employment-history",
+        "name": "Employment History",
+        "kind": "entries",
+        "entry": "past job",
+        "dove": 1,
+        "desc": "The jobs that made up your working life.",
+        "fields": [
+          {
+            "k": "Employer",
+            "t": "text",
+            "req": 1,
+            "ph": "Mission Hospital"
+          },
+          {
+            "k": "Role",
+            "t": "text",
+            "ph": "Charge Nurse, Emergency Department"
+          },
+          {
+            "k": "Years",
+            "t": "text",
+            "ph": "1998 to 2011",
+            "w": "half"
+          },
+          {
+            "k": "What you are proud of from that job",
+            "t": "long",
+            "ph": "I helped build the trauma triage protocol the ED still uses, and I trained more than forty new nurses.",
+            "hint": "This is often the heart of an obituary. Write it the way you would say it out loud."
+          },
+          {
+            "k": "People you worked with worth mentioning",
+            "t": "text",
+            "ph": "Dr. Alan Reyes, still a close friend"
+          }
+        ]
+      },
+      {
+        "id": "benefits-equity",
+        "name": "Benefits & Equity",
+        "kind": "entries",
+        "entry": "benefit",
+        "desc": "What your work gives you beyond the paycheque.",
+        "fields": [
+          {
+            "k": "Benefit type",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Health",
+              "Life",
+              "Disability",
+              "Stock options",
+              "RSUs",
+              "Pension",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Provider",
+            "t": "text",
+            "req": 1,
+            "ph": "Blue Cross Blue Shield of NC",
+            "w": "half"
+          },
+          {
+            "k": "Policy or grant number",
+            "t": "text",
+            "ph": "Group 88214, member ID XJH902441"
+          },
+          {
+            "k": "Who to contact",
+            "t": "text",
+            "ph": "Lena Ortiz in HR, or the number on the back of the card"
+          },
+          {
+            "k": "Value or coverage amount",
+            "t": "money",
+            "ph": "150000",
+            "w": "half"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Employer life policy pays 2x salary. It is separate from the personal term policy.",
+            "hint": "Employer life insurance is easy to forget because no bill ever arrives for it."
+          }
+        ]
+      },
+      {
+        "id": "business-ownership",
+        "name": "Business Ownership",
+        "kind": "form",
+        "desc": "If you own part of a business, what happens to it matters.",
+        "fields": [
+          {
+            "k": "Business name",
+            "t": "text",
+            "req": 1,
+            "ph": "Beechwood Pottery LLC"
+          },
+          {
+            "k": "Entity type",
+            "t": "choice",
+            "opts": [
+              "Sole proprietorship",
+              "Partnership",
+              "LLC",
+              "S corporation",
+              "C corporation",
+              "Nonprofit",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Your ownership percentage",
+            "t": "num",
+            "ph": "60",
+            "w": "half"
+          },
+          {
+            "k": "Partners or other owners",
+            "t": "text",
+            "ph": "Rosa Delgado owns the other 40%"
+          },
+          {
+            "k": "Where the operating agreement is",
+            "t": "text",
+            "ph": "Filed with Hargrove Law, copy in the office filing cabinet",
+            "hint": "The operating agreement usually says what happens to your share if you die. Read it before assuming."
+          },
+          {
+            "k": "Who should run it or sell it",
+            "t": "long",
+            "ph": "Rosa should have first refusal to buy me out. If she does not want it, sell the kiln and the inventory and close it down."
+          },
+          {
+            "k": "Accountant",
+            "t": "text",
+            "ph": "Tim Beasley CPA, (828) 555-0181"
+          },
+          {
+            "k": "Attorney",
+            "t": "text",
+            "ph": "Hargrove Law, Karen Hargrove, (828) 555-0193"
+          }
+        ]
+      },
+      {
+        "id": "other-income",
+        "name": "Other Income",
+        "kind": "entries",
+        "entry": "income source",
+        "desc": "Money that arrives from somewhere other than a job.",
+        "fields": [
+          {
+            "k": "Source",
+            "t": "text",
+            "req": 1,
+            "ph": "Social Security, rental income from the duplex, or royalties"
+          },
+          {
+            "k": "Amount",
+            "t": "money",
+            "ph": "1840",
+            "w": "half"
+          },
+          {
+            "k": "Frequency",
+            "t": "choice",
+            "opts": [
+              "Weekly",
+              "Every two weeks",
+              "Monthly",
+              "Quarterly",
+              "Twice a year",
+              "Yearly",
+              "Irregular"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "How it is paid",
+            "t": "text",
+            "ph": "Direct deposit into checking ending 4412 on the 3rd"
+          },
+          {
+            "k": "Who to notify if it needs to stop or transfer",
+            "t": "text",
+            "ph": "Social Security Administration, (800) 555-1213",
+            "hint": "Some payments must be returned if they arrive after a death."
+          }
+        ]
+      }
+    ],
+    "apiId": "18"
+  },
+  {
+    "id": "insurance-policies",
+    "name": "Insurance Policies",
+    "icon": "shield",
+    "collection": "Protection",
+    "desc": "Every policy the household pays for, so a claim can be made without hunting for paperwork.",
+    "subs": [
+      {
+        "id": "life-insurance",
+        "name": "Life Insurance",
+        "kind": "entries",
+        "entry": "life insurance policy",
+        "desc": "Policies that pay out to someone else when you die.",
+        "fields": [
+          {
+            "k": "Carrier",
+            "t": "text",
+            "req": 1,
+            "ph": "Northwestern Mutual"
+          },
+          {
+            "k": "Policy number",
+            "t": "text",
+            "w": "half",
+            "ph": "LI-4471902",
+            "hint": "This is usually the first claim a next of kin has to make, so copy it exactly."
+          },
+          {
+            "k": "Policy type",
+            "t": "choice",
+            "opts": [
+              "Term",
+              "Whole",
+              "Universal",
+              "Group through employer"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Death benefit",
+            "t": "money",
+            "w": "half",
+            "ph": "500,000"
+          },
+          {
+            "k": "Premium",
+            "t": "money",
+            "w": "half",
+            "ph": "142"
+          },
+          {
+            "k": "How often the premium is paid",
+            "t": "choice",
+            "opts": [
+              "Monthly",
+              "Quarterly",
+              "Twice a year",
+              "Annually",
+              "Fully paid up"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Primary beneficiary",
+            "t": "text",
+            "ph": "Maria Alvarez, spouse"
+          },
+          {
+            "k": "Contingent beneficiary",
+            "t": "text",
+            "ph": "Elena Alvarez and Tomas Alvarez, split evenly"
+          },
+          {
+            "k": "Agent name and phone",
+            "t": "text",
+            "ph": "Dana Whitfield, (312) 555-0188"
+          }
+        ]
+      },
+      {
+        "id": "health-insurance",
+        "name": "Health Insurance",
+        "kind": "entries",
+        "entry": "health plan",
+        "desc": "The plan you show at the doctor.",
+        "fields": [
+          {
+            "k": "Carrier",
+            "t": "text",
+            "req": 1,
+            "ph": "Blue Cross Blue Shield of Illinois"
+          },
+          {
+            "k": "Plan name",
+            "t": "text",
+            "ph": "PPO Gold 2000"
+          },
+          {
+            "k": "Member ID",
+            "t": "masked",
+            "w": "half",
+            "ph": "XZG884120311"
+          },
+          {
+            "k": "Group number",
+            "t": "text",
+            "w": "half",
+            "ph": "0043928"
+          },
+          {
+            "k": "Who is covered",
+            "t": "text",
+            "ph": "Me, Maria, and both kids until Elena turns 26"
+          },
+          {
+            "k": "Member services phone",
+            "t": "tel",
+            "w": "half",
+            "ph": "(800) 555-0142",
+            "hint": "The number on the back of the card, not the local office."
+          }
+        ]
+      },
+      {
+        "id": "home-property-insurance",
+        "name": "Home & Property Insurance",
+        "kind": "entries",
+        "entry": "property policy",
+        "desc": "Cover on the house, the contents, and anything sitting on top of them.",
+        "fields": [
+          {
+            "k": "Carrier",
+            "t": "text",
+            "req": 1,
+            "ph": "State Farm"
+          },
+          {
+            "k": "Policy type",
+            "t": "choice",
+            "opts": [
+              "Homeowner",
+              "Renter",
+              "Flood",
+              "Umbrella"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Policy number",
+            "t": "text",
+            "w": "half",
+            "ph": "HO-2290-33814"
+          },
+          {
+            "k": "Coverage amount",
+            "t": "money",
+            "w": "half",
+            "ph": "450,000"
+          },
+          {
+            "k": "Deductible",
+            "t": "money",
+            "w": "half",
+            "ph": "2,500"
+          },
+          {
+            "k": "Renewal date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Agent",
+            "t": "text",
+            "ph": "Ruth Kessler, (847) 555-0121"
+          }
+        ]
+      },
+      {
+        "id": "auto-insurance",
+        "name": "Auto Insurance",
+        "kind": "entries",
+        "entry": "auto policy",
+        "desc": "Cover on the vehicles, plus the number to call at the roadside.",
+        "fields": [
+          {
+            "k": "Carrier",
+            "t": "text",
+            "req": 1,
+            "ph": "Geico"
+          },
+          {
+            "k": "Policy number",
+            "t": "text",
+            "w": "half",
+            "ph": "4471-9920-11"
+          },
+          {
+            "k": "Vehicles covered",
+            "t": "text",
+            "ph": "2019 Subaru Outback, 2014 Honda CR-V"
+          },
+          {
+            "k": "Coverage summary",
+            "t": "long",
+            "ph": "Full coverage on the Subaru, liability only on the Honda. 500 deductible on both."
+          },
+          {
+            "k": "Renewal date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Roadside assistance number",
+            "t": "tel",
+            "w": "half",
+            "ph": "(800) 555-0199"
+          }
+        ]
+      },
+      {
+        "id": "other-policies",
+        "name": "Other Policies",
+        "kind": "entries",
+        "entry": "policy",
+        "desc": "Everything else you pay a premium for.",
+        "fields": [
+          {
+            "k": "Type of policy",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Disability",
+              "Long-term care",
+              "Pet",
+              "Travel",
+              "Identity theft",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Carrier",
+            "t": "text",
+            "ph": "Mutual of Omaha"
+          },
+          {
+            "k": "Policy number",
+            "t": "text",
+            "w": "half",
+            "ph": "LTC-88213"
+          },
+          {
+            "k": "What it covers",
+            "t": "long",
+            "ph": "Nursing home or in-home care after a 90 day waiting period, 200 a day for three years"
+          },
+          {
+            "k": "Renewal date",
+            "t": "date",
+            "w": "half"
+          }
+        ]
+      }
+    ],
+    "apiId": "7"
+  },
+  {
+    "id": "healthcare",
+    "name": "Healthcare",
+    "icon": "heart",
+    "collection": "Protection",
+    "desc": "Who treats you, what you take, and what someone would need to know in an emergency.",
+    "subs": [
+      {
+        "id": "providers",
+        "name": "Doctors & Providers",
+        "kind": "entries",
+        "entry": "provider",
+        "desc": "Everyone on your medical team.",
+        "fields": [
+          {
+            "k": "Name",
+            "t": "text",
+            "req": 1,
+            "ph": "Dr. Anita Rao"
+          },
+          {
+            "k": "Specialty",
+            "t": "text",
+            "w": "half",
+            "ph": "Cardiology"
+          },
+          {
+            "k": "Practice or hospital",
+            "t": "text",
+            "ph": "Lakeview Cardiology Associates"
+          },
+          {
+            "k": "Phone",
+            "t": "tel",
+            "w": "half",
+            "ph": "(773) 555-0164"
+          },
+          {
+            "k": "Patient portal login",
+            "t": "text",
+            "ph": "MyChart, username sebastian32",
+            "hint": "Put the username here and keep the password in the passwords section."
+          },
+          {
+            "k": "What they treat",
+            "t": "text",
+            "ph": "Blood pressure and the stent fitted in 2021"
+          }
+        ]
+      },
+      {
+        "id": "conditions",
+        "name": "Conditions & Allergies",
+        "kind": "form",
+        "desc": "The things a stranger would need to know before treating you.",
+        "fields": [
+          {
+            "k": "Ongoing conditions",
+            "t": "long",
+            "req": 1,
+            "ph": "Type 2 diabetes since 2016, high blood pressure, mild asthma"
+          },
+          {
+            "k": "Allergies",
+            "t": "long",
+            "ph": "Penicillin (hives), shellfish, bee stings (carries an EpiPen)"
+          },
+          {
+            "k": "Blood type",
+            "t": "choice",
+            "opts": [
+              "A+",
+              "A-",
+              "B+",
+              "B-",
+              "AB+",
+              "AB-",
+              "O+",
+              "O-",
+              "Not sure"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Implants or devices",
+            "t": "text",
+            "ph": "Pacemaker fitted March 2022, left hip replacement 2018"
+          },
+          {
+            "k": "What a paramedic should know",
+            "t": "long",
+            "ph": "On blood thinners. Deaf in the right ear. Panics under a mask.",
+            "hint": "Write this for a stranger who has ninety seconds to read it."
+          }
+        ]
+      },
+      {
+        "id": "medications",
+        "name": "Medications",
+        "kind": "entries",
+        "entry": "medication",
+        "desc": "What you take, why, and who prescribes it.",
+        "fields": [
+          {
+            "k": "Medication",
+            "t": "text",
+            "req": 1,
+            "ph": "Metformin"
+          },
+          {
+            "k": "Dose",
+            "t": "text",
+            "w": "half",
+            "ph": "500 mg, twice a day with food"
+          },
+          {
+            "k": "What it is for",
+            "t": "text",
+            "w": "half",
+            "ph": "Blood sugar"
+          },
+          {
+            "k": "Prescribing doctor",
+            "t": "text",
+            "w": "half",
+            "ph": "Dr. Anita Rao"
+          },
+          {
+            "k": "Pharmacy",
+            "t": "text",
+            "w": "half",
+            "ph": "Walgreens on Grand Avenue"
+          },
+          {
+            "k": "Refill schedule",
+            "t": "text",
+            "ph": "90 day supply, refilled in January, April, July and October"
+          }
+        ]
+      },
+      {
+        "id": "pharmacy",
+        "name": "Pharmacy & Insurance",
+        "kind": "form",
+        "desc": "Where the prescriptions come from and who pays for them.",
+        "fields": [
+          {
+            "k": "Preferred pharmacy",
+            "t": "text",
+            "req": 1,
+            "ph": "Walgreens, 1200 Grand Avenue"
+          },
+          {
+            "k": "Pharmacy phone",
+            "t": "tel",
+            "w": "half",
+            "ph": "(773) 555-0108"
+          },
+          {
+            "k": "Prescription plan",
+            "t": "text",
+            "ph": "Express Scripts through the employer plan"
+          },
+          {
+            "k": "Member ID",
+            "t": "masked",
+            "w": "half",
+            "ph": "ESI-6640912"
+          },
+          {
+            "k": "Mail order details",
+            "t": "long",
+            "ph": "90 day refills ship automatically to the house, account is under my email"
+          }
+        ]
+      },
+      {
+        "id": "advance-directives",
+        "name": "Advance Directives",
+        "kind": "form",
+        "desc": "Your wishes about care, in writing, where someone can actually find them.",
+        "fields": [
+          {
+            "k": "Living will",
+            "t": "doc",
+            "req": 1,
+            "hint": "Upload the signed copy, not the draft you filled in on screen."
+          },
+          {
+            "k": "Medical power of attorney holder",
+            "t": "text",
+            "ph": "Maria Alvarez"
+          },
+          {
+            "k": "Their phone",
+            "t": "tel",
+            "w": "half",
+            "ph": "(773) 555-0155"
+          },
+          {
+            "k": "DNR status",
+            "t": "choice",
+            "opts": [
+              "In place",
+              "Not in place",
+              "Not decided yet"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Organ donation",
+            "t": "choice",
+            "opts": [
+              "Registered donor",
+              "Not a donor",
+              "Undecided",
+              "Whole body donation arranged"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Where the signed originals are kept",
+            "t": "text",
+            "ph": "Fireproof box in the hall closet, second shelf",
+            "hint": "This has to be findable in a hurry, not filed away in a bank vault that opens at nine."
+          }
+        ]
+      },
+      {
+        "id": "medical-history",
+        "name": "Medical History",
+        "kind": "entries",
+        "entry": "event",
+        "desc": "Surgeries, hospital stays, and anything a new doctor would ask about.",
+        "fields": [
+          {
+            "k": "Event or procedure",
+            "t": "text",
+            "req": 1,
+            "ph": "Appendix removed"
+          },
+          {
+            "k": "Year",
+            "t": "num",
+            "w": "half",
+            "ph": "2009"
+          },
+          {
+            "k": "Provider or hospital",
+            "t": "text",
+            "w": "half",
+            "ph": "Evanston Hospital"
+          },
+          {
+            "k": "Follow up still needed",
+            "t": "toggle",
+            "w": "half"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Reacted badly to the anaesthetic, took two days to come round properly"
+          }
+        ]
+      }
+    ],
+    "apiId": "15"
+  },
+  {
+    "id": "family",
+    "name": "Family & Relationships",
+    "icon": "users",
+    "collection": "Life",
+    "dove": 1,
+    "desc": "The people in your life, how to reach them, and what they should be told.",
+    "subs": [
+      {
+        "id": "family-members",
+        "name": "Family Members",
+        "kind": "entries",
+        "entry": "family member",
+        "dove": 1,
+        "desc": "Everyone who belongs in the family record.",
+        "fields": [
+          {
+            "k": "Full name",
+            "t": "text",
+            "req": 1,
+            "ph": "Maria Elena Alvarez"
+          },
+          {
+            "k": "Relationship",
+            "t": "choice",
+            "opts": [
+              "Spouse",
+              "Child",
+              "Parent",
+              "Sibling",
+              "Grandchild",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Date of birth",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Living status",
+            "t": "choice",
+            "opts": [
+              "Living",
+              "Predeceased"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "City and state",
+            "t": "text",
+            "w": "half",
+            "ph": "Evanston, Illinois"
+          },
+          {
+            "k": "Phone",
+            "t": "tel",
+            "w": "half",
+            "ph": "(847) 555-0130"
+          },
+          {
+            "k": "Include in obituary as",
+            "t": "text",
+            "ph": "his wife of 31 years, Maria",
+            "hint": "Leave this blank and the obituary builder just uses the name and the relationship."
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Estranged since 2019, but should still be told"
+          }
+        ]
+      },
+      {
+        "id": "dependents",
+        "name": "Dependents",
+        "kind": "entries",
+        "entry": "dependent",
+        "desc": "Anyone who relies on you for money, care, or both.",
+        "fields": [
+          {
+            "k": "Name",
+            "t": "text",
+            "req": 1,
+            "ph": "Tomas Alvarez"
+          },
+          {
+            "k": "Relationship",
+            "t": "text",
+            "w": "half",
+            "ph": "Son"
+          },
+          {
+            "k": "Birth date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Type of dependency",
+            "t": "choice",
+            "opts": [
+              "Minor child",
+              "Adult child",
+              "Ageing parent",
+              "Adult with a disability",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Support I provide",
+            "t": "long",
+            "ph": "Rent and tuition, about 1,900 a month, plus car insurance"
+          },
+          {
+            "k": "Backup caregivers and emergency pickup",
+            "t": "long",
+            "ph": "My sister Rosa first, then Luis Herrera. Mrs. Patel next door can collect from school."
+          },
+          {
+            "k": "Special needs, conditions, and future care",
+            "t": "long",
+            "ph": "Autism diagnosis at age 7. Will need a supported living place by his mid twenties."
+          },
+          {
+            "k": "School, grade, and who to contact there",
+            "t": "text",
+            "ph": "Evanston Township High School, 10th grade, front office (847) 555-0110"
+          },
+          {
+            "k": "IEP or 504 plan",
+            "t": "doc"
+          }
+        ]
+      },
+      {
+        "id": "ancestry",
+        "name": "Ancestry & Family Tree",
+        "kind": "form",
+        "dove": 1,
+        "desc": "Where the family came from and who keeps the records.",
+        "fields": [
+          {
+            "k": "Ancestral origins",
+            "t": "text",
+            "ph": "Galicia in northern Spain, arrived in Chicago in 1948"
+          },
+          {
+            "k": "Genealogy contacts",
+            "t": "text",
+            "ph": "Cousin Teresa in Madrid keeps the paper records"
+          },
+          {
+            "k": "Family stories and traditions",
+            "t": "long",
+            "ph": "Christmas Eve is always at our house, and always my grandmother's recipe"
+          },
+          {
+            "k": "Family tree overview",
+            "t": "long",
+            "ph": "Four generations traced on my mother's side, only two on my father's"
+          },
+          {
+            "k": "Family records",
+            "t": "doc"
+          },
+          {
+            "k": "DNA testing results",
+            "t": "doc"
+          }
+        ]
+      },
+      {
+        "id": "close-friends",
+        "name": "Close Friends",
+        "kind": "entries",
+        "entry": "friend",
+        "dove": 1,
+        "desc": "The people who would want to hear it from someone, not from Facebook.",
+        "fields": [
+          {
+            "k": "Name",
+            "t": "text",
+            "req": 1,
+            "ph": "Ray Dembowski"
+          },
+          {
+            "k": "How you know each other",
+            "t": "text",
+            "ph": "Roommates at Illinois State, 1989"
+          },
+          {
+            "k": "Phone",
+            "t": "tel",
+            "w": "half",
+            "ph": "(309) 555-0142"
+          },
+          {
+            "k": "Email",
+            "t": "email",
+            "w": "half",
+            "ph": "ray.dembowski@example.com"
+          },
+          {
+            "k": "How they should be told",
+            "t": "choice",
+            "opts": [
+              "Personally by phone",
+              "Any way is fine",
+              "Do not contact"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Lost his own wife last year. Someone should sit with him."
+          }
+        ]
+      },
+      {
+        "id": "important-relationships",
+        "name": "Important Relationships",
+        "kind": "entries",
+        "entry": "relationship",
+        "dove": 1,
+        "desc": "People who mattered who are not family and not quite friends.",
+        "fields": [
+          {
+            "k": "Name",
+            "t": "text",
+            "req": 1,
+            "ph": "Frank Oyelaran"
+          },
+          {
+            "k": "Nature of the relationship",
+            "t": "text",
+            "ph": "Mentor, gave me my first job in 1993"
+          },
+          {
+            "k": "How long you have known each other",
+            "t": "text",
+            "w": "half",
+            "ph": "Just over thirty years"
+          },
+          {
+            "k": "Contact",
+            "t": "text",
+            "ph": "(773) 555-0187 or frank.o@example.com"
+          },
+          {
+            "k": "Include in obituary",
+            "t": "toggle"
+          }
+        ]
+      },
+      {
+        "id": "pets",
+        "name": "Pet Care & Records",
+        "kind": "entries",
+        "entry": "pet",
+        "dove": 1,
+        "desc": "The animals in the house and who takes them if you cannot.",
+        "fields": [
+          {
+            "k": "Pet name",
+            "t": "text",
+            "req": 1,
+            "ph": "Biscuit"
+          },
+          {
+            "k": "Species and breed",
+            "t": "text",
+            "w": "half",
+            "ph": "Dog, border collie mix"
+          },
+          {
+            "k": "Age or birth year",
+            "t": "text",
+            "w": "half",
+            "ph": "Born spring 2019"
+          },
+          {
+            "k": "Microchip number",
+            "t": "text",
+            "w": "half",
+            "ph": "985141002356789"
+          },
+          {
+            "k": "Veterinarian",
+            "t": "text",
+            "ph": "Ravenswood Animal Hospital, (773) 555-0119"
+          },
+          {
+            "k": "Who takes them",
+            "t": "text",
+            "req": 1,
+            "ph": "My sister Rosa, and yes she has agreed",
+            "hint": "Say whether they have actually agreed. A surprise pet is how animals end up in shelters."
+          },
+          {
+            "k": "Medications and routine",
+            "t": "long",
+            "ph": "Half a thyroid tablet each morning in cheese. Two walks a day. Terrified of thunder."
+          },
+          {
+            "k": "Vet records",
+            "t": "doc"
+          }
+        ]
+      },
+      {
+        "id": "memorabilia",
+        "name": "Memorabilia & Sentimental Items",
+        "kind": "entries",
+        "entry": "item",
+        "desc": "The objects with a story attached, and who you want to have them.",
+        "fields": [
+          {
+            "k": "Item",
+            "t": "text",
+            "req": 1,
+            "ph": "My father's pocket watch"
+          },
+          {
+            "k": "Where it is kept",
+            "t": "text",
+            "ph": "Top drawer of the bedroom dresser, in the blue cloth"
+          },
+          {
+            "k": "Intended for",
+            "t": "text",
+            "ph": "My daughter Elena"
+          },
+          {
+            "k": "Formally in the will",
+            "t": "choice",
+            "opts": [
+              "Yes, a specific bequest",
+              "No, a wish only"
+            ],
+            "w": "half",
+            "hint": "A wish is not legally binding. If it really matters, tell your attorney."
+          },
+          {
+            "k": "The story behind it",
+            "t": "long",
+            "ph": "He bought it the week he became a citizen and wore it to every wedding after that"
+          }
+        ]
+      }
+    ],
+    "apiId": "17"
+  },
+  {
+    "id": "education",
+    "name": "Education History",
+    "icon": "cap",
+    "collection": "Life",
+    "dove": 1,
+    "desc": "Where you studied, what you qualified in, and what you are proud of.",
+    "subs": [
+      {
+        "id": "schools",
+        "name": "Schools & Degrees",
+        "kind": "entries",
+        "entry": "school",
+        "dove": 1,
+        "desc": "Every school, college, or programme you attended.",
+        "fields": [
+          {
+            "k": "Institution",
+            "t": "text",
+            "req": 1,
+            "ph": "University of Illinois at Urbana-Champaign"
+          },
+          {
+            "k": "Level",
+            "t": "choice",
+            "opts": [
+              "High school",
+              "Trade or technical",
+              "Associate",
+              "Bachelor's",
+              "Master's",
+              "Doctorate",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Field of study",
+            "t": "text",
+            "w": "half",
+            "ph": "Mechanical engineering"
+          },
+          {
+            "k": "Years attended",
+            "t": "text",
+            "w": "half",
+            "ph": "1987 to 1991"
+          },
+          {
+            "k": "Graduation year",
+            "t": "num",
+            "w": "half",
+            "ph": "1991"
+          },
+          {
+            "k": "Degree or diploma",
+            "t": "doc"
+          },
+          {
+            "k": "Honours or distinctions",
+            "t": "text",
+            "ph": "Cum laude, Tau Beta Pi"
+          }
+        ]
+      },
+      {
+        "id": "certifications",
+        "name": "Certifications & Licences",
+        "kind": "entries",
+        "entry": "certification",
+        "desc": "Qualifications you have to keep current.",
+        "fields": [
+          {
+            "k": "Name",
+            "t": "text",
+            "req": 1,
+            "ph": "Professional Engineer licence"
+          },
+          {
+            "k": "Issuing body",
+            "t": "text",
+            "ph": "Illinois Department of Financial and Professional Regulation"
+          },
+          {
+            "k": "Licence number",
+            "t": "text",
+            "w": "half",
+            "ph": "062-047781"
+          },
+          {
+            "k": "Issue date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Expiry date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Renewal requirements",
+            "t": "long",
+            "ph": "30 hours of continuing education every two years, renewed in November of odd years"
+          }
+        ]
+      },
+      {
+        "id": "achievements",
+        "name": "Achievements & Activities",
+        "kind": "entries",
+        "entry": "achievement",
+        "dove": 1,
+        "desc": "The things you did that were not on a payslip.",
+        "fields": [
+          {
+            "k": "What it was",
+            "t": "text",
+            "req": 1,
+            "ph": "Coached the Wildcats to the state final"
+          },
+          {
+            "k": "Year",
+            "t": "num",
+            "w": "half",
+            "ph": "2014"
+          },
+          {
+            "k": "Organisation",
+            "t": "text",
+            "w": "half",
+            "ph": "Evanston Youth Soccer"
+          },
+          {
+            "k": "Who shared it with you",
+            "t": "text",
+            "ph": "Twenty two teenagers and one very patient assistant coach"
+          },
+          {
+            "k": "Why it mattered to you",
+            "t": "long",
+            "ph": "Half that team had never been outside the city before that weekend",
+            "hint": "This is the material an obituary is actually built from, so write more than you think you need."
+          }
+        ]
+      }
+    ],
+    "apiId": "10"
+  },
+  {
+    "id": "military",
+    "name": "Military Service",
+    "icon": "medal",
+    "collection": "Life",
+    "dove": 1,
+    "desc": "Your service record and the benefits it entitles your family to claim.",
+    "subs": [
+      {
+        "id": "service-record",
+        "name": "Service Record",
+        "kind": "form",
+        "dove": 1,
+        "desc": "The basic facts of your service, plus the one document that proves them.",
+        "fields": [
+          {
+            "k": "I have not served",
+            "t": "toggle",
+            "hint": "Turn this on and the whole section is marked not applicable."
+          },
+          {
+            "k": "Branch",
+            "t": "choice",
+            "opts": [
+              "Army",
+              "Navy",
+              "Air Force",
+              "Marines",
+              "Coast Guard",
+              "Space Force",
+              "National Guard",
+              "Reserves"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Rank at discharge",
+            "t": "text",
+            "w": "half",
+            "ph": "Staff Sergeant, E-6"
+          },
+          {
+            "k": "Service number",
+            "t": "masked",
+            "w": "half",
+            "ph": "RA 19 442 118"
+          },
+          {
+            "k": "Dates of service",
+            "t": "text",
+            "w": "half",
+            "ph": "June 1991 to August 1997"
+          },
+          {
+            "k": "Where you served",
+            "t": "text",
+            "ph": "Fort Bragg, then Ramstein in Germany, then the Gulf in 1995"
+          },
+          {
+            "k": "Discharge type",
+            "t": "choice",
+            "opts": [
+              "Honourable",
+              "General under honourable conditions",
+              "Other than honourable",
+              "Bad conduct",
+              "Dishonourable",
+              "Still serving"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "DD-214",
+            "t": "doc",
+            "req": 1,
+            "hint": "This single document unlocks most veteran benefits, including burial. Scan both sides."
+          }
+        ]
+      },
+      {
+        "id": "awards",
+        "name": "Awards & Decorations",
+        "kind": "entries",
+        "entry": "award",
+        "dove": 1,
+        "desc": "Medals, commendations, and what they were for.",
+        "fields": [
+          {
+            "k": "Award",
+            "t": "text",
+            "req": 1,
+            "ph": "Army Commendation Medal"
+          },
+          {
+            "k": "Year",
+            "t": "num",
+            "w": "half",
+            "ph": "1995"
+          },
+          {
+            "k": "Where the medal is kept",
+            "t": "text",
+            "w": "half",
+            "ph": "Shadow box in the study"
+          },
+          {
+            "k": "Unit at the time",
+            "t": "text",
+            "ph": "2nd Battalion, 505th Parachute Infantry Regiment"
+          },
+          {
+            "k": "Citation",
+            "t": "long",
+            "ph": "For meritorious service as a squad leader during the 1995 deployment"
+          }
+        ]
+      },
+      {
+        "id": "va-benefits",
+        "name": "VA Benefits & Burial",
+        "kind": "form",
+        "desc": "What the VA owes your family and how they claim it.",
+        "fields": [
+          {
+            "k": "VA file number",
+            "t": "masked",
+            "w": "half",
+            "ph": "C-28 114 902"
+          },
+          {
+            "k": "Enrolled in VA healthcare",
+            "t": "toggle",
+            "w": "half"
+          },
+          {
+            "k": "Disability rating",
+            "t": "text",
+            "w": "half",
+            "ph": "40 percent, awarded 2003"
+          },
+          {
+            "k": "Burial benefit eligibility",
+            "t": "text",
+            "ph": "Eligible for a plot allowance and a government headstone",
+            "hint": "A next of kin needs the DD-214 in hand to claim any of this, so upload it above first."
+          },
+          {
+            "k": "Preferred national cemetery",
+            "t": "text",
+            "ph": "Abraham Lincoln National Cemetery, Elwood"
+          },
+          {
+            "k": "Headstone or marker preference",
+            "t": "choice",
+            "opts": [
+              "Upright headstone",
+              "Flat marker",
+              "Niche cover",
+              "Private stone with a VA medallion",
+              "No preference"
+            ]
+          }
+        ]
+      }
+    ],
+    "apiId": "11"
+  },
+  {
+    "id": "organizations",
+    "name": "Organizations & Memberships",
+    "icon": "flag",
+    "collection": "Life",
+    "dove": 1,
+    "desc": "The groups you belong to and the services that bill you every month.",
+    "subs": [
+      {
+        "id": "group-memberships",
+        "name": "Group Memberships",
+        "kind": "entries",
+        "entry": "membership",
+        "dove": 1,
+        "desc": "Churches, unions, clubs, and anywhere people would notice you missing.",
+        "fields": [
+          {
+            "k": "Organisation name",
+            "t": "text",
+            "req": 1,
+            "ph": "St. Nicholas Parish"
+          },
+          {
+            "k": "Type of organisation",
+            "t": "choice",
+            "opts": [
+              "Religious",
+              "Professional",
+              "Union",
+              "Social or fraternal",
+              "Alumni",
+              "Sports or recreation",
+              "Volunteer",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Membership details",
+            "t": "text",
+            "ph": "Member since 1998, lector at the Sunday nine o'clock"
+          },
+          {
+            "k": "Renewal date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Contact information",
+            "t": "text",
+            "ph": "Parish office, (847) 555-0132, ask for Deacon Ruiz"
+          },
+          {
+            "k": "Importance to me",
+            "t": "long",
+            "ph": "This is where I go on the bad weeks. They should know."
+          },
+          {
+            "k": "Notification instructions",
+            "t": "long",
+            "ph": "Call the office, do not email. They will want to say the Mass.",
+            "hint": "Some of these need to be told out of respect. Some will keep billing until they are told."
+          }
+        ]
+      },
+      {
+        "id": "subscriptions",
+        "name": "Subscriptions & Recurring Services",
+        "kind": "entries",
+        "entry": "subscription",
+        "desc": "Everything charging the card on a schedule.",
+        "fields": [
+          {
+            "k": "Service",
+            "t": "text",
+            "req": 1,
+            "ph": "Netflix"
+          },
+          {
+            "k": "Category",
+            "t": "choice",
+            "opts": [
+              "Streaming or media",
+              "News",
+              "Software",
+              "Health or fitness",
+              "Food or delivery",
+              "Storage or cloud",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Monthly or annual cost",
+            "t": "money",
+            "w": "half",
+            "ph": "19.99 a month"
+          },
+          {
+            "k": "Billing account",
+            "t": "text",
+            "ph": "Chase Visa ending 4471"
+          },
+          {
+            "k": "Renewal date",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Cancel by contacting",
+            "t": "text",
+            "ph": "netflix.com/cancelplan, no phone line, needs the account email"
+          }
+        ]
+      },
+      {
+        "id": "loyalty",
+        "name": "Loyalty & Rewards",
+        "kind": "entries",
+        "entry": "program",
+        "desc": "Points and miles that may or may not survive you.",
+        "fields": [
+          {
+            "k": "Program",
+            "t": "text",
+            "req": 1,
+            "ph": "United MileagePlus"
+          },
+          {
+            "k": "Membership number",
+            "t": "text",
+            "w": "half",
+            "ph": "XN448120"
+          },
+          {
+            "k": "Approximate balance or points",
+            "t": "text",
+            "w": "half",
+            "ph": "About 84,000 miles"
+          },
+          {
+            "k": "Account email or login",
+            "t": "text",
+            "ph": "Signed up under the old yahoo address, not my current one"
+          },
+          {
+            "k": "Can it be transferred",
+            "t": "toggle",
+            "hint": "Most airline miles die with the account holder. A few programmes will release them to an estate if asked in writing."
+          }
+        ]
+      }
+    ],
+    "apiId": "8"
+  },
+  {
+    "id": "charitable",
+    "name": "Charitable Contributions",
+    "icon": "gift",
+    "collection": "Life",
+    "dove": 1,
+    "desc": "Where you give, why, and what you have promised after you are gone.",
+    "subs": [
+      {
+        "id": "giving",
+        "name": "Giving",
+        "kind": "entries",
+        "entry": "charity",
+        "dove": 1,
+        "desc": "The causes you support now.",
+        "fields": [
+          {
+            "k": "Charity or organisation name",
+            "t": "text",
+            "req": 1,
+            "ph": "Greater Chicago Food Depository"
+          },
+          {
+            "k": "Type of cause",
+            "t": "choice",
+            "opts": [
+              "Faith",
+              "Health or medical research",
+              "Education",
+              "Food or housing",
+              "Animals",
+              "Arts and culture",
+              "Environment",
+              "Veterans",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Type of contribution",
+            "t": "choice",
+            "opts": [
+              "Regular ongoing",
+              "Annual",
+              "Occasional",
+              "Planned in will or trust",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Contribution amount",
+            "t": "money",
+            "w": "half",
+            "ph": "50 a month"
+          },
+          {
+            "k": "Payment method",
+            "t": "text",
+            "w": "half",
+            "ph": "Automatic debit from the joint checking account"
+          },
+          {
+            "k": "Donor or account information",
+            "t": "text",
+            "ph": "Donor ID 88213, listed under my email"
+          },
+          {
+            "k": "Charity contact",
+            "t": "text",
+            "ph": "Ellen Marsh, development office, (312) 555-0177"
+          },
+          {
+            "k": "Special instructions",
+            "t": "long",
+            "ph": "If people want to do something, send them here rather than to a florist",
+            "hint": "This is where \"in lieu of flowers\" comes from, so write the name exactly as you want it printed."
+          }
+        ]
+      },
+      {
+        "id": "planned-giving",
+        "name": "Planned Giving",
+        "kind": "form",
+        "desc": "What you have written into the will or trust.",
+        "fields": [
+          {
+            "k": "Will or trust provision",
+            "t": "long",
+            "ph": "Clause 7 leaves a fixed gift to the Food Depository and the rest of the residue to the kids"
+          },
+          {
+            "k": "Bequest amount or percentage",
+            "t": "text",
+            "w": "half",
+            "ph": "5 percent of the residual estate"
+          },
+          {
+            "k": "Has the charity been told",
+            "t": "toggle",
+            "w": "half",
+            "hint": "Telling them is optional, but most will handle the paperwork faster if they are expecting it."
+          },
+          {
+            "k": "Date the provision was signed",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Attorney who drafted it",
+            "t": "text",
+            "ph": "Grace Okonkwo, Okonkwo and Reyes, (312) 555-0146"
+          }
+        ]
+      },
+      {
+        "id": "tax-records",
+        "name": "Tax Records",
+        "kind": "entries",
+        "entry": "receipt",
+        "desc": "Proof of giving, one year at a time.",
+        "fields": [
+          {
+            "k": "Tax year",
+            "t": "num",
+            "req": 1,
+            "w": "half",
+            "ph": "2025"
+          },
+          {
+            "k": "Total given",
+            "t": "money",
+            "w": "half",
+            "ph": "4,250"
+          },
+          {
+            "k": "Receipts",
+            "t": "doc",
+            "hint": "Anything over 250 in a single gift needs a written acknowledgement from the charity."
+          },
+          {
+            "k": "Where the paper copies are kept",
+            "t": "text",
+            "ph": "Green accordion file in the office closet, one folder per year"
+          },
+          {
+            "k": "Who prepares your return",
+            "t": "text",
+            "ph": "Alan Pruitt, Pruitt Tax Services, (847) 555-0155"
+          }
+        ]
+      }
+    ],
+    "apiId": "9"
+  },
+  {
+    "id": "legal-documents",
+    "name": "Legal Documents & Records",
+    "icon": "scale",
+    "collection": "Legal & estate",
+    "desc": "The paperwork that proves who you are, what you own, and what you have agreed to, and where each original is kept.",
+    "subs": [
+      {
+        "id": "identity-documents",
+        "name": "Identity Documents",
+        "kind": "entries",
+        "entry": "document",
+        "desc": "Birth, marriage, passport and the rest of the papers that prove identity.",
+        "fields": [
+          {
+            "k": "Document type",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Birth certificate",
+              "Marriage certificate",
+              "Divorce decree",
+              "Passport",
+              "Naturalisation",
+              "Social Security card",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Whose document it is",
+            "t": "text",
+            "req": 1,
+            "ph": "Maria Alvarez, or \"both of us\" for a marriage certificate"
+          },
+          {
+            "k": "Document number",
+            "t": "text",
+            "ph": "Passport 512847733",
+            "hint": "Skip this if the number is sensitive and the file is attached below.",
+            "w": "half"
+          },
+          {
+            "k": "Where the original is kept",
+            "t": "text",
+            "ph": "Fireproof box in the hall closet, top tray"
+          },
+          {
+            "k": "Certified copies on hand",
+            "t": "num",
+            "ph": "3",
+            "hint": "Banks and insurers usually want certified copies, not photocopies.",
+            "w": "half"
+          },
+          {
+            "k": "Expires",
+            "t": "date",
+            "hint": "Passports and residency cards only. Leave blank if it never expires.",
+            "w": "half"
+          },
+          {
+            "k": "Scan or photo of the document",
+            "t": "doc"
+          }
+        ]
+      },
+      {
+        "id": "property-title",
+        "name": "Property & Title Documents",
+        "kind": "entries",
+        "entry": "document",
+        "desc": "Proof of ownership for homes, land and vehicles.",
+        "fields": [
+          {
+            "k": "What it covers",
+            "t": "text",
+            "req": 1,
+            "ph": "14 Ellery Road house, 2019 Subaru Outback, back paddock"
+          },
+          {
+            "k": "Document type",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Deed",
+              "Vehicle title",
+              "Bill of sale",
+              "Survey",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Names on the title",
+            "t": "text",
+            "ph": "Maria and Tom Alvarez, joint tenants with right of survivorship",
+            "hint": "How the names are worded decides whether it passes automatically or through probate."
+          },
+          {
+            "k": "Where the original is",
+            "t": "text",
+            "ph": "County recorder plus a copy in the home safe"
+          },
+          {
+            "k": "Recorded or issued",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Loan or lien still on it",
+            "t": "toggle",
+            "hint": "Turn this on if anyone else has a claim on the property."
+          },
+          {
+            "k": "Scan of the document",
+            "t": "doc"
+          }
+        ]
+      },
+      {
+        "id": "contracts-agreements",
+        "name": "Contracts & Agreements",
+        "kind": "entries",
+        "entry": "agreement",
+        "desc": "Anything you have signed that binds you: leases, prenups, business terms, service contracts.",
+        "fields": [
+          {
+            "k": "What it is",
+            "t": "text",
+            "req": 1,
+            "ph": "Lease on the Mill Street unit, prenuptial agreement, solar panel finance contract"
+          },
+          {
+            "k": "Other party",
+            "t": "text",
+            "req": 1,
+            "ph": "Harbourview Property Group"
+          },
+          {
+            "k": "Signed",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Expires or renews",
+            "t": "text",
+            "ph": "Auto renews 1 March each year unless cancelled 60 days ahead",
+            "w": "half"
+          },
+          {
+            "k": "Where the original is",
+            "t": "text",
+            "ph": "Filing cabinet, drawer two, folder marked Property"
+          },
+          {
+            "k": "What it obliges you to",
+            "t": "long",
+            "ph": "Monthly payment of 1,240 through 2031, plus insurance on the equipment."
+          },
+          {
+            "k": "Scan of the agreement",
+            "t": "doc"
+          }
+        ]
+      },
+      {
+        "id": "court-orders",
+        "name": "Court Orders & Legal Matters",
+        "kind": "entries",
+        "entry": "matter",
+        "desc": "Anything currently or previously in front of a court, so nobody is surprised by it later.",
+        "fields": [
+          {
+            "k": "Matter",
+            "t": "text",
+            "req": 1,
+            "ph": "Custody order for Jonah, boundary dispute with 16 Ellery Road"
+          },
+          {
+            "k": "Court or jurisdiction",
+            "t": "text",
+            "ph": "Marion County Superior Court, Indiana"
+          },
+          {
+            "k": "Case number",
+            "t": "text",
+            "ph": "49D08-2204-DR-012947",
+            "w": "half"
+          },
+          {
+            "k": "Status",
+            "t": "choice",
+            "opts": [
+              "Open",
+              "Closed",
+              "On appeal"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Attorney handling it",
+            "t": "text",
+            "ph": "Dana Whitfield, Whitfield & Ross"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Hearing set for November. Order requires written notice before any change of address."
+          },
+          {
+            "k": "Order or judgment",
+            "t": "doc"
+          }
+        ]
+      },
+      {
+        "id": "legal-contacts",
+        "name": "Attorneys & Legal Contacts",
+        "kind": "entries",
+        "entry": "attorney",
+        "desc": "Who to call, and for which kind of problem.",
+        "fields": [
+          {
+            "k": "Name",
+            "t": "text",
+            "req": 1,
+            "ph": "Dana Whitfield"
+          },
+          {
+            "k": "Firm",
+            "t": "text",
+            "ph": "Whitfield & Ross LLP"
+          },
+          {
+            "k": "What they handle",
+            "t": "text",
+            "req": 1,
+            "ph": "Estate and probate, or the property dispute only"
+          },
+          {
+            "k": "Phone",
+            "t": "tel",
+            "ph": "(317) 555-0142",
+            "w": "half"
+          },
+          {
+            "k": "Email",
+            "t": "email",
+            "ph": "dana@whitfieldross.com",
+            "w": "half"
+          },
+          {
+            "k": "Holds original documents for us",
+            "t": "toggle",
+            "hint": "Turn this on if any signed original lives at their office rather than in your house."
+          }
+        ]
+      },
+      {
+        "id": "notary-witnesses",
+        "name": "Notarisation & Witnesses",
+        "kind": "entries",
+        "entry": "record",
+        "desc": "Who witnessed or notarised your signed documents, in case a signature is ever questioned.",
+        "fields": [
+          {
+            "k": "Document witnessed",
+            "t": "text",
+            "req": 1,
+            "ph": "2023 will, financial power of attorney"
+          },
+          {
+            "k": "Notary or witness names",
+            "t": "text",
+            "req": 1,
+            "ph": "Ruth Emerson (notary), witnessed by Paul Ngata and Cara Boyd"
+          },
+          {
+            "k": "Date signed",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Where it was signed",
+            "t": "text",
+            "ph": "Whitfield & Ross office, Indianapolis",
+            "w": "half"
+          },
+          {
+            "k": "Notary commission number",
+            "t": "text",
+            "ph": "NP0721994",
+            "w": "half"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "Both witnesses are unrelated and are not named in the will.",
+            "hint": "A witness who inherits can invalidate a bequest in some places."
+          }
+        ]
+      },
+      {
+        "id": "business-entities",
+        "name": "Business & Entity Records",
+        "kind": "entries",
+        "entry": "entity",
+        "desc": "Companies, partnerships and side businesses you are named in.",
+        "fields": [
+          {
+            "k": "Business name",
+            "t": "text",
+            "req": 1,
+            "ph": "Ellery Road Woodworks LLC"
+          },
+          {
+            "k": "Your role and share",
+            "t": "text",
+            "req": 1,
+            "ph": "Sole member, 100 percent"
+          },
+          {
+            "k": "Registration or tax number",
+            "t": "text",
+            "ph": "EIN 84-2210997",
+            "w": "half"
+          },
+          {
+            "k": "Formed",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "What happens to it if you die",
+            "t": "long",
+            "ph": "Operating agreement lets Tom wind it down and sell the equipment. Nobody is expected to keep it running.",
+            "hint": "Without this written down, a business can sit frozen for months."
+          },
+          {
+            "k": "Accountant or bookkeeper",
+            "t": "text",
+            "ph": "Grace Lindstrom, (317) 555-0154"
+          },
+          {
+            "k": "Formation and ownership documents",
+            "t": "doc"
+          }
+        ]
+      },
+      {
+        "id": "prior-wills",
+        "name": "Prior Wills & Superseded Documents",
+        "kind": "entries",
+        "entry": "document",
+        "desc": "Old versions that no longer apply, kept on record so nobody acts on the wrong one.",
+        "fields": [
+          {
+            "k": "What it is",
+            "t": "text",
+            "req": 1,
+            "ph": "2014 will drafted in Ohio, 2018 medical power of attorney"
+          },
+          {
+            "k": "Date of that version",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Superseded by",
+            "t": "text",
+            "req": 1,
+            "ph": "The 2023 will signed at Whitfield & Ross",
+            "w": "half"
+          },
+          {
+            "k": "Where it is now",
+            "t": "text",
+            "ph": "Marked VOID and filed at the back of the estate folder",
+            "hint": "Keeping old versions findable and clearly marked prevents a fight later."
+          },
+          {
+            "k": "Destroyed",
+            "t": "toggle",
+            "hint": "Turn this on if the original was shredded, and say where the record of that is in the notes."
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "The Ohio will named my brother as executor. He knows it no longer stands."
+          }
+        ]
+      }
+    ],
+    "apiId": "20"
+  },
+  {
+    "id": "estate-planning",
+    "name": "Estate Planning & Final Wishes",
+    "icon": "dove",
+    "collection": "Legal & estate",
+    "dove": 1,
+    "desc": "What you want to happen, who decides, and everything the people left behind will need to find.",
+    "subs": [
+      {
+        "id": "will",
+        "name": "Will & Testament",
+        "kind": "form",
+        "desc": "Where the will is and who is named to carry it out.",
+        "fields": [
+          {
+            "k": "Will location",
+            "t": "text",
+            "req": 1,
+            "ph": "Attorney office, home safe, county clerk"
+          },
+          {
+            "k": "Will date",
+            "t": "date",
+            "hint": "The most recent signed version is the one that counts.",
+            "w": "half"
+          },
+          {
+            "k": "Executor information",
+            "t": "long",
+            "req": 1,
+            "ph": "Tom Alvarez, brother, (317) 555-0188, tom.alvarez@email.com. He has agreed and knows where the will is."
+          },
+          {
+            "k": "Alternate executor",
+            "t": "long",
+            "ph": "Cara Boyd, close friend, (317) 555-0231. Steps in if Tom cannot serve."
+          },
+          {
+            "k": "Estate attorney",
+            "t": "text",
+            "ph": "Dana Whitfield, Whitfield & Ross, (317) 555-0142"
+          },
+          {
+            "k": "The will itself",
+            "t": "doc",
+            "hint": "A scan here is for finding things quickly. Courts still want the signed original."
+          },
+          {
+            "k": "Notes on the will",
+            "t": "long",
+            "ph": "Handwritten codicil from 2024 is stapled to the back.",
+            "hint": "This Vault is not a legal document. Anything you want to be binding has to be drawn up and signed with an attorney."
+          }
+        ]
+      },
+      {
+        "id": "trusts",
+        "name": "Trust Documents",
+        "kind": "form",
+        "desc": "Any trust you have set up, and who runs it.",
+        "fields": [
+          {
+            "k": "Trust information",
+            "t": "long",
+            "ph": "Alvarez Family Revocable Living Trust, established March 2021, holds the house and the brokerage account."
+          },
+          {
+            "k": "Trustee information",
+            "t": "long",
+            "ph": "Maria Alvarez is trustee while living. Contact (317) 555-0177."
+          },
+          {
+            "k": "Successor trustee",
+            "t": "long",
+            "ph": "Tom Alvarez, brother, (317) 555-0188. Has read the trust and agreed to serve."
+          },
+          {
+            "k": "Trust attorney",
+            "t": "text",
+            "ph": "Dana Whitfield, Whitfield & Ross, (317) 555-0142"
+          },
+          {
+            "k": "What is actually titled in the trust",
+            "t": "long",
+            "ph": "House on Ellery Road, Fidelity brokerage ending 4471. The cars and the checking account are not in it.",
+            "hint": "A trust only controls what has actually been retitled into it. This is the most common gap."
+          },
+          {
+            "k": "Trust documents",
+            "t": "doc"
+          }
+        ]
+      },
+      {
+        "id": "powers-of-attorney",
+        "name": "Powers of Attorney",
+        "kind": "form",
+        "desc": "Who can act for you on money and on medical decisions if you cannot.",
+        "fields": [
+          {
+            "k": "Financial power of attorney holder",
+            "t": "text",
+            "req": 1,
+            "ph": "Tom Alvarez, brother"
+          },
+          {
+            "k": "Financial POA phone",
+            "t": "tel",
+            "ph": "(317) 555-0188",
+            "w": "half"
+          },
+          {
+            "k": "When the financial POA takes effect",
+            "t": "choice",
+            "opts": [
+              "Immediately",
+              "On incapacity"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Medical power of attorney holder",
+            "t": "text",
+            "req": 1,
+            "ph": "Cara Boyd, close friend"
+          },
+          {
+            "k": "Medical POA phone",
+            "t": "tel",
+            "ph": "(317) 555-0231",
+            "w": "half"
+          },
+          {
+            "k": "When the medical POA takes effect",
+            "t": "choice",
+            "opts": [
+              "Immediately",
+              "On incapacity"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Power of attorney documents",
+            "t": "doc",
+            "hint": "Banks and hospitals often want to see their own copy, so tell each holder where the original lives."
+          }
+        ]
+      },
+      {
+        "id": "healthcare-directives",
+        "name": "Healthcare Directives",
+        "kind": "form",
+        "desc": "Your written instructions for care when you cannot speak for yourself.",
+        "fields": [
+          {
+            "k": "Living will or advance directive",
+            "t": "doc",
+            "req": 1
+          },
+          {
+            "k": "DNR order in place",
+            "t": "choice",
+            "opts": [
+              "Yes, signed and on file",
+              "No",
+              "Not decided yet"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Organ donation instructions",
+            "t": "choice",
+            "opts": [
+              "Donate anything usable",
+              "Specific organs only",
+              "Donate for research",
+              "Do not donate",
+              "Not decided yet"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "If specific organs only, which ones",
+            "t": "text",
+            "ph": "Corneas and kidneys, nothing else"
+          },
+          {
+            "k": "Who holds the original",
+            "t": "text",
+            "ph": "Cara Boyd has the signed original; a copy is with Dr. Patel at Northside Family Medicine"
+          },
+          {
+            "k": "What matters most to you about care",
+            "t": "long",
+            "ph": "I would rather be at home with pain controlled than in a hospital gaining a few weeks.",
+            "hint": "Doctors follow the form, but this is what helps your people feel sure they chose right."
+          }
+        ]
+      },
+      {
+        "id": "beneficiaries",
+        "name": "Beneficiary Information",
+        "kind": "form",
+        "desc": "Who receives what, including the things that pass outside the will.",
+        "fields": [
+          {
+            "k": "Primary beneficiaries",
+            "t": "long",
+            "req": 1,
+            "ph": "Jonah Alvarez (son) and Elise Alvarez (daughter), split evenly."
+          },
+          {
+            "k": "Contingent beneficiaries",
+            "t": "long",
+            "ph": "If either child predeceases me, their share goes to their children, otherwise to my brother Tom."
+          },
+          {
+            "k": "Special bequests",
+            "t": "long",
+            "ph": "Grandmother’s ring to Elise. The workshop tools to Paul Ngata. The Martin guitar to Jonah."
+          },
+          {
+            "k": "Charitable bequests",
+            "t": "long",
+            "ph": "5,000 to Riverside Animal Rescue, tax ID 84-1120043."
+          },
+          {
+            "k": "Accounts with their own beneficiary forms",
+            "t": "long",
+            "ph": "401k at Fidelity, life insurance at Guardian, HSA at Optum.",
+            "hint": "Beneficiary designations on accounts override what the will says. Check that these still name the right people."
+          },
+          {
+            "k": "Beneficiary forms last reviewed",
+            "t": "date",
+            "w": "half"
+          }
+        ]
+      },
+      {
+        "id": "funeral-preferences",
+        "name": "Funeral / Memorial Preferences",
+        "kind": "form",
+        "dove": 1,
+        "desc": "The shape of the gathering, if you want one.",
+        "fields": [
+          {
+            "k": "Type of service",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Traditional funeral",
+              "Memorial service",
+              "Celebration of life",
+              "No service",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Service location",
+            "t": "text",
+            "ph": "St. Anne’s on Third Street, or the back garden at home",
+            "w": "half"
+          },
+          {
+            "k": "Preferred funeral home",
+            "t": "text",
+            "ph": "Kettering & Sons, (317) 555-0166"
+          },
+          {
+            "k": "Clergy or officiant",
+            "t": "text",
+            "ph": "Father Michael Doyle, or my sister Ana reading instead of a clergy member"
+          },
+          {
+            "k": "Service preferences",
+            "t": "long",
+            "ph": "Short, under an hour. Open casket is fine. No black tie, tell people to wear colour."
+          },
+          {
+            "k": "Music or readings",
+            "t": "long",
+            "ph": "Bach cello suite no. 1 as people arrive. Mary Oliver, Wild Geese. Nothing from the radio."
+          },
+          {
+            "k": "Who should speak",
+            "t": "long",
+            "ph": "Tom, then Cara, then anyone who wants to. Please do not make Jonah speak if he does not want to."
+          },
+          {
+            "k": "Food, flowers and gathering afterwards",
+            "t": "long",
+            "ph": "Coffee and something sweet at the house after. Sunflowers if there are flowers at all."
+          }
+        ]
+      },
+      {
+        "id": "body-disposition",
+        "name": "Body Disposition Preferences",
+        "kind": "form",
+        "dove": 1,
+        "desc": "What you want done with your body.",
+        "fields": [
+          {
+            "k": "Disposition preference",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Burial",
+              "Cremation",
+              "Donation to science"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Cemetery or location",
+            "t": "text",
+            "ph": "Crown Hill Cemetery, Indianapolis, family section",
+            "w": "half"
+          },
+          {
+            "k": "Plot details",
+            "t": "text",
+            "ph": "Section 14, lot 6, space 2. Deed is in the estate folder."
+          },
+          {
+            "k": "What to do with ashes",
+            "t": "long",
+            "ph": "Half scattered at Lake Monroe off the north trail, half kept by Elise. Please do not divide them further."
+          },
+          {
+            "k": "What to be buried or cremated in",
+            "t": "text",
+            "ph": "The grey wool suit, no tie. Wedding ring stays on."
+          },
+          {
+            "k": "Anything you do not want",
+            "t": "long",
+            "ph": "No embalming if it can be avoided. No viewing at the funeral home."
+          }
+        ]
+      },
+      {
+        "id": "memorial-preferences",
+        "name": "Memorial Preferences",
+        "kind": "form",
+        "dove": 1,
+        "desc": "What stays behind to mark it.",
+        "fields": [
+          {
+            "k": "Headstone or marker preferences",
+            "t": "text",
+            "ph": "Flat granite marker, name and dates only, no photograph"
+          },
+          {
+            "k": "Wording for the marker",
+            "t": "long",
+            "ph": "Maria Alvarez, 1961 to 2026. \"She fed everyone.\""
+          },
+          {
+            "k": "Memorial donations",
+            "t": "long",
+            "ph": "Donations to Riverside Animal Rescue instead of flowers.",
+            "hint": "This is what people ask for first when they want to help and do not know how."
+          },
+          {
+            "k": "Special requests",
+            "t": "long",
+            "ph": "Plant a redbud in the front yard. Keep the recipe box in the family, do not sell it."
+          },
+          {
+            "k": "Who maintains the site",
+            "t": "text",
+            "ph": "Perpetual care is paid through the cemetery. Elise checks it each spring."
+          }
+        ]
+      },
+      {
+        "id": "obituary",
+        "name": "Obituary Information",
+        "kind": "form",
+        "dove": 1,
+        "desc": "The facts and the details you would want said, so nobody has to guess at 2am.",
+        "fields": [
+          {
+            "k": "Obituary details",
+            "t": "long",
+            "req": 1,
+            "ph": "Born in Toledo, 1961. Nursing at Methodist for 31 years. Married Tom in 1988. Two children, four grandchildren. Grew tomatoes badly and persistently."
+          },
+          {
+            "k": "Photo for obituary",
+            "t": "doc",
+            "hint": "Pick it yourself. Otherwise someone chooses under pressure and regrets it."
+          },
+          {
+            "k": "Where it should be published",
+            "t": "text",
+            "ph": "Indianapolis Star, the hospital newsletter, and the church bulletin"
+          },
+          {
+            "k": "Who should write it",
+            "t": "text",
+            "ph": "Elise, with Tom checking the dates",
+            "w": "half"
+          },
+          {
+            "k": "People to name in it",
+            "t": "long",
+            "ph": "Survived by Tom, Jonah, Elise and four grandchildren. Preceded by my parents and my sister Ana."
+          },
+          {
+            "k": "Anything to leave out",
+            "t": "long",
+            "ph": "Do not mention the illness. Do not use the word brave.",
+            "hint": "The sections marked with the dove already hold most of what an obituary needs, so this is only the parts nobody else could know."
+          }
+        ]
+      },
+      {
+        "id": "prepaid-arrangements",
+        "name": "Prepaid Arrangements",
+        "kind": "form",
+        "desc": "Anything already paid for, so your family does not pay twice.",
+        "fields": [
+          {
+            "k": "Prepaid funeral arrangements",
+            "t": "long",
+            "ph": "Kettering & Sons, contract signed 2022, paid in full. Covers cremation, urn and the service room."
+          },
+          {
+            "k": "Amount prepaid",
+            "t": "money",
+            "ph": "4,800",
+            "w": "half"
+          },
+          {
+            "k": "Cemetery plot ownership",
+            "t": "text",
+            "ph": "Crown Hill, section 14 lot 6, two spaces, deed in the estate folder"
+          },
+          {
+            "k": "Funeral insurance",
+            "t": "long",
+            "ph": "Guardian final expense policy, 10,000, policy 4471-QB. Claim line (800) 555-0119."
+          },
+          {
+            "k": "Contract",
+            "t": "doc"
+          },
+          {
+            "k": "What is not covered",
+            "t": "long",
+            "ph": "Flowers, catering and the newspaper notice are not included.",
+            "hint": "Prepaid plans usually cover less than families expect."
+          }
+        ]
+      },
+      {
+        "id": "guardianship",
+        "name": "Minor Children & Guardianship",
+        "kind": "form",
+        "desc": "Who raises your children if you cannot.",
+        "fields": [
+          {
+            "k": "Minor children details",
+            "t": "long",
+            "req": 1,
+            "ph": "Jonah, born 2014. Elise, born 2017. Both at Northview Elementary."
+          },
+          {
+            "k": "Primary guardian name",
+            "t": "text",
+            "req": 1,
+            "ph": "Tom and Rachel Alvarez"
+          },
+          {
+            "k": "Relationship to children",
+            "t": "text",
+            "ph": "Uncle and aunt on my side",
+            "w": "half"
+          },
+          {
+            "k": "Primary guardian contact",
+            "t": "text",
+            "ph": "(317) 555-0188, tom.alvarez@email.com",
+            "w": "half"
+          },
+          {
+            "k": "Guardian consent status",
+            "t": "choice",
+            "opts": [
+              "Agreed to serve",
+              "Needs to be asked",
+              "Verbal agreement only",
+              "Written agreement"
+            ],
+            "hint": "A guardian who was never asked can decline, and then a court chooses instead.",
+            "w": "half"
+          },
+          {
+            "k": "Alternate guardian name",
+            "t": "text",
+            "ph": "Cara Boyd",
+            "w": "half"
+          },
+          {
+            "k": "Alternate guardian contact",
+            "t": "text",
+            "ph": "(317) 555-0231, cara.boyd@email.com"
+          },
+          {
+            "k": "Who should not be considered",
+            "t": "long",
+            "ph": "Please do not place them with my father.",
+            "hint": "Say this plainly here and in the will, or a court may assume the nearest relative is the right one."
+          }
+        ]
+      },
+      {
+        "id": "guardian-instructions",
+        "name": "Instructions for Guardians",
+        "kind": "form",
+        "desc": "The things a guardian could not know from paperwork.",
+        "fields": [
+          {
+            "k": "Parenting philosophy and values",
+            "t": "long",
+            "req": 1,
+            "ph": "Talk to them like people. They get told the truth about hard things, in their own words. Bedtimes matter more than grades."
+          },
+          {
+            "k": "Education preferences",
+            "t": "long",
+            "ph": "Keep them at Northview if you can, at least through the first year. College fund is the 529 at Vanguard."
+          },
+          {
+            "k": "Religious or spiritual guidance",
+            "t": "text",
+            "ph": "Raised Catholic, Mass at Christmas and Easter. Let them decide from twelve."
+          },
+          {
+            "k": "Healthcare instructions",
+            "t": "long",
+            "ph": "Jonah has a peanut allergy, EpiPen in his bag and one at school. Dr. Patel at Northside has both their records."
+          },
+          {
+            "k": "Special needs or considerations",
+            "t": "long",
+            "ph": "Elise has an IEP for reading support. The paperwork renews each August."
+          },
+          {
+            "k": "Activities and interests",
+            "t": "long",
+            "ph": "Jonah swims Tuesdays and Thursdays. Elise draws constantly, keep her in paper."
+          },
+          {
+            "k": "Family relationships to maintain",
+            "t": "long",
+            "ph": "They see Grandma Ruth every second Sunday and she matters enormously to them. Their cousins in Toledo, at least twice a year. Their father can call, but visits should stay supervised."
+          }
+        ]
+      },
+      {
+        "id": "digital-after-death",
+        "name": "Digital & Social Accounts After Death",
+        "kind": "form",
+        "desc": "What happens to your accounts and everything in them.",
+        "fields": [
+          {
+            "k": "What should happen to social accounts",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Memorialise",
+              "Delete",
+              "Hand over to someone"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Who handles it",
+            "t": "text",
+            "req": 1,
+            "ph": "Elise. She already has the password manager recovery key.",
+            "w": "half"
+          },
+          {
+            "k": "Legacy contacts already set up",
+            "t": "long",
+            "ph": "Apple legacy contact is Elise. Facebook legacy contact is Tom. Google inactive account manager is set to 6 months.",
+            "hint": "Setting these inside each platform is far easier for your family than any letter."
+          },
+          {
+            "k": "Instructions",
+            "t": "long",
+            "ph": "Memorialise Facebook and Instagram. Delete the dating account without opening it. Download the photos from Google before anything is closed."
+          },
+          {
+            "k": "Photos and files worth saving",
+            "t": "text",
+            "ph": "Google Photos back to 2009, and the Dropbox folder called Scans"
+          },
+          {
+            "k": "Things you would rather nobody read",
+            "t": "long",
+            "ph": "The journal folder on the laptop desktop. Please delete it unopened.",
+            "hint": "Saying this now is kinder than hoping it is never found."
+          }
+        ]
+      },
+      {
+        "id": "notifications",
+        "name": "Notifications",
+        "kind": "entries",
+        "entry": "notification",
+        "desc": "Everyone who has to be told, and what each of them will ask for.",
+        "fields": [
+          {
+            "k": "Who or what must be told",
+            "t": "text",
+            "req": 1,
+            "ph": "Social Security Administration, Methodist Hospital HR, Guardian Life"
+          },
+          {
+            "k": "Category",
+            "t": "choice",
+            "req": 1,
+            "opts": [
+              "Employer",
+              "Government",
+              "Bank",
+              "Insurance",
+              "Utility",
+              "Subscription",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Contact",
+            "t": "text",
+            "ph": "(800) 555-0119 or benefits@methodist.org",
+            "w": "half"
+          },
+          {
+            "k": "Account or reference number",
+            "t": "text",
+            "ph": "Policy 4471-QB",
+            "w": "half"
+          },
+          {
+            "k": "What they need from you",
+            "t": "text",
+            "ph": "Certified death certificate plus the claim form they post out",
+            "hint": "This is the list that saves a next of kin weeks. Note how many death certificates each one wants."
+          },
+          {
+            "k": "How soon",
+            "t": "choice",
+            "opts": [
+              "First week",
+              "First month",
+              "When there is time"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Notes",
+            "t": "long",
+            "ph": "The pension office is slow. Call rather than email, and ask for the survivor benefits desk."
+          }
+        ]
+      },
+      {
+        "id": "final-instructions",
+        "name": "Final Instructions",
+        "kind": "form",
+        "desc": "The last things to say, and where everything physically is.",
+        "fields": [
+          {
+            "k": "Anything else your executor should know",
+            "t": "long",
+            "req": 1,
+            "ph": "The safe code is with the password manager, not written here. Paul Ngata has a spare key to the workshop and knows what the tools are worth."
+          },
+          {
+            "k": "Things you specifically do not want",
+            "t": "long",
+            "ph": "Do not sell the house in the first year. Do not let anyone throw out the boxes in the attic before Elise has looked through them."
+          },
+          {
+            "k": "Where the physical copies of everything are",
+            "t": "text",
+            "req": 1,
+            "ph": "Fireproof box in the hall closet, plus the estate folder at Whitfield & Ross"
+          },
+          {
+            "k": "Who has keys, codes or access",
+            "t": "long",
+            "ph": "Tom has the house key and the safe deposit key. Cara has the car spare. Nobody else has the safe code."
+          },
+          {
+            "k": "Debts or obligations people should know about",
+            "t": "long",
+            "ph": "I co-signed Jonah’s student loan. There is 3,100 left on the workshop credit line.",
+            "hint": "Naming debts now stops them arriving as a shock alongside grief."
+          },
+          {
+            "k": "Last reviewed",
+            "t": "date",
+            "hint": "Worth reading through once a year, and after any birth, death, move or divorce.",
+            "w": "half"
+          }
+        ]
+      }
+    ],
+    "apiId": "21"
+  },
+  {
+    "id": "letter-next-of-kin",
+    "name": "Letter to Next of Kin",
+    "icon": "mail",
+    "collection": "People & access",
+    "desc": "A private letter for each person you have named, sealed until the Vault opens.",
+    "subs": [
+      {
+        "id": "letters",
+        "name": "Letters",
+        "kind": "entries",
+        "entry": "letter",
+        "desc": "One letter per person. Written now, read only later.",
+        "fields": [
+          {
+            "k": "Who it is for",
+            "t": "text",
+            "req": 1,
+            "ph": "Elise, my daughter"
+          },
+          {
+            "k": "Their relationship to you",
+            "t": "text",
+            "ph": "Daughter, and the one who will hold this together",
+            "w": "half"
+          },
+          {
+            "k": "Status",
+            "t": "choice",
+            "opts": [
+              "Draft",
+              "Sealed"
+            ],
+            "hint": "Nobody, including the person it is addressed to, can read this while you are living.",
+            "w": "half"
+          },
+          {
+            "k": "The letter",
+            "t": "long",
+            "req": 1,
+            "ph": "Elise, if you are reading this then the thing we never talked about has happened, and I want you to hear a few things from me first."
+          },
+          {
+            "k": "Last edited",
+            "t": "date",
+            "w": "half"
+          },
+          {
+            "k": "Deliver alongside",
+            "t": "text",
+            "ph": "The recipe box, or the envelope in the desk drawer"
+          },
+          {
+            "k": "A note about the letter for your executor",
+            "t": "text",
+            "ph": "Give this to her privately, not at the service"
+          }
+        ]
+      },
+      {
+        "id": "writing-help",
+        "name": "Writing Help",
+        "kind": "form",
+        "desc": "For when you open the page and nothing comes.",
+        "fields": [
+          {
+            "k": "Which of these to include",
+            "t": "multi",
+            "opts": [
+              "What I want you to handle first",
+              "Why I chose you",
+              "Things only you would know to ask about",
+              "Where the hard feelings might be",
+              "What I am grateful for",
+              "Something I never said out loud",
+              "What I hope happens next for you"
+            ],
+            "hint": "Pick two or three. A short honest letter beats a long careful one."
+          },
+          {
+            "k": "Tone",
+            "t": "choice",
+            "opts": [
+              "Practical",
+              "Personal",
+              "Both"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Remind me to revisit this",
+            "t": "choice",
+            "opts": [
+              "Every 6 months",
+              "Once a year",
+              "Every 2 years",
+              "Never"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Start with a prompt instead of a blank page",
+            "t": "toggle",
+            "hint": "Turns on a first line you can keep, change or delete."
+          },
+          {
+            "k": "Notes to yourself while drafting",
+            "t": "long",
+            "ph": "Still need to say something about the argument in 2019. Not ready yet.",
+            "hint": "This stays with your draft and is never delivered."
+          }
+        ]
+      }
+    ],
+    "apiId": "3"
+  }
+]

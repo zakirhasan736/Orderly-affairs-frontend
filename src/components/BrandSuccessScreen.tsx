@@ -89,12 +89,12 @@ function SuccessIcon({
 }) {
   const isHero = variant === 'celebration';
   const tone =
-    variant === 'export' ? 'text-[#5a6b80]' : 'text-[#2b5a8c]';
+    variant === 'export' ? 'text-[#5a6b80]' : 'text-[#2E7FAD]';
 
   return (
     <span
       className={cn(
-        'inline-flex items-center justify-center rounded-full bg-[#e7eef7]',
+        'inline-flex items-center justify-center rounded-full bg-[#EAF6FD]',
         isHero ? 'h-14 w-14' : 'h-12 w-12',
         tone,
       )}
@@ -130,7 +130,7 @@ function ActionButton({
           'min-w-[7.5rem] rounded-[21px] px-5 font-[family-name:var(--font-family)] text-[14px] font-medium transition disabled:opacity-50',
           isPrimary
             ? 'h-[42px] border-0 bg-[#213d59] text-white hover:bg-[#1a3148]'
-            : 'h-[42px] border border-[#7688a1] bg-white text-[#213d59] hover:bg-[#f5f8fc]',
+            : 'h-[42px] border border-[#7688a1] bg-white text-[#213d59] hover:bg-[#F6F8FA]',
         )}
     >
       {action.label}

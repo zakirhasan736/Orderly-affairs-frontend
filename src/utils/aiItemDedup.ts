@@ -228,6 +228,13 @@ export function vehiclesAreDuplicates(
   const existingModel = normalizeComparable(existing.model);
   const incomingModel = normalizeComparable(incoming.model);
 
+  const modelsCompatible =
+    !existingModel ||
+    !incomingModel ||
+    existingModel === incomingModel ||
+    existingModel.includes(incomingModel) ||
+    incomingModel.includes(existingModel);
+
   if (
     existingYear &&
     incomingYear &&
@@ -237,9 +244,25 @@ export function vehiclesAreDuplicates(
     incomingModel &&
     existingYear === incomingYear &&
     existingMake === incomingMake &&
-    existingModel === incomingModel
+    modelsCompatible
   ) {
     return true;
+  }
+
+  // Same make + compatible model, no year conflict (re-upload / thin OCR).
+  // 2017 Honda vs 2022 Honda stay separate.
+  if (
+    existingMake &&
+    incomingMake &&
+    existingMake === incomingMake &&
+    modelsCompatible
+  ) {
+    if (existingYear && incomingYear && existingYear !== incomingYear) {
+      return false;
+    }
+    if (existingModel || incomingModel || existingYear || incomingYear) {
+      return true;
+    }
   }
 
   // Soft match: thin insurance seed ↔ richer vehicle extract sharing a policy.
@@ -689,6 +712,48 @@ export function normalizeInsuranceSectionData(
 }
 
 /**
+ * Collapse duplicate inner cards in every subsection (one Jeep, one Honda,
+ * one matching policy/account) without merging 2017 Honda with 2022 Honda.
+ */
+export function normalizeCardSectionData(
+  sectionId: string,
+  data: unknown,
+): unknown {
+  let next = sectionId === '7' ? normalizeInsuranceSectionData(data) : data;
+  if (!next || typeof next !== 'object' || Array.isArray(next)) return next;
+
+  const section = { ...(next as Record<string, unknown>) };
+  let changed = false;
+
+  Object.entries(section).forEach(([key, value]) => {
+    if (!Array.isArray(value) || value.length < 1) return;
+    const items = value.filter(
+      (item): item is Record<string, unknown> =>
+        !!item && typeof item === 'object' && !Array.isArray(item),
+    );
+    const cleaned =
+      sectionId === '5' ? items.filter(item => !isJunkVehicleCard(item)) : items;
+    if (!cleaned.length) return;
+
+    const matcher =
+      duplicateMatcherForSection(sectionId, key) ||
+      ((existing: Record<string, unknown>, incoming: Record<string, unknown>) =>
+        namedItemsAreDuplicates(existing, incoming));
+    const collapsed =
+      sectionId === '7' && (!key || key === '7A')
+        ? collapseInsurancePolicies(cleaned)
+        : collapseItemsByMatcher(cleaned, matcher);
+
+    if (collapsed.length !== cleaned.length || cleaned.length !== value.length) {
+      section[key] = collapsed;
+      changed = true;
+    }
+  });
+
+  return changed ? section : next;
+}
+
+/**
  * Soft identity match for accounts that share a number or institution+type.
  */
 export function accountsAreDuplicates(
@@ -1035,11 +1100,34 @@ const IDENTITY_FIELD_GROUPS: string[][] = [
  * Soft identity match for multi-card sections (charities, memberships, etc.).
  * Same document re-upload should update the card, not create another form.
  */
+function identityDiscriminatorsConflict(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): boolean {
+  const pairs: Array<[unknown, unknown, 'year' | 'id']> = [
+    [existing.year, incoming.year, 'year'],
+    [existing.vin, incoming.vin, 'id'],
+    [existing.account_number, incoming.account_number, 'id'],
+    [existing.policy_number, incoming.policy_number, 'id'],
+    [existing.card_number, incoming.card_number, 'id'],
+    [existing.routing_number, incoming.routing_number, 'id'],
+  ];
+  return pairs.some(([left, right, kind]) => {
+    const a =
+      kind === 'year' ? normalizeComparable(left) : normalizePolicyNumber(left);
+    const b =
+      kind === 'year' ? normalizeComparable(right) : normalizePolicyNumber(right);
+    return Boolean(a && b && a !== b);
+  });
+}
+
 export function namedItemsAreDuplicates(
   existing: Record<string, unknown>,
   incoming: Record<string, unknown>,
   preferredKeys?: string[],
 ): boolean {
+  if (identityDiscriminatorsConflict(existing, incoming)) return false;
+
   const groups = preferredKeys?.length
     ? [preferredKeys]
     : IDENTITY_FIELD_GROUPS;

@@ -11,7 +11,6 @@ import {
   SendHorizontal,
   Sparkles,
   UploadCloud,
-  X,
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import { Button } from '@/components/common/ui/button';
@@ -24,6 +23,7 @@ import {
 } from '@/utils/helpAssistantBrain';
 import { sendOwnerSupportMessage } from '@/libs/api/supportChat';
 import { toast } from 'sonner';
+import { VaultDetailDrawer } from '@/components/vault-prototype/VaultDetailDrawer';
 
 type HelpAssistantPanelProps = {
   onStartTour?: () => void;
@@ -774,84 +774,26 @@ export function HelpAssistantPanel({
     }
   };
 
-  if (!open || !canPortal) return null;
+  if (!canPortal) return null;
 
-  return createPortal(
-    <div className="fixed inset-0 z-[99999] flex items-end justify-center sm:items-center sm:p-4 md:p-6">
-      <button
-        type="button"
-        className="absolute inset-0 z-0 bg-[#1a1030]/45 backdrop-blur-[6px]"
-        aria-label="Close help"
-        onClick={closeHelp}
-      />
-
-      <div
-        className={cn(
-          'relative z-10 flex w-full max-w-[560px] flex-col overflow-hidden bg-white pointer-events-auto',
-          // Mobile: bottom sheet with a clear 45px gap from the top of the screen
-          'h-[calc(100dvh-45px)] max-h-[calc(100dvh-45px)] rounded-t-[1.75rem] shadow-[0_-12px_40px_rgba(40,20,80,0.22)]',
-          'pb-[env(safe-area-inset-bottom)]',
-          // Desktop / tablet: centered card
-          'sm:h-[min(92dvh,820px)] sm:max-h-[min(92dvh,820px)] sm:rounded-[32px] sm:border sm:border-white/50 sm:pb-0 sm:shadow-[0_30px_80px_rgba(40,20,80,0.28)]',
-        )}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Orderly Affairs assistant"
-        onClick={event => event.stopPropagation()}
-        onMouseDown={event => event.stopPropagation()}
-      >
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(165deg,#efe8ff_0%,#f7e9f4_28%,#eaf4ff_58%,#eef8f3_100%)]" />
-        <div className="pointer-events-none absolute -left-16 top-10 h-56 w-56 rounded-full bg-[#c4b5fd]/35 blur-3xl" />
-        <div className="pointer-events-none absolute -right-10 top-24 h-48 w-48 rounded-full bg-[#fda4af]/30 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-24 left-1/3 h-40 w-40 rounded-full bg-[#93c5fd]/30 blur-3xl" />
-
-        {/* Mobile sheet handle */}
-        <div
-          className="relative z-10 flex shrink-0 justify-center pt-3 sm:hidden"
-          aria-hidden
-        >
-          <div className="h-1.5 w-11 rounded-full bg-slate-300/90" />
-        </div>
-
-        <header className="relative z-10 flex shrink-0 flex-col gap-2.5 px-4 pb-2 pt-3 sm:gap-3 sm:px-5 sm:pt-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/70 text-[#5b21b6] shadow-sm ring-1 ring-white/80 backdrop-blur">
-                {mode === 'live' ? (
-                  <Headphones className="h-5 w-5 text-[#213D59]" />
-                ) : (
-                  <Sparkles className="h-5 w-5" />
-                )}
-              </span>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate text-[15px] font-semibold tracking-tight text-[#1e1b4b]">
-                    Contact Support
-                  </p>
-                  {mode === 'chat' ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-100">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                      Online
-                    </span>
-                  ) : null}
-                </div>
-                <p className="truncate text-[11px] font-medium text-[#64748b]">
-                  {sectionHint}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={closeHelp}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/80 text-[#475569] shadow-sm ring-1 ring-white/80 transition hover:bg-white hover:text-[#1e1b4b]"
-              aria-label="Close support"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1 self-stretch rounded-full bg-white/55 p-1 shadow-sm ring-1 ring-white/70 backdrop-blur sm:self-start">
+  return (
+    <VaultDetailDrawer
+      open={open}
+      onClose={closeHelp}
+      title="Get help"
+      subtitle={sectionHint || 'Ask AI, email, or live agent'}
+      icon={
+        mode === 'live' ? (
+          <Headphones className="h-5 w-5" />
+        ) : (
+          <Sparkles className="h-5 w-5" />
+        )
+      }
+      padded={false}
+    >
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="shrink-0 border-b border-[#E4EAF0] px-4 pb-3 pt-1 md:px-6">
+          <div className="flex items-center gap-1 rounded-full border border-[#E4EAF0] bg-[#F6F8FA] p-1">
             {(
               [
                 ['chat', 'AI'],
@@ -883,15 +825,13 @@ export function HelpAssistantPanel({
                   setMode(id);
                 }}
                 className={cn(
-                  'flex-1 rounded-full px-2.5 py-2 text-[11px] font-semibold transition sm:flex-none sm:py-1.5',
+                  'flex-1 rounded-full px-2.5 py-2 text-[12.5px] font-semibold transition',
                   mode === id
-                    ? 'bg-[#1e1b4b] text-white shadow-sm'
-                    : 'text-[#475569] hover:bg-white/80',
+                    ? 'bg-[#213D59] text-white'
+                    : 'text-[#6A7481] hover:bg-white',
                   id === 'live' && 'opacity-70',
                 )}
-                title={
-                  id === 'live' ? 'Live agent coming soon' : undefined
-                }
+                title={id === 'live' ? 'Live agent coming soon' : undefined}
               >
                 {label}
                 {id === 'live' ? (
@@ -902,11 +842,11 @@ export function HelpAssistantPanel({
               </button>
             ))}
           </div>
-        </header>
+        </div>
 
         <div
           ref={scrollerRef}
-          className="relative z-10 min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5"
+          className="mobile-sheet-scroll min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-4 py-4 md:px-6"
         >
           {mode === 'chat' && (
             <>
@@ -939,45 +879,40 @@ export function HelpAssistantPanel({
           {mode === 'email' && (
             <form
               onSubmit={event => void submitEmail(event)}
-              className="space-y-3 rounded-[24px] border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur-md"
+              className="space-y-4"
             >
-              <div className="flex items-center gap-2 text-sm font-semibold text-[#1e1b4b]">
-                <Mail className="h-4 w-4" />
-                Email support
-              </div>
-              <p className="text-xs text-slate-500">
-                We deliver this to our admin support inbox. Replies show in the{' '}
-                <span className="font-semibold text-slate-700">Live</span> tab —
-                no need to open your email. You can still CC{' '}
-                <span className="font-semibold text-slate-700">
-                  {SUPPORT_EMAIL}
-                </span>{' '}
-                from your mail app if you prefer.
+              <p className="text-[13.5px] leading-relaxed text-[#7A8794]">
+                We deliver this to our support inbox. Replies show in the Live
+                tab. You can also write {SUPPORT_EMAIL} from your mail app.
               </p>
-              <label className="block text-xs font-semibold text-slate-600">
-                Subject
+              <div>
+                <label className="mb-1.5 block text-[12.5px] font-semibold text-[#6A7481]">
+                  Subject
+                </label>
                 <input
                   value={emailSubject}
                   onChange={event => setEmailSubject(event.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-slate-200/80 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none ring-[#7c3aed]/25 focus:ring-2"
+                  className="h-11 w-full rounded-[10px] border border-[#E4EAF0] bg-white px-3.5 text-[14.5px] text-[#213D59] outline-none focus:border-[#3EB1E5] focus:shadow-[0_0_0_3px_rgba(62,177,229,.14)]"
                 />
-              </label>
-              <label className="block text-xs font-semibold text-slate-600">
-                Message
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12.5px] font-semibold text-[#6A7481]">
+                  Message
+                </label>
                 <textarea
                   value={emailBody}
                   onChange={event => setEmailBody(event.target.value)}
-                  rows={5}
+                  rows={6}
                   placeholder="Tell us what you need help with…"
-                  className="mt-1 w-full resize-none rounded-2xl border border-slate-200/80 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none ring-[#7c3aed]/25 focus:ring-2"
+                  className="min-h-[104px] w-full resize-y rounded-[10px] border border-[#E4EAF0] bg-white px-3.5 py-3 text-[14.5px] leading-[1.55] text-[#213D59] outline-none focus:border-[#3EB1E5] focus:shadow-[0_0_0_3px_rgba(62,177,229,.14)]"
                   required
                 />
-              </label>
-              <div className="flex gap-2">
+              </div>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row">
                 <Button
                   type="button"
                   variant="outline"
-                  className="flex-1 rounded-2xl"
+                  className="h-11 flex-1 rounded-full border-[#E4EAF0] text-[#213D59]"
                   onClick={() => setMode('chat')}
                 >
                   Back to AI
@@ -985,7 +920,7 @@ export function HelpAssistantPanel({
                 <Button
                   type="submit"
                   disabled={emailSending || !emailBody.trim()}
-                  className="flex-1 rounded-2xl bg-[#1e1b4b] text-white hover:bg-[#312e81]"
+                  className="h-11 flex-1 rounded-full bg-[#213D59] text-white hover:bg-[#2C4B6B]"
                 >
                   {emailSending ? 'Sending…' : 'Send to support'}
                 </Button>
@@ -1063,14 +998,14 @@ export function HelpAssistantPanel({
         </div>
 
         {mode === 'chat' ? (
-          <div className="relative z-10 border-t border-white/40 bg-white/35 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl sm:px-4 sm:pb-4">
+          <div className="shrink-0 border-t border-[#E4EAF0] bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-6">
             <SuggestionRail
               chips={suggestionChips}
               disabled={isTyping}
               onPick={fillSuggestedReply}
             />
             <form onSubmit={submitChat}>
-              <div className="flex items-center gap-2 rounded-full border border-white/80 bg-white/95 px-2 py-1.5 shadow-[0_12px_40px_rgba(30,27,75,0.12)] backdrop-blur">
+              <div className="mt-2 flex items-center gap-2 rounded-full border border-[#E4EAF0] bg-[#F6F8FA] px-2 py-1.5">
                 <input
                   ref={chatInputRef}
                   value={draft}
@@ -1083,15 +1018,15 @@ export function HelpAssistantPanel({
                         : 'Ask anything — or tap a suggestion'
                   }
                   disabled={isTyping}
-                  className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 disabled:opacity-60"
+                  className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[14.5px] text-[#213D59] outline-none placeholder:text-[#7A8794] disabled:opacity-60"
                 />
                 <button
                   type="button"
                   className={cn(
-                    'flex h-10 w-10 items-center justify-center rounded-full hover:bg-slate-50',
+                    'grid h-11 w-11 place-items-center rounded-full',
                     listening
-                      ? 'bg-rose-50 text-rose-600 ring-2 ring-rose-200'
-                      : 'text-slate-400',
+                      ? 'bg-[#FBEDEA] text-[#C2442E]'
+                      : 'text-[#7A8794] hover:bg-white',
                   )}
                   aria-label={listening ? 'Stop listening' : 'Speak your question'}
                   aria-pressed={listening}
@@ -1102,7 +1037,7 @@ export function HelpAssistantPanel({
                 <button
                   type="submit"
                   disabled={isTyping || !draft.trim()}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1e1b4b] text-white shadow-md disabled:opacity-50"
+                  className="grid h-11 w-11 place-items-center rounded-full bg-[#213D59] text-white disabled:opacity-50"
                   aria-label="Send"
                 >
                   <SendHorizontal className="h-4 w-4" />
@@ -1113,20 +1048,20 @@ export function HelpAssistantPanel({
         ) : null}
 
         {mode === 'live' ? (
-          <div className="relative z-10 border-t border-white/40 bg-white/35 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl sm:px-4 sm:pb-4">
+          <div className="shrink-0 border-t border-[#E4EAF0] bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-6">
             <form onSubmit={event => void submitLive(event)}>
-              <div className="flex items-center gap-2 rounded-full border border-white/80 bg-white/90 px-2 py-1.5 shadow-[0_12px_40px_rgba(30,27,75,0.12)] backdrop-blur">
+              <div className="flex items-center gap-2 rounded-full border border-[#E4EAF0] bg-[#F6F8FA] px-2 py-1.5">
                 <input
                   value={liveDraft}
                   onChange={event => setLiveDraft(event.target.value)}
                   placeholder="Message the live agent…"
                   disabled={!liveConnected || liveSending}
-                  className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 disabled:opacity-60"
+                  className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[14.5px] text-[#213D59] outline-none placeholder:text-[#7A8794] disabled:opacity-60"
                 />
                 <button
                   type="submit"
                   disabled={!liveConnected || liveSending || !liveDraft.trim()}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[#213D59] text-white shadow-md disabled:opacity-50"
+                  className="grid h-11 w-11 place-items-center rounded-full bg-[#213D59] text-white disabled:opacity-50"
                   aria-label="Send to live agent"
                 >
                   <SendHorizontal className="h-4 w-4" />
@@ -1136,8 +1071,7 @@ export function HelpAssistantPanel({
           </div>
         ) : null}
       </div>
-    </div>,
-    document.body,
+    </VaultDetailDrawer>
   );
 }
 

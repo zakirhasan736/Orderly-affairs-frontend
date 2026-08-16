@@ -28,10 +28,20 @@ import {
 } from '@/utils/aiInsuranceDocument';
 import type { IdentityPersonChoice } from '@/utils/aiIdentityDocument';
 import { toastSavedJustSavedHandoff } from '@/utils/toastSavedJustSavedHandoff';
+import { applyEditedFactsToStash } from '@/utils/aiReviewAcceptSave';
+import type { DetectedAiFact } from '@/utils/aiDashboardPatchCache';
 
 function patchesForFile(fileId?: string): StashedAiPatch[] {
   if (!fileId) return [];
   return listDashboardAiPatches().filter(entry => entry.file_id === fileId);
+}
+
+function resultWithEditedFacts(
+  stash: StashedAiPatch,
+  facts?: DetectedAiFact[] | null,
+): unknown {
+  if (!facts?.length) return stash.result;
+  return applyEditedFactsToStash(stash, facts).result;
 }
 
 async function persistOne(args: {
@@ -162,6 +172,17 @@ export async function approveOverviewAiDocuments(
               fileName: doc.fileName || primary.file_name,
             });
 
+        const remappedResult = resultWithEditedFacts(
+          {
+            ...primary,
+            section_id: remapped.sectionId,
+            section_key: remapped.sectionKey,
+            subsection: remapped.subsection,
+            result: remapped.result,
+          },
+          doc.editedFacts,
+        );
+
         // If remapped away from original, drop the old stash and persist new target.
         if (remapped.sectionId !== primary.section_id) {
           takeDashboardAiPatch(primary.section_id, primary.file_id);
@@ -169,7 +190,7 @@ export async function approveOverviewAiDocuments(
             sectionId: remapped.sectionId,
             sectionKey: remapped.sectionKey,
             subsection: remapped.subsection,
-            result: remapped.result,
+            result: remappedResult,
             fileId: doc.fileId || primary.file_id,
             fileName: doc.fileName,
           });
@@ -196,7 +217,7 @@ export async function approveOverviewAiDocuments(
               sectionId: remapped.sectionId,
               sectionKey: remapped.sectionKey,
               subsection: remapped.subsection,
-              result: remapped.result,
+              result: remappedResult,
               fileId: doc.fileId || primary.file_id,
               fileName: doc.fileName,
             });
@@ -251,7 +272,7 @@ export async function approveOverviewAiDocuments(
           sectionKey:
             stash.section_key || AI_SECTION_BY_ID[sectionId]?.key || '',
           subsection: stash.subsection,
-          result: stash.result,
+          result: resultWithEditedFacts(stash, doc.editedFacts),
           fileId: stash.file_id || doc.fileId,
           fileName: doc.fileName || stash.file_name,
         });

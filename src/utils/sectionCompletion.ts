@@ -624,6 +624,12 @@ export function isSectionComplete(
   return getSectionProgress(sectionId, ctx).complete;
 }
 
+/** Vault-wide percent is completed sections / total sections, not an average of field scores. */
+export function vaultOverallPercent(completedCount: number, totalCount: number) {
+  if (totalCount <= 0) return 0;
+  return Math.round((completedCount / totalCount) * 100);
+}
+
 export type IncompleteField = {
   key: string;
   label: string;

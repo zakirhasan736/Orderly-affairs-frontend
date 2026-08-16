@@ -319,7 +319,7 @@ export function NotificationBell({
             markAllNoticesRead(visibleNotices.map(n => n.id)),
           );
         }}
-        className="shrink-0 text-[13.5px] font-medium text-[#2b5a8c] transition hover:underline"
+        className="shrink-0 text-[13.5px] font-medium text-[#2E7FAD] transition hover:underline"
       >
         Mark all read
       </button>
@@ -348,7 +348,7 @@ export function NotificationBell({
                 'flex w-full gap-3 px-3 py-[13px] text-left transition',
                 highlighted
                   ? 'rounded-[11px] bg-[#fff3dd]'
-                  : 'rounded-[11px] hover:bg-[#f5f8fc]',
+                  : 'rounded-[11px] hover:bg-[#F6F8FA]',
               )}
             >
               <span
@@ -402,7 +402,7 @@ export function NotificationBell({
                   onOpenReviewInbox();
                 });
               }}
-              className="text-[13.5px] font-medium text-[#2b5a8c] no-underline transition hover:underline"
+              className="text-[13.5px] font-medium text-[#2E7FAD] no-underline transition hover:underline"
             >
               Open review inbox
             </button>
@@ -418,7 +418,7 @@ export function NotificationBell({
                 onOpenSettings?.();
               });
             }}
-            className="text-[13.5px] font-medium text-[#2b5a8c] no-underline transition hover:underline"
+            className="text-[13.5px] font-medium text-[#2E7FAD] no-underline transition hover:underline"
           >
             Notification settings
           </button>
@@ -537,7 +537,7 @@ export function NotificationBell({
                   onOpenReviewInbox();
                 });
               }}
-              className="text-[13.5px] font-medium text-[#2b5a8c] no-underline transition hover:underline"
+              className="text-[13.5px] font-medium text-[#2E7FAD] no-underline transition hover:underline"
             >
               Open review inbox
             </button>
@@ -553,7 +553,7 @@ export function NotificationBell({
                 onOpenSettings?.();
               });
             }}
-            className="text-[13.5px] font-medium text-[#2b5a8c] no-underline transition hover:underline"
+            className="text-[13.5px] font-medium text-[#2E7FAD] no-underline transition hover:underline"
           >
             Notification settings
           </button>
@@ -570,7 +570,7 @@ export function NotificationBell({
             role="dialog"
             aria-label="Notifications"
             aria-modal="true"
-            className="fixed inset-0 z-[120] flex flex-col overflow-hidden bg-[#f5f8fc] text-[#213d59]"
+            className="fixed inset-0 z-[120] flex flex-col overflow-hidden bg-[#F6F8FA] text-[#213d59]"
             onClick={stopAction}
           >
             {mobilePanelBody}

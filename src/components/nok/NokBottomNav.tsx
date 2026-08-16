@@ -74,7 +74,7 @@ export function NokBottomNav({
   return (
     <nav
       className={cn(
-        'fixed inset-x-0 bottom-0 z-50 border-t border-[rgba(33, 61, 89,0.1)] bg-[var(--surface)] px-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1.5 oa-float md:hidden',
+        'fixed inset-x-0 bottom-0 z-50 border-t border-[#E4EAF0] bg-white px-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1.5 oa-float md:hidden',
         className,
       )}
     >
@@ -89,18 +89,18 @@ export function NokBottomNav({
               onClick={item.onClick}
               className={cn(
                 'relative flex flex-col items-center justify-center rounded-xl px-0.5 py-1.5 transition active:scale-95',
-                isActive ? 'text-[#213D59]' : 'text-slate-400',
+                isActive ? 'text-[#213D59]' : 'text-[#7A8794]',
               )}
             >
               <span
                 className={cn(
                   'relative flex h-9 w-9 items-center justify-center rounded-xl',
-                  isActive ? 'bg-sky-100' : '',
+                  isActive ? 'bg-[#EAF6FC]' : '',
                 )}
               >
                 <Icon className="h-5 w-5" />
                 {item.badge && item.badge > 0 ? (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-sky-500 px-1 text-[9px] font-bold text-white">
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#3EB1E5] px-1 text-[9px] font-bold text-[#16293C]">
                     {item.badge > 9 ? '9+' : item.badge}
                   </span>
                 ) : null}

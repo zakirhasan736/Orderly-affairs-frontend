@@ -1,5 +1,5 @@
 export const AI_UPLOAD_DETECTION_HINT =
-  'System automatically detects the correct section from your document.';
+  'Files are scanned and rebuilt before they enter your vault. The system then detects the matching section.';
 
 export const AI_SUPPORTED_UPLOAD_CATEGORIES = [
   'Personal Information',

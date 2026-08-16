@@ -159,7 +159,7 @@ export function VaultFillProgressChip({
               setOpen(true);
             }}
             className={cn(
-              'inline-flex items-center gap-1 rounded-full border border-[#213D59]/20 bg-[#e7eef7] font-semibold text-[#213D59] transition hover:bg-[#dce6f2]',
+              'inline-flex items-center gap-1 rounded-full border border-[#213D59]/20 bg-[#EAF6FD] font-semibold text-[#213D59] transition hover:bg-[#EAF6FD]',
               compact
                 ? 'px-2 py-0.5 text-[10px]'
                 : 'px-2.5 py-1 text-[11px]',

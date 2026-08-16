@@ -129,3 +129,14 @@ export function getAiSectionLabel(sectionId: string) {
   if (!label) return `Section ${sectionId}`;
   return label;
 }
+
+/** Map AI `section_key` or numeric id onto a vault section id. */
+export function resolveAiSectionId(
+  sectionKey?: string | null,
+  fallbackId?: string,
+) {
+  const raw = String(sectionKey || '').trim();
+  if (raw && AI_SECTION_BY_ID[raw]) return raw;
+  if (raw && AI_SECTION_BY_KEY[raw]) return AI_SECTION_BY_KEY[raw].id;
+  return String(fallbackId || '').trim();
+}

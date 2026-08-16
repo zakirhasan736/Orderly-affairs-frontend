@@ -1,9 +1,5 @@
 import { secureFetch } from '@/libs/secureFetch';
-import {
-  decryptJson,
-  isE2eeUnlocked,
-  type E2eeStatus,
-} from '@/libs/e2ee/crypto';
+import { decryptJson, encryptJson, isE2eeUnlocked, type E2eeStatus } from '@/libs/e2ee/crypto';
 
 /** Map legacy /sections/... path to E2EE gateway slug */
 export function sectionPathToSlug(path: string): string | null {
@@ -290,6 +286,63 @@ export async function postE2eeNokWrap(body: {
   return res.json();
 }
 
+async function mergePrivateSectionData(legacyPath: string, data: unknown) {
+  const { sectionIdFromVaultPath } = await import('@/utils/vaultPrivacyPolicy');
+  const { loadDeviceSection, mergeSectionPayload } = await import(
+    '@/utils/vaultPrivacySplit'
+  );
+  const { fetchVaultZkCiphertext } = await import('@/libs/api/vaultPrivacy');
+  const sectionId = sectionIdFromVaultPath(legacyPath);
+  if (!sectionId) return data;
+  let zkPayload: unknown = {};
+  try {
+    const cipher = await fetchVaultZkCiphertext(sectionId);
+    if (cipher && isE2eeUnlocked()) {
+      zkPayload = await decryptJson(cipher);
+    }
+  } catch {
+    zkPayload = {};
+  }
+  return mergeSectionPayload(data, loadDeviceSection(sectionId), zkPayload);
+}
+
+async function preparePrivateSectionWrite(legacyPath: string, payload: unknown) {
+  const { sectionIdFromVaultPath } = await import('@/utils/vaultPrivacyPolicy');
+  const { saveDeviceSection, splitSectionPayload } = await import(
+    '@/utils/vaultPrivacySplit'
+  );
+  const { saveVaultZkCiphertext } = await import('@/libs/api/vaultPrivacy');
+  const sectionId = sectionIdFromVaultPath(legacyPath);
+  if (!sectionId) return payload;
+  const { server, device, zk } = splitSectionPayload(sectionId, payload);
+  saveDeviceSection(sectionId, device);
+  const zkEmpty = !zk || (typeof zk === 'object' && !Object.keys(zk as object).length);
+  try {
+    if (zkEmpty) {
+      await saveVaultZkCiphertext(sectionId, null);
+    } else if (isE2eeUnlocked()) {
+      await saveVaultZkCiphertext(sectionId, await encryptJson(zk));
+    } else {
+      saveDeviceSection(sectionId, mergeForDeviceFallback(device, zk));
+    }
+  } catch {
+    saveDeviceSection(sectionId, mergeForDeviceFallback(device, zk));
+  }
+  return server;
+}
+
+function mergeForDeviceFallback(device: unknown, zk: unknown) {
+  const a =
+    device && typeof device === 'object' && !Array.isArray(device)
+      ? (device as Record<string, unknown>)
+      : {};
+  const b =
+    zk && typeof zk === 'object' && !Array.isArray(zk)
+      ? (zk as Record<string, unknown>)
+      : {};
+  return { ...a, ...b };
+}
+
 /**
  * Load a vault section via server AES path.
  * If a leftover client-E2EE (v3) row is returned and DEK is unlocked, decrypt
@@ -328,12 +381,17 @@ export async function getVaultSection(legacyPath: string): Promise<any> {
 
     return {
       section_key: json.section_key,
-      data,
+      data: await mergePrivateSectionData(legacyPath, data),
       e2ee: false,
       encryption_version: 2,
     };
   }
-  return json;
+  const payload = json.data !== undefined ? json.data : json;
+  const merged = await mergePrivateSectionData(legacyPath, payload);
+  if (json.data !== undefined) {
+    return { ...json, data: merged };
+  }
+  return merged;
 }
 
 /**
@@ -344,9 +402,10 @@ export async function saveVaultSection(
   legacyPath: string,
   payload: unknown,
 ): Promise<any> {
+  const prepared = await preparePrivateSectionWrite(legacyPath, payload);
   const res = await secureFetch(legacyPath, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(prepared),
   });
   if (!res.ok) throw new Error('Failed to save section');
   return res.json();

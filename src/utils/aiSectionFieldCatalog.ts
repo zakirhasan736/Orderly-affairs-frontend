@@ -79,7 +79,10 @@ export function getSectionFieldCatalog(
   const meta =
     AI_SECTION_BY_ID[sectionIdOrKey] || AI_SECTION_BY_KEY[sectionIdOrKey];
   const sectionId = meta?.id || sectionIdOrKey;
-  const subsection = subsectionId || meta?.defaultSubsection || null;
+  const subsection =
+    subsectionId === undefined
+      ? meta?.defaultSubsection || null
+      : subsectionId;
   const fields = getSectionFieldDefinitions(sectionId, subsection);
   return {
     sectionId,

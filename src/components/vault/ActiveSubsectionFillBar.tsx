@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardList, Sparkles } from 'lucide-react';
 import {
   getSubsectionProgress,
@@ -13,6 +13,7 @@ import {
   formatVaultSubsectionTitle,
   VAULT_NAVIGATION,
 } from '@/utils/vaultNavigation';
+import { VaultPrivacySaveToggle } from '@/components/vault/VaultPrivacySaveToggle';
 import { cn } from '@common/ui/utils';
 import {
   listAllNewFills,
@@ -82,11 +83,24 @@ export function ActiveSubsectionFillBar({
 }: ActiveSubsectionFillBarProps) {
   const fillGaps = useVaultFillGaps();
   const [fillTick, setFillTick] = useState(0);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
 
   useEffect(() => {
     const refresh = () => setFillTick(value => value + 1);
     window.addEventListener(NEW_FILLS_CHANGED, refresh);
     return () => window.removeEventListener(NEW_FILLS_CHANGED, refresh);
+  }, []);
+
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setStuck(!entry.isIntersecting),
+      { threshold: 0, rootMargin: '-56px 0px 0px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
   }, []);
 
   const justFilled = useMemo(() => {
@@ -183,63 +197,79 @@ export function ActiveSubsectionFillBar({
     });
   };
 
-  return (
-    <div
-      data-tour="tour-fill-empty-bar"
-      className={cn(
-        'sticky top-0 z-30 mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#213D59]/15 bg-white/95 px-3.5 py-2.5 shadow-sm backdrop-blur-md',
-        meta.emptyCount > 0 || justFilled
-          ? 'border-amber-200 bg-amber-50/90'
-          : undefined,
-        className,
-      )}
-    >
-      <div className="min-w-0">
-        <p className="truncate text-[13px] font-semibold text-[#213D59]">
-          {meta.title}
-        </p>
-        <p className="text-[12px] text-slate-600">
-          {meta.progress.percent}% complete
-          {meta.emptyCount > 0
-            ? ` · ${meta.emptyCount} empty field${meta.emptyCount === 1 ? '' : 's'}`
-            : ' · all fields have values'}
-        </p>
-        {justFilled ? (
-          <p className="mt-0.5 text-[12px] font-semibold leading-snug text-amber-800">
-            This card was just filled — Review fields
-          </p>
-        ) : (
-          <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
-            Use Review fields anytime — empty blanks, already filled values, or
-            after you skipped the popup.
-          </p>
-        )}
-      </div>
+  const progressLine = `${meta.progress.percent}% complete${
+    meta.emptyCount > 0
+      ? ` · ${meta.emptyCount} empty field${meta.emptyCount === 1 ? '' : 's'}`
+      : ' · all fields have values'
+  }`;
 
-      {fillGaps ? (
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <button
-            type="button"
-            data-tour="tour-review-fields-action"
-            onClick={() => openDialog(meta.emptyCount > 0 ? 'empty' : 'area')}
-            className="inline-flex items-center gap-1.5 rounded-full border border-[#213D59]/25 bg-white px-3.5 py-2 text-[12px] font-semibold text-[#213D59] shadow-sm transition hover:bg-[#eef3f9]"
-          >
-            <ClipboardList className="h-3.5 w-3.5" />
-            Review fields
-          </button>
-          {meta.emptyCount > 0 ? (
+  return (
+    <>
+      <div ref={sentinelRef} className="h-px w-full" aria-hidden />
+      <div
+        data-tour="tour-fill-empty-bar"
+        data-stuck={stuck ? 'true' : 'false'}
+        className={cn(
+          'sticky top-14 z-30 mb-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-xl border border-[#213D59]/15 bg-white/95 shadow-sm backdrop-blur-md md:top-[72px]',
+          stuck ? 'mb-2 px-3 py-1' : 'px-3 py-1.5',
+          'transition-[padding,box-shadow] duration-150 ease-in-out',
+          meta.emptyCount > 0 || justFilled
+            ? 'border-amber-200 bg-amber-50/95'
+            : undefined,
+          className,
+        )}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-semibold leading-tight text-[#213D59]">
+              {stuck
+                ? `${meta.title} · ${meta.progress.percent}%`
+                : meta.title}
+            </p>
+            {stuck ? null : (
+              <p className="truncate text-[11px] tabular-nums text-slate-600">
+                {progressLine}
+              </p>
+            )}
+          </div>
+          <VaultPrivacySaveToggle
+            className="max-w-[220px] shrink-0"
+            compact
+            sectionId={sectionId}
+            subsectionId={subsectionId}
+          />
+        </div>
+
+        {fillGaps ? (
+          <div className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
-              data-tour="tour-fill-empty-action"
-              onClick={() => openDialog('empty')}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[#213D59] px-3.5 py-2 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#00305C]"
+              data-tour="tour-review-fields-action"
+              onClick={() => openDialog(meta.emptyCount > 0 ? 'empty' : 'area')}
+              className="inline-flex h-8 items-center gap-1 rounded-full border border-[#213D59]/25 bg-white px-2.5 text-[12px] font-semibold text-[#213D59] shadow-sm transition hover:bg-[#eef3f9]"
             >
-              <Sparkles className="h-3.5 w-3.5" />
-              Quick fill
+              <ClipboardList className="h-3.5 w-3.5" />
+              Review fields
             </button>
-          ) : null}
-        </div>
+            {meta.emptyCount > 0 ? (
+              <button
+                type="button"
+                data-tour="tour-fill-empty-action"
+                onClick={() => openDialog('empty')}
+                className="inline-flex h-8 items-center gap-1 rounded-full bg-[#213D59] px-2.5 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#2C4B6B]"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Quick fill
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      {justFilled && !stuck ? (
+        <p className="-mt-2 mb-3 text-[11px] font-medium text-amber-800">
+          This card was just filled. Open Review fields to check it.
+        </p>
       ) : null}
-    </div>
+    </>
   );
 }

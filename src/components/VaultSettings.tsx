@@ -9,12 +9,12 @@ import {
   Settings2,
   ShieldCheck,
   Smartphone,
-  Users,
   X,
 } from 'lucide-react';
 import { FamilyAccessManagement } from '@/components/vault/FamilyAccessManagement';
 import { FamilyRoleAreaDefaultsDialog } from '@/components/vault/FamilyRoleAreaDefaultsDialog';
 import { VaultNotificationSettings } from '@/components/vault/VaultNotificationSettings';
+import { VaultPrivacySettings } from '@/components/vault/VaultPrivacySettings';
 import { fetchSession } from '@/libs/secureFetch';
 import {
   familyCanManageFamilyAccess,
@@ -62,6 +62,7 @@ import { PhoneNumberInput } from './PhoneNumberInput';
 import { TurnstileCaptcha } from './TurnstileCaptcha';
 import {
   SUBSCRIPTION_PLAN_LIST,
+  getSubscriptionPlan,
   type SubscriptionPlanId,
 } from '@/constants/subscriptionPlans';
 import { isValidE164PhoneNumber } from '@/utils/phoneCountries';
@@ -129,6 +130,49 @@ const mfaOptions: Array<{
 
 const getErrorMessage = (err: unknown, fallback: string) =>
   getSafeErrorMessage(err, fallback);
+
+function SettingsPanel({
+  kicker,
+  title,
+  hint,
+  badge,
+  children,
+  id,
+}: {
+  kicker: string;
+  title: string;
+  hint?: string;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+  id?: string;
+}) {
+  return (
+    <section
+      id={id}
+      className="w-full overflow-hidden rounded-[16px] border border-[#E4EAF0] bg-white shadow-[0_1px_2px_rgba(33,61,89,.06)]"
+    >
+      <div className="border-b border-[#EFF3F7] px-5 pb-4 pt-[22px] sm:px-6">
+        <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#619FCE]">
+          {kicker}
+        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-[19px] font-bold tracking-[-0.02em] text-[#213D59]">
+              {title}
+            </h2>
+            {hint ? (
+              <p className="mt-1 max-w-[620px] text-[13.5px] text-[#7A8794]">
+                {hint}
+              </p>
+            ) : null}
+          </div>
+          {badge}
+        </div>
+      </div>
+      <div className="p-4 sm:p-6">{children}</div>
+    </section>
+  );
+}
 
 /* ---------------- Component ---------------- */
 const VaultSettings = () => {
@@ -899,33 +943,22 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
     !familySession.isFamily || familySession.canManageBilling;
   const billingViewOnly = familySession.isFamily && familySession.canManageBilling;
 
+  const plan = getSubscriptionPlan(billing.plan);
+
   return (
     <div className="vault-settings-section w-full space-y-4 pb-24 sm:space-y-5 sm:pb-28">
-      {/* OWNER MFA SETTINGS */}
       {showMfaBlock && (
-      <section className="w-full overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[28px]">
-        <div className="relative overflow-hidden bg-[#00305C] px-4 py-5 text-white sm:px-6 sm:py-6 md:px-8">
-          <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-sky-300/20 blur-2xl" />
-          <div className="relative flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
-                Security
-              </p>
-              <h2 className="mt-1 text-[20px] font-bold tracking-tight sm:text-[22px]">
-                Owner MFA
-              </h2>
-              <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-white/75 sm:text-sm">
-                Link authenticator, email, or SMS. Use any method at login.
-              </p>
-            </div>
-            <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ring-1 ring-white/20">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              {activeMfaCount} linked
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-3 p-3 sm:space-y-4 sm:p-5 md:p-6">
+      <SettingsPanel
+        kicker="Security"
+        title="Owner MFA"
+        hint="Link authenticator, email, or SMS. Use any method at login."
+        badge={
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8F6F0] px-3 py-1 text-[11.5px] font-bold text-[#1F9D6B]">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            {activeMfaCount} linked
+          </span>
+        }
+      >
           {isMobile ? (
             <div className="space-y-2.5">
               {mfaOptions.map(option => {
@@ -940,7 +973,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
                       'flex w-full min-h-[76px] items-center gap-3 rounded-[22px] border px-3.5 py-3.5 text-left transition active:scale-[0.99]',
                       active
                         ? 'border-emerald-200/90 bg-[linear-gradient(90deg,#ffffff_0%,#ecfdf5_100%)] shadow-sm'
-                        : 'border-slate-200 bg-[#f5f8fc] shadow-sm',
+                        : 'border-slate-200 bg-[#F6F8FA] shadow-sm',
                     )}
                   >
                     <div
@@ -1043,41 +1076,49 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
               })}
             </div>
           )}
-        </div>
-      </section>
+      </SettingsPanel>
       )}
 
       {/* PLAN CARD + INVOICES */}
       {showBillingBlock && (
       <>
-      <section className="w-full overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px]">
-        <div className="flex flex-col gap-4 border-b border-[#dbe3ed] bg-white px-4 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-6 sm:py-6 md:px-8">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-              Billing
-            </p>
-            <h2 className="mt-1 text-[18px] font-bold tracking-tight text-[#213D59] sm:text-xl">
-              {isTrial ? 'Free Trial Phase' : 'Subscription Active'}
-            </h2>
-            <p className="mt-1.5 text-[12px] font-medium text-slate-500">
-              {isTrial
-                ? `${trialDaysLeft} days remaining on your trial`
-                : `Plan: ${billing.plan?.toUpperCase() || '—'}`}
-            </p>
-          </div>
+      <SettingsPanel
+        kicker="Subscription"
+        title={isTrial ? 'Free trial' : 'Your plan'}
+        hint={
+          isTrial
+            ? `${trialDaysLeft} days remaining. Features below stay on after you add a card.`
+            : `${plan.title} · ${plan.amount}${plan.period}`
+        }
+        badge={
           <span
             className={cn(
-              'inline-flex w-auto items-center rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide',
+              'inline-flex items-center rounded-full px-3 py-1 text-[11.5px] font-bold',
               isTrial
-                ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
-                : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+                ? 'bg-[#FDF4E4] text-[#B4761A]'
+                : 'bg-[#E8F6F0] text-[#1F9D6B]',
             )}
           >
             {isTrial ? 'Trial' : billing.status || 'Active'}
           </span>
-        </div>
-
-        <div className="space-y-4 p-4 sm:space-y-5 sm:p-6 md:px-8 md:pb-8">
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {plan.features.map(feature => (
+              <div
+                key={feature.label}
+                className="flex items-center justify-between gap-3 rounded-[11px] border border-[#E4EAF0] bg-[#F6F8FA] px-3.5 py-2.5"
+              >
+                <span className="text-[13.5px] font-semibold text-[#213D59]">
+                  {feature.label}
+                </span>
+                <span className="text-[12.5px] font-semibold text-[#2E7FAD]">
+                  {feature.value}
+                </span>
+              </div>
+            ))}
+          </div>
           {isTrial && trialDaysLeft <= 3 && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
               Your free trial ends in {trialDaysLeft} days. Add a payment
@@ -1179,18 +1220,13 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
           </div>
           )}
         </div>
-      </section>
+      </SettingsPanel>
 
-      {/* INVOICES */}
-      <section className="w-full overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px]">
-        <div className="border-b border-slate-100 px-4 py-4 sm:px-6 md:px-8">
-          <h2 className="text-[17px] font-bold tracking-tight text-[#213D59]">
-            Invoices
-          </h2>
-          <p className="mt-1 text-[12px] text-slate-500">
-            Recent billing history for this vault.
-          </p>
-        </div>
+      <SettingsPanel
+        kicker="Billing"
+        title="Transaction history"
+        hint="Receipts and invoices for this vault."
+      >
 
         {/* Mobile invoice cards */}
         <div className="space-y-2.5 p-3 sm:hidden">
@@ -1199,7 +1235,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
             invoices?.map((inv: Invoice) => (
               <div
                 key={inv.id}
-                className="rounded-2xl border border-slate-200 bg-[#f5f8fc] p-3.5"
+                className="rounded-2xl border border-slate-200 bg-[#F6F8FA] p-3.5"
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="truncate font-mono text-[11px] text-slate-500">
@@ -1330,9 +1366,11 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
             </tbody>
           </table>
         </div>
-      </section>
+      </SettingsPanel>
       </>
       )}
+
+      {showMfaBlock && <VaultPrivacySettings />}
 
       {/* NOTIFICATION SETTINGS */}
       {!familySession.isFamily && (
@@ -1341,57 +1379,28 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
 
       {/* FAMILY ROLE & ACCESS — bottom of Vault Settings */}
       {showFamilyBlock && (
-        <section className="w-full overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)] sm:rounded-[28px]">
-          <div className="relative overflow-hidden bg-[#0f3d4c] px-4 py-4 text-white sm:px-6 sm:py-6 md:px-8">
-            <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-teal-300/20 blur-2xl" />
-            <div className="relative flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
-                  Family access
-                </p>
-                <h2 className="mt-1 text-[18px] font-bold tracking-tight sm:text-[22px]">
-                  Roles &amp; permissions
-                </h2>
-                <p className="mt-1 max-w-xl text-[12px] leading-relaxed text-white/75 sm:mt-1.5 sm:text-sm">
-                  <span className="sm:hidden">
-                    Invite family, set roles, and choose which vault areas they
-                    can open.
-                  </span>
-                  <span className="hidden sm:inline">
-                    Invite up to 5 family collaborators, mark vault areas, then
-                    choose their portal role. Use the settings control for
-                    global areas per role. Separate from Next of Kin (Section
-                    2).
-                  </span>
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFamilyRoleAreasOpen(true)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white ring-1 ring-white/25 transition hover:bg-white/25"
-                  aria-label="Manage global role access areas"
-                  title="Global role access areas"
-                >
-                  <Settings2 className="h-[18px] w-[18px]" />
-                </button>
-                <div className="hidden items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white ring-1 ring-white/20 sm:inline-flex">
-                  <Users className="h-3.5 w-3.5" />
-                  Access
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3 p-3 sm:space-y-4 sm:p-5 md:p-6">
-            <FamilyAccessManagement />
-          </div>
-
+        <SettingsPanel
+          kicker="Family access"
+          title="Roles & permissions"
+          hint="Invite family, set roles, and choose which vault areas they can open. Separate from Next of Kin."
+          badge={
+            <button
+              type="button"
+              onClick={() => setFamilyRoleAreasOpen(true)}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#E4EAF0] text-[#213D59] hover:bg-[#F6F8FA]"
+              aria-label="Manage global role access areas"
+              title="Global role access areas"
+            >
+              <Settings2 className="h-[18px] w-[18px]" />
+            </button>
+          }
+        >
+          <FamilyAccessManagement />
           <FamilyRoleAreaDefaultsDialog
             open={familyRoleAreasOpen}
             onOpenChange={setFamilyRoleAreasOpen}
           />
-        </section>
+        </SettingsPanel>
       )}
 
       {!familySession.isFamily && (
@@ -1471,7 +1480,7 @@ const mfaSheetOption = mfaOptions.find(item => item.id === mfaSheetMethod);
           className="max-h-[92dvh]"
           labelledBy="vault-mfa-sheet-title"
         >
-          <div className="flex h-full min-h-0 flex-col bg-[#f5f8fc]">
+          <div className="flex h-full min-h-0 flex-col bg-[#F6F8FA]">
             <MobileSheetHandle />
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200/80 bg-white px-4 pb-4 pt-1">
               <div className="flex min-w-0 flex-1 items-start gap-3">

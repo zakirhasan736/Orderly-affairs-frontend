@@ -36,6 +36,9 @@ export type AIDocumentUploadResponse = {
   needs_vision?: boolean;
   extract_method?: string;
   extract_quality?: number;
+  scan_status?: string;
+  scan_engine?: string;
+  scan_sanitized?: boolean;
 };
 
 export type OwnerAiDocument = {
@@ -127,7 +130,11 @@ export async function listOwnerAiDocuments(): Promise<OwnerAiDocument[]> {
     const res = await secureFetch('/ai/documents');
     if (!res.ok) return [];
     const json = await res.json();
-    return Array.isArray(json?.documents) ? json.documents : [];
+    return Array.isArray(json?.documents)
+      ? json.documents
+      : Array.isArray(json)
+        ? json
+        : [];
   } catch {
     return [];
   }

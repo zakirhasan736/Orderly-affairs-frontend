@@ -1,13 +1,9 @@
 'use client';
 
 import React from 'react';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from '@/components/common/ui/card';
 import { AccessManagement, type AccessManagementHandle } from '@/components/AccessManagement';
+import { FamilyAccessManagement } from '@/components/vault/FamilyAccessManagement';
+import { FamilyRoleAreaDefaultsDialog } from '@/components/vault/FamilyRoleAreaDefaultsDialog';
 import {
   Bell,
   CheckCircle2,
@@ -16,30 +12,37 @@ import {
   FileKey2,
   KeyRound,
   LockKeyhole,
+  Settings2,
   ShieldCheck,
   UserPlus,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/components/common/ui/utils';
 
 const SECTION_2A = {
   id: '2A',
-  title: 'Kit Access Control',
+  title: 'Access Control',
 };
 
 const GUIDE_STEPS = [
   {
     title: 'Add next of kin',
-    text: 'Invite up to 5 people who can open your kit dashboard — full kit or up to 5 specific sections.',
+    text: 'Invite up to 5 people who can access your Vault in an emergency: full Vault or up to 5 specific sections. Next of kin is view-only.',
     icon: UserPlus,
   },
   {
+    title: 'Add family & others',
+    text: 'Invite up to 5 family, friends, or advisors who can view or edit your Vault while you are living. Choose their role and which areas they can open.',
+    icon: Users,
+  },
+  {
     title: 'Set access & timing',
-    text: 'Choose immediate login (email with password) or upon-death access (password card). Next of kin is view-only.',
+    text: 'For next of kin, choose immediate login (email with password) or upon-death access (password card). Family collaborators use their own family login.',
     icon: ShieldCheck,
   },
   {
     title: 'Password card',
-    text: 'Print each card and store it securely. Tell people where it is — not the password itself.',
+    text: 'Print each next-of-kin card and store it securely. Tell people where it is, not the password itself.',
     icon: FileKey2,
   },
   {
@@ -53,8 +56,9 @@ const SECURITY_RULES = [
   'Do not give anyone their Master Access Password directly.',
   'Only tell them where their printed Password Card is stored.',
   'Add at least 1 trusted next of kin to enable emergency access.',
-  'Maximum 5 next-of-kin accounts. Family edit roles are managed in Vault Settings — not here.',
-  'Use Revoke All if you need to immediately lock everyone out.',
+  'Maximum 5 next-of-kin accounts and 5 family/other collaborators.',
+  'Family & others (below) can view or edit the vault. Next of kin is view-only.',
+  'Use Revoke All if you need to immediately lock next-of-kin access.',
 ];
 
 interface Props {
@@ -145,7 +149,7 @@ function MobileGuide() {
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold">How it works & security</p>
-            <p className="text-xs text-muted-foreground">4 steps · security rules</p>
+            <p className="text-xs text-muted-foreground">5 steps · security rules</p>
           </div>
         </div>
         <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition group-open:rotate-180" />
@@ -159,47 +163,188 @@ function MobileGuide() {
 
 export default function Section2AccessManagement({ isActive = false }: Props) {
   const accessRef = React.useRef<AccessManagementHandle>(null);
+  const [familyRoleAreasOpen, setFamilyRoleAreasOpen] = React.useState(false);
+  const [filter, setFilter] = React.useState<
+    'all' | 'kin' | 'contributors' | 'activity'
+  >('all');
+
+  const showKin = filter === 'all' || filter === 'kin';
+  const showContributors = filter === 'all' || filter === 'contributors';
+  const showActivity = filter === 'activity';
 
   return (
-    <Card
-      id="subsection-2A"
-      className={cn(
-        'overflow-hidden rounded-3xl border-slate-200/80 shadow-sm transition-all',
-        isActive && 'bg-primary/[0.02] ring-2 ring-primary/40',
-      )}
-    >
-      <CardHeader className="border-b px-4 py-4 sm:px-6 sm:py-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="flex items-center gap-2.5 text-base sm:gap-3 sm:text-xl">
-            <span>{SECTION_2A.title}</span>
-          </CardTitle>
-          <span className="inline-flex w-fit items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
-            <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-primary" />
-            Add at least 1 trusted person to enable emergency access
-          </span>
+    <div id="subsection-2A" className={cn('space-y-5', isActive && 'ring-0')}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-[16px] border border-[#E4EAF0] border-t-[3px] border-t-[#213D59] bg-white p-[18px] max-md:rounded-[14px]">
+          <div className="mb-3 flex items-center gap-3">
+            <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#213D59] text-white">
+              <Users className="h-[18px] w-[18px]" />
+            </span>
+            <div>
+              <p className="text-[16px] font-bold text-[#213D59]">Next of kin</p>
+              <p className="text-[12.5px] text-[#7A8794]">Access after you pass</p>
+            </div>
+          </div>
+          <ul className="list-disc space-y-1.5 pl-5 text-[13.5px] text-[#414A55]">
+            <li>Sees nothing at all while you are living</li>
+            <li>Reaches the next of kin portal once your Vault unlocks</li>
+            <li>Gets their own sealed letter from you</li>
+            <li>Read only, they settle your affairs, they do not edit your Vault</li>
+          </ul>
         </div>
-      </CardHeader>
+        <div className="rounded-[16px] border border-[#E4EAF0] border-t-[3px] border-t-[#1F9D6B] bg-white p-[18px] max-md:rounded-[14px]">
+          <div className="mb-3 flex items-center gap-3">
+            <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#E8F6F0] text-[#1F9D6B]">
+              <UserPlus className="h-[18px] w-[18px]" />
+            </span>
+            <div>
+              <p className="text-[16px] font-bold text-[#213D59]">Contributor</p>
+              <p className="text-[12.5px] text-[#7A8794]">Access starting now</p>
+            </div>
+          </div>
+          <ul className="list-disc space-y-1.5 pl-5 text-[13.5px] text-[#414A55]">
+            <li>Works in your Vault today, alongside you</li>
+            <li>You set view or edit for every section, one at a time</li>
+            <li>Edit means they can add, change, and delete entries in that section</li>
+            <li>Every change is logged with their name and the time</li>
+          </ul>
+        </div>
+      </div>
 
-      <CardContent className="space-y-4 p-3 sm:space-y-5 sm:p-6">
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_260px] xl:grid-cols-[minmax(0,1fr)_280px] xl:gap-6">
+      <div className="flex gap-3 rounded-[16px] border border-[#CFE6F5] bg-[#EAF6FD] px-4 py-3.5 text-[13.5px] text-[#213D59] max-md:rounded-[14px]">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+        <p>
+          The two roles are independent. A spouse is usually both: a contributor today
+          and a next of kin later. An attorney is often next of kin only.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+          {(
+            [
+              ['all', 'Everyone'],
+              ['kin', 'Next of kin'],
+              ['contributors', 'Contributors'],
+              ['activity', 'Activity log'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setFilter(id)}
+              className={cn(
+                'inline-flex h-10 items-center rounded-full border px-3.5 text-[13px] font-semibold',
+                filter === id
+                  ? 'border-[#213D59] bg-[#213D59] text-white'
+                  : 'border-[#E4EAF0] bg-white text-[#213D59]',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => accessRef.current?.openAddWizard()}
+          className="inline-flex h-10 items-center gap-2 rounded-full bg-[#213D59] px-[18px] text-[14px] font-semibold text-white"
+        >
+          <UserPlus className="h-4 w-4" />
+          Invite a person
+        </button>
+        <button
+          type="button"
+          onClick={() => setFamilyRoleAreasOpen(true)}
+          className="inline-flex h-10 items-center gap-2 rounded-full border border-[#E4EAF0] bg-white px-4 text-[14px] font-semibold text-[#213D59]"
+        >
+          <Settings2 className="h-4 w-4" />
+          Role defaults
+        </button>
+      </div>
+
+      <div className={cn(showActivity && 'hidden')}>
+        <div className={cn(!showKin && 'hidden', 'space-y-5')}>
+          <div className="flex items-center gap-3">
+            <span className="grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-[#213D59] text-white">
+              <Users className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-[17px] font-bold tracking-[-0.02em] text-[#213D59]">
+                Next of kin
+              </h3>
+              <p className="text-[12.5px] text-[#7A8794]">
+                Nothing visible until your Vault unlocks. Read only after that.
+              </p>
+            </div>
+          </div>
+
           <div
             id="access-management-panel"
-            className="min-w-0 scroll-mt-6 rounded-2xl border border-slate-200/80 bg-background sm:rounded-3xl"
+            className="scroll-mt-6 overflow-hidden rounded-[16px] border border-[#E4EAF0] bg-white max-md:rounded-[14px]"
           >
             <div className="p-3 sm:p-5">
               <AccessManagement ref={accessRef} embedded />
             </div>
           </div>
-
-          <aside className="hidden lg:block">
-            <div className="sticky top-6">
-              <GuideAccordion />
-            </div>
-          </aside>
         </div>
 
-        <MobileGuide />
-      </CardContent>
-    </Card>
+        <div className={cn(!showContributors && 'hidden', 'mt-5 space-y-5')}>
+          <div className="flex items-center gap-3">
+            <span className="grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-[#E8F6F0] text-[#1F9D6B]">
+              <Users className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-[17px] font-bold tracking-[-0.02em] text-[#213D59]">
+                Contributors
+              </h3>
+              <p className="text-[12.5px] text-[#7A8794]">
+                People who can view or edit your Vault today.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFamilyRoleAreasOpen(true)}
+              className="grid h-11 w-11 place-items-center rounded-full bg-[#EAF6FD] text-[#213D59]"
+              aria-label="Manage default access areas by role"
+            >
+              <Settings2 className="h-[18px] w-[18px]" />
+            </button>
+          </div>
+
+          <div
+            id="family-access-panel"
+            className="scroll-mt-6 overflow-hidden rounded-[16px] border border-[#E4EAF0] bg-white max-md:rounded-[14px]"
+          >
+            <div className="p-3 sm:p-5">
+              <FamilyAccessManagement variant="access-management" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {showActivity ? (
+        <div className="rounded-[16px] border border-[#E4EAF0] bg-white p-5 max-md:rounded-[14px]">
+          <p className="text-[15px] font-bold text-[#213D59]">Activity log</p>
+          <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#7A8794]">
+            Every contributor change is stored with their name and the time. Open
+            a contributor card to review the areas they can view or edit.
+          </p>
+          <button
+            type="button"
+            onClick={() => setFilter('contributors')}
+            className="mt-4 inline-flex h-10 items-center rounded-full border border-[#E4EAF0] bg-white px-4 text-[13px] font-semibold text-[#213D59]"
+          >
+            View contributors
+          </button>
+        </div>
+      ) : null}
+
+      <MobileGuide />
+
+      <FamilyRoleAreaDefaultsDialog
+        open={familyRoleAreasOpen}
+        onOpenChange={setFamilyRoleAreasOpen}
+      />
+    </div>
   );
 }

@@ -15,7 +15,9 @@ export function newestNewFillMarker(): NewFillMarker | null {
 
 export function scrollToJustSavedHub() {
   if (typeof document === 'undefined') return;
-  const el = document.getElementById('overview-recently-filled');
+  const el =
+    document.querySelector('[data-tour="tour-new-data-hub"]') ||
+    document.querySelector('.owner-dashboard-item');
   if (el) {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
@@ -31,13 +33,13 @@ type SavedHandoffToastArgs = {
 export function toastSavedJustSavedHandoff(args?: SavedHandoffToastArgs) {
   const count = args?.savedCount ?? 1;
   toast.success(
-    'Saved — find it under “Just saved” on your Dashboard',
+    'Saved — find it under Review these first in the sidebar',
     {
       description:
         args?.description ||
         (count > 1
-          ? `${count} fills are ready under Just saved — open a card or Review fields.`
-          : 'Open the card from Just saved above Upload, or tap Review fields.'),
+          ? `${count} fills are ready in the left sidebar — open the section to review.`
+          : 'Open the highlighted section in the left sidebar, or tap Review fields on the section page.'),
       action: {
         label: 'Open',
         onClick: () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 
@@ -9,12 +9,10 @@ import {
   nextKinTour,
   type NextKinTourStep,
 } from '@/onboarding/config/nextKinTour';
-import {
-  SpotlightOverlay,
-  type SpotlightRect,
-} from './SpotlightOverlay';
+import { SpotlightOverlay } from './SpotlightOverlay';
 import { useOnboarding } from './OnboardingProvider';
 import { useUpdateTourStatusMutation } from '@/services/onboardingApi';
+import { getTooltipStyle } from '@/onboarding/utils/tooltipPlacement';
 import { cn } from '@common/ui/utils';
 
 type TourStep = OwnerTourStep | NextKinTourStep;
@@ -33,79 +31,6 @@ function getEnsureSection(step: TourStep): string | undefined {
     return (step as OwnerTourStep).ensureSection;
   }
   return undefined;
-}
-
-/** Place the card near the spotlight target instead of always bottom-center. */
-function getTooltipStyle(
-  rect: SpotlightRect,
-  placement: OwnerTourStep['tooltipPlacement'] = 'auto',
-): CSSProperties {
-  const gap = 16;
-  const tipWidth = 400;
-  const tipHeight = 260;
-  const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
-  const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-  const spaceRight = vw - rect.right - gap;
-  const spaceLeft = rect.left - gap;
-  const spaceBelow = vh - rect.bottom - gap;
-  const width = Math.min(tipWidth, Math.max(280, Math.min(vw - 32, tipWidth)));
-
-  const clampTop = (top: number) =>
-    Math.max(16, Math.min(top, vh - tipHeight - 16));
-  const clampLeft = (left: number) =>
-    Math.max(16, Math.min(left, vw - width - 16));
-
-  const besideRight = (): CSSProperties => ({
-    left: clampLeft(rect.right + gap),
-    top: clampTop(rect.top),
-    width,
-    maxWidth: width,
-    transform: 'none',
-    bottom: 'auto',
-  });
-
-  const belowTarget = (): CSSProperties => ({
-    left: clampLeft(rect.right - width),
-    top: Math.min(rect.bottom + gap, vh - tipHeight - 16),
-    width,
-    maxWidth: width,
-    transform: 'none',
-    bottom: 'auto',
-  });
-
-  if (placement === 'beside') return besideRight();
-  if (placement === 'below') return belowTarget();
-
-  // Left-rail targets (sidebar): sit to the right.
-  if (rect.left < vw * 0.42 && spaceRight >= Math.min(width, 280)) {
-    return besideRight();
-  }
-
-  // Top / right targets (header % bar): sit below, aligned toward the target.
-  if (rect.top < vh * 0.35 && spaceBelow >= 160) {
-    return belowTarget();
-  }
-
-  // Right-side targets with room on the left: sit to the left.
-  if (spaceLeft >= Math.min(width, 300)) {
-    return {
-      left: clampLeft(rect.left - width - gap),
-      top: clampTop(rect.top),
-      width,
-      maxWidth: width,
-      transform: 'none',
-      bottom: 'auto',
-    };
-  }
-
-  return {
-    left: '50%',
-    bottom: 'max(1rem, env(safe-area-inset-bottom))',
-    top: 'auto',
-    width: 'calc(100% - 2rem)',
-    maxWidth: '28rem',
-    transform: 'translateX(-50%)',
-  };
 }
 
 export const GuidedTour = ({

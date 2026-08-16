@@ -1,4 +1,5 @@
 import { clearAiSectionReviewed } from '@/utils/aiSectionReviewState';
+import { highlightVaultSections } from '@/vault-prototype/navigate';
 
 const STORAGE_KEY = 'orderly_dashboard_ai_patches';
 
@@ -117,6 +118,7 @@ export function stashDashboardAiPatch(entry: StashedAiPatch) {
         },
       }),
     );
+    highlightVaultSections([entry.section_id]);
   }
 }
 

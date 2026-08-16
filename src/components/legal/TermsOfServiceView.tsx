@@ -70,7 +70,7 @@ function ShortVersionIcon({ tone }: { tone: 'green' | 'amber' | 'blue' }) {
   const styles = {
     green: 'bg-[#e2f0eb] text-[#2c7a63]',
     amber: 'bg-[#fff2d9] text-[#9a7326]',
-    blue: 'bg-[#dde6f1] text-[#2b5a8c]',
+    blue: 'bg-[#dde6f1] text-[#2E7FAD]',
   } as const;
   const Icon = tone === 'green' ? Shield : tone === 'amber' ? AlertCircle : Clock3;
   return (
@@ -124,7 +124,7 @@ export default function TermsOfServiceView() {
   const toc = useMemo(() => TOS_NAV, []);
 
   return (
-    <div className="tos-page min-h-screen bg-[#f5f8fc] text-[#213d59]">
+    <div className="tos-page min-h-screen bg-[#F6F8FA] text-[#213d59]">
       {/* Desktop header */}
       <header className="bg-[#213d59] text-white max-md:hidden">
         <div className="mx-auto flex h-[58px] max-w-[1440px] items-center gap-3.5 border-b border-white/14 px-10">
@@ -467,7 +467,7 @@ function DesktopSections() {
           the confidentiality of your login credentials. You are responsible for all activity that
           occurs under your account, whether or not authorized by you, except to the extent caused
           by our gross negligence or willful misconduct. Notify us immediately at{' '}
-          <a href={`mailto:${TOS_META.supportEmail}`} className="font-semibold text-[#2b5a8c]">
+          <a href={`mailto:${TOS_META.supportEmail}`} className="font-semibold text-[#2E7FAD]">
             {TOS_META.supportEmail}
           </a>{' '}
           if you suspect unauthorized access to your account.

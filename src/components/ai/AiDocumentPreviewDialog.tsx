@@ -12,6 +12,7 @@ import {
 import { fetchAiDocumentPreviewBlobCached } from '@/utils/aiDocumentPreviewCache';
 import { getReadableAiDocumentType } from '@/utils/aiDocumentUploadUi';
 import { resolveAiPreviewKind, resolveAiPreviewMime } from '@/utils/aiPreviewKind';
+import { AiPdfCanvas } from '@/components/ai/AiPdfCanvas';
 import { cn } from '@common/ui/utils';
 
 type AiDocumentPreviewDialogProps = {
@@ -35,6 +36,7 @@ export function AiDocumentPreviewDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
   const [resolvedMime, setResolvedMime] = useState(mimeType || '');
   const [textContent, setTextContent] = useState<string | null>(null);
   const [kind, setKind] = useState<'image' | 'pdf' | 'text' | 'other'>('other');
@@ -45,6 +47,7 @@ export function AiDocumentPreviewDialog({
       setTextContent(null);
       setLoading(false);
       setKind('other');
+      setPdfBytes(null);
       setObjectUrl(prev => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
@@ -60,6 +63,7 @@ export function AiDocumentPreviewDialog({
       setError('');
       setTextContent(null);
       setKind('other');
+      setPdfBytes(null);
       setObjectUrl(prev => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
@@ -96,7 +100,16 @@ export function AiDocumentPreviewDialog({
           return;
         }
 
-        // Retype from ArrayBuffer so <img> / PDF iframe get a real Content-Type.
+        if (nextKind === 'pdf') {
+          const pdfBlob = new Blob([buffer], { type: 'application/pdf' });
+          createdUrl = URL.createObjectURL(pdfBlob);
+          if (!cancelled) {
+            setPdfBytes(new Uint8Array(buffer));
+            setObjectUrl(createdUrl);
+          }
+          return;
+        }
+
         const previewBlob = new Blob([buffer], {
           type: mime || 'application/octet-stream',
         });
@@ -140,8 +153,7 @@ export function AiDocumentPreviewDialog({
 
   const openPdfInBrowser = () => {
     if (!objectUrl) return;
-    // Blob URL without the download attribute opens Chrome's built-in viewer.
-    window.open(objectUrl, '_blank', 'noopener,noreferrer');
+    window.open(objectUrl, '_blank');
   };
 
   return (
@@ -167,7 +179,7 @@ export function AiDocumentPreviewDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-auto bg-[#f5f8fc] p-3 sm:p-4">
+        <div className="min-h-0 flex-1 overflow-auto bg-[#F6F8FA] p-3 sm:p-4">
           {loading ? (
             <div className="flex min-h-[240px] flex-col items-center justify-center gap-2 text-slate-500">
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -205,31 +217,22 @@ export function AiDocumentPreviewDialog({
             />
           ) : null}
 
-          {!loading && !error && objectUrl && kind === 'pdf' ? (
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <object
-                data={`${objectUrl}#toolbar=1&navpanes=0&view=FitH`}
-                type="application/pdf"
-                title={title}
-                className="h-[min(70dvh,560px)] w-full border-0 bg-white"
-              >
-                <iframe
-                  title={title}
-                  src={`${objectUrl}#toolbar=1&navpanes=0&view=FitH`}
-                  className="h-[min(70dvh,560px)] w-full border-0 bg-white"
-                />
-              </object>
-              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t border-slate-100 px-3 py-2 text-center">
+          {!loading && !error && pdfBytes && kind === 'pdf' ? (
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-[#eef1f4] p-2 sm:p-3">
+              <div className="max-h-[min(70dvh,560px)] overflow-auto">
+                <AiPdfCanvas data={pdfBytes} title={title} />
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t border-slate-200/80 px-3 py-2 text-center">
                 <button
                   type="button"
                   onClick={openPdfInBrowser}
-                  className="text-xs font-medium text-[#2B5A8C] underline-offset-2 hover:underline"
+                  className="text-xs font-medium text-[#2E7FAD] underline-offset-2 hover:underline"
                 >
                   Open PDF in new tab
                 </button>
                 <a
-                  href={objectUrl}
-                  download={title}
+                  href={objectUrl || undefined}
+                  download={title.endsWith('.pdf') ? title : `${title}.pdf`}
                   className="text-xs font-medium text-slate-500 underline-offset-2 hover:underline"
                 >
                   Download
@@ -241,7 +244,8 @@ export function AiDocumentPreviewDialog({
           {!loading &&
           !error &&
           !textContent &&
-          !objectUrl ? (
+          !objectUrl &&
+          !pdfBytes ? (
             <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-center">
               <FileText className="h-8 w-8 text-slate-400" />
               <p className="text-sm text-slate-600">
@@ -263,7 +267,7 @@ export function AiDocumentPreviewDialog({
               <a
                 href={objectUrl}
                 download={title}
-                className="text-sm font-medium text-[#2B5A8C] underline-offset-2 hover:underline"
+                className="text-sm font-medium text-[#2E7FAD] underline-offset-2 hover:underline"
               >
                 Download file
               </a>

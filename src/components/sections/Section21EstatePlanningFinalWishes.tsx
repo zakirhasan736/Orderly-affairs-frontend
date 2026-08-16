@@ -29,6 +29,7 @@ import {
   Users,
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
+import { LegalDisclaimer } from '@/components/vault-ui';
 
 import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
 import {
@@ -1431,6 +1432,7 @@ export default function Section21EstatePlanningFinalWishes({
       {renderSection('21A')}
       {renderSection('21B')}
       {renderSection('21C')}
+      <LegalDisclaimer variant="footer" />
     </div>
   );
 }

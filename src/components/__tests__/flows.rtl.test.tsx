@@ -42,7 +42,7 @@ describe('MultiItemAutofillDialog (AI popup flow)', () => {
     expect(screen.getByText(/1\. Honda CR-V/i)).toBeInTheDocument();
     expect(screen.getByText(/2\. Toyota RAV4/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /add all 2 vehicles/i }));
+    await user.click(screen.getByRole('button', { name: /apply all 2 vehicles/i }));
     expect(onAddAll).toHaveBeenCalledTimes(1);
 
     await user.click(

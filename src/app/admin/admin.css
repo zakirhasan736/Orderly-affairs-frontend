@@ -1,34 +1,34 @@
-/* Orderly Affairs System Owner Admin — ink · teal · gold · paper · surface */
-/* Typography matches portal: Manrope UI, Poppins display, IBM Plex Mono */
+/* Orderly Affairs System Owner Admin — navy · paper · accent */
+/* Typography matches portal: system stack, no third-party font request */
 
 .oa-admin {
-  --oa-ink: #132b26;
+  --oa-ink: #213D59;
   --oa-ink-soft: rgba(255, 255, 255, 0.72);
-  --oa-teal: #2e7d6e;
-  --oa-teal-soft: #e7f3f0;
-  --oa-teal-mid: #4f9c8b;
-  --oa-gold: #b98a3e;
-  --oa-gold-soft: #f7efdf;
-  --oa-paper: #f7f6f2;
+  --oa-teal: #3EB1E5;
+  --oa-teal-soft: #EAF6FC;
+  --oa-teal-mid: #7ACAF9;
+  --oa-gold: #2E7FAD;
+  --oa-gold-soft: #EAF6FC;
+  --oa-paper: #F6F8FA;
   --oa-surface: #ffffff;
-  --oa-text: #1b201e;
-  --oa-muted: #6a726e;
-  --oa-border: #e4e4df;
-  --oa-divider: #ecece7;
-  --oa-danger: #a2453c;
-  --oa-danger-soft: #fbeceb;
-  --oa-radius: 18px;
-  --oa-radius-sm: 12px;
+  --oa-text: #213D59;
+  --oa-muted: #7A8794;
+  --oa-border: #E4EAF0;
+  --oa-divider: #EFF3F7;
+  --oa-danger: #C2442E;
+  --oa-danger-soft: #FBECEB;
+  --oa-radius: 16px;
+  --oa-radius-sm: 10px;
   --oa-tap: 44px;
-  --oa-font: 'Manrope', 'Segoe UI', Helvetica, Arial, sans-serif;
-  --oa-display: 'Poppins', 'Manrope', 'Segoe UI', Helvetica, Arial, sans-serif;
-  --oa-mono: 'IBM Plex Mono', ui-monospace, Menlo, Monaco, Consolas, monospace;
+  --oa-font: system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --oa-display: var(--oa-font);
+  --oa-mono: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
 
   /* legacy aliases used across pages */
   --oa-brand: var(--oa-teal);
   --oa-brand-deep: var(--oa-ink);
   --oa-brand-10: var(--oa-teal-soft);
-  --oa-brand-20: #d3e8e2;
+  --oa-brand-20: #d4eef8;
   --oa-bg: var(--oa-paper);
   --oa-card: var(--oa-surface);
   --oa-green: var(--oa-teal);
@@ -165,7 +165,7 @@
 
 .oa-admin-nav a.active {
   background: var(--oa-teal);
-  color: #fff;
+  color: #16293C;
   font-weight: 600;
 }
 
@@ -211,7 +211,7 @@
   position: sticky;
   top: 0;
   z-index: 40;
-  background: rgba(247, 246, 242, 0.92);
+  background: rgba(246, 248, 250, 0.92);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--oa-border);
   padding: 16px 28px;
@@ -500,10 +500,10 @@
 
 .oa-admin-btn.primary {
   background: var(--oa-teal);
-  color: #fff;
+  color: #16293C;
 }
 .oa-admin-btn.primary:hover {
-  background: #25695c;
+  background: var(--oa-teal-mid);
 }
 .oa-admin-btn.secondary {
   background: var(--oa-surface);
@@ -596,7 +596,7 @@
   flex-direction: column;
   justify-content: space-between;
   background: var(--oa-ink);
-  color: #f7f6f2;
+  color: #F6F8FA;
   gap: 40px;
 }
 
@@ -753,7 +753,7 @@
 .oa-admin-filters button.active {
   background: var(--oa-teal);
   border-color: var(--oa-teal);
-  color: #fff;
+  color: #16293C;
 }
 
 .oa-admin-users-layout {
@@ -870,19 +870,19 @@
 
 .oa-admin-bar.tone-mint,
 .oa-admin-bar.mint {
-  background: #a8d4cb;
+  background: #7ACAF9;
 }
 
 .oa-admin-bar.tone-mid {
-  background: #5fa897;
+  background: #3EB1E5;
 }
 
 .oa-admin-bar.tone-deep {
-  background: #3d8f7e;
+  background: #2E7FAD;
 }
 
 .oa-admin-bar.tone-peak {
-  background: #2e7d6e;
+  background: #213D59;
 }
 
 .oa-admin-bar-col .n {
@@ -922,7 +922,7 @@
 .oa-admin-h-bar .track {
   height: 12px;
   border-radius: 999px;
-  background: #ecece7;
+  background: var(--oa-border);
   overflow: hidden;
 }
 
@@ -993,7 +993,7 @@
 .oa-admin-bone {
   display: inline-block;
   vertical-align: middle;
-  background: linear-gradient(90deg, #ecece7 0%, #f7f6f2 45%, #ecece7 90%);
+  background: linear-gradient(90deg, #E4EAF0 0%, #F6F8FA 45%, #E4EAF0 90%);
   background-size: 200% 100%;
   animation: oa-admin-shimmer 1.25s ease-in-out infinite;
 }
@@ -1010,7 +1010,7 @@
 @media (prefers-reduced-motion: reduce) {
   .oa-admin-bone {
     animation: none;
-    background: #ecece7;
+    background: var(--oa-border);
   }
 }
 

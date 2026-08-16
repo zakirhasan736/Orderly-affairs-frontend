@@ -54,6 +54,7 @@ import { PhotoCapture } from '@/components/PhotoCapture';
 import { SafeMediaRecorder } from '@/components/SafeMediaRecorder';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { DatePicker } from '@/components/DatePicker';
+import { VaultDetailDrawer } from '@/components/vault-prototype/VaultDetailDrawer';
 
 import {
   createMessage,
@@ -1407,140 +1408,53 @@ export function Letters({
         />
       )}
 
-      {/* Mobile message detail sheet */}
-      {isMobile && detailLetter && (
-        <MobileBottomSheet
-          open={detailLetterId !== null}
-          onClose={() => setDetailLetterId(null)}
-          className="max-h-[92dvh]"
-          labelledBy="message-detail-title"
-        >
-          <div className="flex h-full min-h-0 flex-col">
-            <MobileSheetHandle />
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 pb-3 pt-1">
-              <div className="min-w-0">
-                <h3 id="message-detail-title" className="text-lg font-semibold">
-                  Personal Message
-                </h3>
-                <p className="truncate text-sm text-muted-foreground">
-                  {detailLetter.title || 'Untitled message'}
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => setDetailLetterId(null)}
-                className="h-10 w-10 shrink-0 rounded-full"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
+      {/* Mobile message detail drawer */}
+      <VaultDetailDrawer
+        open={isMobile && detailLetterId !== null && !!detailLetter}
+        onClose={() => setDetailLetterId(null)}
+        title="Personal Message"
+        subtitle={detailLetter?.title || 'Untitled message'}
+        icon={<Heart className="h-5 w-5" />}
+        footer={
+          detailLetter ? (
+            <MessageMobileActionBar
+              readOnly={isReadOnly}
+              onEdit={() => editMessage(detailLetter)}
+              onPrint={() => printMessage(detailLetter)}
+              onDelete={() => {
+                setDetailLetterId(null);
+                void removeMessage(detailLetter.id);
+              }}
+            />
+          ) : null
+        }
+      >
+        {detailLetter ? (
+          <MessageMobileDetails
+            letter={detailLetter}
+            hideActions
+            onEdit={() => editMessage(detailLetter)}
+            onPrint={() => printMessage(detailLetter)}
+            onDelete={() => {
+              setDetailLetterId(null);
+              void removeMessage(detailLetter.id);
+            }}
+          />
+        ) : null}
+      </VaultDetailDrawer>
 
-            <div
-              className={cn(
-                'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3',
-                MOBILE_SHEET_SCROLL_CLASS,
-                MOBILE_SHEET_SCROLL_PADDING,
-              )}
-            >
-              <MessageMobileDetails
-                letter={detailLetter}
-                hideActions
-                onEdit={() => editMessage(detailLetter)}
-                onPrint={() => printMessage(detailLetter)}
-                onDelete={() => {
-                  setDetailLetterId(null);
-                  void removeMessage(detailLetter.id);
-                }}
-              />
-            </div>
-
-            <div
-              className={cn(
-                MOBILE_SHEET_FOOTER_CLASS,
-                'shrink-0 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
-              )}
-            >
-              <MessageMobileActionBar
-                readOnly={isReadOnly}
-                onEdit={() => editMessage(detailLetter)}
-                onPrint={() => printMessage(detailLetter)}
-                onDelete={() => {
-                  setDetailLetterId(null);
-                  void removeMessage(detailLetter.id);
-                }}
-              />
-            </div>
-          </div>
-        </MobileBottomSheet>
-      )}
-
-      {/* Add / Edit message — Access Management pattern: bottom sheet mobile, right Sheet desktop */}
-      {isMobile ? (
-        <MobileBottomSheet
-          open={editorOpen}
-          onClose={() => handleEditorOpenChange(false)}
-          className="h-[min(96dvh,100svh)]"
-          labelledBy="message-editor-title"
-        >
-          <div className="flex h-full min-h-0 flex-col">
-            {renderMessageEditorShell()}
-          </div>
-        </MobileBottomSheet>
-      ) : (
-        <Sheet
-          open={editorOpen}
-          onOpenChange={handleEditorOpenChange}
-        >
-          <SheetContent
-            side="right"
-            hideClose
-            className="flex h-full w-full max-w-full flex-col gap-0 p-0 sm:max-w-xl lg:max-w-2xl"
-            onPointerDownOutside={event => {
-              if (
-                mediaOverlayOpen ||
-                (event.target as Element | null)?.closest?.(
-                  '[data-oa-media-modal]',
-                )
-              ) {
-                event.preventDefault();
-              }
-            }}
-            onInteractOutside={event => {
-              if (
-                mediaOverlayOpen ||
-                (event.target as Element | null)?.closest?.(
-                  '[data-oa-media-modal]',
-                )
-              ) {
-                event.preventDefault();
-              }
-            }}
-            onFocusOutside={event => {
-              if (
-                mediaOverlayOpen ||
-                (event.target as Element | null)?.closest?.(
-                  '[data-oa-media-modal]',
-                )
-              ) {
-                event.preventDefault();
-              }
-            }}
-            onEscapeKeyDown={event => {
-              if (mediaOverlayOpen) {
-                event.preventDefault();
-                dismissMediaOverlays();
-              }
-            }}
-          >
-            <div className="flex h-full min-h-0 flex-col">
-              {renderMessageEditorShell()}
-            </div>
-          </SheetContent>
-        </Sheet>
-      )}
+      <VaultDetailDrawer
+        open={editorOpen}
+        onClose={() => handleEditorOpenChange(false)}
+        title={isEditingExisting ? 'Edit Message' : 'New Message'}
+        subtitle="Choose type, recipient, delivery, and content, then save."
+        icon={<FileText className="h-5 w-5" />}
+        hideHeader
+        padded={false}
+        wide
+      >
+        {renderMessageEditorShell()}
+      </VaultDetailDrawer>
 
       {isMobile &&
         embeddedInSection &&
@@ -1586,68 +1500,44 @@ function EmbeddedMessagesToolbar({
   const total = letterCount + videoCount + audioCount;
 
   return (
-    <div className="mb-5 overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-background to-background shadow-sm">
-      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
-          <StatPill
-            icon={<FileText className="h-3.5 w-3.5" />}
-            label="Letters"
-            value={letterCount}
-            tone="neutral"
-          />
-          <StatPill
-            icon={<Video className="h-3.5 w-3.5" />}
-            label="Video"
-            value={videoCount}
-            tone="rose"
-          />
-          <StatPill
-            icon={<Mic className="h-3.5 w-3.5" />}
-            label="Audio"
-            value={audioCount}
-            tone="blue"
-          />
-          <StatPill
-            icon={<Clock className="h-3.5 w-3.5" />}
-            label="Pending"
-            value={pendingCount}
-            tone="amber"
-          />
-        </div>
-
-        {!readOnly ? (
-        <div className="flex shrink-0 gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onTemplates}
-          className="h-10 flex-1 rounded-xl sm:flex-none"
-        >
-          <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-          Templates
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          data-oa-mutate
-          onClick={onCreate}
-          className="h-10 flex-1 rounded-xl sm:flex-none"
-        >
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            New Message
-          </Button>
-        </div>
-        ) : (
-          <p className="text-xs font-medium text-slate-500">View only</p>
-        )}
+    <div className="mb-4 flex flex-wrap items-center gap-2.5">
+      <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+        <span className="inline-flex h-10 items-center rounded-full border border-[#E4EAF0] bg-white px-3.5 text-[13px] font-semibold text-[#213D59]">
+          All ({total})
+        </span>
+        <span className="inline-flex h-10 items-center rounded-full border border-[#E4EAF0] bg-white px-3.5 text-[13px] text-[#7A8794]">
+          Letters {letterCount}
+        </span>
+        <span className="inline-flex h-10 items-center rounded-full border border-[#E4EAF0] bg-white px-3.5 text-[13px] text-[#7A8794]">
+          Video {videoCount}
+        </span>
+        <span className="inline-flex h-10 items-center rounded-full border border-[#E4EAF0] bg-white px-3.5 text-[13px] text-[#7A8794]">
+          Audio {audioCount}
+        </span>
+        <span className="inline-flex h-10 items-center rounded-full border border-[#E4EAF0] bg-white px-3.5 text-[13px] text-[#7A8794]">
+          Pending {pendingCount}
+        </span>
       </div>
-      {total === 0 && (
-        <p className="border-t border-slate-100 px-4 py-2.5 text-center text-xs text-muted-foreground">
-          {readOnly
-            ? 'No personal messages have been created yet.'
-            : 'Create a letter, video, or audio message for someone you love'}
-        </p>
+      {!readOnly ? (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onTemplates}
+            className="inline-flex h-10 items-center rounded-full border border-[#E4EAF0] bg-white px-4 text-[13px] font-semibold text-[#213D59]"
+          >
+            Templates
+          </button>
+          <button
+            type="button"
+            data-oa-mutate
+            onClick={onCreate}
+            className="inline-flex h-10 items-center rounded-full bg-[#213D59] px-4 text-[13px] font-semibold text-white"
+          >
+            New message
+          </button>
+        </div>
+      ) : (
+        <p className="text-[12px] font-medium text-[#7A8794]">View only</p>
       )}
     </div>
   );
@@ -2104,37 +1994,34 @@ function MessageListItem({
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-stretch overflow-hidden rounded-2xl border border-slate-200/80 bg-card text-left shadow-sm transition active:scale-[0.99] hover:border-slate-300 hover:shadow-md"
+      className="flex w-full flex-col rounded-[14px] border border-[#E4EAF0] bg-white p-4 text-left"
     >
-      <div
-        className={cn('w-1 shrink-0 bg-gradient-to-b', meta.gradient)}
-        aria-hidden
-      />
-      <div className="flex min-w-0 flex-1 items-center gap-3 p-4">
-        <div
-          className={cn(
-            'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm',
-            iconBg,
-          )}
-        >
-          <Icon className="h-5 w-5" />
+      <div className="mb-2 flex items-center gap-3">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#213D59] text-sm font-bold text-white">
+          {(letter.recipient || 'M').slice(0, 1).toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="min-w-0 truncate text-base font-semibold">
-              {letter.title || 'Untitled message'}
-            </span>
-            <MessageStatusPill delivered={isDelivered} />
-          </div>
-          <p className="mt-1 truncate text-sm text-muted-foreground">
-            {letter.recipient || 'No recipient'}
+          <p className="truncate text-[15px] font-bold text-[#213D59]">
+            {letter.title || 'Untitled message'}
           </p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {shortLabel} · {formatDeliverySummary(letter)}
+          <p className="truncate text-[12.5px] text-[#7A8794]">
+            {letter.recipient || 'No recipient'} · {shortLabel}
           </p>
         </div>
-        <ChevronRight className="h-5 w-5 shrink-0 self-center text-muted-foreground" />
+        <span
+          className={cn(
+            'rounded-full px-2.5 py-1 text-[11px] font-semibold',
+            isDelivered
+              ? 'bg-[#E8F6F0] text-[#1F9D6B]'
+              : 'bg-[#FDF4E4] text-[#B4761A]',
+          )}
+        >
+          {isDelivered ? 'Sealed' : 'Draft'}
+        </span>
       </div>
+      <p className="text-[12.5px] text-[#7A8794]">
+        {formatDeliverySummary(letter)}
+      </p>
     </button>
   );
 }
@@ -2466,7 +2353,7 @@ function BasicDetails({
     <div
       className={cn(
         'grid gap-4',
-        compact ? 'grid-cols-1 sm:grid-cols-2' : 'md:grid-cols-2',
+        compact ? 'grid-cols-2 gap-3' : 'md:grid-cols-2',
       )}
     >
       <FieldBlock label="Message Title">
@@ -2562,7 +2449,7 @@ function DeliverySection({
     <div className="space-y-3">
       <Label>Delivery Trigger</Label>
 
-      <div className={cn('grid gap-3', compact ? 'grid-cols-1 sm:grid-cols-2' : 'sm:grid-cols-2')}>
+      <div className={cn('grid gap-3', compact ? 'grid-cols-2' : 'sm:grid-cols-2')}>
         <DeliveryCard
           active={letter.deliveryTrigger === 'death'}
           icon={<AlertTriangle className="h-5 w-5" />}
@@ -3262,103 +3149,94 @@ function MessageCard({
   });
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm transition hover:border-border hover:shadow-md">
-      <div className={cn('h-1 bg-gradient-to-r', gradient)} aria-hidden />
-
-      <div className="p-4 sm:p-5">
-        <div className="flex items-start gap-4">
-          <div
-            className={cn(
-              'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white shadow-sm',
-              iconBg,
-            )}
-          >
-            <Icon className="h-5 w-5" />
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <h3 className="line-clamp-2 text-base font-semibold leading-snug tracking-tight sm:text-lg">
-                  {letter.title || 'Untitled message'}
-                </h3>
-                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                  <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground">
-                      {initials}
-                    </span>
-                    {recipientName}
-                  </span>
-                  {letter.recipientEmail && (
-                    <>
-                      <span className="text-border">·</span>
-                      <span className="truncate">{letter.recipientEmail}</span>
-                    </>
-                  )}
-                </p>
-              </div>
-              <MessageStatusPill delivered={isDelivered} />
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
-                <Icon className="h-3 w-3 opacity-70" />
-                {shortLabel}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-                <Calendar className="h-3 w-3" />
-                {formatDeliverySummary(letter)}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-                <Clock className="h-3 w-3" />
-                {editedLabel}
-              </span>
-            </div>
-
-            {(letterPreview || hasVideo || hasAudio) && (
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start">
-                {letterPreview && (
-                  <p className="line-clamp-3 flex-1 text-sm leading-6 text-muted-foreground">
-                    {letterPreview}
-                  </p>
-                )}
-                {hasVideo && (
-                  <div className="w-full shrink-0 overflow-hidden rounded-xl border border-border/80 bg-black sm:w-32">
-                    <MessageMediaPreview
-                      messageType="video"
-                      media={letter.media!}
-                      className="h-24 w-full object-cover"
-                    />
-                  </div>
-                )}
-                {hasAudio && (
-                  <div className="w-full rounded-xl border border-border/70 bg-muted/25 p-2.5 sm:max-w-xs">
-                    <MessageMediaPreview
-                      messageType="audio"
-                      media={letter.media!}
-                      className="w-full"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!letterPreview && !hasVideo && !hasAudio && (
-              <p className="mt-3 text-sm text-muted-foreground">
-                No preview yet — use Edit to add your message.
-              </p>
-            )}
-          </div>
+    <article
+      className={cn(
+        'flex flex-col rounded-[16px] border border-[#E4EAF0] bg-white p-[18px] max-md:rounded-[14px]',
+        !isDelivered && !letterPreview && 'border-[#EBD9B4]',
+      )}
+    >
+      <div className="mb-3.5 flex items-center gap-3">
+        <div className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-full bg-[#213D59] text-sm font-bold text-white">
+          {initials}
         </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15.5px] font-bold text-[#213D59]">
+            {letter.title || 'Untitled message'}
+          </p>
+          <p className="truncate text-[12.5px] text-[#7A8794]">
+            {recipientName}
+            {letter.recipientEmail ? `, ${letter.recipientEmail}` : ''}
+          </p>
+        </div>
+        <span
+          className={cn(
+            'rounded-full px-2.5 py-1 text-[11.5px] font-semibold',
+            isDelivered
+              ? 'bg-[#E8F6F0] text-[#1F9D6B]'
+              : 'bg-[#FDF4E4] text-[#B4761A]',
+          )}
+        >
+          {isDelivered ? 'Sealed' : 'Draft'}
+        </span>
       </div>
-
-      <MessageCardActionRail
-        letter={letter}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onPrint={onPrint}
-        readOnly={readOnly}
-      />
+      <div
+        className={cn(
+          'flex-1 rounded-[11px] px-3.5 py-3.5 text-[13.5px] leading-relaxed',
+          letterPreview
+            ? 'bg-[#F6F8FA] italic text-[#414A55]'
+            : 'bg-[#FDF4E4] text-[#8A5A10]',
+        )}
+      >
+        {letterPreview
+          ? letterPreview
+          : hasVideo || hasAudio
+            ? `${shortLabel} attached. Open the editor to review it.`
+            : 'This message is still empty. If it were delivered today, they would find nothing addressed to them.'}
+      </div>
+      {(hasVideo || hasAudio) && letter.media ? (
+        <div className="mt-3">
+          <MessageMediaPreview
+            messageType={letter.messageType}
+            media={letter.media}
+            className={hasVideo ? 'h-24 w-full rounded-[11px] object-cover' : 'w-full'}
+          />
+        </div>
+      ) : null}
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#7A8794]">
+        <span>{shortLabel}</span>
+        <span>{formatDeliverySummary(letter)}</span>
+        <span>{editedLabel}</span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {!readOnly ? (
+          <button
+            type="button"
+            data-oa-mutate
+            onClick={onEdit}
+            className="inline-flex min-h-11 items-center rounded-full bg-[#213D59] px-4 text-[13px] font-semibold text-white"
+          >
+            Open editor
+          </button>
+        ) : null}
+        <button
+          type="button"
+          data-oa-view-ok
+          onClick={onPrint}
+          className="inline-flex min-h-11 items-center rounded-full border border-[#E4EAF0] bg-white px-4 text-[13px] font-semibold text-[#213D59]"
+        >
+          Preview
+        </button>
+        {!readOnly ? (
+          <button
+            type="button"
+            data-oa-mutate
+            onClick={onDelete}
+            className="inline-flex min-h-11 items-center rounded-full border border-[#EBCFC9] bg-white px-4 text-[13px] font-semibold text-[#C0392B]"
+          >
+            Delete
+          </button>
+        ) : null}
+      </div>
     </article>
   );
 }

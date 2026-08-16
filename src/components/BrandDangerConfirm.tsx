@@ -102,7 +102,7 @@ export function BrandDangerConfirm({
             type="button"
             disabled={busy}
             onClick={onCancel}
-            className="h-[42px] flex-1 rounded-[21px] border border-[#e4e6e1] bg-white text-[13px] font-medium text-[#213D59] transition hover:bg-[#f5f8fc] disabled:opacity-50"
+            className="h-[42px] flex-1 rounded-[21px] border border-[#e4e6e1] bg-white text-[13px] font-medium text-[#213D59] transition hover:bg-[#F6F8FA] disabled:opacity-50"
           >
             {cancelLabel}
           </button>

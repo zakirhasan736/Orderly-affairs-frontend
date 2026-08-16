@@ -422,7 +422,7 @@ export function PasswordCard({
             Password Card Preview
           </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Secure card for trusted kit access
+            Secure card for trusted Vault access
           </p>
         </div>
 

@@ -21,6 +21,7 @@ import {
   ShieldAlert,
   Users,
   Video,
+  ArrowRight,
 } from 'lucide-react';
 
 import { AccessPersonCard } from './AccessPersonCard';
@@ -29,9 +30,10 @@ import { MessageCard } from './MessageCard';
 import { OverviewAiUploadCard } from './ai/OverviewAiUploadCard';
 import { OverviewTaskBoard } from './ai/OverviewTaskBoard';
 import { OverviewBrowseGrid } from './ai/OverviewBrowseGrid';
-import { OverviewRecentlyFilled } from './ai/OverviewRecentlyFilled';
-import { AiUploadSupportedSectionsHint } from './ai/AiUploadSupportedSectionsHint';
 import { AiUploadHistoryPopup } from './ai/AiUploadHistoryPopup';
+import { UploadedDocumentsButton } from '@/components/vault/UploadedDocumentsButton';
+import { useUploadedDocuments } from '@/hooks/useUploadedDocuments';
+import { useSyncSpecialDaysFromVault } from '@/hooks/useSyncSpecialDaysFromVault';
 import { useDashboardAiBatch } from '@/contexts/DashboardAiBatchContext';
 import { AiOverviewReadMatchDialog } from './ai/AiOverviewReadMatchDialog';
 import type {
@@ -42,6 +44,7 @@ import {
   listDashboardAiPatches,
 } from '@/utils/aiDashboardPatchCache';
 import { getAiSectionLabel, AI_SECTION_BY_KEY } from '@/utils/aiSectionRegistry';
+import { listAiUploadHistory, toVaultSectionId } from '@/utils/aiUploadHistory';
 import {
   approveOverviewAiDocuments,
   detectOverviewPersonPrompt,
@@ -58,6 +61,14 @@ import {
 } from '@/utils/overviewExpiryAlerts';
 import type { DashboardNotice } from '@/utils/dashboardNotifications';
 import { cn } from '@common/ui/utils';
+import { AttentionChip, EmptyState, ProgressRing, StatCard } from '@/components/vault-ui';
+import { openVaultUploadDrawer } from '@/components/vault-prototype/VaultUploadDrawer';
+import { isAiSectionReviewed } from '@/utils/aiSectionReviewState';
+import {
+  OPEN_AI_REVIEW_FILL,
+  type OpenAiReviewFillDetail,
+} from '@/utils/vaultActivityTabs';
+import { pickDocsByFileId, synthesizeReviewStashFromVault } from '@/utils/aiMatchReviewDocs';
 
 interface DataBindingDashboardProps {
   formData: any;
@@ -119,6 +130,7 @@ export function DataBindingDashboard({
   nokLetter,
   onNavigateToSection,
   onOpenNewFill,
+  nextTask,
   isNextOfKin = false,
   completedCount = 0,
   totalCount = 0,
@@ -165,8 +177,8 @@ export function DataBindingDashboard({
   }, [welcomeName, isReturningUser]);
 
   const welcomeSubtitle = isReturningUser
-    ? 'Pick up where you left off — upload a document or open a section below.'
-    : "Let's get your vault started — upload a document or open a section below.";
+    ? 'Pick up where you left off. Upload a document and it files itself, or open a section below and keep building.'
+    : 'Upload a document and it files itself, or open a section below and start filling your Vault.';
   const [activeTab, setActiveTab] = useState<PeopleTab>('access');
   const [mobileHubTab, setMobileHubTab] = useState<MobileHubTab>('people');
   const [messages, setMessages] = useState<ApiMessage[]>([]);
@@ -174,6 +186,9 @@ export function DataBindingDashboard({
   const batch = useDashboardAiBatch();
   const routing = useOptionalAiDocumentRouting();
   const [overviewReviewOpen, setOverviewReviewOpen] = useState(false);
+  const [overviewFocusFileId, setOverviewFocusFileId] = useState<string | null>(
+    null,
+  );
   const [approvingOverview, setApprovingOverview] = useState(false);
   const [choosingSectionDocId, setChoosingSectionDocId] = useState<
     string | null
@@ -193,7 +208,11 @@ export function DataBindingDashboard({
   useEffect(() => {
     const onStash = () => setStashTick(value => value + 1);
     window.addEventListener('orderly-ai-patch-stashed', onStash);
-    return () => window.removeEventListener('orderly-ai-patch-stashed', onStash);
+    window.addEventListener('orderly-ai-section-reviewed', onStash);
+    return () => {
+      window.removeEventListener('orderly-ai-patch-stashed', onStash);
+      window.removeEventListener('orderly-ai-section-reviewed', onStash);
+    };
   }, []);
 
   const docsWorkingCount = useMemo(
@@ -218,8 +237,14 @@ export function DataBindingDashboard({
   );
 
   const reviewableJobs = useMemo(
-    () => [...needsChoiceJobs, ...doneJobs],
-    [needsChoiceJobs, doneJobs],
+    () =>
+      [...needsChoiceJobs, ...doneJobs].filter(job => {
+        if (job.status === 'needs_section_choice') return true;
+        const sectionId = job.targetSectionId;
+        if (!sectionId) return true;
+        return !isAiSectionReviewed(sectionId, job.file_id);
+      }),
+    [needsChoiceJobs, doneJobs, stashTick],
   );
 
   // Clear pending pins once per failed file. Do not depend on `routing` —
@@ -252,6 +277,7 @@ export function DataBindingDashboard({
     prevWorkingRef.current = working;
 
     if (needsChoiceJobs.length > 0) {
+      setOverviewFocusFileId(null);
       setOverviewReviewOpen(true);
       return;
     }
@@ -260,6 +286,7 @@ export function DataBindingDashboard({
 
     batchReviewShownRef.current = true;
     const timer = window.setTimeout(() => {
+      setOverviewFocusFileId(null);
       setOverviewReviewOpen(true);
     }, 700);
 
@@ -273,9 +300,21 @@ export function DataBindingDashboard({
     }
   }, [docsWorkingCount]);
 
+  useEffect(() => {
+    const onOpenFill = (event: Event) => {
+      const detail =
+        (event as CustomEvent<OpenAiReviewFillDetail>).detail || {};
+      if (detail.from === 'section' && detail.sectionId) return;
+      setOverviewFocusFileId(detail.fileId || null);
+      setOverviewReviewOpen(true);
+    };
+    window.addEventListener(OPEN_AI_REVIEW_FILL, onOpenFill);
+    return () => window.removeEventListener(OPEN_AI_REVIEW_FILL, onOpenFill);
+  }, []);
+
   const overviewDocuments = useMemo((): OverviewDocumentReview[] => {
     void stashTick;
-    return reviewableJobs.map(job => {
+    const fromJobs = reviewableJobs.map(job => {
       const fileId = job.file_id;
       const facts = fileId
         ? listDashboardAiPatches()
@@ -376,6 +415,7 @@ export function DataBindingDashboard({
         id: job.id,
         fileId,
         fileName: job.fileName,
+        mimeType: job.mime_type,
         documentSummary: job.documentSummary,
         facts,
         matchedSections: Array.from(byId.values()),
@@ -388,11 +428,102 @@ export function DataBindingDashboard({
         needsSectionChoice: job.status === 'needs_section_choice',
       };
     });
+
+    const seen = new Set(
+      fromJobs.map(doc => String(doc.fileId || '').trim()).filter(Boolean),
+    );
+    const history = listAiUploadHistory();
+    const extraByFile = new Map<string, ReturnType<typeof listDashboardAiPatches>>();
+    listDashboardAiPatches().forEach(entry => {
+      const fileId = String(entry.file_id || '').trim();
+      if (!fileId || seen.has(fileId)) return;
+      if (isAiSectionReviewed(entry.section_id, fileId)) return;
+      const list = extraByFile.get(fileId) || [];
+      list.push(entry);
+      extraByFile.set(fileId, list);
+    });
+
+    const extras: OverviewDocumentReview[] = [...extraByFile.entries()].map(
+      ([fileId, entries]) => {
+        const hist = history.find(item => item.fileId === fileId);
+        const first = entries[0];
+        return {
+          id: `stash-${fileId}`,
+          fileId,
+          fileName: first.file_name || hist?.fileName || 'Uploaded document',
+          mimeType: hist?.mimeType,
+          documentSummary: first.document_summary,
+          facts: entries.flatMap(entry => entry.detectedFields || []),
+          matchedSections: entries.map(entry => ({
+            sectionId: entry.section_id,
+            sectionLabel: getAiSectionLabel(entry.section_id),
+            summary: entry.document_summary,
+            factCount: entry.detectedFields?.length,
+          })),
+        };
+      },
+    );
+
+    return [...fromJobs, ...extras];
   }, [reviewableJobs, routing?.pendingUploads, stashTick]);
+
+  const focusedOverviewDocuments = useMemo((): OverviewDocumentReview[] => {
+    const picked = pickDocsByFileId(
+      overviewDocuments,
+      overviewFocusFileId,
+      doc => doc.fileId || doc.id,
+      { strict: Boolean(overviewFocusFileId) },
+    );
+    if (!overviewFocusFileId || picked.length) return picked;
+
+    const history = listAiUploadHistory().find(
+      item => item.fileId === overviewFocusFileId,
+    );
+    const sectionIds = (
+      history?.sectionIds?.length
+        ? history.sectionIds
+        : history?.sectionId
+          ? [history.sectionId]
+          : []
+    )
+      .map(id => toVaultSectionId(id) || String(id || '').trim())
+      .filter(Boolean);
+
+    for (const sectionId of sectionIds) {
+      const synthesized = synthesizeReviewStashFromVault({
+        sectionId,
+        fileId: overviewFocusFileId,
+        fileName: history?.fileName,
+        documentSummary: history?.documentSummary,
+        sectionData: formDataProp?.[sectionId],
+      });
+      if (!synthesized) continue;
+      return [
+        {
+          id: `stash-${synthesized.file_id}`,
+          fileId: synthesized.file_id,
+          fileName:
+            synthesized.file_name || history?.fileName || 'Uploaded document',
+          mimeType: history?.mimeType,
+          documentSummary: synthesized.document_summary,
+          facts: synthesized.detectedFields || [],
+          matchedSections: [
+            {
+              sectionId: synthesized.section_id,
+              sectionLabel: getAiSectionLabel(synthesized.section_id),
+              summary: synthesized.document_summary,
+              factCount: synthesized.detectedFields?.length,
+            },
+          ],
+        },
+      ];
+    }
+    return [];
+  }, [overviewDocuments, overviewFocusFileId, formDataProp]);
 
   // Avoid Radix presence thrash: only open when we have docs to show.
   const overviewDialogOpen =
-    overviewReviewOpen && overviewDocuments.length > 0;
+    overviewReviewOpen && focusedOverviewDocuments.length > 0;
 
   const hasReviewableDocs = overviewDocuments.length > 0;
 
@@ -442,10 +573,9 @@ export function DataBindingDashboard({
     return 0;
   }, [progress, completedCount, totalCount]);
 
-  const docsFilledCount = useMemo(
-    () => batch.jobs.filter(job => job.status === 'done').length,
-    [batch.jobs],
-  );
+  const uploadedDocs = useUploadedDocuments();
+  const docsFilledCount = uploadedDocs.count;
+  useSyncSpecialDaysFromVault(formDataProp);
 
   useEffect(() => {
     let cancelled = false;
@@ -609,13 +739,48 @@ export function DataBindingDashboard({
     <div className="space-y-4 sm:space-y-6">
       {!isNextOfKin && (
         <>
-          <header className="overview-welcome px-0.5">
-            <h1 className="text-[1.4rem] font-semibold tracking-tight text-[#213D59] sm:text-[1.65rem]">
-              {welcomeHeading}
-            </h1>
-            <p className="mt-1 max-w-xl text-sm leading-relaxed text-slate-500">
-              {welcomeSubtitle}
-            </p>
+          <header className="relative overflow-hidden rounded-[22px] bg-[linear-gradient(120deg,#213D59_0%,#2C4B6B_62%,#3A6288_100%)] px-8 py-[30px] text-white max-md:rounded-[14px] max-md:px-5 max-md:py-6">
+            <span className="pointer-events-none absolute -right-[70px] -top-[90px] h-[300px] w-[300px] rounded-full bg-[rgba(122,202,249,.16)]" />
+            <span className="pointer-events-none absolute bottom-[-140px] right-[70px] h-[230px] w-[230px] rounded-full bg-[rgba(122,202,249,.1)]" />
+            <div className="relative z-[1] flex flex-wrap items-center gap-7">
+              <div className="min-w-[220px] flex-1">
+                <h1 className="text-[29px] font-bold tracking-[-0.028em] max-md:text-[23px]">
+                  {welcomeHeading}
+                </h1>
+                <p className="mt-2 max-w-[520px] text-[15px] text-white/80">
+                  {welcomeSubtitle}
+                </p>
+                <div className="mt-[18px] flex flex-wrap gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToSection(nextTask?.id || '1')}
+                    className="inline-flex h-10 items-center gap-2 rounded-full bg-[#3EB1E5] px-[18px] text-[14px] font-semibold text-[#16293C] hover:bg-[#7ACAF9]"
+                  >
+                    <ArrowRight className="h-4 w-4" />
+                    Continue where I left off
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openVaultUploadDrawer()}
+                    className="inline-flex h-10 items-center rounded-full border border-white/26 bg-white/10 px-[18px] text-[14px] font-semibold text-white hover:bg-white/18"
+                  >
+                    Upload documents
+                  </button>
+                </div>
+              </div>
+              <div className="mx-auto text-center md:ml-auto md:mr-0">
+                <ProgressRing value={vaultPct} size="hero" surface="navy">
+                  <span className="flex flex-col items-center leading-none">
+                    <span className="text-[26px] font-bold tracking-[-0.02em] text-white">
+                      {vaultPct}%
+                    </span>
+                    <span className="mt-1 text-[12px] font-medium text-white/70">
+                      complete
+                    </span>
+                  </span>
+                </ProgressRing>
+              </div>
+            </div>
           </header>
 
           <OverviewAlertRow
@@ -624,10 +789,10 @@ export function DataBindingDashboard({
           />
 
           {/* 1) Overview snapshot — vault health (mobile + desktop) */}
-          <div className="overview-vault-snapshot grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="overview-vault-snapshot grid grid-cols-2 gap-4 md:grid-cols-4">
             <OverviewStatCard
               icon={<CheckCircle2 className="h-4 w-4" />}
-              accent="sky"
+              accent="blue"
               value={`${vaultPct}%`}
               label="Vault complete"
               detail={
@@ -637,14 +802,7 @@ export function DataBindingDashboard({
               }
               action="Continue"
               onClick={() => {
-                const done = new Set(
-                  (completedSectionIds || []).map(id => String(id)),
-                );
-                const nextId = Array.from(
-                  { length: Math.max(totalCount || 22, 1) },
-                  (_, i) => String(i === 0 ? 1 : i),
-                ).find(id => !done.has(id) && id !== '0');
-                onNavigateToSection(nextId || '1');
+                onNavigateToSection(nextTask?.id || '1');
               }}
             />
             <OverviewStatCard
@@ -659,8 +817,8 @@ export function DataBindingDashboard({
                 urgentExpiryAlerts.length > 0
                   ? 'amber'
                   : expiryAlerts.length > 0
-                    ? 'sky'
-                    : 'emerald'
+                    ? 'blue'
+                    : 'green'
               }
               value={String(expiryAlerts.length)}
               label={
@@ -678,44 +836,67 @@ export function DataBindingDashboard({
             />
             <OverviewStatCard
               icon={<FolderOpen className="h-4 w-4" />}
-              accent="violet"
+              accent="navy"
               value={String(docsFilledCount)}
-              label={docsFilledCount === 1 ? 'Doc filled' : 'Docs filled'}
+              label={docsFilledCount === 1 ? 'Document stored' : 'Documents stored'}
               detail={
-                docsWorkingCount > 0
-                  ? `${docsWorkingCount} in progress`
-                  : 'AI document fill'
+                docsWorkingCount > 0 || uploadedDocs.processingCount > 0
+                  ? `${docsWorkingCount || uploadedDocs.processingCount} still processing`
+                  : uploadedDocs.isLoading
+                    ? 'Loading from vault…'
+                    : 'AI document fill'
               }
-              action="Review"
-              onClick={() => openReviewInbox('docs')}
+              action="Open library"
+              onClick={() => openVaultUploadDrawer()}
+            />
+            <OverviewStatCard
+              icon={<Users className="h-4 w-4" />}
+              accent="green"
+              value={String(nextKinList?.length || 0)}
+              label={
+                (nextKinList?.length || 0) === 1
+                  ? 'Person with access'
+                  : 'People with access'
+              }
+              detail={
+                nextKinList?.[0]?.full_name
+                  ? String(nextKinList[0].full_name)
+                  : 'Name a next of kin'
+              }
+              action="Manage access"
+              onClick={() => onNavigateToSection('2')}
             />
           </div>
 
-          <OverviewRecentlyFilled
-            onOpenFill={marker => {
-              if (onOpenNewFill) {
-                onOpenNewFill(marker);
-                return;
-              }
-              onNavigateToSection(marker.sectionId);
-            }}
-          />
-
           {/* 2) Upload document — drop zone for Editor+; history for all family readers */}
           {!uploadsDisabled && !isNextOfKin && (
-            <>
+            <div className="overflow-hidden rounded-[22px] border border-[#E4EAF0] bg-white shadow-[0_1px_2px_rgba(33,61,89,.06)]">
+              <div className="flex flex-wrap items-start justify-between gap-3 px-6 pt-[22px] max-md:px-4">
+                <div className="min-w-0 flex-1">
+                  <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#619FCE]">
+                    Fastest way to fill your Vault
+                  </p>
+                  <h2 className="text-[19px] font-bold tracking-[-0.02em] text-[#213D59]">
+                    Upload a document, we file it for you
+                  </h2>
+                  <p className="mt-1 text-[13.5px] text-[#7A8794]">
+                    Drop in a policy, statement, title, or ID. It reads the document,
+                    picks the right section, and shows you the fill to approve.
+                  </p>
+                </div>
+                <UploadedDocumentsButton className="shrink-0" />
+              </div>
               <OverviewAiUploadCard
+                className="mx-6 mb-6 mt-[18px] max-md:mx-4"
                 jobs={batch.jobs}
                 enqueueFiles={batch.enqueueFiles}
                 dismissJob={batch.dismissJob}
                 maxConcurrent={batch.maxConcurrent}
                 hasReviewableDocs={hasReviewableDocs}
                 onOpenReview={() => setOverviewReviewOpen(true)}
+                onOpenDrawer={() => openVaultUploadDrawer()}
               />
-              <div className="overview-upload-types">
-                <AiUploadSupportedSectionsHint />
-              </div>
-            </>
+            </div>
           )}
           {uploadsDisabled && !isNextOfKin && (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-3">
@@ -742,8 +923,12 @@ export function DataBindingDashboard({
 
           <AiOverviewReadMatchDialog
             open={overviewDialogOpen}
-            onOpenChange={setOverviewReviewOpen}
-            documents={overviewDocuments}
+            onOpenChange={open => {
+              setOverviewReviewOpen(open);
+              if (!open) setOverviewFocusFileId(null);
+            }}
+            documents={focusedOverviewDocuments}
+            focusFileId={overviewFocusFileId}
             onOpenSection={onNavigateToSection}
             approving={approvingOverview}
             choosingSectionDocId={choosingSectionDocId}
@@ -768,6 +953,10 @@ export function DataBindingDashboard({
               } finally {
                 setApprovingOverview(false);
               }
+            }}
+            vaultBySection={formDataProp || {}}
+            onReviewLater={() => {
+              window.setTimeout(() => openVaultUploadDrawer(), 160);
             }}
           />
 
@@ -1021,7 +1210,7 @@ export function DataBindingDashboard({
                         description={
                           readOnly
                             ? 'No trusted people are listed for this Vault yet.'
-                            : 'Add trusted people who can access your kit.'
+                            : 'Add trusted people who can access your Vault.'
                         }
                         action={readOnly ? undefined : 'Add access people'}
                         onClick={
@@ -1241,7 +1430,7 @@ export function DataBindingDashboard({
                       description={
                         readOnly
                           ? 'No trusted people are listed for this Vault yet.'
-                          : 'Add trusted people who can access your kit.'
+                          : 'Add trusted people who can access your Vault.'
                       }
                       action={readOnly ? undefined : 'Add access people'}
                       onClick={
@@ -1365,76 +1554,23 @@ function OverviewStatCard({
   onClick,
 }: {
   icon: React.ReactNode;
-  accent: 'sky' | 'emerald' | 'violet' | 'amber';
+  accent: 'blue' | 'green' | 'navy' | 'amber';
   value: string;
   label: string;
   detail: string;
   action: string;
   onClick: () => void;
 }) {
-  const accents = {
-    sky: {
-      shell:
-        'border-sky-100/80 bg-[linear-gradient(165deg,#ffffff_0%,#f0f9ff_100%)]',
-      icon: 'bg-sky-500/10 text-sky-600 ring-sky-100',
-      action: 'text-sky-700',
-    },
-    emerald: {
-      shell:
-        'border-emerald-100/80 bg-[linear-gradient(165deg,#ffffff_0%,#ecfdf5_100%)]',
-      icon: 'bg-emerald-500/10 text-emerald-600 ring-emerald-100',
-      action: 'text-emerald-700',
-    },
-    violet: {
-      shell:
-        'border-violet-100/80 bg-[linear-gradient(165deg,#ffffff_0%,#f5f3ff_100%)]',
-      icon: 'bg-violet-500/10 text-violet-600 ring-violet-100',
-      action: 'text-violet-700',
-    },
-    amber: {
-      shell:
-        'border-amber-100/80 bg-[linear-gradient(165deg,#ffffff_0%,#fffbeb_100%)]',
-      icon: 'bg-amber-500/10 text-amber-600 ring-amber-100',
-      action: 'text-amber-700',
-    },
-  }[accent];
-
   return (
-    <button
-      type="button"
+    <StatCard
+      tone={accent}
+      icon={icon}
+      value={value}
+      label={label}
+      detail={detail}
+      action={action}
       onClick={onClick}
-      className={cn(
-        'relative flex min-h-[118px] flex-col overflow-hidden rounded-[18px] border p-2.5 text-left shadow-[0_8px_22px_rgba(15,23,42,0.04)] transition active:scale-[0.98] sm:min-h-[128px] sm:rounded-[20px] sm:p-3.5',
-        accents.shell,
-      )}
-    >
-      <span
-        className={cn(
-          'flex h-8 w-8 items-center justify-center rounded-xl ring-1 sm:h-9 sm:w-9 sm:rounded-2xl',
-          accents.icon,
-        )}
-      >
-        {icon}
-      </span>
-      <span className="mt-2.5 text-[20px] font-bold leading-none tracking-tight text-[#213D59] sm:mt-3 sm:text-[24px]">
-        {value}
-      </span>
-      <span className="mt-1 truncate text-[10px] font-semibold text-slate-700 sm:text-[11px]">
-        {label}
-      </span>
-      <span className="mt-0.5 line-clamp-1 text-[9px] font-medium text-slate-400 sm:text-[10px]">
-        {detail}
-      </span>
-      <span
-        className={cn(
-          'mt-auto inline-flex items-center gap-0.5 pt-2 text-[10px] font-semibold sm:text-[11px]',
-          accents.action,
-        )}
-      >
-        {action}
-        <ChevronRight className="h-3 w-3" />
-      </span>
-    </button>
+    />
   );
 }
 
@@ -1544,7 +1680,7 @@ function OverviewAlertRow({
 }) {
   if (!alerts.length) {
     return (
-      <div className="hidden flex-wrap items-center gap-2 sm:flex">
+    <div className="flex flex-wrap items-center gap-2">
         <AlertPill
           tone="ok"
           icon={<CheckCircle2 className="h-3.5 w-3.5" />}
@@ -1555,20 +1691,15 @@ function OverviewAlertRow({
   }
 
   return (
-    <div className="hidden flex-wrap items-center gap-2 sm:flex">
+    <div className="flex flex-wrap items-center gap-2">
       {alerts.map(alert => (
-        <button
+        <AttentionChip
           key={alert.id}
-          type="button"
+          tone={alert.tone === 'critical' ? 'overdue' : 'dueSoon'}
           onClick={() => onOpenSection(alert.sectionId)}
-          className="max-w-full text-left transition hover:opacity-90"
         >
-          <AlertPill
-            tone={alert.tone === 'critical' ? 'critical' : 'warn'}
-            icon={<AlarmClock className="h-3.5 w-3.5" />}
-            text={alert.text}
-          />
-        </button>
+          {alert.text}
+        </AttentionChip>
       ))}
     </div>
   );
@@ -1643,20 +1774,13 @@ function EmptyBlock({
   onClick?: () => void;
 }) {
   return (
-    <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center sm:mt-4 sm:px-6 sm:py-10">
-      <p className="text-sm font-semibold text-slate-900">{title}</p>
-      <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-        {description}
-      </p>
-      {action && onClick ? (
-        <Button
-          type="button"
-          onClick={onClick}
-          className="mt-4 rounded-xl bg-[#213D59] text-white hover:bg-[#00305C]"
-        >
-          {action}
-        </Button>
-      ) : null}
-    </div>
+    <EmptyState
+      className="mt-3 sm:mt-4"
+      variant="neverStarted"
+      title={title}
+      description={description}
+      action={action}
+      onAction={onClick}
+    />
   );
 }

@@ -32,12 +32,12 @@ export function AiUploadedAttachmentList({
     <>
       <div
         className={cn(
-          'rounded-xl border border-slate-200 bg-white/90 px-3 py-2.5 shadow-sm',
+          'rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 shadow-sm',
           className,
         )}
         data-ai-upload-attachment
       >
-        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+        <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-slate-500">
           <Paperclip className="h-3 w-3" />
           Attached file
         </div>
@@ -60,7 +60,7 @@ export function AiUploadedAttachmentList({
             <p className="mt-0.5 text-xs text-slate-500">
               {getReadableAiDocumentType(file.mime_type)}
               {uploadedLabel ? ` · Uploaded ${uploadedLabel}` : ''}
-              <span className="ml-1.5 inline-flex items-center gap-0.5 font-medium text-[#2B5A8C]">
+              <span className="ml-1.5 inline-flex items-center gap-0.5 font-medium text-[#2E7FAD]">
                 <Eye className="h-3 w-3" />
                 View
               </span>

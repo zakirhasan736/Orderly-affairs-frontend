@@ -3,7 +3,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useOptionalDashboardAiBatch } from '@/contexts/DashboardAiBatchContext';
-import { resolveUploadDisplayTitle } from '@/utils/aiUploadDisplayTitle';
+import {
+  resolveUploadDisplayTitle,
+  uploadedFileKindLabel,
+} from '@/utils/aiUploadDisplayTitle';
 import { AI_SECTION_REGISTRY } from '@/utils/aiSectionRegistry';
 import {
   ChevronDown,
@@ -43,6 +46,7 @@ import { toast } from 'sonner';
 import { AiDocumentPreviewDialog } from '@/components/ai/AiDocumentPreviewDialog';
 import { useFamilyAcl } from '@/contexts/FamilyAclContext';
 import { AiUploadHistoryThumb } from '@/components/ai/AiUploadHistoryThumb';
+import { openVaultUploadDrawer } from '@/components/vault-prototype/VaultUploadDrawer';
 
 /** Timeouts / blips / AI backlog — still treat as in progress in the UI. */
 function looksLikeTransientIssue(error?: string | null) {
@@ -162,29 +166,20 @@ function mergeHistoryWithJobs(
           : Math.max(0, Math.min(99, live.progress || 0)),
       targetSectionLabel: live.targetSectionLabel || item.targetSectionLabel,
       documentSummary: live.documentSummary || item.documentSummary,
-      displayTitle:
-        live.documentSummary || live.targetSectionLabel
-          ? resolveUploadDisplayTitle({
-              displayTitle: item.displayTitle,
-              documentSummary: live.documentSummary || item.documentSummary,
-              fileName: item.fileName,
-              sectionId,
-              targetSectionLabel:
-                live.targetSectionLabel || item.targetSectionLabel,
-              fileId: live.file_id || item.fileId,
-            })
-          : item.displayTitle ||
-            resolveUploadDisplayTitle({
-              displayTitle: item.displayTitle,
-              documentSummary: item.documentSummary,
-              fileName: item.fileName,
-              sectionId,
-              targetSectionLabel: item.targetSectionLabel,
-              fileId: item.fileId,
-            }),
+      displayTitle: resolveUploadDisplayTitle({
+        displayTitle: item.displayTitle,
+        documentSummary: live.documentSummary || item.documentSummary,
+        fileName: live.fileName || item.fileName,
+        mimeType: live.mime_type || item.mimeType,
+        sectionId,
+        targetSectionLabel:
+          live.targetSectionLabel || item.targetSectionLabel,
+        fileId: live.file_id || item.fileId,
+      }),
       sectionId,
       sectionIds,
       fileId: live.file_id || item.fileId,
+      mimeType: live.mime_type || item.mimeType,
       error: live.error,
       createdAt: item.createdAt,
       updatedAt: live.updatedAt || item.updatedAt,
@@ -215,6 +210,7 @@ function mergeHistoryWithJobs(
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
       fileId: job.file_id,
+      mimeType: job.mime_type,
       sectionId: job.targetSectionId || 'overview',
       sectionIds: job.targetSectionId
         ? [String(job.targetSectionId)]
@@ -224,6 +220,7 @@ function mergeHistoryWithJobs(
       displayTitle: resolveUploadDisplayTitle({
         documentSummary: job.documentSummary,
         fileName: job.fileName,
+        mimeType: job.mime_type,
         sectionId: job.targetSectionId,
         targetSectionLabel: job.targetSectionLabel,
         fileId: job.file_id,
@@ -305,8 +302,8 @@ function useUploadHistoryItems(args: {
   // RTK Query caches GET /ai/documents — reopen popup / poll won't spam the API.
   const { data: serverDocs, refetch } = useListOwnerAiDocumentsQuery(undefined, {
     pollingInterval: 45_000,
-    refetchOnMountOrArgChange: 60,
-    refetchOnFocus: false,
+    refetchOnMountOrArgChange: 15,
+    refetchOnFocus: true,
     refetchOnReconnect: true,
   });
 
@@ -508,6 +505,7 @@ export function AiUploadHistoryPopup({
       fileName: resolveUploadDisplayTitle({
         ...item,
         fileId,
+        mimeType: item.mimeType || live?.mime_type,
       }),
       mimeType: item.mimeType || live?.mime_type || undefined,
     });
@@ -705,7 +703,7 @@ export function AiUploadHistoryPopup({
           aria-expanded={open}
           onClick={() => {
             refreshHistory();
-            setOpen(value => !value);
+            openVaultUploadDrawer(sectionId || undefined);
           }}
           className={cn(
             'inline-flex items-center text-left shadow-md transition',
@@ -840,6 +838,14 @@ export function AiUploadHistoryPopup({
                       : Math.max(0, Math.min(99, item.progress || 0));
                   const isLive =
                     uiStatus === 'processing' || uiStatus === 'queued';
+                  const title = resolveUploadDisplayTitle({
+                    ...item,
+                    mimeType: item.mimeType,
+                  });
+                  const kind = uploadedFileKindLabel({
+                    fileName: item.fileName,
+                    mimeType: item.mimeType,
+                  });
 
                   return (
                     <div
@@ -853,7 +859,7 @@ export function AiUploadHistoryPopup({
                           onClick={() => openPreview(item)}
                           className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
                           title="View document"
-                          aria-label={`View ${item.fileName}`}
+                          aria-label={`View ${title}`}
                         >
                           <AiUploadHistoryThumb
                             fileId={item.fileId}
@@ -871,9 +877,9 @@ export function AiUploadHistoryPopup({
                         >
                           <p
                             className="truncate text-[11px] font-semibold text-slate-900"
-                            title={resolveUploadDisplayTitle(item)}
+                            title={title}
                           >
-                            {resolveUploadDisplayTitle(item)}
+                            {title}
                           </p>
                           <div className="mt-0.5 flex flex-wrap items-center gap-1">
                             <span
@@ -887,10 +893,13 @@ export function AiUploadHistoryPopup({
                               ) : null}
                               {statusLabel(uiStatus, item.status)}
                             </span>
+                            <span className="rounded bg-white px-1 py-0.5 text-[9px] font-semibold text-[#213D59] ring-1 ring-inset ring-[#213D59]/15">
+                              {kind}
+                            </span>
                             <span className="text-[10px] font-semibold text-slate-600">
                               {progress}%
                             </span>
-                            <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-[#2B5A8C]">
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-[#2E7FAD]">
                               <Eye className="h-2.5 w-2.5" />
                               View
                             </span>
@@ -924,7 +933,7 @@ export function AiUploadHistoryPopup({
                       ) : null}
 
                       <div className="mt-1.5 space-y-0.5 text-[9px] leading-snug text-slate-500">
-                        <p className="font-semibold text-[#2B5A8C]">
+                        <p className="font-semibold text-[#2E7FAD]">
                           {formatUploadRelativeDays(item.updatedAt)}
                         </p>
                         <p>
@@ -978,7 +987,7 @@ export function AiUploadHistoryPopup({
         onClick={event => {
           event.stopPropagation();
           refreshHistory();
-          setOpen(true);
+          openVaultUploadDrawer(sectionId || undefined);
         }}
         className={cn(
           absolute ? 'absolute bottom-3 right-3 z-10' : 'relative',
@@ -1052,8 +1061,8 @@ export function AiUploadHistoryPopup({
               Uploaded documents
             </DialogTitle>
             <DialogDescription className="text-[13px] text-[#5a6b80]">
-              Tap a card to preview. Re-uploading the same topic replaces the
-              previous file.
+              Each card is named after the file you uploaded (PDF, photo, or
+              scan). The matched vault section is listed underneath.
             </DialogDescription>
           </DialogHeader>
 
@@ -1104,7 +1113,14 @@ export function AiUploadHistoryPopup({
                   const relative = formatUploadRelativeShort(
                     item.updatedAt || item.createdAt,
                   );
-                  const title = resolveUploadDisplayTitle(item);
+                  const title = resolveUploadDisplayTitle({
+                    ...item,
+                    mimeType: item.mimeType,
+                  });
+                  const kind = uploadedFileKindLabel({
+                    fileName: item.fileName,
+                    mimeType: item.mimeType,
+                  });
 
                   return (
                     <div
@@ -1194,6 +1210,9 @@ export function AiUploadHistoryPopup({
                             ) : null}
                             {statusFootnote(uiStatus, item.status)}
                           </span>
+                          <span className="inline-flex items-center rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-[#213D59] ring-1 ring-inset ring-[#213D59]/15">
+                            {kind}
+                          </span>
                           <span
                             className="truncate text-[10px] text-[#6b7785] sm:text-[11px]"
                             title={category}
@@ -1220,7 +1239,7 @@ export function AiUploadHistoryPopup({
                             );
                             setChangeSectionFor(item);
                           }}
-                          className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-[#213D59]/15 bg-white/80 px-2 py-1.5 text-[10px] font-semibold text-[#2B5A8C] transition hover:bg-white disabled:opacity-50"
+                          className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-[#213D59]/15 bg-white/80 px-2 py-1.5 text-[10px] font-semibold text-[#2E7FAD] transition hover:bg-white disabled:opacity-50"
                         >
                           {reassigningId === item.id ? (
                             <Loader2 className="h-3 w-3 animate-spin" />

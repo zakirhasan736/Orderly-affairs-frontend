@@ -12,7 +12,8 @@ import {
 import { getOtpSessionId } from '@/utils/otpSession';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import { parseAuthApiError } from '@/utils/authRateLimit';
-import { markPortalSession } from '@/libs/secureFetch';
+import { fetchSession, markPortalSession, nokLogout } from '@/libs/secureFetch';
+import { collaboratorPortalMismatch } from '@/utils/portalLogin';
 
 export default function NextKinLoginPageWrapper() {
   const router = useRouter();
@@ -28,6 +29,28 @@ export default function NextKinLoginPageWrapper() {
       /* ignore */
     }
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchSession().then(session => {
+      if (cancelled || !session.authenticated) return;
+      const accessType = String(session.access_type || '').toLowerCase();
+      if (session.role === 'owner') {
+        router.replace('/dashboard');
+        return;
+      }
+      if (session.role === 'nextkin' && accessType === 'family') {
+        router.replace('/dashboard');
+        return;
+      }
+      if (session.role === 'nextkin') {
+        router.replace('/next-kin/dashboard');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const refreshCaptcha = useCallback(() => {
     setCaptchaToken('');
@@ -53,6 +76,7 @@ export default function NextKinLoginPageWrapper() {
         master_password: password,
         captcha_token: captchaToken,
         otp_session_id: getOtpSessionId(),
+        portal: 'nextkin',
       }).unwrap();
     } catch (err: unknown) {
       const parsed = parseAuthApiError(err, '');
@@ -76,6 +100,15 @@ export default function NextKinLoginPageWrapper() {
   };
 
   const handleAuthenticated = async (res: LoginResponse) => {
+    const mismatch = collaboratorPortalMismatch(res.access_type, 'nextkin');
+    if (mismatch) {
+      try {
+        await nokLogout();
+      } catch {
+        /* ignore */
+      }
+      throw new Error(mismatch);
+    }
     if (!res.authenticated) {
       throw new Error('Session not established');
     }
@@ -86,10 +119,6 @@ export default function NextKinLoginPageWrapper() {
     }
     await markPortalSession();
     toast.success('Login successful');
-    if (res.access_type === 'family') {
-      router.replace('/dashboard');
-      return;
-    }
     router.replace('/next-kin/dashboard');
   };
 
@@ -97,7 +126,8 @@ export default function NextKinLoginPageWrapper() {
     <NextOfKinLoginPage
       onLoginSuccess={handleLoginAttempt}
       onAuthenticated={handleAuthenticated}
-      onBackToOwner={() => router.push('/dashboard')}
+      onBackToOwner={() => router.push('/')}
+      expectedPortal="nextkin"
       formData={{}}
       captchaReady={captchaReady}
       captchaSlot={

@@ -16,14 +16,23 @@ function coerceDisplayValue(value: unknown): unknown {
 }
 
 export function mapUIToSection1Payload(data: any) {
+  const {
+    vital_info,
+    identity_documents,
+    next_of_kin,
+    executor_trustee,
+    additional_contacts,
+    ...rest
+  } = data || {};
   return {
-    vital_info: data.vital_info || {},
-    identity_documents: Array.isArray(data.identity_documents)
-      ? data.identity_documents
+    vital_info: vital_info || {},
+    identity_documents: Array.isArray(identity_documents)
+      ? identity_documents
       : [],
-    next_of_kin: data.next_of_kin || [],
-    executor_trustee: data.executor_trustee || [],
-    additional_contacts: data.additional_contacts || [],
+    next_of_kin: next_of_kin || [],
+    executor_trustee: executor_trustee || [],
+    additional_contacts: additional_contacts || [],
+    ...rest,
   };
 }
 
@@ -36,6 +45,7 @@ export function mapSection1ResponseToUI(apiResponse: any) {
   );
 
   return {
+    ...apiResponse.data,
     vital_info,
     identity_documents: apiResponse.data.identity_documents || [],
     next_of_kin: apiResponse.data.next_of_kin || [],

@@ -24,21 +24,21 @@ const iconClass: Record<NonNullable<VariantProps<typeof inlineNoticeVariants>['v
   {
     warning: 'text-[#6d4d15]',
     danger: 'text-[#b4483f]',
-    info: 'text-[#2b5a8c]',
+    info: 'text-[#2E7FAD]',
   };
 
 const titleClass: Record<NonNullable<VariantProps<typeof inlineNoticeVariants>['variant']>, string> =
   {
     warning: 'text-[#7a5a1c]',
     danger: 'text-[#8e372f]',
-    info: 'text-[#2b5a8c]',
+    info: 'text-[#2E7FAD]',
   };
 
 const bodyClass: Record<NonNullable<VariantProps<typeof inlineNoticeVariants>['variant']>, string> =
   {
     warning: 'text-[#6d4d15]',
     danger: 'text-[#b4483f]',
-    info: 'text-[#2b5a8c]',
+    info: 'text-[#2E7FAD]',
   };
 
 export type InlineNoticeProps = React.ComponentProps<'div'> &

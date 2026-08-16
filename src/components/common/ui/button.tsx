@@ -5,11 +5,12 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from './utils';
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive min-h-11",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium transition-[background-color,box-shadow,transform,color] duration-[160ms] ease-in-out disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive min-h-11",
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        default: 'bg-[#213D59] text-white hover:bg-[#2C4B6B]',
+        accent: 'bg-[#3EB1E5] text-[#16293C] hover:bg-[#7ACAF9]',
         destructive:
           'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
         outline:
@@ -17,14 +18,14 @@ const buttonVariants = cva(
         secondary:
           'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost:
-          'text-[#213D59] hover:bg-[#e7eef7] hover:text-[#213D59] dark:hover:bg-accent/50',
-        link: 'text-[#2B5A8C] underline-offset-4 hover:underline hover:text-[#3d6f9e]',
+          'text-[#213D59] hover:bg-[#EAF6FD] hover:text-[#213D59] dark:hover:bg-accent/50',
+        link: 'text-[#2E7FAD] underline-offset-4 hover:underline hover:text-[#3d6f9e]',
       },
       size: {
         default: 'h-11 px-4 py-2 has-[>svg]:px-3',
-        sm: 'h-11 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5',
-        lg: 'h-12 rounded-md px-6 has-[>svg]:px-4',
-        icon: 'size-11 rounded-md',
+        sm: 'h-11 rounded-full gap-1.5 px-3 has-[>svg]:px-2.5',
+        lg: 'h-12 rounded-full px-6 has-[>svg]:px-4',
+        icon: 'size-11 rounded-full',
       },
     },
     defaultVariants: {

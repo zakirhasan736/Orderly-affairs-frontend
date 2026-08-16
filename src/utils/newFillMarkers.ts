@@ -22,16 +22,36 @@ function storageKey(ownerId?: string | null) {
   return ownerId ? `${STORAGE_KEY}:${ownerId}` : STORAGE_KEY;
 }
 
-function readAll(ownerId?: string | null): NewFillMarker[] {
-  if (typeof window === 'undefined') return [];
+function readKey(key: string): NewFillMarker[] {
   try {
-    const raw = window.localStorage.getItem(storageKey(ownerId));
+    const raw = window.localStorage.getItem(key);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
+}
+
+function readAll(ownerId?: string | null): NewFillMarker[] {
+  if (typeof window === 'undefined') return [];
+  const keys = new Set<string>([storageKey()]);
+  if (ownerId) keys.add(storageKey(ownerId));
+  try {
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith(STORAGE_KEY)) keys.add(key);
+    }
+  } catch {
+    // ignore
+  }
+  const byId = new Map<string, NewFillMarker>();
+  keys.forEach(key => {
+    readKey(key).forEach(item => {
+      if (item?.id) byId.set(String(item.id), item);
+    });
+  });
+  return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
 }
 
 function writeAll(items: NewFillMarker[], ownerId?: string | null) {
@@ -169,4 +189,17 @@ export function sectionHasUnseenFills(
   sectionId: string,
 ): boolean {
   return fills.some(item => item.sectionId === sectionId && !item.seenAt);
+}
+
+export function subsectionHasUnseenFills(
+  fills: NewFillMarker[],
+  sectionId: string,
+  subsectionId: string,
+): boolean {
+  return fills.some(
+    item =>
+      item.sectionId === sectionId &&
+      item.subsectionId === subsectionId &&
+      !item.seenAt,
+  );
 }

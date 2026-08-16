@@ -91,8 +91,8 @@ export default function NextKinPortalLayout({
 
   if (!ready) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-[#f6f8fb]">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#F6F8FA]">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#E4EAF0] border-t-[#3EB1E5]" />
       </div>
     );
   }

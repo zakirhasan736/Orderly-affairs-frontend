@@ -37,7 +37,7 @@ const BODY_SHEET_OPEN_CLASS = 'mobile-sheet-open';
 /** Nested sheets share one body lock — don't unlock until the last sheet closes. */
 let openSheetCount = 0;
 
-function lockBodyForSheet() {
+export function lockBodyForSheet() {
   openSheetCount += 1;
   if (openSheetCount === 1) {
     document.body.style.overflow = 'hidden';
@@ -45,7 +45,7 @@ function lockBodyForSheet() {
   }
 }
 
-function unlockBodyForSheet() {
+export function unlockBodyForSheet() {
   openSheetCount = Math.max(0, openSheetCount - 1);
   if (openSheetCount === 0) {
     document.body.style.overflow = '';

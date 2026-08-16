@@ -116,16 +116,21 @@ function BrandAside({
   return (
     <aside
       className={cn(
-        'relative hidden min-h-[100dvh] bg-[#213D59] text-white lg:flex',
+        'relative hidden bg-[#213D59] text-white lg:flex',
+        // Stay viewport-tall even when the login card is taller, so the
+        // headline is not pushed below the fold by mt-auto.
+        'sticky top-0 h-[100dvh] min-h-[100dvh] max-h-[100dvh] shrink-0 self-start overflow-hidden',
         wide
-          ? 'w-[min(40%,560px)] shrink-0'
+          ? 'w-[min(40%,560px)]'
           : 'w-[44%] xl:w-[42%]',
       )}
     >
       <div
         className={cn(
-          'ml-auto flex h-full w-full flex-col',
-          wide ? 'px-[46px] py-11' : 'p-11',
+          'ml-auto flex h-full min-h-0 w-full flex-col',
+          wide
+            ? 'px-[46px] py-[clamp(1.5rem,4vh,2.75rem)]'
+            : 'px-11 py-[clamp(1.5rem,4vh,2.75rem)]',
         )}
         style={{ maxWidth: contentMaxWidth }}
       >
@@ -140,12 +145,12 @@ function LoginBrandPanel() {
     <BrandAside contentMaxWidth="600px">
       <BrandMark />
 
-      <div className="mt-auto max-w-[34ch]">
-        <h2 className="m-0 font-[family-name:var(--font-family-display)] text-[44px] font-normal leading-[1.12] text-white">
+      <div className="mt-auto max-w-[34ch] pb-1">
+        <h2 className="m-0 font-[family-name:var(--font-family-display)] text-[clamp(1.85rem,4.6vh,2.75rem)] font-normal leading-[1.15] text-white">
           A single, trusted place for your life's essentials
         </h2>
         <p
-          className="mt-6 mb-0 text-[16.5px] leading-[1.7] text-pretty"
+          className="mt-4 mb-0 text-[clamp(14px,1.7vh,16.5px)] leading-[1.65] text-pretty"
           style={{ color: 'rgba(255,255,255,.72)' }}
         >
           Your accounts, documents, wishes and letters — private while you&apos;re
@@ -153,7 +158,7 @@ function LoginBrandPanel() {
         </p>
       </div>
 
-      <ul className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-[12px] tracking-[-0.01em] text-white/40">
+      <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-2 pb-[max(0px,env(safe-area-inset-bottom))] text-[12px] tracking-[-0.01em] text-white/40">
         <li>Encrypted at rest</li>
         <li>SOC 2 hosting</li>
         <li>You choose who opens it</li>
@@ -340,7 +345,7 @@ export function AuthPortalShell({
   return (
     <div
       className={cn(
-        'auth-portal flex w-full bg-[#f5f8fc]',
+        'auth-portal flex w-full bg-[#F6F8FA]',
         isFillChrome
           ? 'h-[100dvh] max-h-[100dvh] overflow-hidden lg:min-h-[100dvh] lg:h-auto lg:max-h-none lg:overflow-visible'
           : 'min-h-[100dvh]',
@@ -442,7 +447,7 @@ export function AuthPortalShell({
             <h1
               style={{
                 margin: '8px 0 0',
-                font: "400 25px/1.2 'Poppins', 'Manrope', sans-serif",
+                font: '750 25px/1.2 system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif',
                 color: '#fff',
               }}
             >

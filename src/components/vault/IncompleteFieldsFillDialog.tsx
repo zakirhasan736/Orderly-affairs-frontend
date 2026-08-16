@@ -18,6 +18,7 @@ import {
   listIncompleteFields,
   type IncompleteField,
 } from '@/utils/sectionCompletion';
+import { VaultPrivacySaveToggle } from '@/components/vault/VaultPrivacySaveToggle';
 import { cn } from '@common/ui/utils';
 
 type FillTab = 'empty' | 'area';
@@ -168,7 +169,7 @@ export function IncompleteFieldsFillDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[min(92dvh,42rem)] w-[min(100vw-1.25rem,36rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[36rem]">
         <DialogHeader className="shrink-0 space-y-1 border-b border-slate-100 bg-gradient-to-b from-[#f7f9fc] to-white px-5 pb-3 pt-5 pr-12 text-left sm:px-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2B5A8C]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2E7FAD]">
             Quick fill
           </p>
           <DialogTitle className="text-lg font-semibold text-[#213D59]">
@@ -177,7 +178,7 @@ export function IncompleteFieldsFillDialog({
           <DialogDescription className="text-[13px] text-slate-600">
             {description} You can close anytime and open this again from{' '}
             <span className="font-semibold text-[#213D59]">Review fields</span>{' '}
-            on the section bar or from <span className="font-semibold text-[#213D59]">New data</span> on the dashboard.
+            on the section bar or from <span className="font-semibold text-[#213D59]">New — tap to open</span> in the left sidebar.
           </DialogDescription>
 
           <div
@@ -239,6 +240,15 @@ export function IncompleteFieldsFillDialog({
             </button>
           </div>
         </DialogHeader>
+
+        {target ? (
+          <div className="shrink-0 border-b border-slate-100 px-5 py-3 sm:px-6">
+            <VaultPrivacySaveToggle
+              sectionId={target.sectionId}
+              subsectionId={target.subsectionId}
+            />
+          </div>
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
           {visibleFields.length === 0 ? (

@@ -16,6 +16,7 @@ import {
   ScrollText,
   ShieldCheck,
 } from 'lucide-react';
+import { LegalDisclaimer } from '@/components/vault-ui';
 
 interface Props {
   onFullyRead?: () => void;
@@ -70,9 +71,7 @@ The side benefit is real, though. If a next of kin ever had to step in unexpecte
 
 • Life changes, so revisit your Vault when it does: a move, a new pet, a car you sold, a will you updated. A few minutes every so often keeps it accurate.
 
-• Keep your Vault in one place, and make sure someone you trust actually knows how to access it. A perfectly organized Vault nobody can find or open does nobody any good.
-
-• This is not a legal document. For anything binding, like your will, beneficiary designations, or other legal decisions, talk to an attorney.`,
+• Keep your Vault in one place, and make sure someone you trust actually knows how to access it. A perfectly organized Vault nobody can find or open does nobody any good.`,
   },
   {
     id: 'copyright_legal_notice',
@@ -320,6 +319,8 @@ export default function Section0PersonalInformation({
                 }}
               />
             ))}
+
+            <LegalDisclaimer />
 
             <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 sm:p-5">
               <div className="flex gap-3">

@@ -77,6 +77,52 @@ function reorderArray<T>(items: T[], fromIndex: number, toIndex: number): T[] {
   return next;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+/**
+ * Repeatable groups can live at the section root (`identity_documents`)
+ * or nested under the subsection (`20A.identity_documents`).
+ */
+function readGroupItems(
+  sectionData: Record<string, unknown>,
+  subsectionId: string,
+  groupKey: string,
+): { items: unknown[]; nested: boolean } | null {
+  const nestedBlock = asRecord(sectionData[subsectionId]);
+  const nested = nestedBlock?.[groupKey];
+  if (Array.isArray(nested)) {
+    return { items: nested, nested: true };
+  }
+  const root = sectionData[groupKey];
+  if (Array.isArray(root)) {
+    return { items: root, nested: false };
+  }
+  return null;
+}
+
+function writeGroupItems(
+  sectionData: Record<string, unknown>,
+  subsectionId: string,
+  groupKey: string,
+  items: unknown[],
+  nested: boolean,
+): Record<string, unknown> {
+  if (nested) {
+    const nestedBlock = asRecord(sectionData[subsectionId]) || {};
+    return {
+      ...sectionData,
+      [subsectionId]: {
+        ...nestedBlock,
+        [groupKey]: items,
+      },
+    };
+  }
+  return { ...sectionData, [groupKey]: items };
+}
+
 function parseTopicId(topicId: string) {
   const parts = topicId.split(':');
   if (parts.length === 2) {
@@ -130,11 +176,17 @@ export function reorderTopicInFormData(
   if (from.kind === 'group' && to.kind === 'group') {
     if (from.groupKey !== to.groupKey) return null;
 
-    const raw = sectionData[from.groupKey];
-    if (!Array.isArray(raw)) return null;
+    const group = readGroupItems(sectionData, subsectionId, from.groupKey);
+    if (!group) return null;
 
-    const reordered = reorderArray(raw, from.index, to.index);
-    return { ...sectionData, [from.groupKey]: reordered };
+    const reordered = reorderArray(group.items, from.index, to.index);
+    return writeGroupItems(
+      sectionData,
+      subsectionId,
+      from.groupKey,
+      reordered,
+      group.nested,
+    );
   }
 
   if (from.kind !== 'simple' || to.kind !== 'simple') return null;
@@ -163,10 +215,16 @@ export function removeTopicFromFormData(
   if (!Number.isFinite(parsed.index) || parsed.index < 0) return null;
 
   if (parsed.kind === 'group') {
-    const raw = sectionData[parsed.groupKey];
-    if (!Array.isArray(raw) || parsed.index >= raw.length) return null;
-    const next = raw.filter((_, i) => i !== parsed.index);
-    return { ...sectionData, [parsed.groupKey]: next };
+    const group = readGroupItems(sectionData, subsectionId, parsed.groupKey);
+    if (!group || parsed.index >= group.items.length) return null;
+    const next = group.items.filter((_, i) => i !== parsed.index);
+    return writeGroupItems(
+      sectionData,
+      subsectionId,
+      parsed.groupKey,
+      next,
+      group.nested,
+    );
   }
 
   const config = SUBSECTION_TOPIC_CONFIG[sectionId]?.[subsectionId];

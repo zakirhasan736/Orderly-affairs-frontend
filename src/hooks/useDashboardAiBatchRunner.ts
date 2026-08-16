@@ -40,6 +40,7 @@ import { resolveUploadDisplayTitle } from '@/utils/aiUploadDisplayTitle';
 import {
   linkAiUploadHistorySections,
   removeReplacedAiUploadFileIds,
+  toVaultSectionId,
   upsertAiUploadHistory,
 } from '@/utils/aiUploadHistory';
 import {
@@ -47,6 +48,7 @@ import {
   toAiUserFacingMessage,
 } from '@/utils/aiUserFacingError';
 import { isHealthInsuranceCardCandidate } from '@/utils/aiInsuranceDocument';
+import { correctBankStatementSectionKey } from '@/utils/aiBankDocument';
 // Person/section approval happens in AiOverviewReadMatchDialog after stash.
 
 /** Always also fill related sections when one of the pair is targeted. */
@@ -729,6 +731,7 @@ export function useDashboardAiBatchRunner() {
         const displayTitle = resolveUploadDisplayTitle({
           documentSummary: summary,
           fileName,
+          mimeType: mime_type,
           sectionId,
           targetSectionLabel: label,
           fileId: file_id,
@@ -1103,6 +1106,12 @@ export function useDashboardAiBatchRunner() {
           bestKey = 'insurance_policies';
         }
 
+        bestKey =
+          correctBankStatementSectionKey(bestKey, {
+            documentSummary: classified.document_summary,
+            fileName: job.fileName,
+          }) || bestKey;
+
         const pauseForSectionChoice = (summary?: string) => {
           patchJob(job.id, {
             status: 'needs_section_choice',
@@ -1299,10 +1308,17 @@ export function useDashboardAiBatchRunner() {
   };
 
   const enqueueFiles = useCallback(
-    (files: FileList | File[]) => {
+    (
+      files: FileList | File[],
+      opts?: { sectionId?: string; source?: 'overview' | 'section' },
+    ) => {
       const list = Array.from(files);
       if (!list.length) return;
 
+      const sectionId = opts?.sectionId
+        ? toVaultSectionId(opts.sectionId) || String(opts.sectionId).trim()
+        : undefined;
+      const source = opts?.source || (sectionId ? 'section' : 'overview');
       const now = new Date().toISOString();
       const nextJobs: DashboardAiJob[] = list.map(file => ({
         id: createJobId(),
@@ -1324,7 +1340,9 @@ export function useDashboardAiBatchRunner() {
           progress: 0,
           createdAt: job.createdAt,
           updatedAt: job.updatedAt,
-          source: 'overview',
+          sectionId: sectionId || undefined,
+          sectionIds: sectionId ? [sectionId] : undefined,
+          source,
         });
       });
 

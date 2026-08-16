@@ -38,6 +38,7 @@ function apiProxyDestination(): string {
 const nextConfig: NextConfig = {
   reactCompiler: true,
   productionBrowserSourceMaps: false,
+  transpilePackages: ['pdfjs-dist'],
   // Isolated build/cache for Cypress/Playwright E2E so they can run alongside `npm run dev`.
   ...(process.env.CYPRESS_DIST_DIR || process.env.PLAYWRIGHT_DIST_DIR
     ? {

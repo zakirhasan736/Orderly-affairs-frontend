@@ -94,20 +94,20 @@ export function SectionAttachedDocumentsGallery({
   return (
     <div
       className={cn(
-        'rounded-2xl border border-[#213D59]/15 bg-gradient-to-br from-[#f4f7fb] to-white p-3 sm:p-4',
+        'rounded-xl border border-[#213D59]/12 bg-[#EAF6FD]/50 px-2 py-1.5',
         className,
       )}
     >
-      <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#213D59] text-white">
-          <Paperclip className="h-4 w-4" />
+      <div className="mb-1.5 flex items-center gap-2">
+        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#213D59] text-white">
+          <Paperclip className="h-3.5 w-3.5" />
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-[#213D59]">
+          <p className="text-[13px] font-semibold leading-tight text-[#213D59]">
             Documents in this section
           </p>
           <p className="text-[11px] text-slate-500">
-            {total} file{total === 1 ? '' : 's'} attached — tap a preview to open
+            {total} file{total === 1 ? '' : 's'} attached. Tap a preview to open.
           </p>
         </div>
       </div>
@@ -128,7 +128,7 @@ export function SectionAttachedDocumentsGallery({
               className="rounded-none border-0 ring-0"
             />
             <div className="space-y-0.5 px-2 py-1.5">
-              <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#2B5A8C]">
+              <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#2E7FAD]">
                 {item.fieldLabel}
               </p>
               <p className="truncate text-xs font-semibold text-slate-800">
@@ -157,7 +157,7 @@ export function SectionAttachedDocumentsGallery({
               className="rounded-none ring-0"
             />
             <div className="space-y-0.5 px-2 py-1.5">
-              <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#2B5A8C]">
+              <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#2E7FAD]">
                 {item.targetSectionLabel || 'AI upload'}
               </p>
               <p className="truncate text-xs font-semibold text-slate-800">

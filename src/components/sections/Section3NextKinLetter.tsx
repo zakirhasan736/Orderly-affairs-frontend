@@ -1,40 +1,21 @@
-'use client';
+﻿'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from '@/components/common/ui/card';
-import { Button } from '@common/ui/button';
 import { cn } from '@common/ui/utils';
-import { Sheet, SheetContent } from '@common/ui/sheet';
 import {
-  AlertTriangle,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
-  ChevronUp,
   Eye,
   FileText,
-  Mail,
-  Phone,
-  Printer,
-  ShieldCheck,
-  Sparkles,
+  Lock,
+  Plus,
   Users,
 } from 'lucide-react';
 
 import { NextOfKinLetterField } from '@/components/NextOfKinLetterField';
 import { NokLetterPreviewDialog } from '@/components/NokLetterPreviewDialog';
-import {
-  getVaultSectionDisplayNumber,
-} from '@/utils/vaultNavigation';
-import {
-  MobileBottomSheet,
-  useIsMobile,
-} from '@/components/MobileBottomSheet';
+import { VaultDetailDrawer } from '@/components/vault-prototype/VaultDetailDrawer';
+import { goToVaultSection } from '@/vault-prototype/navigate';
 import {
   type NextKinAccessResponse,
   useGetMyNextKinQuery,
@@ -44,40 +25,6 @@ import { isNokLetterDelivered } from '@/utils/nokLetterPreview';
 import { useFamilyAcl } from '@/contexts/FamilyAclContext';
 
 type LetterData = Record<string, unknown>;
-
-const SECTION_3A = {
-  id: '3A',
-  title: 'Letter to Next of Kin',
-};
-
-const GUIDE_STEPS = [
-  {
-    title: 'What this letter is',
-    text: "A personal note for the person who'll handle things when you're gone — it explains the Vault, what's inside, and where to find what they need.",
-    icon: FileText,
-  },
-  {
-    title: 'Fill in the essentials',
-    text: "Recipient, relationship, and password card location — that card unlocks the portal only after you've passed. Add Key Bag and Documents Bag locations if you use them.",
-    icon: ShieldCheck,
-  },
-  {
-    title: 'Choose how it\'s delivered',
-    text: 'Print & mail it yourself, send it now by email so they know it exists, or schedule a future send. They still cannot log in until the portal unlocks.',
-    icon: Mail,
-  },
-  {
-    title: 'Review & finish',
-    text: 'Preview the letter, then Export, Send now, or Schedule from the closing step.',
-    icon: Sparkles,
-  },
-];
-
-const HELPFUL_NOTES = [
-  'Only Upon Death access trusted people with Will Receive Next of Kin Letter checked appear here.',
-  'Emailing the letter does not unlock the Vault — the master password on the Password Card does that after your passing.',
-  `Complete Section ${getVaultSectionDisplayNumber('2')} Access Management (card & bag locations) before finishing this letter.`,
-];
 
 interface Props {
   data?: {
@@ -109,95 +56,6 @@ function getInitials(name?: string | null) {
       .map(part => part.charAt(0))
       .join('')
       .toUpperCase() || 'NK'
-  );
-}
-
-function GuidePanel({ className }: { className?: string }) {
-  const [openIndex, setOpenIndex] = React.useState<number | null>(null);
-
-  return (
-    <div className={cn('space-y-3', className)}>
-      <div className="rounded-2xl border border-amber-200/70 bg-amber-50/40 p-3.5 sm:rounded-3xl sm:p-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
-            <AlertTriangle className="h-4 w-4" />
-          </div>
-          <h4 className="text-sm font-semibold text-amber-950">Before you start</h4>
-        </div>
-        <ul className="mt-2.5 space-y-2">
-          {HELPFUL_NOTES.map(note => (
-            <li
-              key={note}
-              className="flex gap-2 text-xs leading-5 text-amber-950/85 sm:text-sm sm:leading-6"
-            >
-              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 sm:h-4 sm:w-4" />
-              <span>{note}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="rounded-2xl border bg-card p-3.5 shadow-sm sm:rounded-3xl sm:p-4">
-        <h4 className="text-sm font-semibold">How it works</h4>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Tap a step for details.
-        </p>
-        <ol className="mt-3 space-y-1">
-          {GUIDE_STEPS.map((step, index) => {
-            const Icon = step.icon;
-            const isOpen = openIndex === index;
-            return (
-              <li key={step.title} className="overflow-hidden rounded-xl border">
-                <button
-                  type="button"
-                  onClick={() => setOpenIndex(isOpen ? null : index)}
-                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-muted/30"
-                >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Icon className="h-3.5 w-3.5" />
-                  </span>
-                  <span className="min-w-0 flex-1 text-sm font-medium">
-                    {index + 1}. {step.title}
-                  </span>
-                  {isOpen ? (
-                    <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  )}
-                </button>
-                {isOpen && (
-                  <p className="border-t bg-muted/20 px-3 py-2 text-xs leading-5 text-muted-foreground">
-                    {step.text}
-                  </p>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      </div>
-    </div>
-  );
-}
-
-function MobileGuide() {
-  return (
-    <details className="group rounded-2xl border bg-card lg:hidden">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 [&::-webkit-details-marker]:hidden">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <ShieldCheck className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold">How it works</p>
-            <p className="text-xs text-muted-foreground">4 steps · prerequisites</p>
-          </div>
-        </div>
-        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition group-open:rotate-180" />
-      </summary>
-      <div className="border-t px-3 pb-4 pt-3">
-        <GuidePanel />
-      </div>
-    </details>
   );
 }
 
@@ -291,93 +149,60 @@ function RecipientCard({
   return (
     <article
       className={cn(
-        'group flex overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm transition hover:border-border hover:shadow-md',
-        isSelected && 'border-primary/40 ring-1 ring-primary/20',
+        'flex flex-col rounded-[16px] border border-[#E4EAF0] bg-white p-[18px] max-md:rounded-[14px]',
+        !isDelivered && 'border-[#EBD9B4]',
       )}
     >
+      <div className="mb-3.5 flex items-center gap-3">
+        <div className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-full bg-[#213D59] text-sm font-bold text-white">
+          {initials}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15.5px] font-bold text-[#213D59]">{name}</p>
+          <p className="text-[12.5px] text-[#7A8794]">
+            {person.relationship || 'Next of kin'}
+          </p>
+        </div>
+        <span
+          className={cn(
+            'rounded-full px-2.5 py-1 text-[11.5px] font-semibold',
+            isDelivered
+              ? 'bg-[#E8F6F0] text-[#1F9D6B]'
+              : 'bg-[#FDF4E4] text-[#B4761A]',
+          )}
+        >
+          {isDelivered ? 'Sealed' : 'Not written'}
+        </span>
+      </div>
       <div
         className={cn(
-          'w-1 shrink-0',
-          isSelected ? 'bg-primary' : 'bg-muted-foreground/25',
+          'flex-1 rounded-[11px] px-3.5 py-3.5 text-[13.5px] leading-relaxed',
+          isDelivered
+            ? 'bg-[#F6F8FA] italic text-[#414A55]'
+            : 'bg-[#FDF4E4] text-[#8A5A10]',
         )}
-        aria-hidden
-      />
-
-      <div className="flex min-w-0 flex-1 flex-col sm:flex-row">
-        <div className="min-w-0 flex-1 p-4 sm:p-5 sm:pr-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground shadow-sm">
-                {initials}
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h4 className="line-clamp-1 text-base font-semibold tracking-tight sm:text-lg">
-                    {name}
-                  </h4>
-                  <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-800 ring-1 ring-emerald-200/70">
-                    Assigned Next of Kin
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Upon-death access · personalized letter
-                </p>
-              </div>
-            </div>
-            {isDelivered ? (
-              <DeliveredBadge />
-            ) : (
-              isSelected && (
-                <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />
-              )
-            )}
-          </div>
-
-          <div className="mt-4 rounded-xl border border-border/70 bg-muted/25 px-3 py-2.5">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
-              {person.email && (
-                <span className="inline-flex max-w-full items-center gap-1.5 truncate">
-                  <Mail className="h-3.5 w-3.5 shrink-0" />
-                  {person.email}
-                </span>
-              )}
-              {person.phone_number && (
-                <span className="inline-flex items-center gap-1.5">
-                  <Phone className="h-3.5 w-3.5 shrink-0" />
-                  {person.phone_number}
-                </span>
-              )}
-              {!person.email && !person.phone_number && (
-                <span>No contact details on file</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 flex-col gap-1.5 border-t border-border/60 bg-muted/20 p-2.5 sm:w-[7.75rem] sm:border-l sm:border-t-0 sm:p-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-oa-view-ok
-            onClick={onPreview}
-            className={actionBtn}
-          >
-            <Eye className="mr-1.5 h-3.5 w-3.5 shrink-0" />
-            Preview
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-oa-view-ok
-            onClick={onOpen}
-            className={actionBtn}
-          >
-            <FileText className="mr-1.5 h-3.5 w-3.5 shrink-0" />
-            {readOnly ? 'View' : 'Open'}
-          </Button>
-        </div>
+      >
+        {isDelivered
+          ? 'This letter is written and sealed. It stays private until an access person unlocks your Vault.'
+          : `${name} was named next of kin and this letter is still empty. If your Vault unlocked today they would find nothing addressed to them.`}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          data-oa-view-ok
+          onClick={onOpen}
+          className="inline-flex min-h-11 items-center rounded-full bg-[#213D59] px-4 text-[13px] font-semibold text-white"
+        >
+          {readOnly ? 'View letter' : isDelivered ? 'Open editor' : 'Write letter'}
+        </button>
+        <button
+          type="button"
+          data-oa-view-ok
+          onClick={onPreview}
+          className="inline-flex min-h-11 items-center rounded-full border border-[#E4EAF0] bg-white px-4 text-[13px] font-semibold text-[#213D59]"
+        >
+          Preview
+        </button>
       </div>
     </article>
   );
@@ -390,6 +215,7 @@ function RecipientCardWithStatus({
   onPreview,
   compact,
   readOnly = false,
+  filter = 'all',
 }: {
   person: NextKinAccessResponse;
   isSelected: boolean;
@@ -397,9 +223,12 @@ function RecipientCardWithStatus({
   onPreview: () => void;
   compact?: boolean;
   readOnly?: boolean;
+  filter?: 'all' | 'sealed' | 'empty';
 }) {
   const { data: letter } = useGetNokLetterQuery({ nokId: person.id });
   const isDelivered = isNokLetterDelivered(letter);
+  if (filter === 'sealed' && !isDelivered) return null;
+  if (filter === 'empty' && isDelivered) return null;
 
   return (
     <RecipientCard
@@ -416,23 +245,25 @@ function RecipientCardWithStatus({
 
 function EmptyRecipientsState() {
   return (
-    <div className="rounded-3xl border border-dashed border-amber-200/90 bg-gradient-to-b from-amber-50/80 to-background px-5 py-10 text-center sm:px-8 sm:py-12">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+    <div className="rounded-[16px] border border-dashed border-[#D5DDE5] bg-[#F6F8FA] px-5 py-10 text-center max-md:rounded-[14px]">
+      <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-white text-[#213D59] shadow-sm">
         <Users className="h-6 w-6" />
       </div>
-      <h3 className="mt-4 text-base font-semibold text-amber-950 sm:text-lg">
-        No recipients ready yet
+      <h3 className="mt-4 text-[16px] font-bold text-[#213D59]">
+        No next of kin named yet
       </h3>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-amber-900/80">
-        In{' '}
-        <strong className="font-medium">
-          Section {getVaultSectionDisplayNumber('2')} → Access Management
-        </strong>
-        ,
-        add an upon-death trusted person and mark{' '}
-        <strong className="font-medium">Next-of-Kin Letter Received</strong>.
-        They will show up here automatically.
+      <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-relaxed text-[#7A8794]">
+        Name someone in Access Management first. Their sealed letter is created
+        automatically, then you write it here.
       </p>
+      <button
+        type="button"
+        onClick={() => goToVaultSection('2')}
+        className="mt-5 inline-flex h-11 items-center gap-2 rounded-full bg-[#213D59] px-5 text-[14px] font-semibold text-white"
+      >
+        <Users className="h-4 w-4" />
+        Name a next of kin
+      </button>
     </div>
   );
 }
@@ -459,14 +290,15 @@ function LoadingState() {
 export default function Section3NextOfKinLetter({
   data = {},
   onChange = () => {},
-  isActive = false,
   ownerName = null,
 }: Props) {
-  const isMobile = useIsMobile();
   const { isReadOnly } = useFamilyAcl();
   const [letterSheetOpen, setLetterSheetOpen] = useState(false);
   const [previewNokId, setPreviewNokId] = useState<string | null>(null);
   const [viewNokId, setViewNokId] = useState<string | null>(null);
+  const [letterFilter, setLetterFilter] = useState<'all' | 'sealed' | 'empty'>(
+    'all',
+  );
   const { data: nextKinPeople = [], isLoading } =
     useGetMyNextKinQuery(undefined);
 
@@ -550,14 +382,7 @@ export default function Section3NextOfKinLetter({
   const previewPerson = letterReadyPeople.find(p => p.id === previewNokId);
 
   return (
-    <Card
-      id="subsection-3A"
-      className={cn(
-        'overflow-hidden rounded-3xl border-slate-200/80 shadow-sm transition-all',
-        isActive && 'bg-primary/[0.02] ring-2 ring-primary/40',
-        isMobile && 'rounded-2xl',
-      )}
-    >
+    <div id="subsection-3A" className="space-y-4">
       {letterReadyPeople.map(person => (
         <MarkedNokLetterSync
           key={`letter-sync-${person.id}`}
@@ -565,132 +390,125 @@ export default function Section3NextOfKinLetter({
         />
       ))}
 
-      <CardHeader className="border-b px-4 py-4 sm:px-6 sm:py-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="flex items-center gap-2.5 text-base sm:gap-3 sm:text-xl">
-            <span>{SECTION_3A.title}</span>
-          </CardTitle>
-          <span
-            className={cn(
-              'inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-xs',
-              letterReadyPeople.length > 0
-                ? 'border-emerald-200/80 bg-emerald-50/80 text-emerald-700'
-                : 'bg-muted/30 text-muted-foreground',
-            )}
-          >
-            <FileText className="h-3.5 w-3.5 shrink-0" />
-            {isLoading
-              ? 'Loading…'
-              : letterReadyPeople.length > 0
-                ? `${letterReadyPeople.length} recipient${letterReadyPeople.length === 1 ? '' : 's'} ready`
-                : 'No recipients yet'}
-          </span>
+      <div className="flex gap-3 rounded-[16px] border border-[#CFE6F5] bg-[#EAF6FD] px-4 py-3.5 text-[13.5px] text-[#213D59] max-md:rounded-[14px]">
+        <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+        <p>
+          Letters stay sealed while you are living. Nobody, including the person
+          it is addressed to, can read a letter before your Vault unlocks. Edit
+          yours as often as you like.
+        </p>
+      </div>
+
+      {isReadOnly ? (
+        <div className="rounded-[14px] border border-[#E4EAF0] bg-[#F6F8FA] px-4 py-3 text-[13px] text-[#6A7481]">
+          View-only. You can open and read letters, but cannot edit, send, or
+          schedule them.
         </div>
-      </CardHeader>
+      ) : null}
 
-      <CardContent className="space-y-4 p-3 sm:space-y-5 sm:p-6">
-        {isReadOnly ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-            View-only — you can open and read letters, but cannot edit, send, or
-            schedule them.
-          </div>
-        ) : null}
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_260px] xl:grid-cols-[minmax(0,1fr)_280px] xl:gap-6">
-          <div className="min-w-0 scroll-mt-6 space-y-3">
-            {letterReadyPeople.length > 0 && !isLoading && (
-              <p className="text-xs text-muted-foreground sm:text-sm">
-                {isReadOnly
-                  ? 'Select a recipient to view their letter.'
-                  : 'Select a recipient and open their letter to review, customize, print, or email.'}
-              </p>
-            )}
-
-            {isLoading ? (
-              <LoadingState />
-            ) : letterReadyPeople.length === 0 ? (
-              <EmptyRecipientsState />
-            ) : (
-              <ul
-                className={cn(isMobile ? 'space-y-2.5' : 'space-y-3')}
-                role="list"
-              >
-                {letterReadyPeople.map(person => {
-                  const isSelected = person.id === selectedNokId;
-                  return (
-                    <li key={person.id}>
-                      <RecipientCardWithStatus
-                        person={person}
-                        isSelected={isSelected}
-                        onOpen={() => openLetterForRecipient(person.id)}
-                        onPreview={() => openPreviewForRecipient(person.id)}
-                        compact={isMobile}
-                        readOnly={isReadOnly}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          <aside className="hidden lg:block">
-            <div className="sticky top-6">
-              <GuidePanel />
-            </div>
-          </aside>
-        </div>
-
-        <MobileGuide />
-      </CardContent>
-
-      {isMobile ? (
-        <MobileBottomSheet
-          open={letterSheetOpen && !!selectedNokId && !!selectedPerson}
-          onClose={() => setLetterSheetOpen(false)}
-          className="h-[96dvh]"
-          labelledBy="nok-letter-wizard-title"
-        >
-          <div className="flex h-full min-h-0 flex-col">
-            {selectedNokId && selectedPerson && (
-              <NextOfKinLetterField
-                data={(data.next_of_kin_letter_data || {}) as any}
-                onChange={value => updateLetterData(value as LetterData)}
-                selectedNokId={selectedNokId}
-                embeddedInSheet
-                onClose={() => setLetterSheetOpen(false)}
-                recipientName={getDisplayName(selectedPerson)}
-                ownerName={ownerName}
-              />
-            )}
-          </div>
-        </MobileBottomSheet>
-      ) : (
-        <Sheet
-          open={letterSheetOpen && !!selectedNokId && !!selectedPerson}
-          onOpenChange={open => !open && setLetterSheetOpen(false)}
-        >
-          <SheetContent
-            side="right"
-            className="flex h-full max-w-lg flex-col gap-0 p-0 sm:max-w-xl"
-          >
-            <div className="flex h-full min-h-0 flex-col">
-              {selectedNokId && selectedPerson && (
-                <NextOfKinLetterField
-                  data={(data.next_of_kin_letter_data || {}) as any}
-                  onChange={value => updateLetterData(value as LetterData)}
-                  selectedNokId={selectedNokId}
-                  embeddedInSheet
-                  onClose={() => setLetterSheetOpen(false)}
-                  recipientName={getDisplayName(selectedPerson)}
-                  ownerName={ownerName}
-                />
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+          {(
+            [
+              ['all', `All (${letterReadyPeople.length})`],
+              ['sealed', 'Sealed'],
+              ['empty', 'Not written'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setLetterFilter(id)}
+              className={cn(
+                'inline-flex h-10 items-center rounded-full border px-3.5 text-[13px] font-semibold',
+                letterFilter === id
+                  ? 'border-[#213D59] bg-[#213D59] text-white'
+                  : 'border-[#E4EAF0] bg-white text-[#213D59]',
               )}
-            </div>
-          </SheetContent>
-        </Sheet>
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => goToVaultSection('2')}
+          className="inline-flex h-10 items-center gap-2 rounded-full border border-[#E4EAF0] bg-white px-4 text-[13px] font-semibold text-[#213D59]"
+        >
+          <Users className="h-4 w-4" />
+          Manage next of kin
+        </button>
+      </div>
+
+      {isLoading ? (
+        <LoadingState />
+      ) : letterReadyPeople.length === 0 ? (
+        <EmptyRecipientsState />
+      ) : (
+        <div className="grid gap-3.5 md:grid-cols-2">
+          {letterReadyPeople.map(person => {
+            const isSelected = person.id === selectedNokId;
+            return (
+              <RecipientCardWithStatus
+                key={person.id}
+                person={person}
+                isSelected={isSelected}
+                onOpen={() => openLetterForRecipient(person.id)}
+                onPreview={() => openPreviewForRecipient(person.id)}
+                compact={false}
+                readOnly={isReadOnly}
+                filter={letterFilter}
+              />
+            );
+          })}
+          {!isReadOnly ? (
+            <button
+              type="button"
+              onClick={() => goToVaultSection('2')}
+              className="flex min-h-[180px] flex-col items-center justify-center rounded-[16px] border border-dashed border-[#D5DDE5] bg-[#F6F8FA] p-[18px] text-center max-md:rounded-[14px]"
+            >
+              <span className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-white text-[#213D59] shadow-sm">
+                <Plus className="h-5 w-5" />
+              </span>
+              <span className="text-[14.5px] font-semibold text-[#213D59]">
+                Name another next of kin
+              </span>
+              <span className="mt-1 text-[12.5px] text-[#7A8794]">
+                Their letter is created for you
+              </span>
+            </button>
+          ) : null}
+        </div>
       )}
 
-      {previewNokId && previewPerson && (
+      <VaultDetailDrawer
+        open={letterSheetOpen && !!selectedNokId && !!selectedPerson}
+        onClose={() => setLetterSheetOpen(false)}
+        title={
+          selectedPerson
+            ? `Letter to ${getDisplayName(selectedPerson)}`
+            : 'Letter to Next of Kin'
+        }
+        subtitle="Sealed until your Vault unlocks. Edit as often as you like."
+        icon={<FileText className="h-5 w-5" />}
+        hideHeader
+        padded={false}
+        wide
+      >
+        {selectedNokId && selectedPerson ? (
+          <NextOfKinLetterField
+            data={(data.next_of_kin_letter_data || {}) as any}
+            onChange={value => updateLetterData(value as LetterData)}
+            selectedNokId={selectedNokId}
+            embeddedInSheet
+            onClose={() => setLetterSheetOpen(false)}
+            recipientName={getDisplayName(selectedPerson)}
+            ownerName={ownerName}
+          />
+        ) : null}
+      </VaultDetailDrawer>
+
+      {previewNokId && previewPerson ? (
         <NokLetterPreviewDialog
           open={!!previewNokId}
           onClose={() => setPreviewNokId(null)}
@@ -702,7 +520,7 @@ export default function Section3NextOfKinLetter({
               data.next_of_kin_letter_data) as any
           }
         />
-      )}
-    </Card>
+      ) : null}
+    </div>
   );
 }

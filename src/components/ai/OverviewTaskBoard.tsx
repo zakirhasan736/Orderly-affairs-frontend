@@ -196,9 +196,9 @@ function ProgressLine({ state }: { state: CardVisualState }) {
         className={cn(
           'shrink-0 text-[11px] font-semibold tabular-nums',
           state.kind === 'done' || state.isNew
-            ? 'text-[#2B5A8C]'
+            ? 'text-[#2E7FAD]'
             : state.kind === 'active' || state.kind === 'partial'
-              ? 'text-[#2B5A8C]'
+              ? 'text-[#2E7FAD]'
               : state.kind === 'waiting'
                 ? 'text-[#b98a3e]'
                 : 'text-[rgba(33, 61, 89,0.45)]',
@@ -250,7 +250,7 @@ function SliderTaskCard({
     >
       {state.isNew ? (
         <span className="absolute right-3 top-3 rounded-md bg-[#2B5A8C] px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
-          New
+          New data
         </span>
       ) : null}
       <span

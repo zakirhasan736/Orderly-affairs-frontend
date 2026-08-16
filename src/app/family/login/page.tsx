@@ -13,7 +13,8 @@ import { getOtpSessionId } from '@/utils/otpSession';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import { parseAuthApiError } from '@/utils/authRateLimit';
 import { buildWelcomeMessage } from '@/utils/welcomeMessage';
-import { fetchSession, markPortalSession } from '@/libs/secureFetch';
+import { fetchSession, markPortalSession, nokLogout } from '@/libs/secureFetch';
+import { collaboratorPortalMismatch } from '@/utils/portalLogin';
 
 /**
  * Family collaborator sign-in — separate cookie session from the owner.
@@ -26,7 +27,6 @@ export default function FamilyLoginPage() {
   const [captchaReady, setCaptchaReady] = useState(false);
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
 
-  // Prefer NOK cookies for E2EE unlock / refresh before MFA completes.
   useEffect(() => {
     try {
       sessionStorage.setItem('oa_portal_kind', 'family');
@@ -34,6 +34,28 @@ export default function FamilyLoginPage() {
       /* ignore */
     }
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchSession().then(session => {
+      if (cancelled || !session.authenticated) return;
+      const accessType = String(session.access_type || '').toLowerCase();
+      if (session.role === 'owner') {
+        router.replace('/dashboard');
+        return;
+      }
+      if (session.role === 'nextkin' && accessType === 'family') {
+        router.replace('/dashboard');
+        return;
+      }
+      if (session.role === 'nextkin') {
+        router.replace('/next-kin/dashboard');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const refreshCaptcha = useCallback(() => {
     setCaptchaToken('');
@@ -59,6 +81,7 @@ export default function FamilyLoginPage() {
         master_password: password,
         captcha_token: captchaToken,
         otp_session_id: getOtpSessionId(),
+        portal: 'family',
       }).unwrap();
     } catch (err: unknown) {
       const parsed = parseAuthApiError(err, '');
@@ -82,6 +105,15 @@ export default function FamilyLoginPage() {
   };
 
   const handleAuthenticated = async (res: LoginResponse) => {
+    const mismatch = collaboratorPortalMismatch(res.access_type, 'family');
+    if (mismatch) {
+      try {
+        await nokLogout();
+      } catch {
+        /* ignore */
+      }
+      throw new Error(mismatch);
+    }
     if (!res.authenticated) {
       throw new Error('Session not established');
     }
@@ -94,38 +126,31 @@ export default function FamilyLoginPage() {
       returning: res.returning_user ?? session.returning_user,
     });
 
-    let accessType = String(res.access_type || session.access_type || '').toLowerCase();
-
-    if (accessType === 'family') {
-      try {
-        sessionStorage.setItem('oa_portal_kind', 'family');
-      } catch {
-        /* ignore */
-      }
-      const { isE2eeUnlocked } = await import('@/libs/e2ee/unlock');
-      if (!isE2eeUnlocked()) {
-        toast.warning(
-          `${welcome}. Vault encryption is locked — ask the owner to re-save your family access password if sections will not open.`,
-        );
-      } else {
-        toast.success(welcome);
-      }
-      // Soft navigate so an unlocked DEK survives into the dashboard.
-      router.replace('/dashboard');
-      return;
+    try {
+      sessionStorage.setItem('oa_portal_kind', 'family');
+    } catch {
+      /* ignore */
     }
-    toast.success(welcome);
-    router.replace('/next-kin/dashboard');
+    const { isE2eeUnlocked } = await import('@/libs/e2ee/unlock');
+    if (!isE2eeUnlocked()) {
+      toast.warning(
+        `${welcome}. Vault encryption is locked. Ask the owner to re-save your family access password if sections will not open.`,
+      );
+    } else {
+      toast.success(welcome);
+    }
+    router.replace('/dashboard');
   };
 
   return (
     <NextOfKinLoginPage
       onLoginSuccess={handleLoginAttempt}
       onAuthenticated={handleAuthenticated}
-      onBackToOwner={() => router.push('/login')}
+      onBackToOwner={() => router.push('/')}
+      expectedPortal="family"
       formData={{}}
       titleOverride="Family collaborator sign-in"
-      subtitleOverride="Use the email invite from the Vault owner. This is your own session — signing in as the owner does not open this access."
+      subtitleOverride="Use the email invite from the Vault owner. This is your own session. Signing in as the owner does not open this access."
       captchaReady={captchaReady}
       captchaSlot={
         <TurnstileCaptcha

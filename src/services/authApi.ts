@@ -263,6 +263,7 @@ export interface LoginResponse {
   role?: string;
   email?: string;
   access_type?: string;
+  portal?: string;
   full_name?: string;
   returning_user?: boolean;
   billing_status?: string;
@@ -415,6 +416,7 @@ export const authApi = createApi({
         master_password: string;
         captcha_token?: string;
         otp_session_id?: string;
+        portal?: 'nextkin' | 'family';
       }
     >({
       query: b => ({ url: '/nextkin-login', method: 'POST', body: b }),
@@ -662,6 +664,17 @@ export const authApi = createApi({
         email_reminders_enabled: boolean;
         push_state: 'active' | 'paused' | 'off';
         push_for_collaborators: boolean;
+        section_update_recipient_ids?: string[] | null;
+        section_update_recipients_by_section?: Record<string, string[]>;
+        special_days_enabled?: boolean;
+        special_days?: Array<{
+          kind: string;
+          month: number;
+          day: number;
+          label?: string;
+          enabled?: boolean;
+          source?: string;
+        }>;
         vault_push?: {
           state: 'active' | 'paused' | 'off';
           collaborators_enabled: boolean;
@@ -678,6 +691,17 @@ export const authApi = createApi({
         email_reminders_enabled: boolean;
         push_state: 'active' | 'paused' | 'off';
         push_for_collaborators: boolean;
+        section_update_recipient_ids?: string[] | null;
+        section_update_recipients_by_section?: Record<string, string[]>;
+        special_days_enabled?: boolean;
+        special_days?: Array<{
+          kind: string;
+          month: number;
+          day: number;
+          label?: string;
+          enabled?: boolean;
+          source?: string;
+        }>;
         vault_push?: {
           state: 'active' | 'paused' | 'off';
           collaborators_enabled: boolean;
@@ -688,6 +712,17 @@ export const authApi = createApi({
         email_reminders_enabled?: boolean;
         push_state?: 'active' | 'paused' | 'off';
         push_for_collaborators?: boolean;
+        section_update_recipient_ids?: string[] | null;
+        section_update_recipients_by_section?: Record<string, string[] | null>;
+        special_days_enabled?: boolean;
+        special_days?: Array<{
+          kind: string;
+          month: number;
+          day: number;
+          label?: string;
+          enabled?: boolean;
+          source?: string;
+        }>;
       }
     >({
       query: body => ({

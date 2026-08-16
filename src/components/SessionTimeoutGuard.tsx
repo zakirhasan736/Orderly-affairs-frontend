@@ -246,7 +246,7 @@ export function SessionTimeoutGuard({
             type="button"
             disabled={stayingSignedIn}
             onClick={() => void doLogout()}
-            className="h-[42px] flex-1 rounded-[21px] border border-[#e4e6e1] bg-white text-[13px] font-medium text-[#213D59] transition hover:bg-[#f5f8fc] disabled:opacity-60"
+            className="h-[42px] flex-1 rounded-[21px] border border-[#e4e6e1] bg-white text-[13px] font-medium text-[#213D59] transition hover:bg-[#F6F8FA] disabled:opacity-60"
           >
             Sign out now
           </button>

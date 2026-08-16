@@ -34,7 +34,11 @@ export default function AuthWatcher({
   useEffect(() => {
     // NOK / family login pages manage their own gate; hard expiry is handled
     // by SessionExpiredListener mounted below.
-    if (pathname.startsWith('/next-kin') || pathname.startsWith('/family')) {
+    if (
+      pathname.startsWith('/next-kin') ||
+      pathname.startsWith('/family') ||
+      pathname.startsWith('/admin')
+    ) {
       return;
     }
 

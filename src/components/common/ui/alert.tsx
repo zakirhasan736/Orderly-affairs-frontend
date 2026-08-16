@@ -9,9 +9,9 @@ const alertVariants = cva(
     variants: {
       variant: {
         default:
-          "border-[#2c7a63] bg-[#f7f9fc] text-[#2b5a8c] [&>svg]:text-[#2b5a8c] *:data-[slot=alert-description]:text-[#2b5a8c]",
+          "border-[#2c7a63] bg-[#f7f9fc] text-[#2E7FAD] [&>svg]:text-[#2E7FAD] *:data-[slot=alert-description]:text-[#2E7FAD]",
         info:
-          "border-[#2c7a63] bg-[#f7f9fc] text-[#2b5a8c] [&>svg]:text-[#2b5a8c] *:data-[slot=alert-description]:text-[#2b5a8c]",
+          "border-[#2c7a63] bg-[#f7f9fc] text-[#2E7FAD] [&>svg]:text-[#2E7FAD] *:data-[slot=alert-description]:text-[#2E7FAD]",
         warning:
           "border-[#9a7326] bg-[#fff3dd] text-[#7a5a1c] [&>svg]:text-[#6d4d15] *:data-[slot=alert-description]:text-[#6d4d15]",
         destructive:

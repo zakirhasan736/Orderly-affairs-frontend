@@ -119,10 +119,15 @@ function generatePassword(length = 14) {
 }
 
 /**
- * Vault Settings — family collaborator invites for the owner dashboard.
- * Separate from Section 2 Next of Kin.
+ * Family collaborator invites for the owner dashboard.
+ * Shown on Access Control (Section 2) and Vault Settings.
+ * Separate from Next of Kin accounts.
  */
-export function FamilyAccessManagement() {
+export function FamilyAccessManagement({
+  variant = 'vault-settings',
+}: {
+  variant?: 'vault-settings' | 'access-management';
+}) {
   const { data, isLoading, refetch, isFetching } = useGetMyFamilyQuery();
   const { data: rolesData } = useGetPortalRolesQuery();
   const { data: roleAreasData } = useGetFamilyRoleAreasQuery();
@@ -410,14 +415,25 @@ export function FamilyAccessManagement() {
     return [...map.entries()];
   }, [areaRows]);
 
+  const onAccessPage = variant === 'access-management';
+
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3.5 py-3 text-[12px] leading-relaxed text-slate-600">
-        Family collaborators sign in with their own email/password at the family
-        login link. Owner and family sessions stay separate — logging in as the
-        owner does not open a family session. This is owner dashboard access,
-        not Next of Kin access (Section 2).
-        <span className="mt-2 block font-medium text-slate-700">
+      <div className="rounded-2xl border border-[#E4EAF0] bg-[#F6F8FA] px-3.5 py-3 text-[12px] leading-relaxed text-[#6A7481]">
+        {onAccessPage ? (
+          <>
+            Add family, friends, or advisors who can view or edit your vault
+            while you are living. They sign in with their own email and
+            password at the family login — separate from Next of Kin above.
+          </>
+        ) : (
+          <>
+            Family collaborators sign in with their own email/password at the
+            family login link. Owner and family sessions stay separate. This is
+            dashboard access, not Next of Kin access.
+          </>
+        )}
+        <span className="mt-2 block font-medium text-[#213D59]">
           To let them see encrypted vault sections, save their invite while your
           vault is unlocked (after a normal owner password sign-in). If a member
           shows “Vault key not shared”, edit them, enter their password, and
@@ -426,8 +442,9 @@ export function FamilyAccessManagement() {
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <p className="text-sm text-slate-600">
-          {members.length} / {MAX_FAMILY} family members
+        <p className="text-sm text-[#6A7481]">
+          {members.length} / {MAX_FAMILY}{' '}
+          {onAccessPage ? 'other people' : 'family members'}
         </p>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -446,12 +463,12 @@ export function FamilyAccessManagement() {
           <Button
             type="button"
             size="sm"
-            className="min-h-10 flex-1 rounded-xl sm:min-h-0 sm:flex-none"
+            className="min-h-10 flex-1 rounded-xl bg-[#213D59] sm:min-h-0 sm:flex-none hover:bg-[#2C4B6B]"
             onClick={openAdd}
             disabled={members.length >= MAX_FAMILY}
           >
             <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Invite family
+            {onAccessPage ? 'Add other person' : 'Invite family'}
           </Button>
         </div>
       </div>
@@ -462,15 +479,15 @@ export function FamilyAccessManagement() {
         <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center">
           <UserRound className="mx-auto h-8 w-8 text-slate-300" />
           <p className="mt-2 text-sm font-medium text-slate-700">
-            No family collaborators yet
+            No family or other collaborators yet
           </p>
           <p className="mt-1 text-xs text-slate-500">
-            Invite up to {MAX_FAMILY} people, then mark which dashboard areas
-            and vault sections they can open.
+            Invite up to {MAX_FAMILY} people besides next of kin, then mark
+            which dashboard areas they can open.
           </p>
-          <Button type="button" className="mt-4 rounded-xl" onClick={openAdd}>
+          <Button type="button" className="mt-4 rounded-xl bg-[#213D59] hover:bg-[#2C4B6B]" onClick={openAdd}>
             <Plus className="mr-1.5 h-4 w-4" />
-            Invite family member
+            {onAccessPage ? 'Add other person' : 'Invite family member'}
           </Button>
         </div>
       ) : (
@@ -478,23 +495,36 @@ export function FamilyAccessManagement() {
           {members.map(member => (
             <li
               key={member.id}
-              className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-3 sm:flex-row sm:items-start"
+              className="rounded-[16px] border border-[#E4EAF0] border-t-[3px] border-t-[#1F9D6B] bg-white p-4 max-md:rounded-[14px]"
             >
               <div className="flex min-w-0 flex-1 items-start gap-3">
-                <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00305C] text-sm font-semibold text-white">
+                <span className="grid h-[46px] w-[46px] shrink-0 place-items-center rounded-full bg-[#213D59] text-sm font-bold text-white">
                   {(member.full_name || member.email || '?')
-                    .slice(0, 1)
-                    .toUpperCase()}
+                    .trim()
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map(part => part[0])
+                    .join('')
+                    .toUpperCase() || '?'}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-900">
+                  <p className="truncate text-[15.5px] font-bold text-[#213D59]">
                     {member.full_name || member.email}
                   </p>
-                  <p className="mt-0.5 text-xs leading-snug text-slate-500 sm:truncate">
-                    {member.relationship} · {roleLabel(member.portal_role)} ·{' '}
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-[#E8F6F0] px-2.5 py-0.5 text-[11px] font-semibold text-[#1F9D6B]">
+                      Contributor
+                    </span>
+                    <span className="rounded-full bg-[#EAF6FD] px-2.5 py-0.5 text-[11px] font-semibold text-[#213D59]">
+                      {roleLabel(member.portal_role)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[12.5px] leading-snug text-[#7A8794]">
+                    {member.relationship}
                     {member.access_level === 'Full Kit Access'
-                      ? 'Full dashboard'
-                      : `${(member.authorized_sections || []).length} areas`}
+                      ? ' · Full dashboard'
+                      : ` · ${(member.authorized_sections || []).length} areas`}
                     {member.e2ee_wrap_configured === false
                       ? ' · Vault key not shared'
                       : ''}
@@ -538,7 +568,7 @@ export function FamilyAccessManagement() {
         <div className="space-y-4 rounded-2xl border border-slate-200 bg-[#f8fafc] p-4">
           <div className="flex items-center justify-between gap-2">
             <h4 className="text-sm font-semibold text-slate-900">
-              {editingId ? 'Edit family member' : 'Invite family member'}
+              {editingId ? 'Edit person' : onAccessPage ? 'Add other person' : 'Invite family member'}
             </h4>
             <Button type="button" variant="ghost" size="sm" onClick={closeForm}>
               Cancel

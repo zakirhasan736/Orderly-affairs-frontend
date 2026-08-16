@@ -33,7 +33,7 @@ export function SubsectionFootprintStrip({
   return (
     <div
       className={cn(
-        'mb-3 flex flex-wrap items-center gap-2',
+        'mb-2 flex flex-wrap items-center gap-2',
         className,
       )}
     >

@@ -68,7 +68,7 @@ export function SixDigitOtpInput({
           disabled={disabled}
           onChange={event => handleChange(event.target.value, index)}
           onKeyDown={event => handleKeyDown(event, index)}
-                      className="h-15 w-full min-w-0 flex-1 rounded-[12px] border border-[#cfd8d4] bg-white text-center text-[24px] font-medium shadow-none transition focus:border-[#2B5A8C] focus:outline-none focus:ring-0 focus:shadow-[0_0_0_3px_#e7eef7] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="h-15 w-full min-w-0 flex-1 rounded-[12px] border border-[#cfd8d4] bg-white text-center text-[24px] font-medium shadow-none transition focus:border-[#2B5A8C] focus:outline-none focus:ring-0 focus:shadow-[0_0_0_3px_#EAF6FD] disabled:cursor-not-allowed disabled:opacity-50"
                       style={{ height: 60, fontFamily: "ui-monospace, 'IBM Plex Mono', monospace" }}
         />
       ))}

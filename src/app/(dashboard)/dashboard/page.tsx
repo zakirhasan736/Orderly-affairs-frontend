@@ -29,9 +29,15 @@ import {
   removeTopicFromFormData,
   saveSubsectionOrder,
 } from '@/utils/vaultNavOrder';
-import { VaultSidebarNavigation } from '@/components/VaultSidebarNavigation';
+import { VaultCollectionSidebar } from '@/components/vault-prototype/VaultCollectionSidebar';
+import { VaultSchemaSection } from '@/components/vault-prototype/VaultSchemaSection';
+import { DedicatedSectionChrome } from '@/components/vault-prototype/DedicatedSectionChrome';
+import { VaultUploadDrawer, openVaultUploadDrawer } from '@/components/vault-prototype/VaultUploadDrawer';
+import { schemaFillProgress, schemaByApiId } from '@/vault-prototype';
+import { ActiveSubsectionFillBar } from '@/components/vault/ActiveSubsectionFillBar';
 import {
   getSectionProgress as computeSectionProgress,
+  vaultOverallPercent,
   type SectionProgress,
 } from '@/utils/sectionCompletion';
 import { listAiUploadHistory } from '@/utils/aiUploadHistory';
@@ -43,12 +49,12 @@ import { LeaveFeedbackWidget } from '@/components/feedback/LeaveFeedbackWidget';
 import { AiReviewInboxDialog } from '@/components/ai/AiReviewInboxDialog';
 import {
   normalizeVaultActivityTab,
+  OPEN_AI_REVIEW_FILL,
+  type OpenAiReviewFillDetail,
   type VaultActivityTab,
   type VaultActivityTabInput,
 } from '@/utils/vaultActivityTabs';
 import { VaultFillGapsProvider } from '@/components/vault/VaultFillGapsContext';
-import { ActiveSubsectionFillBar } from '@/components/vault/ActiveSubsectionFillBar';
-import { SubsectionFootprintStrip } from '@/components/vault/SubsectionFootprintStrip';
 import {
   collectOverviewExpiryAlerts,
   OVERVIEW_REMINDER_HORIZON_DAYS,
@@ -62,10 +68,11 @@ import {
 import {
   hasUnpersistedDashboardAiPatches,
   listDashboardAiPatchesForSection,
+  peekDashboardAiPatch,
   takeDashboardAiPatch,
   type StashedAiPatch,
 } from '@/utils/aiDashboardPatchCache';
-import { selectMatchReviewDocuments } from '@/utils/aiMatchReviewDocs';
+import { selectMatchReviewDocuments, pickDocsByFileId, synthesizeReviewStashFromVault } from '@/utils/aiMatchReviewDocs';
 import {
   markAiSectionFilled,
   wasAiSectionRecentlyFilled,
@@ -76,13 +83,14 @@ import {
   countFilledAiFields,
   type AiSectionApplyStats,
 } from '@/utils/aiSectionFormApply';
-import { buildUpsertAutofillNotice, normalizeInsuranceSectionData } from '@/utils/aiItemDedup';
+import { buildUpsertAutofillNotice, normalizeCardSectionData } from '@/utils/aiItemDedup';
 import { getAiSectionLabel } from '@/utils/aiSectionRegistry';
 import { markSectionFillsSeen } from '@/utils/newFillMarkers';
 import { applyFieldEditsToSectionData } from '@/utils/aiFieldMatchReview';
 import {
   markAiSectionReviewed,
 } from '@/utils/aiSectionReviewState';
+import { countPendingAiReviews } from '@/utils/aiSidebarNewData';
 import {
   persistAllPendingStashesForSection,
   persistPartnerStashesForFiles,
@@ -150,6 +158,10 @@ import {
   LayoutGrid,
   MoreHorizontal,
   ChevronRight,
+  ScanLine,
+  Keyboard,
+  Camera,
+  FolderOpen,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -178,28 +190,9 @@ import {
   useOwnerLogoutMutation,
   useNextkinLogoutMutation,
 } from '@/services/authApi';
-import Section1VitalInformation from '@/components/sections/Section1VitalInformation';
-import Section0PersonalInformation from '@/components/sections/Section0PersonalInformation';
 import Section2AccessManagement from '@/components/sections/Section2AccessManagement';
 import Section3NextKinLetter from '@/components/sections/Section3NextKinLetter';
 import Section4NextKInMessages from '@/components/sections/Section4NextKInMessages';
-import Section5Vehicles from '@/components/sections/Section5Vehicles';
-import Section6MainResidences from '@/components/sections/Section6MainResidence';
-import Section7InsurancePolicies from '@/components/sections/Section7InsurencePolicies';
-import Section8CommunityMembership from '@/components/sections/Section8CommunityMembership';
-import Section9CharitableGiving from '@/components/sections/Section9CharitableGiving';
-import Section10EducationAccomplishments from '@/components/sections/Section10EducationAccomplishments';
-import Section11MilitaryService from '@/components/sections/Section11MilitaryService';
-import Section12BankingFinancialAccounts from '@/components/sections/Section12BankingFinancialAccounts';
-import Section13PasswordsOnlineAccounts from '@/components/sections/Section13PasswordsOnlineAccounts';
-import Section14InvestmentAccounts from '@/components/sections/Section14InvestmentAccounts';
-import Section15HealthInformation from '@/components/sections/Section15HealthInformation';
-import Section16CreditCardsDebt from '@/components/sections/Section16CreditCardsDebt';
-import Section17FamilyTreasuredConnections from '@/components/sections/Section17FamilyTreasuredConnections';
-import Section18EmploymentBusiness from '@/components/sections/Section18EmploymentBusiness';
-import Section19AssetsValuables from '@/components/sections/Section19AssetsValuables';
-import Section20LegalDocumentsRecords from '@/components/sections/Section20LegalDocumentsRecords';
-import Section21EstatePlanningFinalWishes from '@/components/sections/Section21EstatePlanningFinalWishes';
 import VaultSettings from '@/components/VaultSettings';
 
 import { getSection1, saveSection1 } from '@/libs/api/section1';
@@ -334,29 +327,17 @@ export default function DashboardPage() {
       saveSection1(mapUIToSection1Payload(data)),
 
     '5': saveSection5,
-    '6': async (data) => saveSection6({ '6A': data?.['6A'] }),
-    '7': async (data) => saveSection7({ '7A': data?.['7A'] }),
-    '8': async (data) => saveSection8({ '8A': data?.['8A'] }),
-    '9': async (data) => saveSection9({ '9A': data?.['9A'] }),
-    '10': async (data) => saveSection10({ '10A': data?.['10A'] }),
-    '11': async (data) => saveSection11({ '11A': data?.['11A'] }),
-    '12': async (data) =>
-      saveSection12({
-        ...(data?.['12A'] && { '12A': data['12A'] }),
-        ...(data?.['12B'] && { '12B': data['12B'] }),
-      }),
-    '13': async (data) => saveSection13({ '13A': data?.['13A'] }),
-    '14': async (data) => saveSection14({ '14A': data?.['14A'] }),
-    '15': async (data) =>
-      saveSection15({
-        ...(data?.['15A'] && { '15A': data['15A'] }),
-        ...(data?.['15B'] && { '15B': data['15B'] }),
-      }),
-    '16': async (data) =>
-      saveSection16({
-        ...(data?.['16A'] && { '16A': data['16A'] }),
-        ...(data?.['16B'] && { '16B': data['16B'] }),
-      }),
+    '6': saveSection6,
+    '7': saveSection7,
+    '8': saveSection8,
+    '9': saveSection9,
+    '10': saveSection10,
+    '11': saveSection11,
+    '12': saveSection12,
+    '13': saveSection13,
+    '14': saveSection14,
+    '15': saveSection15,
+    '16': saveSection16,
     '17': saveSection17,
     '18': saveSection18,
     '19': saveSection19,
@@ -377,12 +358,40 @@ export default function DashboardPage() {
   type DashboardFormData = Record<string, any>;
 
   const [formData, setFormData] = useState<DashboardFormData>({});
+  const formDataRef = useRef(formData);
+  formDataRef.current = formData;
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem('orderlyAffairsSection0');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        setFormData(prev => (prev['0'] ? prev : { ...prev, '0': parsed }));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!formData['0']) return;
+    try {
+      window.localStorage.setItem(
+        'orderlyAffairsSection0',
+        JSON.stringify(formData['0']),
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [formData['0']]);
 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [browseOpen, setBrowseOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const [kitReadyOpen, setKitReadyOpen] = useState(false);
   const [reviewInboxOpen, setReviewInboxOpen] = useState(false);
   const [reviewInboxTab, setReviewInboxTab] =
@@ -391,6 +400,7 @@ export default function DashboardPage() {
   const [sectionMatchReview, setSectionMatchReview] = useState<{
     sectionId: string;
     documents: StashedAiPatch[];
+    focusFileId?: string;
   } | null>(null);
   const [sectionMatchApplying, setSectionMatchApplying] = useState(false);
   const sectionMatchShownRef = useRef<string | null>(null);
@@ -498,8 +508,7 @@ export default function DashboardPage() {
           }
         }
 
-        const normalized =
-          sectionId === '7' ? normalizeInsuranceSectionData(data) : data;
+        const normalized = normalizeCardSectionData(sectionId, data);
 
         return {
           ...prev,
@@ -531,6 +540,10 @@ export default function DashboardPage() {
     if (sectionsPrefetchedRef.current) return;
 
     sectionsPrefetchedRef.current = true;
+
+    void import('@/libs/api/vaultPrivacy').then(({ fetchVaultPrivacy }) => {
+      void fetchVaultPrivacy().catch(() => null);
+    });
 
     const allowed = familyAllowedVaultSectionIds(familyAcl);
     const canLoad = (id: string) =>
@@ -959,22 +972,25 @@ export default function DashboardPage() {
     }
   }, [loading, status, tourStarted]);
 
-  // Collapse insurance OCR duplicates (same Toyota / Honda / Allstate homeowner)
-  // as soon as section 7 data is in memory — sidebar must not list the same
-  // vehicle multiple times before the user opens Insurance Policies.
+  // Collapse duplicate inner cards (same Jeep / Honda / policy) as soon as
+  // section data is in memory — sidebar must not list the same item twice.
   useEffect(() => {
-    const section7 = formData['7'];
-    if (!section7 || typeof section7 !== 'object') return;
-    const normalized = normalizeInsuranceSectionData(section7);
-    if (normalized === section7) return;
     setFormData(prev => {
-      const current = prev['7'];
-      if (!current || typeof current !== 'object') return prev;
-      const again = normalizeInsuranceSectionData(current);
-      if (again === current) return prev;
-      return { ...prev, '7': again };
+      let next = prev;
+      let changed = false;
+      for (const sectionId of ['5', '7']) {
+        const current = next[sectionId];
+        if (!current || typeof current !== 'object') continue;
+        const normalized = normalizeCardSectionData(sectionId, current);
+        if (normalized !== current) {
+          if (!changed) next = { ...prev };
+          next = { ...next, [sectionId]: normalized };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
     });
-  }, [formData['7']]);
+  }, [formData['5'], formData['7']]);
 
   useEffect(() => {
     if (appMode !== 'owner') return;
@@ -1306,8 +1322,7 @@ export default function DashboardPage() {
         );
         return;
       }
-      const normalized =
-        sectionId === '7' ? normalizeInsuranceSectionData(data) : data;
+      const normalized = normalizeCardSectionData(sectionId, data);
       setFormData(prev => ({ ...prev, [sectionId]: normalized }));
     },
     [familyAcl],
@@ -1322,35 +1337,73 @@ export default function DashboardPage() {
   }, [activeSection]);
 
   const openSectionMatchReview = useCallback(
-    (sectionId: string, opts?: { force?: boolean }) => {
+    (sectionId: string, opts?: { force?: boolean; fileId?: string; fileName?: string }) => {
       if (appMode !== 'owner') return;
       if (!sectionId || sectionId === 'dashboard') return;
       if (!/^\d+$/.test(sectionId)) return;
 
-      const stashes = selectMatchReviewDocuments(
+      let stashes = selectMatchReviewDocuments(
         sectionId,
         listDashboardAiPatchesForSection(sectionId),
+        { includeFileId: opts?.fileId },
       );
+
+      if (opts?.fileId) {
+        const history = listAiUploadHistory().find(
+          item => item.fileId === opts.fileId,
+        );
+        const peeked = peekDashboardAiPatch(sectionId, opts.fileId);
+        if (
+          peeked &&
+          !stashes.some(stash => stash.file_id === opts.fileId)
+        ) {
+          stashes = [peeked, ...stashes];
+        }
+        if (!stashes.some(stash => stash.file_id === opts.fileId)) {
+          const synthesized = synthesizeReviewStashFromVault({
+            sectionId,
+            fileId: opts.fileId,
+            fileName: opts.fileName || history?.fileName,
+            documentSummary: history?.documentSummary,
+            sectionData: formDataRef.current[sectionId],
+          });
+          if (synthesized) stashes = [synthesized];
+        } else {
+          stashes = pickDocsByFileId(
+            stashes,
+            opts.fileId,
+            stash => stash.file_id,
+            { strict: true },
+          );
+        }
+      }
+
       if (!stashes.length) {
         // No unreviwed data for this section — close its dialog if open.
-        if (sectionId === activeSection) {
+        if (sectionId === activeSection && !opts?.fileId) {
           setSectionMatchReview(null);
         }
         return;
       }
 
-      const shownKey = `${sectionId}:${stashes
+      const focused = pickDocsByFileId(
+        stashes,
+        opts?.fileId,
+        stash => stash.file_id,
+      );
+      const shownKey = `${sectionId}:${focused
         .map(item => `${item.file_id}:${item.createdAt}`)
-        .join('|')}`;
+        .join('|')}:${opts?.fileId || ''}`;
       if (!opts?.force && sectionMatchShownRef.current === shownKey) return;
 
       sectionMatchShownRef.current = shownKey;
       setSectionMatchReview({
         sectionId,
-        documents: stashes,
+        documents: focused,
+        focusFileId: opts?.fileId,
       });
 
-      const firstSub = stashes[0]?.subsection;
+      const firstSub = focused[0]?.subsection;
       if (firstSub && sectionId === activeSection) {
         const uiSubsection =
           firstSub === 'vital_info'
@@ -1367,8 +1420,25 @@ export default function DashboardPage() {
   );
 
   useEffect(() => {
-    openSectionMatchReview(activeSection, { force: true });
+    openSectionMatchReview(activeSection);
   }, [activeSection, appMode, aiPatchTick, openSectionMatchReview]);
+
+  useEffect(() => {
+    const onOpenFill = (event: Event) => {
+      const detail =
+        (event as CustomEvent<OpenAiReviewFillDetail>).detail || {};
+      if (detail.from === 'overview') return;
+      const sectionId = String(detail.sectionId || '').trim();
+      if (!sectionId || sectionId === 'dashboard') return;
+      openSectionMatchReview(sectionId, {
+        force: true,
+        fileId: detail.fileId,
+        fileName: detail.fileName,
+      });
+    };
+    window.addEventListener(OPEN_AI_REVIEW_FILL, onOpenFill);
+    return () => window.removeEventListener(OPEN_AI_REVIEW_FILL, onOpenFill);
+  }, [openSectionMatchReview]);
 
   useEffect(() => {
     if (appMode !== 'owner') return;
@@ -1386,10 +1456,14 @@ export default function DashboardPage() {
         openSectionMatchReview(detail.sectionId, { force: true });
       }
     };
+    const onReviewed = () => setAiPatchTick(tick => tick + 1);
 
     window.addEventListener('orderly-ai-patch-stashed', onAiPatch);
-    return () =>
+    window.addEventListener('orderly-ai-section-reviewed', onReviewed);
+    return () => {
       window.removeEventListener('orderly-ai-patch-stashed', onAiPatch);
+      window.removeEventListener('orderly-ai-section-reviewed', onReviewed);
+    };
   }, [activeSection, appMode, openSectionMatchReview]);
 
   // Background AI saves update in-memory form without user opening the section.
@@ -1401,13 +1475,10 @@ export default function DashboardPage() {
         | { sectionId?: string; data?: Record<string, unknown> }
         | undefined;
       if (!detail?.sectionId || !detail.data) return;
-      const normalized =
-        detail.sectionId === '7'
-          ? (normalizeInsuranceSectionData(detail.data) as Record<
-              string,
-              unknown
-            >)
-          : detail.data;
+      const normalized = normalizeCardSectionData(
+        detail.sectionId,
+        detail.data,
+      ) as Record<string, unknown>;
       setFormData(prev => ({
         ...prev,
         [detail.sectionId as string]: normalized,
@@ -1710,11 +1781,26 @@ export default function DashboardPage() {
   // (fill and delete both flow through sectionProgressCtx → formData).
   const sectionProgressMap = useMemo(() => {
     const map: Record<string, SectionProgress> = {};
+    const dedicated = new Set(['0', '2', '3', '4']);
     for (const section of allSections) {
-      map[section.id] = computeSectionProgress(section.id, sectionProgressCtx);
+      const legacy = computeSectionProgress(section.id, sectionProgressCtx);
+      if (dedicated.has(section.id)) {
+        map[section.id] = legacy;
+        continue;
+      }
+      const schema = schemaFillProgress(
+        section.id,
+        (formData[section.id] as Record<string, unknown>) || {},
+      );
+      map[section.id] = {
+        percent: schema.percent,
+        complete: schema.complete,
+        filled: schema.filled,
+        total: schema.total,
+      };
     }
     return map;
-  }, [allSections, sectionProgressCtx]);
+  }, [allSections, sectionProgressCtx, formData]);
 
   const getSectionProgress = useCallback(
     (sectionId: string): SectionProgress =>
@@ -1728,27 +1814,15 @@ export default function DashboardPage() {
     [getSectionProgress],
   );
 
-  // Average of per-section fill percents (disabled sections count as 100)
-  const progress = useMemo(() => {
-    if (!allSections.length) return 0;
-
-    try {
-      const sum = allSections.reduce(
-        (acc, section) =>
-          acc + (sectionProgressMap[section.id]?.percent ?? 0),
-        0,
-      );
-      return Math.round(sum / allSections.length);
-    } catch (e) {
-      console.error('Progress calculation error:', e);
-      return 0;
-    }
-  }, [allSections, sectionProgressMap]);
-
   const completedSectionsCount = useMemo(
     () =>
       allSections.filter(s => sectionProgressMap[s.id]?.complete).length,
     [allSections, sectionProgressMap],
+  );
+
+  const progress = useMemo(
+    () => vaultOverallPercent(completedSectionsCount, allSections.length),
+    [completedSectionsCount, allSections.length],
   );
 
   const currentSectionLabel = useMemo(() => {
@@ -1780,6 +1854,9 @@ export default function DashboardPage() {
         return formatVaultSubsectionTitle(section.id, sub);
       }
     }
+
+    const schemaName = schemaByApiId(activeSection)?.name;
+    if (schemaName) return schemaName;
 
     return formatVaultSectionTitle(section);
   }, [activeSection, activeSubsection, activeTopicId, allSections, formData]);
@@ -1828,112 +1905,29 @@ export default function DashboardPage() {
         await saveSection1(mapUIToSection1Payload(formData['1']));
       }
 
-      // 🚗 SAVE SECTION 5 (Vehicles)
-      if (formData['5']) {
-        await saveSection5( formData['5']);
-      }
-      // 🏠 SAVE SECTION 6 (Main Residence)
-      if (formData['6']?.['6A']) {
-        const raw6A = formData['6']['6A'] as Record<string, unknown>;
-        const normalized6A = Object.fromEntries(
-          Object.entries(raw6A).map(([key, value]) => {
-            if (typeof value !== 'string') return [key, value];
-            const looksUploadKey =
-              /deeds|mortgage|tax|inventory|warranty|manual|shutoff|breaker|security|builder|realtor|heloc|closing|paid_off|reverse|lienholder|property_deeds|home_inventory|appliance|utility|circuit/i.test(
-                key,
-              );
-            if (looksUploadKey) {
-              return [key, { text: value, files: [] }];
-            }
-            return [key, value];
-          }),
-        );
-        await saveSection6({
-          '6A': normalized6A,
-        });
-      }
-      // 🛡️ SAVE SECTION 7 (Insurance Policies)
-      if (formData['7']?.['7A']) {
-        await saveSection7( {
-          '7A': formData['7']['7A'],
-        });
-      }
-      // 🛡️ SAVE SECTION 8 (Insurance Policies)
-      if (formData['8']?.['8A']) {
-        await saveSection8( {
-          '8A': formData['8']['8A'],
-        });
-      }
-      // 🛡️ SAVE SECTION 9 (Insurance Policies)
-      if (formData['9']?.['9A']) {
-        await saveSection9( {
-          '9A': formData['9']['9A'],
-        });
-      }
-      // 🛡️ SAVE SECTION 10 (Insurance Policies)
-      if (formData['10']?.['10A']) {
-        await saveSection10( {
-          '10A': formData['10']['10A'],
-        });
-      }
-      // 🛡️ SAVE SECTION 11 (Insurance Policies)
-      if (formData['11']?.['11A']) {
-        await saveSection11( {
-          '11A': formData['11']['11A'],
-        });
-      }
-      // 🏦 SAVE SECTION 12 (Banking & Financial Accounts)
-      if (formData['12']?.['12A'] || formData['12']?.['12B']) {
-        await saveSection12( {
-          ...(formData['12']['12A'] && { '12A': formData['12']['12A'] }),
-          ...(formData['12']['12B'] && { '12B': formData['12']['12B'] }),
-        });
-      }
-      // 🛡️ SAVE SECTION 13 (Insurance Policies)
-      if (formData['13']?.['13A']) {
-        await saveSection13( {
-          '13A': formData['13']['13A'],
-        });
-      }
-      // 🛡️ SAVE SECTION 14 (Insurance Policies)
-      if (formData['14']?.['14A']) {
-        await saveSection14( {
-          '14A': formData['14']['14A'],
-        });
-      }
-      // 🏥 SAVE SECTION 15 (Health Information)
-      if (formData['15']?.['15A'] || formData['15']?.['15B']) {
-        await saveSection15( {
-          ...(formData['15']['15A'] && { '15A': formData['15']['15A'] }),
-          ...(formData['15']['15B'] && { '15B': formData['15']['15B'] }),
-        });
-      }
-      // 🏥 SAVE SECTION 16 (Health Information)
-      if (formData['16']?.['16A'] || formData['16']?.['16B']) {
-        await saveSection16( {
-          ...(formData['16']['16A'] && { '16A': formData['16']['16A'] }),
-          ...(formData['16']['16B'] && { '16B': formData['16']['16B'] }),
-        });
-      }
-      // SAVE SECTION 17 (Family & Treasured Connections)
-      if (formData['17']) {
-        await saveSection17( formData['17']);
-      }
-      // SAVE SECTION 18 (Employment & Business)
-      if (formData['18']) {
-        await saveSection18( formData['18']);
-      }
-      // SAVE SECTION 19 (Employment & Business)
-      if (formData['19']) {
-        await saveSection19( formData['19']);
-      }
-      // SAVE SECTION 20 (Legal Documents)
-      if (formData['20']) {
-        await saveSection20( formData['20']);
-      }
-      // SAVE SECTION 21
-      if (formData['21']) {
-        await saveSection21( formData['21']);
+      for (const sectionId of [
+        '5',
+        '6',
+        '7',
+        '8',
+        '9',
+        '10',
+        '11',
+        '12',
+        '13',
+        '14',
+        '15',
+        '16',
+        '17',
+        '18',
+        '19',
+        '20',
+        '21',
+      ]) {
+        const saver = sectionSaveMap[sectionId];
+        if (saver && formData[sectionId]) {
+          await saver(formData[sectionId]);
+        }
       }
 
       // 💾 SAVE NON-SENSITIVE UI STATE
@@ -2054,26 +2048,50 @@ export default function DashboardPage() {
     </svg>
   );
 
+  function sectionReviewProps(sectionId: string) {
+    void aiPatchTick;
+    const pendingCount = countPendingAiReviews(sectionId);
+    return {
+      pendingReviewCount: pendingCount,
+      onOpenReview: pendingCount
+        ? () => openSectionMatchReview(sectionId, { force: true })
+        : undefined,
+      onUpload: () => openVaultUploadDrawer(sectionId),
+    };
+  }
+
+  function renderSchemaSection(sectionId: string) {
+    return (
+      <VaultSchemaSection
+        apiSectionId={sectionId}
+        data={(formData[sectionId] as Record<string, unknown>) || {}}
+        onChange={next => updateSectionData(sectionId, next)}
+        readOnly={familyAcl.isFamily && !familyCanWrite(familyAcl)}
+        {...sectionReviewProps(sectionId)}
+      />
+    );
+  }
+
   function renderSection() {
     switch (activeSection) {
       case '0':
-        return (
-          <Section0PersonalInformation
-            onFullyRead={() => setInstructionRead(true)}
-            onContinue={() => goToSection('1')}
-          />
-        );
+        return renderSchemaSection('0');
       case '1':
-        return (
-          <Section1VitalInformation
-            data={formData['1'] || {}}
-            onChange={data => updateSectionData('1', data)}
-            activeSubsection={activeSubsection as any}
-            activeTopicId={activeTopicId}
-          />
-        );
+        return renderSchemaSection('1');
       case '2':
-        return familyCanSeeVaultSection(familyAcl, '2') ? (
+        return (
+          <DedicatedSectionChrome
+            apiSectionId="2"
+            progressLabel="Next of kin named"
+            progressValue={myNextKin?.length ? 60 : 0}
+            progressHint={
+              myNextKin?.length
+                ? `${myNextKin.length} named`
+                : 'Name a next of kin to get started'
+            }
+            {...sectionReviewProps('2')}
+          >
+            {familyCanSeeVaultSection(familyAcl, '2') ? (
           familyCanManageNextKin(familyAcl) ? (
             <Section2AccessManagement
               data={formData['2'] || {}}
@@ -2125,9 +2143,13 @@ export default function DashboardPage() {
               {familyAcl.portalRoleLabel || 'Viewer'}.
             </p>
           </div>
+        )}
+          </DedicatedSectionChrome>
         );
       case '3':
-        return familyCanSeeNokLetters(familyAcl) ? (
+        return (
+          <DedicatedSectionChrome apiSectionId="3" {...sectionReviewProps('3')}>
+            {familyCanSeeNokLetters(familyAcl) ? (
           <Section3NextKinLetter
             data={formData['3'] || {}}
             onChange={data => updateSectionData('3', data)}
@@ -2145,9 +2167,13 @@ export default function DashboardPage() {
               Ask the owner to grant Section 3 (Letter to Next of Kin).
             </p>
           </div>
+        )}
+          </DedicatedSectionChrome>
         );
       case '4':
-        return familyCanSeeMessages(familyAcl) ? (
+        return (
+          <DedicatedSectionChrome apiSectionId="4" {...sectionReviewProps('4')}>
+            {familyCanSeeMessages(familyAcl) ? (
           <Section4NextKInMessages
             data={formData['4'] || {}}
             fullFormData={formData}
@@ -2162,168 +2188,27 @@ export default function DashboardPage() {
               Ask the owner to grant Section 4 (Personal Messages).
             </p>
           </div>
+        )}
+          </DedicatedSectionChrome>
         );
-
       case '5':
-        return (
-          <Section5Vehicles
-            data={formData['5'] || {}}
-            onChange={data => updateSectionData('5', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '6':
-        return (
-          <Section6MainResidences
-            data={formData['6'] || {}}
-            onChange={data => updateSectionData('6', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '7':
-        return (
-          <Section7InsurancePolicies
-            data={formData['7'] || {}}
-            onChange={data => updateSectionData('7', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-            ownerEmail={currentUser?.email || ''}
-            ownerName={currentUser?.full_name || currentUser?.email || 'Owner'}
-            accessPeople={(myNextKin || []).filter(
-              (person: { immediate_access?: boolean }) =>
-                Boolean(person.immediate_access),
-            )}
-          />
-        );
       case '8':
-        return (
-          <Section8CommunityMembership
-            data={formData['8'] || {}}
-            onChange={data => updateSectionData('8', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '9':
-        return (
-          <Section9CharitableGiving
-            data={formData['9'] || {}}
-            onChange={data => updateSectionData('9', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '10':
-        return (
-          <Section10EducationAccomplishments
-            data={formData['10'] || {}}
-            onChange={data => updateSectionData('10', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '11':
-        return (
-          <Section11MilitaryService
-            data={formData['11'] || {}}
-            onChange={data => updateSectionData('11', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '12':
-        return (
-          <Section12BankingFinancialAccounts
-            data={formData['12'] || {}}
-            onChange={data => updateSectionData('12', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '13':
-        return (
-          <Section13PasswordsOnlineAccounts
-            data={formData['13'] || {}}
-            onChange={data => updateSectionData('13', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '14':
-        return (
-          <Section14InvestmentAccounts
-            data={formData['14'] || {}}
-            onChange={data => updateSectionData('14', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '15':
-        return (
-          <Section15HealthInformation
-            data={formData['15'] || {}}
-            onChange={data => updateSectionData('15', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '16':
-        return (
-          <Section16CreditCardsDebt
-            data={formData['16'] || {}}
-            onChange={data => updateSectionData('16', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '17':
-        return (
-          <Section17FamilyTreasuredConnections
-            data={formData['17'] || {}}
-            onChange={data => updateSectionData('17', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '18':
-        return (
-          <Section18EmploymentBusiness
-            data={formData['18'] || {}}
-            onChange={data => updateSectionData('18', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '19':
-        return (
-          <Section19AssetsValuables
-            data={formData['19'] || {}}
-            onChange={data => updateSectionData('19', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
       case '20':
-        return (
-          <Section20LegalDocumentsRecords
-            data={formData['20'] || {}}
-            onChange={data => updateSectionData('20', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-            disabledSubsections={disabledSubsections}
-          />
-        );
       case '21':
-        return (
-          <Section21EstatePlanningFinalWishes
-            data={formData['21'] || {}}
-            onChange={data => updateSectionData('21', data)}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-          />
-        );
+        return renderSchemaSection(activeSection);
       default:
         return (
           <Card>
@@ -2531,10 +2416,6 @@ export default function DashboardPage() {
       setMobileMoreOpen(false);
       window.requestAnimationFrame(() => {
         window.scrollTo({ top: 0, behavior: 'auto' });
-        const main = document.querySelector('main');
-        if (main instanceof HTMLElement) {
-          main.scrollTo({ top: 0, behavior: 'auto' });
-        }
       });
     },
     [familyAcl],
@@ -2761,6 +2642,21 @@ export default function DashboardPage() {
     };
   }, [appMode]);
 
+  useEffect(() => {
+    const onGo = (event: Event) => {
+      const sectionId = (event as CustomEvent<{ sectionId?: string }>).detail
+        ?.sectionId;
+      if (!sectionId) return;
+      if (sectionId === 'dashboard') {
+        goToDashboard();
+        return;
+      }
+      goToSection(sectionId);
+    };
+    window.addEventListener('orderly-go-section', onGo);
+    return () => window.removeEventListener('orderly-go-section', onGo);
+  }, [goToSection, goToDashboard]);
+
   // Cypress E2E: deterministic vault navigation (avoid flaky overlay/sidebar clicks)
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -2901,7 +2797,7 @@ export default function DashboardPage() {
           updateSectionData(sectionId, data)
         }
       >
-      <div className="min-h-screen bg-[#f6f8fb] text-slate-950 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+      <div className="min-h-screen bg-[#F6F8FA] text-slate-950 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
         <MobileTopBar
           title={
             activeSection === 'dashboard' ? 'Dashboard' : currentSectionLabel
@@ -2924,34 +2820,19 @@ export default function DashboardPage() {
           onNoticeSelect={handleNoticeSelect}
           onOpenReviewInbox={() => openReviewInbox('alerts')}
           onOpenNotificationSettings={openNotificationSettings}
+          onNavigateToSection={sectionId => goToSection(sectionId)}
         />
 
-        <div className="flex min-h-screen md:min-h-0">
-          <VaultSidebarNavigation
-            sections={allSections}
+        <VaultCollectionSidebar
             activeSection={activeSection}
-            activeSubsection={activeSubsection}
-            activeTopicId={activeTopicId}
-            disabledSections={disabledSections}
-            disabledSubsections={disabledSubsections}
-            formData={formData}
             progress={progress}
-            completedSectionsCount={completedSectionsCount}
-            totalSectionsCount={allSections.length}
-            getSectionCompletionStatus={getSectionCompletionStatus}
-            getSectionProgress={getSectionProgress}
-            obituarySections={obituarySections}
-            obituarySubsections={obituarySubsections}
-            hasDoveTag={hasDoveTag}
+            completedCount={completedSectionsCount}
+            totalCount={allSections.length}
+            sectionProgressById={sectionProgressMap}
             sidebarOpen={sidebarOpen}
             onCloseSidebar={() => setSidebarOpen(false)}
             goToDashboard={goToDashboard}
             goToSection={goToSection}
-            goToSubsection={goToSubsection}
-            goToTopic={goToTopic}
-            onReorderSubsection={handleReorderSubsection}
-            onReorderTopic={handleReorderTopic}
-            onDeleteTopic={handleDeleteTopic}
             onOpenHelp={() => {
               window.dispatchEvent(
                 new CustomEvent('orderly-open-help', {
@@ -2971,7 +2852,7 @@ export default function DashboardPage() {
             />
           )}
 
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-h-screen min-w-0 flex-col md:ml-[272px]">
             <DashboardTopBar
               currentSectionLabel={
                 activeSection === 'dashboard'
@@ -2981,6 +2862,7 @@ export default function DashboardPage() {
               completedSectionsCount={completedSectionsCount}
               totalSectionsCount={allSections.length}
               progressPercent={progress}
+              onUpload={() => openVaultUploadDrawer()}
               onRunTour={async () => {
                 goToSection('dashboard');
                 await updateStatus({ manually_started: true });
@@ -3006,6 +2888,7 @@ export default function DashboardPage() {
               onNoticeSelect={handleNoticeSelect}
               onOpenReviewInbox={() => openReviewInbox('alerts')}
               onOpenNotificationSettings={openNotificationSettings}
+              onNavigateToSection={sectionId => goToSection(sectionId)}
             />
 
           {/* Main content */}
@@ -3030,7 +2913,7 @@ export default function DashboardPage() {
                         {familyRoleBannerText(familyAcl)}
                       </span>
                       <span className="mt-0.5 block text-teal-900/75">
-                        You share the owner dashboard — only granted areas and
+                        You share the owner dashboard. Only granted areas and
                         actions for your role are available.
                       </span>
                     </div>
@@ -3189,15 +3072,15 @@ export default function DashboardPage() {
                 </div>
               ) : activeSection === 'vault-settings' ? (
                 <div className="space-y-4 sm:space-y-5">
-                  <div className="rounded-[24px] border border-white/70 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-6">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-                      Secure Account
+                  <div className="rounded-[16px] border border-[#E4EAF0] bg-white px-5 py-5 sm:px-7 sm:py-6">
+                    <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#619FCE]">
+                      Account
                     </p>
-                    <h2 className="mt-1 text-xl font-semibold text-[#213D59] sm:text-2xl md:text-3xl">
+                    <h2 className="mt-1 font-[family-name:var(--font-family-display)] text-[27px] font-normal tracking-[-0.028em] text-[#213D59] max-md:text-[23px]">
                       Vault Settings
                     </h2>
-                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-                      Manage your account, security keys, and access settings.
+                    <p className="mt-1.5 max-w-[620px] text-[14.5px] text-[#7A8794]">
+                      Manage your account, encryption keys, subscription, family access, and notifications. Vault contents stay encrypted in the browser.
                     </p>
                   </div>
                   <VaultSettings />
@@ -3236,8 +3119,18 @@ export default function DashboardPage() {
                       documents={sectionMatchReview.documents.map(
                         stashToMatchDocument,
                       )}
+                      focusFileId={sectionMatchReview.focusFileId}
                       sectionData={formData[sectionMatchReview.sectionId]}
                       applying={sectionMatchApplying}
+                      onReviewLater={() => {
+                        window.setTimeout(
+                          () =>
+                            openVaultUploadDrawer(
+                              sectionMatchReview.sectionId,
+                            ),
+                          160,
+                        );
+                      }}
                       onCloseReviewed={() => {
                         sectionMatchReview.documents.forEach(stash => {
                           markAiSectionReviewed({
@@ -3412,78 +3305,6 @@ export default function DashboardPage() {
                       }}
                     />
                   ) : null}
-                  <section className="overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-sm">
-                    <div className="relative p-5 sm:p-6 md:p-7">
-                      <div className="pointer-events-none absolute right-0 top-0 h-28 w-28 rounded-bl-[60px] bg-[#213D59]/5" />
-                      <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="min-w-0 flex-1">
-                          <div className="mb-3 flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-[#213D59] px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-white">
-                              Current section
-                            </span>
-                            {activeSubsection && (
-                              <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-500">
-                                {formatVaultSubsectionTitle(
-                                  currentSection.id,
-                                  {
-                                    id: activeSubsection,
-                                    title:
-                                      currentSection.subsections?.find(
-                                        s => s.id === activeSubsection,
-                                      )?.title || activeSubsection,
-                                  },
-                                )}
-                              </span>
-                            )}
-                          </div>
-
-                          <h2 className="text-[24px] font-semibold leading-tight text-[#213D59] sm:text-[30px] md:text-[34px]">
-                            {(obituarySections.has(currentSection.id) ||
-                              hasDoveTag(currentSection.id)) && (
-                              <span className="mr-2">🕊️</span>
-                            )}
-                            {currentSection.title}
-                          </h2>
-
-                          <p className="mt-3 max-w-5xl whitespace-pre-line text-sm leading-7 text-slate-500 sm:text-[15px]">
-                            {getSectionDescription(activeSection)}
-                          </p>
-                        </div>
-
-                        <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
-                          {(!familyAcl.isFamily || familyCanWrite(familyAcl)) && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            data-oa-mutate
-                            onClick={manualSave}
-                            className="rounded-2xl border-slate-200 bg-white px-4"
-                          >
-                            <Save className="mr-2 h-4 w-4" />
-                            {autoSaving ? 'Saving...' : 'Save'}
-                          </Button>
-                          )}
-                          <div data-oa-view-ok>
-                          <VaultExportMenu
-                            payload={exportPayload}
-                            trigger={
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="rounded-2xl border-slate-200 bg-white px-4"
-                              >
-                                <ExportIcon />
-                                <span className="ml-2">Export</span>
-                              </Button>
-                            }
-                          />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </section>
 
                   {activeSection === '11' &&
                     (!familyAcl.isFamily || familyCanWrite(familyAcl)) && (
@@ -3608,11 +3429,6 @@ export default function DashboardPage() {
                           | undefined
                       }
                     />
-                    <SubsectionFootprintStrip
-                      sectionId={activeSection}
-                      subsectionId={activeSubsection}
-                      topicId={activeTopicId}
-                    />
                     <AiActiveSectionProvider
                       sectionId={activeSection}
                       subsectionId={activeSubsection}
@@ -3687,7 +3503,6 @@ export default function DashboardPage() {
           </div>
         </footer>
           </div>
-        </div>
 
         {/* Mobile More Sheet */}
         {mobileMoreOpen && (
@@ -3711,6 +3526,46 @@ export default function DashboardPage() {
               </div>
 
               <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMoreOpen(false);
+                    goToSection('vault-settings');
+                  }}
+                  className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#213D59]"
+                >
+                  Account <ChevronRight className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMoreOpen(false);
+                    goToSection('0');
+                  }}
+                  className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#213D59]"
+                >
+                  Instructions <ChevronRight className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMoreOpen(false);
+                    openReviewInbox('docs');
+                  }}
+                  className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#213D59]"
+                >
+                  Document library <ChevronRight className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMoreOpen(false);
+                    openReviewInbox('dues');
+                  }}
+                  className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-[#213D59]"
+                >
+                  Reminders <ChevronRight className="h-4 w-4" />
+                </button>
                 <button
                   type="button"
                   onClick={() => goToSection('vault-settings')}
@@ -3750,24 +3605,23 @@ export default function DashboardPage() {
         )}
 
         {/* Mobile bottom navigation */}
-        <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/80 bg-white/95 px-2 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl md:hidden">
-          <div className="grid grid-cols-5 gap-0.5">
+        <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[#E4EAF0] bg-white/95 px-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl md:hidden">
+          <div className="grid h-16 grid-cols-5 items-end">
             <button
               type="button"
               onClick={() => {
+                setScanOpen(false);
+                setBrowseOpen(false);
                 goToDashboard();
               }}
-              className={`relative flex flex-col items-center justify-center rounded-xl px-1 py-2 transition active:scale-95 ${
-                activeSection === 'dashboard'
+              className={`flex min-h-11 flex-col items-center justify-center rounded-xl px-1 py-1 transition ${
+                activeSection === 'dashboard' && !browseOpen && !scanOpen
                   ? 'text-[#213D59]'
                   : 'text-slate-400'
               }`}
             >
-              {activeSection === 'dashboard' ? (
-                <span className="absolute left-1/2 top-0 h-0.5 w-6 -translate-x-1/2 rounded-full bg-[#213D59]" />
-              ) : null}
               <Home className="h-5 w-5" />
-              <span className="mt-1 text-[9px] font-semibold">Dashboard</span>
+              <span className="mt-1 text-[10px] font-semibold">Home</span>
             </button>
 
             <button
@@ -3775,55 +3629,70 @@ export default function DashboardPage() {
               data-tour="tour-vault-by-category"
               onClick={() => {
                 setMobileMoreOpen(false);
+                setScanOpen(false);
                 setBrowseOpen(true);
               }}
-              className={`flex flex-col items-center justify-center rounded-xl px-1 py-2 transition active:scale-95 ${
-                browseOpen ? 'text-[#213D59]' : 'text-slate-400'
+              className={`flex min-h-11 flex-col items-center justify-center rounded-xl px-1 py-1 transition ${
+                browseOpen || (activeSection !== 'dashboard' && activeSection !== 'vault-settings' && !scanOpen)
+                  ? 'text-[#213D59]'
+                  : 'text-slate-400'
               }`}
             >
               <LayoutGrid className="h-5 w-5" />
-              <span className="mt-1 text-[9px] font-semibold">Browse</span>
+              <span className="mt-1 text-[10px] font-semibold">Browse</span>
             </button>
 
             <button
               type="button"
               onClick={() => {
+                setBrowseOpen(false);
+                setMobileMoreOpen(false);
+                setScanOpen(true);
+              }}
+              className="relative flex min-h-11 flex-col items-center justify-center px-1"
+            >
+              <span
+                className={`-mt-5 grid h-14 w-14 place-items-center rounded-full shadow-[0_8px_20px_rgba(33,61,89,.22)] ${
+                  scanOpen ? 'bg-[#3EB1E5] text-[#16293C]' : 'bg-[#213D59] text-white'
+                }`}
+              >
+                <ScanLine className="h-6 w-6" />
+              </span>
+              <span className="mt-1 text-[10px] font-semibold text-[#213D59]">Scan</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setScanOpen(false);
+                setBrowseOpen(false);
                 goToDashboard();
                 window.setTimeout(() => {
                   window.dispatchEvent(
                     new CustomEvent('orderly-open-people-hub'),
                   );
                   document
-                    .getElementById('mobile-hub')
+                    .getElementById('people-messages')
                     ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 120);
               }}
-              className="flex flex-col items-center justify-center rounded-xl px-1 py-2 text-slate-400 transition active:scale-95"
+              className="flex min-h-11 flex-col items-center justify-center rounded-xl px-1 py-1 text-slate-400 transition"
             >
               <User className="h-5 w-5" />
-              <span className="mt-1 text-[9px] font-semibold">People</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => goToSection('4')}
-              className={`flex flex-col items-center justify-center rounded-xl px-1 py-2 transition active:scale-95 ${
-                activeSection === '4' ? 'text-[#213D59]' : 'text-slate-400'
-              }`}
-            >
-              <FileText className="h-5 w-5" />
-              <span className="mt-1 text-[9px] font-semibold">Messages</span>
+              <span className="mt-1 text-[10px] font-semibold">People</span>
             </button>
 
             <button
               type="button"
               onClick={() => setMobileMoreOpen(prev => !prev)}
-              className={`flex flex-col items-center justify-center rounded-xl px-1 py-2 transition active:scale-95 ${
-                mobileMoreOpen ? 'text-[#213D59]' : 'text-slate-400'
+              className={`flex min-h-11 flex-col items-center justify-center rounded-xl px-1 py-1 transition ${
+                mobileMoreOpen || activeSection === 'vault-settings'
+                  ? 'text-[#213D59]'
+                  : 'text-slate-400'
               }`}
             >
               <MoreHorizontal className="h-5 w-5" />
-              <span className="mt-1 text-[9px] font-semibold">More</span>
+              <span className="mt-1 text-[10px] font-semibold">More</span>
             </button>
           </div>
         </nav>
@@ -3858,6 +3727,98 @@ export default function DashboardPage() {
                     : 'all'
                 }
               />
+            </div>
+          </div>
+        </MobileBottomSheet>
+
+        <MobileBottomSheet
+          open={scanOpen}
+          onClose={() => setScanOpen(false)}
+          className="max-h-[70dvh]"
+          labelledBy="mobile-scan-title"
+        >
+          <div className="flex min-h-0 flex-col">
+            <MobileSheetHandle />
+            <div className="px-5 pb-2 pt-1">
+              <h3
+                id="mobile-scan-title"
+                className="text-lg font-semibold text-[#213D59]"
+              >
+                Scan
+              </h3>
+              <p className="mt-1 text-[13.5px] text-[#7A8794]">
+                Three ways in. Scanning is a shortcut. You can always type it yourself.
+              </p>
+            </div>
+            <div className="grid gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <button
+                type="button"
+                onClick={() => {
+                  setScanOpen(false);
+                  openVaultUploadDrawer(
+                    /^\d+$/.test(String(activeSection))
+                      ? String(activeSection)
+                      : undefined,
+                  );
+                }}
+                className="flex min-h-[72px] items-center gap-3 rounded-[14px] border border-[#E4EAF0] bg-white px-4 text-left"
+              >
+                <span className="grid h-11 w-11 place-items-center rounded-[12px] bg-[#EAF6FD] text-[#213D59]">
+                  <Camera className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-[15px] font-semibold text-[#213D59]">
+                    Scan a document
+                  </span>
+                  <span className="block text-[12.5px] text-[#7A8794]">
+                    Use the camera on a policy, statement, or ID
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setScanOpen(false);
+                  openVaultUploadDrawer(
+                    /^\d+$/.test(String(activeSection))
+                      ? String(activeSection)
+                      : undefined,
+                  );
+                }}
+                className="flex min-h-[72px] items-center gap-3 rounded-[14px] border border-[#E4EAF0] bg-white px-4 text-left"
+              >
+                <span className="grid h-11 w-11 place-items-center rounded-[12px] bg-[#EAF6FD] text-[#213D59]">
+                  <FolderOpen className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-[15px] font-semibold text-[#213D59]">
+                    Choose from files
+                  </span>
+                  <span className="block text-[12.5px] text-[#7A8794]">
+                    PDF, JPG, PNG, HEIC already on this phone
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setScanOpen(false);
+                  setBrowseOpen(true);
+                }}
+                className="flex min-h-[72px] items-center gap-3 rounded-[14px] border border-[#E4EAF0] bg-white px-4 text-left"
+              >
+                <span className="grid h-11 w-11 place-items-center rounded-[12px] bg-[#EAF6FD] text-[#213D59]">
+                  <Keyboard className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-[15px] font-semibold text-[#213D59]">
+                    Type it in myself
+                  </span>
+                  <span className="block text-[12.5px] text-[#7A8794]">
+                    Open a section and fill the fields by hand
+                  </span>
+                </span>
+              </button>
             </div>
           </div>
         </MobileBottomSheet>
@@ -3936,6 +3897,8 @@ export default function DashboardPage() {
 
         <LeaveFeedbackWidget />
 
+        <VaultUploadDrawer />
+
         <AiReviewInboxDialog
           open={reviewInboxOpen}
           onOpenChange={setReviewInboxOpen}
@@ -3964,7 +3927,7 @@ export default function DashboardPage() {
         <BrandSuccessScreen
           open={kitReadyOpen}
           variant="celebration"
-          title="Your kit is ready for your family"
+          title="Your Vault is ready for your family"
           description={kitReadyDescription}
           secondaryAction={{
             label: 'Download a copy',

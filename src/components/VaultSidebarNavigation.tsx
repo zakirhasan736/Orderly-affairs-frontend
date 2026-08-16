@@ -13,11 +13,15 @@ import {
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
-import { sectionHasSidebarNewAiData } from '@/utils/aiSidebarNewData';
+import {
+  sectionHasSidebarNewAiData,
+  subsectionHasSidebarNewAiData,
+} from '@/utils/aiSidebarNewData';
 import {
   listUnseenNewFills,
   NEW_FILLS_CHANGED,
   sectionHasUnseenFills,
+  subsectionHasUnseenFills,
 } from '@/utils/newFillMarkers';
 import {
   getDynamicTopicsForSubsection,
@@ -35,6 +39,7 @@ import {
   formatVaultSubsectionTitle,
 } from '@/utils/vaultNavigation';
 import { BRAND_LOGO } from '@/constants/brand';
+import { ProgressBar, ProgressRing, SidebarNavItem } from '@/components/vault-ui';
 
 function parseTopicProgressRef(topicId: string): {
   itemIndex: number;
@@ -53,42 +58,39 @@ function parseTopicProgressRef(topicId: string): {
   return { itemIndex: 0 };
 }
 
+function SidebarNewPip({ label = 'New data' }: { label?: string }) {
+  return (
+    <span
+      className="relative flex h-2.5 w-2.5 shrink-0"
+      title={label}
+      aria-label={label}
+    >
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-300 opacity-75" />
+      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-300 ring-2 ring-[#213D59]" />
+    </span>
+  );
+}
+
 function SectionProgressMark({
   percent,
   complete,
-  selected,
 }: {
   percent: number;
   complete: boolean;
   selected: boolean;
 }) {
-  const clamped = Math.max(0, Math.min(100, percent));
-  const size = 28;
-  const stroke = 2.5;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - clamped / 100);
-
   if (complete) {
     return (
-      <span
-        className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
-          selected ? 'bg-white/20' : 'bg-white/10',
-        )}
-      >
-        <CheckCircle className="h-3.5 w-3.5 text-emerald-300" />
+      <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-white/10">
+        <CheckCircle className="h-4 w-4 text-[#1F9D6B]" />
       </span>
     );
   }
 
-  if (clamped <= 0) {
+  if (percent <= 0) {
     return (
       <span
-        className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
-          selected ? 'bg-white/20' : 'bg-white/10',
-        )}
+        className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-white/10"
         title="Not started"
       >
         <Circle className="h-3.5 w-3.5 opacity-70" />
@@ -97,42 +99,7 @@ function SectionProgressMark({
   }
 
   return (
-    <span
-      className={cn(
-        'relative flex h-7 w-7 shrink-0 items-center justify-center',
-        selected ? 'opacity-100' : 'opacity-95',
-      )}
-      title={
-        clamped < 100
-          ? `Partially complete · ${clamped}%`
-          : `${clamped}% complete`
-      }
-    >
-      <svg width={size} height={size} className="-rotate-90">
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="rgba(255,255,255,0.18)"
-          strokeWidth={stroke}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="#6ee7b7"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-        />
-      </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[8px] font-semibold tabular-nums text-emerald-100">
-        {clamped}
-      </span>
-    </span>
+    <ProgressRing value={percent} size="topbar" surface="navy" />
   );
 }
 
@@ -190,6 +157,12 @@ function ReorderableNavItem({
   const enterCountRef = useRef(0);
 
   const handleDragStart = (event: React.DragEvent<HTMLDivElement>) => {
+    const origin = event.target as HTMLElement | null;
+    if (origin?.closest('button, [data-oa-nav-delete]')) {
+      event.preventDefault();
+      return;
+    }
+
     didDragRef.current = true;
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('application/json', encodeDragPayload(payload));
@@ -241,7 +214,9 @@ function ReorderableNavItem({
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      onClick={() => {
+      onClick={event => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest('button, [data-oa-nav-delete]')) return;
         if (didDragRef.current) return;
         onNavigate();
       }}
@@ -250,7 +225,7 @@ function ReorderableNavItem({
         const target = event.target as HTMLElement | null;
         if (
           target?.closest(
-            'input, textarea, select, [contenteditable="true"]',
+            'button, input, textarea, select, [contenteditable="true"]',
           )
         ) {
           return;
@@ -284,20 +259,25 @@ function ReorderableNavItem({
         {onDelete ? (
           <button
             type="button"
+            draggable={false}
             title={deleteLabel || 'Remove'}
             aria-label={deleteLabel || 'Remove'}
+            data-oa-nav-delete
+            data-oa-mutate
+            data-tour="tour-topic-delete"
+            onPointerDown={event => {
+              event.stopPropagation();
+            }}
+            onMouseDown={event => {
+              event.stopPropagation();
+            }}
             onClick={event => {
               event.preventDefault();
               event.stopPropagation();
               onDelete();
             }}
-            onMouseDown={event => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            data-tour="tour-topic-delete"
             className={cn(
-              'absolute inset-0 flex items-center justify-center rounded-md',
+              'absolute inset-0 z-10 flex touch-auto items-center justify-center rounded-md',
               'text-rose-200/90 opacity-0 transition',
               'hover:bg-rose-500/25 hover:text-rose-100',
               'group-hover/navrow:opacity-100 focus-visible:opacity-100',
@@ -501,20 +481,15 @@ export function VaultSidebarNavigation({
           </div>
 
           <div className="mt-6">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
+            <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-white/45">
               Vault Navigation
             </p>
-            <div className="mt-3 mb-1.5 flex items-center justify-between text-[12px] font-medium text-white/80">
-              <span>
+            <div className="mt-3 mb-1.5 flex items-center justify-between text-[13px] font-medium text-white/80">
+              <span className="tabular-nums">
                 {completedSectionsCount} of {totalSectionsCount} completed
               </span>
             </div>
-            <div className="h-1 overflow-hidden rounded-full bg-white/15">
-              <div
-                className="h-full rounded-full bg-[#2B5A8C] transition-all"
-                style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
-              />
-            </div>
+            <ProgressBar value={progress} size="sidebar" />
           </div>
         </div>
 
@@ -569,12 +544,12 @@ export function VaultSidebarNavigation({
             ).map(navItem => {
               if (navItem.kind === 'new-header') {
                 return (
-                  <div key="new-fills-header" className="px-3.5 pb-1 pt-3">
+                  <div key="new-fills-header" className="px-3.5 pb-1 pt-3" data-tour="tour-new-data-hub">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300">
-                      Review these first
+                      New data
                     </p>
                     <p className="mt-0.5 text-[12px] leading-snug text-amber-100/85">
-                      Sections with newly filled documents
+                      Matched sections stay up here until you finish review
                     </p>
                   </div>
                 );
@@ -582,29 +557,25 @@ export function VaultSidebarNavigation({
 
               if (navItem.kind === 'dashboard') {
                 return (
-                  <button
+                  <SidebarNavItem
                     key="owner-dashboard"
-                    type="button"
+                    className="owner-dashboard-item"
                     onClick={goToDashboard}
-                    className={cn(
-                      'owner-dashboard-item flex w-full items-center gap-3 rounded-full px-3.5 py-2.5 text-left transition',
-                      activeSection === 'dashboard'
-                        ? 'bg-[#2B5A8C] text-white shadow-lg shadow-black/25'
-                        : 'text-white/85 hover:bg-white/10 hover:text-white',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'flex h-7 w-7 items-center justify-center rounded-full',
-                        activeSection === 'dashboard'
-                          ? 'bg-white/20'
-                          : 'bg-white/10',
-                      )}
-                    >
-                      <Home className="h-3.5 w-3.5" />
-                    </span>
-                    <span className="text-[13px] font-semibold">Dashboard</span>
-                  </button>
+                    active={activeSection === 'dashboard'}
+                    icon={
+                      <span
+                        className={cn(
+                          'flex h-[34px] w-[34px] items-center justify-center rounded-full',
+                          activeSection === 'dashboard'
+                            ? 'bg-white/20'
+                            : 'bg-white/10',
+                        )}
+                      >
+                        <Home className="h-3.5 w-3.5" />
+                      </span>
+                    }
+                    label="Dashboard"
+                  />
                 );
               }
 
@@ -620,11 +591,10 @@ export function VaultSidebarNavigation({
               const pendingAiUploads =
                 aiRouting?.getPendingUploadsForSection(section.id) ?? [];
               void aiBadgeTick;
-              // Every matching section with unread AI fill — not only the
-              // single highlighted upload card for the file.
+              const unseenFills = listUnseenNewFills();
               const hasAiReady =
                 sectionHasSidebarNewAiData(section.id, pendingAiUploads) ||
-                sectionHasUnseenFills(listUnseenNewFills(), section.id);
+                sectionHasUnseenFills(unseenFills, section.id);
 
               return (
                 <div key={`main-section-${section.id}`} className="space-y-1">
@@ -633,13 +603,20 @@ export function VaultSidebarNavigation({
                     data-cy={`vault-nav-${section.id}`}
                     onClick={() => goToSection(section.id)}
                     className={cn(
-                      `section-${section.id}-nav flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-left transition`,
+                      `section-${section.id}-nav relative flex w-full items-center gap-3 rounded-full py-2.5 text-left transition`,
+                      hasAiReady ? 'pl-4 pr-3' : 'px-3',
                       isSelected
                         ? 'bg-[#2B5A8C] text-white shadow-lg shadow-black/25'
                         : 'text-white/80 hover:bg-white/10 hover:text-white',
                       disabledSections[section.id] && 'opacity-55',
                     )}
                   >
+                    {hasAiReady ? (
+                      <span
+                        className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-amber-300"
+                        aria-hidden
+                      />
+                    ) : null}
                     <SectionProgressMark
                       percent={sectionPct}
                       complete={isComplete}
@@ -660,14 +637,8 @@ export function VaultSidebarNavigation({
                         </span>
                       )}
                       {hasAiReady && (
-                        <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 px-2 py-0.5">
-                          <span className="relative flex h-2 w-2 shrink-0">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-300 opacity-75" />
-                            <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-300" />
-                          </span>
-                          <span className="text-[11px] font-bold text-amber-200">
-                            New — tap to open
-                          </span>
+                        <span className="mt-1 inline-flex items-center rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-200">
+                          New data
                         </span>
                       )}
                     </span>
@@ -691,6 +662,17 @@ export function VaultSidebarNavigation({
 
                         const isSubsectionActive =
                           activeSubsection === subsection.id && !activeTopicId;
+                        const subsectionHasNew =
+                          subsectionHasUnseenFills(
+                            unseenFills,
+                            section.id,
+                            subsection.id,
+                          ) ||
+                          subsectionHasSidebarNewAiData(
+                            section.id,
+                            subsection.id,
+                            pendingAiUploads,
+                          );
 
                         const subsectionProgress = getSubsectionProgress(
                           section.id,
@@ -725,7 +707,7 @@ export function VaultSidebarNavigation({
                                 goToSubsection(section.id, subsection.id)
                               }
                               className={cn(
-                                'px-1 py-0.5 text-sm',
+                                'relative px-1 py-0.5 text-sm',
                                 isSubsectionActive ||
                                   (activeSubsection === subsection.id &&
                                     dynamicTopics.length === 0)
@@ -737,7 +719,11 @@ export function VaultSidebarNavigation({
                                   'opacity-50',
                               )}
                             >
-                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
+                              {subsectionHasNew ? (
+                                <SidebarNewPip label="New data in this area" />
+                              ) : (
+                                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
+                              )}
                               <span className="min-w-0 flex-1 truncate">
                                 {(obituarySubsections.has(subsection.id) ||
                                   hasDoveTag(section.id, subsection.id)) && (

@@ -25,6 +25,7 @@ import {
   Users,
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
+import { LegalDisclaimer } from '@/components/vault-ui';
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
 
@@ -1467,6 +1468,7 @@ export default function Section20LegalDocumentsRecords({
         renderStaticSection('20B')
       )}
       {renderRepeatable20C()}
+      <LegalDisclaimer variant="footer" />
     </div>
   );
 }

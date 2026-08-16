@@ -105,7 +105,7 @@ function CircularDocProgress({
           'relative z-[1] flex flex-col items-center justify-center rounded-full transition-colors duration-300',
           inner,
           complete
-            ? 'bg-[#e7eef7] text-[#2B5A8C]'
+            ? 'bg-[#E8F6F0] text-[#1F9D6B]'
             : isWorking
               ? 'bg-[#213D59] text-white'
               : 'bg-[rgba(33,61,89,0.05)] text-[#213D59]',
@@ -133,11 +133,16 @@ function CircularDocProgress({
 type OverviewAiUploadCardProps = {
   className?: string;
   jobs: DashboardAiJob[];
-  enqueueFiles: (files: FileList | File[]) => void;
+  enqueueFiles: (
+    files: FileList | File[],
+    opts?: { sectionId?: string; source?: 'overview' | 'section' },
+  ) => void;
   dismissJob?: (jobId: string) => void;
   maxConcurrent?: number;
   hasReviewableDocs?: boolean;
   onOpenReview?: () => void;
+  /** When set, click opens the right upload drawer instead of the file picker. */
+  onOpenDrawer?: () => void;
 };
 
 export function OverviewAiUploadCard({
@@ -147,6 +152,7 @@ export function OverviewAiUploadCard({
   dismissJob,
   hasReviewableDocs = false,
   onOpenReview,
+  onOpenDrawer,
 }: OverviewAiUploadCardProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -241,6 +247,7 @@ export function OverviewAiUploadCard({
   }, [isWorking, jobs]);
 
   const openPicker = () => inputRef.current?.click();
+  const activate = () => openPicker();
 
   return (
     <section className={cn('space-y-2', className)} data-ai-overview-upload>
@@ -253,14 +260,14 @@ export function OverviewAiUploadCard({
         onChange={event => {
           onFiles(event.currentTarget.files);
           event.currentTarget.value = '';
+          onOpenDrawer?.();
         }}
       />
 
-      {/* Upload lane — AI fills sections; Review inbox is below for approval */}
       <div
         role="button"
         tabIndex={0}
-        onClick={openPicker}
+        onClick={activate}
         onKeyDown={event => {
           if (event.key === 'Enter' || event.key === ' ') {
             const target = event.target as HTMLElement | null;
@@ -272,7 +279,7 @@ export function OverviewAiUploadCard({
               return;
             }
             event.preventDefault();
-            openPicker();
+            activate();
           }
         }}
         onDragEnter={event => {
@@ -292,37 +299,89 @@ export function OverviewAiUploadCard({
           event.preventDefault();
           setIsDragging(false);
           onFiles(event.dataTransfer.files);
+          onOpenDrawer?.();
         }}
         className={cn(
-          'relative cursor-pointer overflow-hidden rounded-[20px] border border-dashed p-4 transition sm:p-5',
+          'relative flex cursor-pointer flex-wrap items-center gap-[18px] overflow-hidden rounded-[16px] border-2 border-dashed px-6 py-[22px] transition',
           isDragging
-            ? 'scale-[1.01] border-[#2B5A8C] bg-[#e7eef7]'
-            : 'border-[rgba(33,61,89,0.18)] bg-white hover:border-[#2B5A8C] hover:bg-[#e7eef7]/50',
+            ? 'border-[#3EB1E5] bg-[#EAF6FD]'
+            : 'border-[#E4EAF0] bg-[#F6F8FA] hover:border-[#3EB1E5] hover:bg-[#EAF6FD]',
         )}
       >
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+        <span className="grid h-[46px] w-[46px] shrink-0 place-items-center rounded-[13px] border border-[#E4EAF0] bg-white text-[#619FCE]">
+          {onOpenDrawer && !isWorking ? (
+            <UploadCloud className="h-[21px] w-[21px]" />
+          ) : (
             <CircularDocProgress
               progress={totalCount ? batchProgress : 0}
               isWorking={isWorking}
               compact
             />
-            <div className="min-w-0">
-              <p className="text-[15px] font-semibold leading-snug text-[var(--ink)] sm:text-base">
-                {isWorking
-                  ? liveTitle
-                  : 'Upload documents — AI fills matching sections'}
-              </p>
-              <p className="mt-1 text-[12px] text-[var(--ink-muted)] sm:text-[13px]">
-                {isWorking
-                  ? summaryText
-                  : hasReviewableDocs
-                    ? 'Documents are ready — assign sections and approve fills here.'
-                    : 'After AI finishes, review and approve fills here on the dashboard.'}
-              </p>
+          )}
+        </span>
+        <div className="min-w-[200px] flex-1">
+          <p className="text-[15.5px] font-bold text-[#213D59]">
+            {isWorking ? liveTitle : 'Drop files here or browse'}
+          </p>
+          <p className="mt-0.5 text-[13.5px] text-[#7A8794]">
+            {isWorking
+              ? summaryText
+              : 'PDF, JPG, PNG, HEIC. Up to 15 MB each.'}
+          </p>
+          {onOpenDrawer ? (
+            <div className="mt-3 flex flex-wrap gap-[7px]">
+              {[
+                'Personal',
+                'Employment',
+                'Education',
+                'Insurance',
+                'Banking',
+                'Healthcare',
+                'Legal',
+                'Assets',
+              ].map(tag => (
+                <span
+                  key={tag}
+                  className="rounded-full bg-[#EFF3F7] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#6A7481]"
+                >
+                  {tag}
+                </span>
+              ))}
             </div>
+          ) : null}
+        </div>
+        {onOpenDrawer ? (
+          <div
+            className="flex shrink-0 flex-wrap items-center gap-2"
+            onClick={event => event.stopPropagation()}
+            onKeyDown={event => event.stopPropagation()}
+          >
+            {hasReviewableDocs && onOpenReview ? (
+              <button
+                type="button"
+                onClick={onOpenReview}
+                className="inline-flex h-10 items-center rounded-full border border-[#3EB1E5] bg-white px-4 text-[13px] font-semibold text-[#213D59] hover:bg-[#EAF6FD]"
+              >
+                Review pending
+              </button>
+            ) : null}
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={openPicker}
+              onKeyDown={event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  openPicker();
+                }
+              }}
+              className="inline-flex h-10 shrink-0 items-center rounded-full bg-[#213D59] px-[18px] text-[14px] font-semibold text-white"
+            >
+              Choose files
+            </span>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2 self-end sm:self-auto">
+        ) : (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <div
               onClick={event => event.stopPropagation()}
               onKeyDown={event => event.stopPropagation()}
@@ -343,7 +402,7 @@ export function OverviewAiUploadCard({
                   event.stopPropagation();
                   onOpenReview();
                 }}
-                className="h-11 shrink-0 rounded-xl border-[#213D59]/25 bg-[#e7eef7] px-3 text-[12px] font-semibold text-[#213D59] hover:bg-[#dce6f2] sm:px-4 sm:text-[13px]"
+                className="h-11 shrink-0 rounded-xl border-[#213D59]/25 bg-[#EAF6FD] px-3 text-[12px] font-semibold text-[#213D59] hover:bg-[#EAF6FD] sm:px-4 sm:text-[13px]"
               >
                 <Sparkles className="mr-2 h-4 w-4" />
                 Review & assign
@@ -361,7 +420,7 @@ export function OverviewAiUploadCard({
               Upload
             </Button>
           </div>
-        </div>
+        )}
       </div>
     </section>
   );

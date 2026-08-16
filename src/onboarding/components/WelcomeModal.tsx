@@ -68,7 +68,7 @@ export const WelcomeModal: React.FC<Props> = ({
           <button
             type="button"
             onClick={onSkip}
-            className="h-11 rounded-[22px] border border-[#e4e6e1] bg-white px-[18px] text-[13px] font-medium text-[#213D59] transition hover:bg-[#f5f8fc]"
+            className="h-11 rounded-[22px] border border-[#e4e6e1] bg-white px-[18px] text-[13px] font-medium text-[#213D59] transition hover:bg-[#F6F8FA]"
           >
             Skip the tour
           </button>

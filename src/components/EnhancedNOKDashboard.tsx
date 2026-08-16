@@ -111,31 +111,28 @@ interface EnhancedNOKDashboardProps {
   onPrefetchSection?: (sectionId: string) => void;
 }
 
-const SECTION_ICONS: Record<
-  string,
-  { icon: LucideIcon; bg: string; fg: string }
-> = {
-  '1': { icon: Users, bg: 'bg-sky-50', fg: 'text-sky-600' },
-  '2': { icon: Car, bg: 'bg-indigo-50', fg: 'text-indigo-600' },
-  '3': { icon: Home, bg: 'bg-emerald-50', fg: 'text-emerald-600' },
-  '4': { icon: Shield, bg: 'bg-violet-50', fg: 'text-violet-600' },
-  '5': { icon: Users, bg: 'bg-cyan-50', fg: 'text-cyan-600' },
-  '6': { icon: HeartHandshake, bg: 'bg-rose-50', fg: 'text-rose-500' },
-  '7': { icon: GraduationCap, bg: 'bg-amber-50', fg: 'text-amber-600' },
-  '8': { icon: Landmark, bg: 'bg-slate-100', fg: 'text-slate-600' },
-  '9': { icon: Banknote, bg: 'bg-teal-50', fg: 'text-teal-600' },
-  '10': { icon: Shield, bg: 'bg-orange-50', fg: 'text-orange-600' },
-  '11': { icon: Sparkles, bg: 'bg-fuchsia-50', fg: 'text-fuchsia-600' },
-  '12': { icon: Heart, bg: 'bg-pink-50', fg: 'text-pink-600' },
-  '13': { icon: CreditCard, bg: 'bg-blue-50', fg: 'text-blue-600' },
-  '14': { icon: Users, bg: 'bg-lime-50', fg: 'text-lime-700' },
-  '15': { icon: Briefcase, bg: 'bg-stone-100', fg: 'text-stone-600' },
-  '16': { icon: Building2, bg: 'bg-yellow-50', fg: 'text-yellow-700' },
-  '17': { icon: FileText, bg: 'bg-sky-50', fg: 'text-sky-700' },
-  '18': { icon: Landmark, bg: 'bg-indigo-50', fg: 'text-indigo-700' },
-  '19': { icon: FileText, bg: 'bg-slate-100', fg: 'text-slate-600' },
-  '20': { icon: FileText, bg: 'bg-violet-50', fg: 'text-violet-700' },
-  '21': { icon: Flower2, bg: 'bg-rose-50', fg: 'text-rose-600' },
+const SECTION_ICONS: Record<string, LucideIcon> = {
+  '1': Users,
+  '2': Car,
+  '3': Home,
+  '4': Shield,
+  '5': Users,
+  '6': HeartHandshake,
+  '7': GraduationCap,
+  '8': Landmark,
+  '9': Banknote,
+  '10': Shield,
+  '11': Sparkles,
+  '12': Heart,
+  '13': CreditCard,
+  '14': Users,
+  '15': Briefcase,
+  '16': Building2,
+  '17': FileText,
+  '18': Landmark,
+  '19': FileText,
+  '20': FileText,
+  '21': Flower2,
 };
 
 function ProgressRing({
@@ -167,7 +164,7 @@ function ProgressRing({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="#60a5fa"
+          stroke="#3EB1E5"
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={circumference}
@@ -434,21 +431,21 @@ export function EnhancedNOKDashboard({
 
   if (!isPreview && accessLoading) {
     return (
-      <div className="grid min-h-[100dvh] place-items-center bg-[#f6f8fb]">
-        <div className="h-10 w-10 animate-pulse rounded-2xl bg-[#213D59]" />
+      <div className="grid min-h-[100dvh] place-items-center bg-[#F6F8FA]">
+        <div className="h-10 w-10 animate-pulse rounded-2xl bg-[#3EB1E5]" />
       </div>
     );
   }
 
   if (!isPreview && (accessError as any)?.status === 403) {
     return (
-      <div className="grid min-h-[100dvh] place-items-center bg-[#f6f8fb] px-5">
-        <div className="w-full max-w-md rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
-          <Shield className="mb-3 h-8 w-8 text-[#213D59]" />
-          <h2 className="text-xl font-semibold text-[#213D59]">
+      <div className="grid min-h-[100dvh] place-items-center bg-[#F6F8FA] px-5">
+        <div className="w-full max-w-md rounded-[16px] border border-[#E4EAF0] bg-white p-7">
+          <Shield className="mb-3 h-8 w-8 text-[#3EB1E5]" />
+          <h2 className="font-[family-name:var(--font-family-display)] text-xl font-normal text-[#213D59]">
             Awaiting approval
           </h2>
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="mt-2 text-sm text-[#7A8794]">
             The Vault owner hasn&apos;t approved your access yet.
           </p>
           <Button
@@ -465,8 +462,8 @@ export function EnhancedNOKDashboard({
 
   if (!effectiveAccess) {
     return (
-      <div className="grid min-h-[100dvh] place-items-center bg-[#f6f8fb]">
-        <p className="text-sm text-slate-500">Unable to load your access.</p>
+      <div className="grid min-h-[100dvh] place-items-center bg-[#F6F8FA]">
+        <p className="text-sm text-[#7A8794]">Unable to load your access.</p>
       </div>
     );
   }
@@ -493,11 +490,11 @@ export function EnhancedNOKDashboard({
   const SidebarNav = (
     <aside
       className={cn(
-        'fixed inset-y-0 left-0 z-[70] flex w-[88vw] max-w-[300px] flex-col border-r border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out md:sticky md:top-0 md:z-20 md:h-screen md:w-[272px] md:max-w-none md:translate-x-0 md:shadow-none',
+        'fixed inset-y-0 left-0 z-[70] flex w-[88vw] max-w-[272px] flex-col border-r border-[#E4EAF0] bg-white shadow-2xl transition-transform duration-300 ease-out md:sticky md:top-0 md:z-20 md:h-screen md:w-[272px] md:max-w-none md:translate-x-0 md:shadow-none',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
       )}
     >
-      <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-6">
+      <div className="flex items-start justify-between gap-3 border-b border-[#EFF3F7] px-5 pb-3 pt-5">
         <button
           type="button"
           onClick={() => applyNav('dashboard')}
@@ -506,18 +503,23 @@ export function EnhancedNOKDashboard({
           <Image
             src={BRAND_LOGO}
             alt="Orderly Affairs"
-            width={40}
-            height={40}
-            className="h-10 w-10 rounded-xl bg-white object-contain p-0.5 ring-1 ring-[#213D59]/10"
+            width={36}
+            height={36}
+            className="h-9 w-9 rounded-[10px] bg-[#213D59] object-contain p-0.5"
           />
-          <span className="truncate text-[15px] font-semibold tracking-tight text-[#213D59]">
-            Orderly Affairs
+          <span className="min-w-0">
+            <span className="block truncate text-[15px] font-bold tracking-tight text-[#213D59]">
+              Orderly Affairs
+            </span>
+            <span className="block text-[11.5px] font-semibold uppercase tracking-wide text-[#7A8794]">
+              Next of Kin
+            </span>
           </span>
         </button>
         <button
           type="button"
           onClick={() => setSidebarOpen(false)}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 md:hidden"
+          className="grid h-9 w-9 place-items-center rounded-[9px] text-[#213D59] md:hidden"
           aria-label="Close navigation"
         >
           <X className="h-5 w-5" />
@@ -534,10 +536,10 @@ export function EnhancedNOKDashboard({
               type="button"
               onClick={() => applyNav(item.key)}
               className={cn(
-                'flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-[13px] font-semibold transition',
+                'flex w-full items-center gap-3 rounded-[9px] px-3 py-2 text-left text-[14px] transition',
                 active
-                  ? 'bg-[#213D59] text-white shadow-md shadow-slate-900/10'
-                  : 'text-slate-600 hover:bg-slate-100',
+                  ? 'bg-[#213D59] font-semibold text-white'
+                  : 'text-[#414A55] hover:bg-[#EFF3F7]',
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
@@ -547,17 +549,17 @@ export function EnhancedNOKDashboard({
         })}
       </nav>
 
-      <div className="space-y-3 border-t border-slate-100 px-3 py-4">
+      <div className="space-y-3 border-t border-[#E4EAF0] px-3 py-4">
         <button
           type="button"
           onClick={() => applyNav('settings')}
-          className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-[13px] font-semibold text-slate-600 hover:bg-slate-100"
+          className="flex w-full items-center gap-3 rounded-[9px] px-3 py-2 text-left text-[14px] text-[#414A55] hover:bg-[#EFF3F7]"
         >
           <Settings className="h-4 w-4" />
           Settings
         </button>
-        <div className="rounded-2xl bg-[#213D59] p-4 text-white">
-          <p className="text-[13px] font-semibold">Need Help?</p>
+        <div className="rounded-[16px] bg-[#213D59] p-4 text-white">
+          <p className="text-[13px] font-semibold">Need help?</p>
           <p className="mt-1 text-[11px] leading-4 text-white/70">
             We&apos;re here if you need guidance.
           </p>
@@ -570,7 +572,7 @@ export function EnhancedNOKDashboard({
                 }),
               )
             }
-            className="mt-3 h-9 w-auto rounded-xl bg-white px-3 text-[12px] font-semibold text-[#213D59] hover:bg-slate-100"
+            className="mt-3 h-9 w-auto rounded-full bg-[#3EB1E5] px-3 text-[12px] font-semibold text-[#16293C] hover:bg-[#7ACAF9]"
           >
             Contact Support
           </Button>
@@ -581,7 +583,7 @@ export function EnhancedNOKDashboard({
 
   const RightRail = (
     <aside className="hidden w-[300px] shrink-0 space-y-4 xl:block">
-      <div className="overflow-hidden rounded-[24px] bg-[#213D59] p-5 text-white shadow-lg shadow-slate-900/10">
+      <div className="overflow-hidden rounded-[16px] bg-[#213D59] p-5 text-white">
         <p className="text-[12px] font-medium text-white/70">Overall Progress</p>
         <div className="mt-4 flex justify-center">
           <ProgressRing value={stats.progress} />
@@ -604,7 +606,7 @@ export function EnhancedNOKDashboard({
         </Button>
       </div>
 
-      <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-[16px] border border-[#E4EAF0] bg-white p-4">
         <p className="text-[13px] font-semibold text-[#213D59]">Quick Actions</p>
         <div className="mt-3 space-y-1">
           {[
@@ -637,14 +639,14 @@ export function EnhancedNOKDashboard({
                 key={item.label}
                 type="button"
                 onClick={item.onClick}
-                className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left text-[13px] font-medium text-slate-700 transition hover:bg-slate-50"
+                className="flex w-full items-center gap-3 rounded-[9px] px-2.5 py-2.5 text-left text-[13px] font-medium text-[#414A55] transition hover:bg-[#EFF3F7]"
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-[#213D59]">
+                <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#EAF6FC] text-[#3EB1E5]">
                   <Icon className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">{item.label}</span>
                 {item.badge ? (
-                  <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700">
+                  <span className="rounded-full bg-[#EAF6FC] px-1.5 py-0.5 text-[10px] font-bold text-[#2E7FAD]">
                     {item.badge}
                   </span>
                 ) : null}
@@ -655,13 +657,13 @@ export function EnhancedNOKDashboard({
         </div>
       </div>
 
-      <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-[16px] border border-[#E4EAF0] bg-white p-4">
         <p className="text-[13px] font-semibold text-[#213D59]">
           Recent Activity
         </p>
         <div className="mt-3 space-y-3">
           {recentActivity.length === 0 ? (
-            <p className="text-[12px] text-slate-500">No recent activity yet.</p>
+            <p className="text-[12px] text-[#7A8794]">No recent activity yet.</p>
           ) : (
             recentActivity.map(item => (
               <button
@@ -670,14 +672,14 @@ export function EnhancedNOKDashboard({
                 onClick={() => openSection(item.id)}
                 className="flex w-full items-start gap-3 text-left"
               >
-                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#EAF6FC] text-[#3EB1E5]">
                   <CheckCircle2 className="h-4 w-4" />
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-[13px] font-medium text-[#213D59]">
                     {item.title}
                   </span>
-                  <span className="text-[11px] text-slate-400">{item.when}</span>
+                  <span className="text-[11px] text-[#7A8794]">{item.when}</span>
                 </span>
               </button>
             ))
@@ -745,7 +747,7 @@ export function EnhancedNOKDashboard({
   );
 
   return (
-    <div className="min-h-[100dvh] bg-[#f6f8fb] text-slate-950 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+    <div className="min-h-[100dvh] bg-[#F6F8FA] font-[family-name:var(--font-family)] text-[#213D59] pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
       <div className="flex min-h-[100dvh] md:min-h-0">
         {SidebarNav}
 
@@ -760,27 +762,28 @@ export function EnhancedNOKDashboard({
 
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Top header */}
-          <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
-            <div className="mx-auto flex w-full max-w-[1480px] items-center gap-3 px-4 py-3 sm:px-5 md:px-6 lg:px-8 xl:px-10">
+          <header className="sticky top-0 z-40 min-h-[70px] border-b border-[#E4EAF0] bg-white/95 backdrop-blur-md">
+            <div className="mx-auto flex w-full max-w-[1480px] min-h-[70px] items-center gap-3 px-4 sm:px-5 md:px-6 lg:px-8 xl:px-10">
               <button
                 type="button"
                 onClick={() => setSidebarOpen(true)}
-                className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-[#213D59] md:hidden"
+                className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#F6F8FA] text-[#213D59] md:hidden"
                 aria-label="Open menu"
               >
                 <Menu className="h-5 w-5" />
               </button>
 
               <div className="min-w-0 flex-1">
-                <h1 className="truncate text-[17px] font-semibold tracking-tight text-[#213D59] sm:text-xl md:text-2xl">
-                  {isPreview ? 'NOK Preview' : 'Next of Kin Dashboard'}
+                <h1 className="truncate font-[family-name:var(--font-family-display)] text-[20px] font-normal tracking-tight text-[#213D59] sm:text-[24px]">
+                  {isPreview ? 'NOK Preview' : 'Next of Kin'}
                 </h1>
-                <p className="mt-0.5 truncate text-[12px] text-slate-500 sm:text-[13px]">
+                <p className="mt-0.5 truncate text-[12px] text-[#7A8794] sm:text-[13px]">
                   Welcome,{' '}
                   <span className="font-semibold text-[#213D59]">
                     {displayName}
-                  </span>{' '}
-                  — {accessLabel}
+                  </span>
+                  {' · '}
+                  {accessLabel}
                 </p>
               </div>
 
@@ -791,30 +794,30 @@ export function EnhancedNOKDashboard({
                     setHeaderSearchOpen(v => !v);
                     scrollToSections();
                   }}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E4EAF0] text-[#7A8794] transition hover:bg-[#F6F8FA]"
                   aria-label="Search"
                 >
-                  <Search className="h-4.5 w-4.5 h-[18px] w-[18px]" />
+                  <Search className="h-[18px] w-[18px]" />
                 </button>
 
                 <div className="relative">
                   <button
                     type="button"
                     onClick={() => setProfileOpen(v => !v)}
-                    className="flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1 pl-1 pr-2 transition hover:bg-slate-50 sm:pr-3"
+                    className="flex items-center gap-2 rounded-full border border-[#E4EAF0] bg-white py-1 pl-1 pr-2 transition hover:bg-[#F6F8FA] sm:pr-3"
                   >
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#213D59] text-[11px] font-bold text-white">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#3EB1E5] text-[11px] font-bold text-[#16293C]">
                       {initials || 'NK'}
                     </span>
                     <span className="hidden min-w-0 text-left sm:block">
                       <span className="block max-w-[120px] truncate text-[12px] font-semibold text-[#213D59]">
                         {displayName}
                       </span>
-                      <span className="block text-[10px] text-slate-400">
+                      <span className="block text-[10px] text-[#7A8794]">
                         {accessLabel}
                       </span>
                     </span>
-                    <ChevronDown className="hidden h-3.5 w-3.5 text-slate-400 sm:block" />
+                    <ChevronDown className="hidden h-3.5 w-3.5 text-[#7A8794] sm:block" />
                   </button>
                   {profileOpen ? (
                     <>
@@ -824,14 +827,14 @@ export function EnhancedNOKDashboard({
                         aria-label="Close profile menu"
                         onClick={() => setProfileOpen(false)}
                       />
-                      <div className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1 shadow-xl">
+                      <div className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-[16px] border border-[#E4EAF0] bg-white py-1 shadow-xl">
                         <button
                           type="button"
                           onClick={() => {
                             setProfileOpen(false);
                             onLogout();
                           }}
-                          className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+                          className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13px] font-medium text-[#414A55] hover:bg-[#F6F8FA]"
                         >
                           <LogOut className="h-4 w-4" />
                           {isPreview ? 'Exit Preview' : 'Log out'}
@@ -842,6 +845,20 @@ export function EnhancedNOKDashboard({
                 </div>
               </div>
             </div>
+            {headerSearchOpen ? (
+              <div className="border-t border-[#E4EAF0] px-4 py-2.5 sm:px-5 md:px-6 lg:px-8 xl:px-10">
+                <div className="relative mx-auto max-w-xl">
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7A8794]" />
+                  <Input
+                    autoFocus
+                    placeholder="Search sections"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="h-10 rounded-full border-[#E4EAF0] bg-[#F6F8FA] pl-10 text-[#213D59]"
+                  />
+                </div>
+              </div>
+            ) : null}
           </header>
 
           <main className="min-w-0 flex-1">
@@ -854,35 +871,27 @@ export function EnhancedNOKDashboard({
                       {
                         label: `${stats.completed} of ${stats.total} sections completed`,
                         value: stats.progress,
-                        bar: 'bg-sky-500',
-                        track: 'bg-sky-100',
-                        card: 'bg-sky-50/90 border-sky-100',
+                        bar: 'bg-[#3EB1E5]',
+                        track: 'bg-[#EAF6FC]',
                         icon: FileText,
-                        iconWrap: 'bg-white text-sky-600',
                         showBar: true,
                       },
                       {
                         label: `${stats.progress}% Overall progress`,
                         value: stats.progress,
-                        bar: 'bg-emerald-500',
-                        track: 'bg-emerald-100',
-                        card: 'bg-emerald-50/90 border-emerald-100',
+                        bar: 'bg-[#3EB1E5]',
+                        track: 'bg-[#EAF6FC]',
                         icon: CheckCircle2,
-                        iconWrap: 'bg-white text-emerald-600',
                         showBar: true,
                       },
                       {
                         label: `${stats.obituarySections} Obituary sections`,
-                        card: 'bg-violet-50/90 border-violet-100',
                         icon: Flower2,
-                        iconWrap: 'bg-white text-violet-600',
                         showBar: false,
                       },
                       {
                         label: `${stats.checklistSections} With checklists`,
-                        card: 'bg-orange-50/90 border-orange-100',
                         icon: ClipboardList,
-                        iconWrap: 'bg-white text-orange-600',
                         showBar: false,
                       },
                     ].map(card => {
@@ -890,21 +899,13 @@ export function EnhancedNOKDashboard({
                       return (
                         <div
                           key={card.label}
-                          className={cn(
-                            'rounded-[18px] border p-3.5 shadow-sm sm:rounded-[20px] sm:p-4',
-                            card.card,
-                          )}
+                          className="rounded-[16px] border border-[#E4EAF0] bg-white p-3.5 sm:p-4"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-[12px] font-semibold leading-5 text-[#213D59] sm:text-[13px]">
                               {card.label}
                             </p>
-                            <span
-                              className={cn(
-                                'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl shadow-sm',
-                                card.iconWrap,
-                              )}
-                            >
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#EAF6FC] text-[#3EB1E5]">
                               <Icon className="h-4 w-4" />
                             </span>
                           </div>
@@ -927,7 +928,7 @@ export function EnhancedNOKDashboard({
                   </div>
 
                   {/* Tablet progress (right rail substitute) */}
-                  <div className="hidden rounded-[20px] bg-[#213D59] p-4 text-white md:block xl:hidden">
+                  <div className="hidden rounded-[16px] bg-[#213D59] p-4 text-white md:block xl:hidden">
                     <div className="flex items-center gap-4">
                       <ProgressRing value={stats.progress} size={72} stroke={6} />
                       <div className="min-w-0">
@@ -984,47 +985,47 @@ export function EnhancedNOKDashboard({
 
                   {/* Important actions */}
                   <section className="owner-letter">
-                    <h2 className="mb-3 text-[15px] font-semibold text-[#213D59]">
-                      Important Actions
+                    <h2 className="mb-3 font-[family-name:var(--font-family-display)] text-[18px] font-normal text-[#213D59]">
+                      Important actions
                     </h2>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <button
                         type="button"
                         onClick={onOwnerLetterAccess}
-                        className="flex items-center gap-3 rounded-[20px] border border-rose-100 bg-rose-50/60 p-4 text-left transition hover:bg-rose-50 active:scale-[0.99]"
+                        className="flex items-center gap-3 rounded-[16px] border border-[#E4EAF0] bg-white p-4 text-left transition hover:border-[#3EB1E5]/40 active:scale-[0.99]"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-rose-500 shadow-sm">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-[#EAF6FC] text-[#3EB1E5]">
                           <Heart className="h-5 w-5" />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-[14px] font-semibold text-[#213D59]">
-                            Read Personal Letter
+                            Read personal letter
                           </span>
-                          <span className="mt-0.5 block text-[12px] text-slate-500">
+                          <span className="mt-0.5 block text-[12px] text-[#7A8794]">
                             Access the personal letter written for you
                           </span>
                         </span>
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F6F8FA] text-[#7A8794]">
                           <ChevronRight className="h-4 w-4" />
                         </span>
                       </button>
                       <button
                         type="button"
                         onClick={onDeliverMessages}
-                        className="flex items-center gap-3 rounded-[20px] border border-sky-100 bg-sky-50/60 p-4 text-left transition hover:bg-sky-50 active:scale-[0.99]"
+                        className="flex items-center gap-3 rounded-[16px] border border-[#E4EAF0] bg-white p-4 text-left transition hover:border-[#3EB1E5]/40 active:scale-[0.99]"
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-sky-600 shadow-sm">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-[#EAF6FC] text-[#3EB1E5]">
                           <Mail className="h-5 w-5" />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-[14px] font-semibold text-[#213D59]">
-                            Deliver Messages
+                            Deliver messages
                           </span>
-                          <span className="mt-0.5 block text-[12px] text-slate-500">
+                          <span className="mt-0.5 block text-[12px] text-[#7A8794]">
                             Send messages to other loved ones
                           </span>
                         </span>
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F6F8FA] text-[#7A8794]">
                           <ChevronRight className="h-4 w-4" />
                         </span>
                       </button>
@@ -1034,11 +1035,11 @@ export function EnhancedNOKDashboard({
                   {/* Sections */}
                   <section
                     id="nok-sections"
-                    className="authorized-sections rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:p-5"
+                    className="authorized-sections rounded-[16px] border border-[#E4EAF0] bg-white p-3 sm:p-5"
                   >
                     <div className="mb-3 flex items-center justify-between gap-2">
-                      <h2 className="text-[15px] font-semibold text-[#213D59]">
-                        All Sections
+                      <h2 className="font-[family-name:var(--font-family-display)] text-[18px] font-normal text-[#213D59]">
+                        All sections
                       </h2>
                       <button
                         type="button"
@@ -1047,7 +1048,7 @@ export function EnhancedNOKDashboard({
                           setActiveNav('all');
                           setSearchQuery('');
                         }}
-                        className="text-[13px] font-semibold text-sky-600"
+                        className="text-[13px] font-semibold text-[#2E7FAD]"
                       >
                         View All
                       </button>
@@ -1055,17 +1056,17 @@ export function EnhancedNOKDashboard({
 
                     <div className="mb-3 flex gap-2">
                       <div className="relative min-w-0 flex-1">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7A8794]" />
                         <Input
                           placeholder="Search sections..."
                           value={searchQuery}
                           onChange={e => setSearchQuery(e.target.value)}
-                          className="h-11 rounded-xl border-slate-200 bg-slate-50 pl-9"
+                          className="h-11 rounded-[10px] border-[#E4EAF0] bg-[#F6F8FA] pl-9 text-[#213D59]"
                         />
                       </div>
                     </div>
 
-                    <div className="mb-3 hidden gap-1 overflow-x-auto border-b border-slate-100 sm:flex">
+                    <div className="mb-3 hidden gap-1 overflow-x-auto border-b border-[#E4EAF0] sm:flex">
                       {tabs.map(tab => {
                         const active = activeFilter === tab.id;
                         return (
@@ -1085,8 +1086,8 @@ export function EnhancedNOKDashboard({
                             className={cn(
                               'shrink-0 border-b-2 px-3 py-2 text-[13px] font-semibold transition',
                               active
-                                ? 'border-[#213D59] text-[#213D59]'
-                                : 'border-transparent text-slate-500 hover:text-[#213D59]',
+                                ? 'border-[#3EB1E5] text-[#213D59]'
+                                : 'border-transparent text-[#7A8794] hover:text-[#213D59]',
                             )}
                           >
                             {tab.label}
@@ -1097,7 +1098,7 @@ export function EnhancedNOKDashboard({
 
                     {visibleSections.length === 0 ? (
                       <div className="px-2 py-12 text-center">
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-[#7A8794]">
                           No sections in this view
                         </p>
                         <Button
@@ -1121,9 +1122,8 @@ export function EnhancedNOKDashboard({
                             const isCompleted = getSectionCompletionStatus(
                               section.id,
                             );
-                            const meta =
+                            const Icon =
                               SECTION_ICONS[section.id] || SECTION_ICONS['1'];
-                            const Icon = meta.icon;
                             const isOpening =
                               openingId === section.id && isPending;
                             return (
@@ -1135,22 +1135,16 @@ export function EnhancedNOKDashboard({
                                   onPrefetchSection?.(section.id)
                                 }
                                 disabled={isOpening}
-                                className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3 text-left shadow-sm active:scale-[0.99] disabled:opacity-70"
+                                className="flex w-full items-center gap-3 rounded-[16px] border border-[#E4EAF0] bg-white p-3 text-left active:scale-[0.99] disabled:opacity-70"
                               >
-                                <span
-                                  className={cn(
-                                    'flex h-11 w-11 shrink-0 items-center justify-center rounded-full',
-                                    meta.bg,
-                                    meta.fg,
-                                  )}
-                                >
+                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-[#EAF6FC] text-[#3EB1E5]">
                                   <Icon className="h-[18px] w-[18px]" />
                                 </span>
                                 <span className="min-w-0 flex-1">
                                   <span className="block truncate text-[13px] font-semibold text-[#213D59]">
                                     {formatVaultSectionTitle(section)}
                                   </span>
-                                  <span className="text-[11px] text-slate-400">
+                                  <span className="text-[11px] text-[#7A8794]">
                                     {isOpening
                                       ? 'Opening…'
                                       : isCompleted
@@ -1159,14 +1153,14 @@ export function EnhancedNOKDashboard({
                                   </span>
                                 </span>
                                 {hasChecklist(section.id) ? (
-                                  <ClipboardList className="h-4 w-4 shrink-0 text-orange-400" />
+                                  <ClipboardList className="h-4 w-4 shrink-0 text-[#3EB1E5]" />
                                 ) : null}
                                 {isCompleted ? (
-                                  <CheckCircle2 className="h-[18px] w-[18px] shrink-0 text-emerald-500" />
+                                  <CheckCircle2 className="h-[18px] w-[18px] shrink-0 text-[#1F9D6B]" />
                                 ) : (
-                                  <Circle className="h-[18px] w-[18px] shrink-0 text-slate-300" />
+                                  <Circle className="h-[18px] w-[18px] shrink-0 text-[#E4EAF0]" />
                                 )}
-                                <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+                                <ChevronRight className="h-4 w-4 shrink-0 text-[#7A8794]" />
                               </button>
                             );
                           })}
@@ -1178,9 +1172,8 @@ export function EnhancedNOKDashboard({
                             const isCompleted = getSectionCompletionStatus(
                               section.id,
                             );
-                            const meta =
+                            const Icon =
                               SECTION_ICONS[section.id] || SECTION_ICONS['1'];
-                            const Icon = meta.icon;
                             const isOpening =
                               openingId === section.id && isPending;
 
@@ -1193,22 +1186,16 @@ export function EnhancedNOKDashboard({
                                   onPrefetchSection?.(section.id)
                                 }
                                 disabled={isOpening}
-                                className="flex items-center gap-3 rounded-[18px] border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:border-[#213D59]/25 hover:shadow-md active:scale-[0.99] disabled:opacity-70"
+                                className="flex items-center gap-3 rounded-[16px] border border-[#E4EAF0] bg-white p-3.5 text-left transition hover:border-[#3EB1E5]/40 active:scale-[0.99] disabled:opacity-70"
                               >
-                                <span
-                                  className={cn(
-                                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
-                                    meta.bg,
-                                    meta.fg,
-                                  )}
-                                >
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[#EAF6FC] text-[#3EB1E5]">
                                   <Icon className="h-[18px] w-[18px]" />
                                 </span>
                                 <span className="min-w-0 flex-1">
                                   <span className="block truncate text-[13px] font-semibold text-[#213D59]">
                                     {formatVaultSectionTitle(section)}
                                   </span>
-                                  <span className="mt-0.5 block text-[11px] text-slate-400">
+                                  <span className="mt-0.5 block text-[11px] text-[#7A8794]">
                                     {isOpening
                                       ? 'Opening…'
                                       : isCompleted
@@ -1217,12 +1204,12 @@ export function EnhancedNOKDashboard({
                                   </span>
                                 </span>
                                 {hasChecklist(section.id) ? (
-                                  <ClipboardList className="h-3.5 w-3.5 shrink-0 text-slate-300" />
+                                  <ClipboardList className="h-3.5 w-3.5 shrink-0 text-[#3EB1E5]" />
                                 ) : null}
                                 {isCompleted ? (
-                                  <CheckCircle2 className="h-[18px] w-[18px] shrink-0 text-emerald-500" />
+                                  <CheckCircle2 className="h-[18px] w-[18px] shrink-0 text-[#1F9D6B]" />
                                 ) : (
-                                  <Circle className="h-[18px] w-[18px] shrink-0 text-slate-300" />
+                                  <Circle className="h-[18px] w-[18px] shrink-0 text-[#E4EAF0]" />
                                 )}
                               </button>
                             );

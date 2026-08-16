@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Building2,
-  ChevronRight,
   ContactRound,
   HeartPulse,
   Home,
@@ -15,10 +14,8 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
-import {
-  getVaultSectionDisplayNumber,
-  VAULT_NAVIGATION,
-} from '@/utils/vaultNavigation';
+import { CategoryTile, SectionTile } from '@/components/vault-ui';
+import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import {
   OVERVIEW_BROWSE_CATEGORIES,
@@ -187,55 +184,11 @@ export function OverviewBrowseGrid({
 
         return (
           <li key={sectionId}>
-            <button
-              type="button"
+            <SectionTile
+              title={title}
+              status={hasPending ? 'inProgress' : isDone ? 'complete' : 'notStarted'}
               onClick={() => onNavigateToSection(sectionId)}
-              className={cn(
-                'group flex w-full items-center gap-3 rounded-xl border px-3.5 py-3.5 text-left transition',
-                hasPending
-                  ? 'border-amber-300 bg-amber-50 ring-1 ring-amber-200'
-                  : isDone
-                    ? 'border-emerald-100 bg-emerald-50/60 hover:bg-emerald-50'
-                    : 'border-slate-200 bg-white hover:border-[#213D59]/25',
-              )}
-            >
-              <span
-                className={cn(
-                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[13px] font-bold',
-                  hasPending
-                    ? 'bg-amber-600 text-white'
-                    : isDone
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-[#e7eef7] text-[#213D59]',
-                )}
-              >
-                {getVaultSectionDisplayNumber(sectionId)}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[15px] font-semibold text-[#1a2b3d]">
-                  {title}
-                </span>
-                <span
-                  className={cn(
-                    'mt-0.5 block text-[13px]',
-                    hasPending ? 'font-medium text-amber-900' : 'text-[#5a6b80]',
-                  )}
-                >
-                  {hasPending
-                    ? 'New information ready — tap to review'
-                    : isDone
-                      ? 'Completed'
-                      : 'Tap to open this section'}
-                </span>
-              </span>
-              {hasPending ? (
-                <span className="shrink-0 rounded-full bg-amber-500 px-2.5 py-1 text-[12px] font-bold text-white">
-                  New
-                </span>
-              ) : (
-                <ChevronRight className="h-5 w-5 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-[#213D59]" />
-              )}
-            </button>
+            />
           </li>
         );
       })}
@@ -246,7 +199,7 @@ export function OverviewBrowseGrid({
     <div
       className={cn(
         'grid grid-cols-2 gap-2.5 p-3 sm:gap-3 sm:p-4',
-        isSheet ? 'grid-cols-2' : 'md:grid-cols-3 lg:grid-cols-5',
+        isSheet ? 'grid-cols-2' : 'md:grid-cols-4 xl:grid-cols-8',
       )}
     >
       {visibleCategories.map(category => {
@@ -259,74 +212,35 @@ export function OverviewBrowseGrid({
             : `${badge > 9 ? '9+' : badge} sections with new data`;
 
         return (
-          <button
+          <CategoryTile
             key={category.id}
-            type="button"
+            title={category.label}
+            subtitle={
+              badge > 0
+                ? newLabel
+                : 'Tap to browse'
+            }
+            hasNew={badge > 0}
+            selected={selected}
             onClick={() => openCategory(category)}
             aria-label={
               badge > 0
                 ? `${category.label}. ${newLabel}. Tap to open.`
                 : `${category.label}. Tap to open.`
             }
-            className={cn(
-              'relative flex min-h-[7rem] flex-col justify-between rounded-2xl border px-3.5 py-3.5 text-left transition active:scale-[0.98] sm:min-h-[7.5rem]',
-              selected
-                ? 'border-[#213D59] bg-[#213D59] text-white shadow-sm'
-                : badge > 0
-                  ? 'border-amber-300 bg-amber-50 text-[#1a2b3d] shadow-sm ring-1 ring-amber-200 hover:bg-amber-100/80'
-                  : 'border-slate-200/90 bg-[#f7f8fa] text-[#1a2b3d] hover:border-[#213D59]/30 hover:bg-white',
-            )}
-          >
-            <div className="flex items-start justify-between gap-2">
+            icon={
               <Icon
                 className={cn(
                   'h-6 w-6 shrink-0',
                   selected
                     ? 'text-white/90'
                     : badge > 0
-                      ? 'text-amber-800'
+                      ? 'text-[#B4761A]'
                       : 'text-[#213D59]',
                 )}
               />
-              {badge > 0 ? (
-                <span
-                  className={cn(
-                    'inline-flex max-w-[7.5rem] items-center justify-center rounded-full px-2 py-1 text-center text-[11px] font-bold leading-tight sm:max-w-none sm:text-[12px]',
-                    selected
-                      ? 'bg-amber-300 text-amber-950'
-                      : 'bg-amber-500 text-white',
-                  )}
-                >
-                  {badge > 9 ? '9+' : badge} new
-                </span>
-              ) : null}
-            </div>
-
-            <div className="mt-3 space-y-1">
-              <span className="block text-[15px] font-semibold leading-snug tracking-tight sm:text-[16px]">
-                {category.label}
-              </span>
-              {badge > 0 ? (
-                <span
-                  className={cn(
-                    'block text-[12px] font-medium leading-snug sm:text-[13px]',
-                    selected ? 'text-amber-100' : 'text-amber-900',
-                  )}
-                >
-                  {newLabel}
-                </span>
-              ) : (
-                <span
-                  className={cn(
-                    'block text-[12px] leading-snug sm:text-[13px]',
-                    selected ? 'text-white/75' : 'text-[#5a6b80]',
-                  )}
-                >
-                  Tap to browse
-                </span>
-              )}
-            </div>
-          </button>
+            }
+          />
         );
       })}
     </div>
@@ -351,7 +265,7 @@ export function OverviewBrowseGrid({
           </h2>
           <p className="mt-1 text-[13.5px] leading-snug text-[#5a6b80]">
             Amber tiles say <span className="font-semibold text-amber-800">new</span>{' '}
-            when documents were just filled — tap one to open those sections.
+            when documents were just filled. Tap one to open those sections.
           </p>
         </div>
 
@@ -376,7 +290,7 @@ export function OverviewBrowseGrid({
                 <button
                   type="button"
                   onClick={() => setActiveId(null)}
-                  className="text-[11px] font-medium text-[#2B5A8C]"
+                  className="text-[11px] font-medium text-[#2E7FAD]"
                 >
                   Clear
                 </button>
@@ -404,21 +318,19 @@ export function OverviewBrowseGrid({
       data-overview-browse
       data-tour="tour-vault-by-category"
       className={cn(
-        'overview-vault-by-category overflow-hidden rounded-2xl border border-[#213D59]/12 bg-white shadow-sm',
+        'overview-vault-by-category overflow-hidden rounded-[22px] border border-[#E4EAF0] bg-white shadow-[0_1px_2px_rgba(33,61,89,.06)]',
         className,
       )}
     >
-      <div className="border-b border-slate-100 px-4 py-3.5 sm:px-5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+      <div className="px-6 pt-[22px]">
+        <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#619FCE]">
           Browse
         </p>
-        <h2 className="mt-0.5 text-[17px] font-semibold text-[#213D59]">
-          Vault by category
+        <h2 className="mt-1.5 text-[19px] font-bold tracking-[-0.02em] text-[#213D59]">
+          Your Vault by category
         </h2>
-        <p className="mt-1 text-[13.5px] leading-snug text-[#5a6b80]">
-          Look for amber tiles labeled{' '}
-          <span className="font-semibold text-amber-800">new</span> — those have
-          documents ready to review. Tap the category, then tap the section.
+        <p className="mt-1 text-[13.5px] text-[#7A8794]">
+          Amber tiles have documents waiting for your review.
         </p>
       </div>
 

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { sectionHasSidebarNewAiData } from '@/utils/aiSidebarNewData';
+import {
+  countPendingAiReviews,
+  partitionVaultNavForNewData,
+  sectionHasSidebarNewAiData,
+} from '@/utils/aiSidebarNewData';
 import {
   markDashboardAiPatchPersisted,
   stashDashboardAiPatch,
@@ -110,5 +114,99 @@ describe('sectionHasSidebarNewAiData', () => {
         },
       ]),
     ).toBe(true);
+  });
+});
+
+describe('countPendingAiReviews', () => {
+  beforeEach(() => {
+    installSessionStorage();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps a deferred Review later document countable', () => {
+    stashDashboardAiPatch({
+      file_id: 'file-later',
+      section_id: '5',
+      section_key: 'vehicles',
+      result: { make: 'Honda' },
+      detectedFields: [{ label: 'Make', value: 'Honda' }],
+      pending_accept: true,
+      createdAt: Date.now(),
+    });
+
+    expect(countPendingAiReviews('5')).toBe(1);
+    expect(countPendingAiReviews()).toBe(1);
+  });
+
+  it('drops the count after Accept marks the section reviewed', () => {
+    stashDashboardAiPatch({
+      file_id: 'file-done',
+      section_id: '5',
+      section_key: 'vehicles',
+      result: { make: 'Honda' },
+      detectedFields: [{ label: 'Make', value: 'Honda' }],
+      pending_accept: true,
+      createdAt: Date.now(),
+    });
+    markAiSectionReviewed({ sectionId: '5', fileId: 'file-done' });
+    takeDashboardAiPatch('5', 'file-done');
+
+    expect(countPendingAiReviews('5')).toBe(0);
+    expect(countPendingAiReviews()).toBe(0);
+  });
+});
+
+describe('partitionVaultNavForNewData', () => {
+  const groups = [
+    {
+      id: 'Start here',
+      label: 'Start here',
+      items: [
+        { apiId: 'dashboard', name: 'Dashboard' },
+        { apiId: '0', name: 'Getting started' },
+      ],
+    },
+    {
+      id: 'Property',
+      label: 'Property',
+      items: [
+        { apiId: '5', name: 'Vehicles' },
+        { apiId: '6', name: 'Residence' },
+      ],
+    },
+    {
+      id: 'Protection',
+      label: 'Protection',
+      items: [{ apiId: '7', name: 'Insurance' }],
+    },
+  ];
+
+  it('pins matched sections to New data and returns them after the set clears', () => {
+    const pinned = partitionVaultNavForNewData(groups, new Set(['5', '7']));
+    expect(pinned.newDataItems.map(item => item.apiId)).toEqual(['5', '7']);
+    expect(
+      pinned.groupsForNav.find(group => group.id === 'Property')?.items.map(
+        item => item.apiId,
+      ),
+    ).toEqual(['6']);
+    expect(pinned.groupsForNav.some(group => group.id === 'Protection')).toBe(
+      false,
+    );
+
+    const afterReview = partitionVaultNavForNewData(groups, new Set());
+    expect(afterReview.newDataItems).toEqual([]);
+    expect(
+      afterReview.groupsForNav
+        .find(group => group.id === 'Property')
+        ?.items.map(item => item.apiId),
+    ).toEqual(['5', '6']);
+    expect(
+      afterReview.groupsForNav
+        .find(group => group.id === 'Protection')
+        ?.items.map(item => item.apiId),
+    ).toEqual(['7']);
   });
 });

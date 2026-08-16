@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   hydrateAiUploadHistoryFromServer,
+  itemMatchesSection,
   listAiUploadHistory,
+  mapServerDocumentsToHistory,
   toVaultSectionId,
   clearAiUploadHistory,
 } from '@/utils/aiUploadHistory';
@@ -38,5 +40,23 @@ describe('aiUploadHistory section mapping', () => {
     expect(insurance[0].sectionIds).toEqual(
       expect.arrayContaining(['7', '5']),
     );
+  });
+
+  it('maps server documents without waiting on hydrate', () => {
+    const mapped = mapServerDocumentsToHistory([
+      {
+        file_id: 's3-1',
+        original_filename: 'Passport.pdf',
+        mime_type: 'application/pdf',
+        status: 'ready',
+        filled: true,
+        section: 'vital_information',
+        consumed_sections: ['vital_information'],
+      },
+    ]);
+    expect(mapped).toHaveLength(1);
+    expect(mapped[0].fileId).toBe('s3-1');
+    expect(mapped[0].fileName).toBe('Passport.pdf');
+    expect(itemMatchesSection(mapped[0], '1')).toBe(true);
   });
 });

@@ -26,10 +26,10 @@ export function AiPendingUploadBanner({
   const isReview = mode === 'review';
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-[#7688a1]/40 bg-[#e7eef7] p-3.5 shadow-sm sm:p-4">
+    <div className="relative overflow-hidden rounded-2xl border border-[#7688a1]/40 bg-[#EAF6FD] p-3.5 shadow-sm sm:p-4">
       <div className="relative flex flex-col gap-3.5 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
         <div className="flex min-w-0 flex-1 items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#2B5A8C] shadow-sm ring-1 ring-[#2B5A8C]/20">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#2E7FAD] shadow-sm ring-1 ring-[#2B5A8C]/20">
             {isReview ? <Eye className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
           </div>
 

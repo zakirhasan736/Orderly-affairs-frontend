@@ -18,8 +18,11 @@ export const aiDocumentsApi = createApi({
   endpoints: builder => ({
     listOwnerAiDocuments: builder.query<OwnerAiDocument[], void>({
       query: () => ({ url: '/documents', method: 'GET' }),
-      transformResponse: (response: DocumentsListResponse) =>
-        Array.isArray(response?.documents) ? response.documents : [],
+      transformResponse: (response: DocumentsListResponse | OwnerAiDocument[]) => {
+        if (Array.isArray(response)) return response;
+        if (Array.isArray(response?.documents)) return response.documents;
+        return [];
+      },
       providesTags: ['AiDocuments'],
     }),
   }),

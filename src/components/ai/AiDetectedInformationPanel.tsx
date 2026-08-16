@@ -100,13 +100,13 @@ export function AiDetectedInformationPanel({
   if (!primary) return null;
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-[#7688a1]/40 bg-[#e7eef7]/50 p-4 shadow-sm sm:p-5">
+    <section className="overflow-hidden rounded-2xl border border-[#7688a1]/40 bg-[#EAF6FD]/50 p-4 shadow-sm sm:p-5">
       <div className="mb-3 flex items-center gap-3 sm:mb-4">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#e7eef7] text-[#2B5A8C]">
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#EAF6FD] text-[#2E7FAD]">
           <Sparkles className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-kicker text-[#2B5A8C]">
+          <p className="text-kicker text-[#2E7FAD]">
             Detected data
           </p>
           <h3 className="text-lg font-semibold text-[#213D59]">
@@ -124,11 +124,11 @@ export function AiDetectedInformationPanel({
         >
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-slate-700">
-              <FileText className="h-4 w-4 text-[#2B5A8C]" />
+              <FileText className="h-4 w-4 text-[#2E7FAD]" />
               <span className="font-semibold text-[#213D59]">
                 {getAiSectionLabel(primary.targetSectionId)}
               </span>
-              <span className="rounded-full bg-[#e7eef7] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#2B5A8C]">
+              <span className="rounded-full bg-[#EAF6FD] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#2E7FAD]">
                 Next
               </span>
             </div>
@@ -163,7 +163,7 @@ export function AiDetectedInformationPanel({
             variant="outline"
             className={cn(
               AI_MOBILE_ACTION_BUTTON,
-                  'mt-3 border-[#2B5A8C]/30 bg-[#e7eef7]/60 hover:bg-[#e7eef7] sm:mt-4',
+                  'mt-3 border-[#2B5A8C]/30 bg-[#EAF6FD]/60 hover:bg-[#EAF6FD] sm:mt-4',
                 )}
                 onClick={() => {
                   const sectionId = primary.targetSectionId;
@@ -192,7 +192,7 @@ export function AiDetectedInformationPanel({
                   <li key={`${upload.targetSectionId}:${upload.file_id}`}>
                     <button
                       type="button"
-                      className="flex w-full min-h-11 items-center justify-between gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-[#213D59] hover:bg-[#e7eef7]/80"
+                      className="flex w-full min-h-11 items-center justify-between gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-[#213D59] hover:bg-[#EAF6FD]/80"
                       onClick={() => {
                         const pending =
                           routing?.getPendingUploadsForSection(

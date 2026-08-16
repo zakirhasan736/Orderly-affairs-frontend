@@ -15,7 +15,6 @@ import {
   getReadableAiDocumentType,
   type UploadedAIFile,
 } from '@/utils/aiDocumentUploadUi';
-import { AiUploadSupportedSectionsHint } from '@/components/ai/AiUploadSupportedSectionsHint';
 import { AiUploadHistoryPopup } from '@/components/ai/AiUploadHistoryPopup';
 import { AI_PENDING_ROUTED_HINT } from '@/utils/aiRoutingUi';
 import { AI_MOBILE_ACTION_BUTTON } from '@/utils/aiMobileUi';
@@ -25,7 +24,7 @@ import {
   isAiAutofillDoneForSection,
 } from '@/utils/aiAutofillDoneSections';
 import { toAiUserFacingMessage } from '@/utils/aiUserFacingError';
-import { useAiActiveSectionId, useAiActiveSubsectionId, useAiActiveSectionData } from '@/contexts/AiActiveSectionContext';
+import { useAiActiveSectionId } from '@/contexts/AiActiveSectionContext';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import { useFamilyAcl } from '@/contexts/FamilyAclContext';
 import {
@@ -36,7 +35,6 @@ import {
 } from '@/utils/aiUploadHistory';
 import { listOwnerAiDocuments } from '@/services/aiDocumentUpload';
 import { getAiSectionLabel } from '@/utils/aiSectionRegistry';
-import { SectionLastUpdatedPin } from '@/components/vault/SectionLastUpdatedPin';
 
 export type SectionAiUploaderTone = {
   wrapper?: string;
@@ -101,11 +99,8 @@ export function SectionAiDocumentUploader({
   const [isDragging, setIsDragging] = useState(false);
   const [doneTick, setDoneTick] = useState(0);
   const activeSectionId = useAiActiveSectionId();
-  const activeSubsectionId = useAiActiveSubsectionId();
-  const activeSectionData = useAiActiveSectionData();
   const aiRouting = useOptionalAiDocumentRouting();
   const resolvedSectionId = sectionId || activeSectionId || undefined;
-  const resolvedSubsectionId = subsectionId || activeSubsectionId || undefined;
   const resolvedMimeType = uploadedFile?.mime_type || uploadedMimeType;
   const hasUploadedFile = Boolean(resolvedMimeType || uploadedFile?.file_id);
   const allowSectionUpload =
@@ -333,21 +328,21 @@ export function SectionAiDocumentUploader({
       data-ai-autofill-done={autofillDone ? 'true' : undefined}
       className={cn(
         'relative overflow-visible rounded-xl border border-dashed shadow-sm transition-all duration-200',
-        'border-[#7688a1] bg-[#e7eef7]/40',
+        'border-[#7688a1] bg-[#EAF6FD]/40',
         'hover:border-[#2B5A8C] hover:shadow-md',
         // Section pages stay dense so form fields stay above the fold.
-        compact ? 'space-y-1.5 p-2' : 'space-y-2 p-2.5 sm:p-3',
+        compact ? 'space-y-1 p-1.5' : 'space-y-1.5 p-2',
         activeHighlight &&
-          'border-[#2B5A8C] bg-[#e7eef7] ring-2 ring-[#2B5A8C]/30 ring-offset-1 animate-pulse',
+          'border-[#2B5A8C] bg-[#EAF6FD] ring-2 ring-[#2B5A8C]/30 ring-offset-1 animate-pulse',
         overviewPin &&
-          'border-[#2B5A8C]/50 bg-[#e7eef7]/70 ring-1 ring-[#2B5A8C]/20',
+          'border-[#2B5A8C]/50 bg-[#EAF6FD]/70 ring-1 ring-[#2B5A8C]/20',
         autofillDone && 'border-[#2c7a63] bg-[#e7f2ee]',
         tone?.wrapper,
       )}
     >
       {overviewPin ? (
         <div
-          className="absolute -right-1.5 -top-1.5 z-10 flex items-center gap-0.5 rounded-full border border-[#2B5A8C]/30 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-[#2B5A8C] shadow-sm"
+          className="absolute -right-1.5 -top-1.5 z-10 flex items-center gap-0.5 rounded-full border border-[#2B5A8C]/30 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-[#2E7FAD] shadow-sm"
           title="Document was read on Overview and pinned to this section"
         >
           <Pin className="h-3 w-3 fill-[#2B5A8C]/20" />
@@ -355,16 +350,7 @@ export function SectionAiDocumentUploader({
         </div>
       ) : null}
 
-      <div className="relative flex flex-wrap items-center gap-2">
-        {resolvedSectionId ? (
-          <SectionLastUpdatedPin
-            sectionId={resolvedSectionId}
-            subsectionId={resolvedSubsectionId}
-            label="Updated"
-            compact
-          />
-        ) : null}
-
+      <div className="relative flex flex-wrap items-center gap-1.5">
         {!allowSectionUpload ? (
           <div className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600">
             Document upload is not available for your family role. You can still
@@ -395,11 +381,11 @@ export function SectionAiDocumentUploader({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             className={cn(
-              'group flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg border border-dashed px-2.5 py-2 transition touch-manipulation active:scale-[0.99]',
+              'group flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-lg border border-dashed px-2 py-1.5 transition touch-manipulation active:scale-[0.99]',
               hasUploadedFile || autofillDone
                 ? 'border-[#2c7a63]/40 bg-[#e7f2ee]/60'
-                : 'border-[#7688a1] bg-white hover:border-[#2B5A8C] hover:bg-[#e7eef7]/50',
-              isDragging && 'border-[#2B5A8C] bg-[#e7eef7] ring-2 ring-[#2B5A8C]/25',
+                : 'border-[#7688a1] bg-white hover:border-[#2B5A8C] hover:bg-[#EAF6FD]/50',
+              isDragging && 'border-[#2B5A8C] bg-[#EAF6FD] ring-2 ring-[#2B5A8C]/25',
               isBusy && 'pointer-events-none opacity-60',
               tone?.uploadBox,
             )}
@@ -418,16 +404,16 @@ export function SectionAiDocumentUploader({
               }}
             />
 
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-slate-200">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white shadow-sm ring-1 ring-slate-200">
               {isUploading ? (
                 <Loader2
-                  className={cn('h-4 w-4 animate-spin text-[#2B5A8C]', tone?.icon)}
+                  className={cn('h-4 w-4 animate-spin text-[#2E7FAD]', tone?.icon)}
                 />
               ) : hasUploadedFile || autofillDone ? (
                 <CheckCircle2 className="h-4 w-4 text-[#2c7a63]" />
               ) : (
                 <UploadCloud
-                  className={cn('h-4 w-4 text-[#2B5A8C]', tone?.icon)}
+                  className={cn('h-4 w-4 text-[#2E7FAD]', tone?.icon)}
                 />
               )}
             </div>
@@ -439,7 +425,7 @@ export function SectionAiDocumentUploader({
                   autofillDone || hasUploadedFile
                     ? 'text-[#2c7a63]'
                     : overviewPin
-                      ? 'text-[#2B5A8C]'
+                      ? 'text-[#2E7FAD]'
                       : 'text-[#213D59]',
                 )}
               >
@@ -495,7 +481,7 @@ export function SectionAiDocumentUploader({
 
       {(isUploading || (!isUploading && isReading && !hasUploadedFile)) && (
         <div className="flex items-center gap-1.5 text-[11px] text-[#5a6b80]">
-          <Loader2 className="h-3 w-3 animate-spin text-[#2B5A8C]" />
+          <Loader2 className="h-3 w-3 animate-spin text-[#2E7FAD]" />
           {isUploading ? 'Uploading…' : 'Running AI autofill…'}
         </div>
       )}
@@ -506,10 +492,7 @@ export function SectionAiDocumentUploader({
         </p>
       )}
 
-      {/* Category chips stay on Overview; sections only need a one-line hint. */}
-      {allowSectionUpload && !autofillDone && !hasUploadedFile && !overviewPin && (
-        <AiUploadSupportedSectionsHint compact className="!mt-0 opacity-80" />
-      )}
+      {/* Category chips stay on Overview; keep the section drop zone one row. */}
     </div>
   );
 }

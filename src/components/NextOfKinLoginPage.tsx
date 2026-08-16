@@ -15,6 +15,10 @@ import {
 } from '@/services/authApi';
 import { getOtpSessionId } from '@/utils/otpSession';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
+import {
+  collaboratorPortalMismatch,
+  type CollaboratorPortal,
+} from '@/utils/portalLogin';
 
 interface NextOfKinLoginPageProps {
   /** Password step — return API body (may be MFA challenge or authenticated). */
@@ -31,6 +35,8 @@ interface NextOfKinLoginPageProps {
   captchaReady?: boolean;
   titleOverride?: string;
   subtitleOverride?: string;
+  /** Reject the other collaborator type after password/MFA. */
+  expectedPortal?: CollaboratorPortal;
 }
 
 function ShieldIcon({ className }: { className?: string }) {
@@ -73,7 +79,7 @@ function BrandAside({
         type="button"
         onClick={onBackToOwner}
         className="inline-flex h-11 w-fit items-center gap-2 self-start rounded-2xl bg-white/10 px-3.5 text-[12.5px] font-medium text-white/90"
-        style={{ fontFamily: "'Manrope', sans-serif" }}
+        style={{ fontFamily: 'system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif' }}
       >
         <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.7} />
         Owner sign-in
@@ -126,7 +132,7 @@ function MobileBrandHeader({
         type="button"
         onClick={onBackToOwner}
         className="inline-flex h-11 w-fit items-center gap-[7px] rounded-[15px] bg-white/10 px-3 text-xs font-medium text-white/90"
-        style={{ fontFamily: "'Manrope', sans-serif" }}
+        style={{ fontFamily: 'system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif' }}
       >
         <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.7} />
         Owner sign-in
@@ -167,6 +173,7 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
   captchaReady = true,
   titleOverride,
   subtitleOverride,
+  expectedPortal,
 }) => {
   const title = titleOverride || 'Next of Kin';
   const subtitle =
@@ -194,6 +201,17 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
   const isLocked = failedAttempts >= maxAttempts;
 
   const finishAuthenticated = async (res: LoginResponse) => {
+    const mismatch = expectedPortal
+      ? collaboratorPortalMismatch(res.access_type, expectedPortal)
+      : null;
+    if (mismatch) {
+      try {
+        await import('@/libs/secureFetch').then(({ nokLogout }) => nokLogout());
+      } catch {
+        /* ignore */
+      }
+      throw new Error(mismatch);
+    }
     try {
       const { unlockVaultWithPassword } = await import('@/libs/e2ee/unlock');
       await unlockVaultWithPassword(passwordRef.current || password);
@@ -261,6 +279,15 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
       })) as LoginResponse | void;
 
       if (res && res.mfa_required) {
+        const mismatch = expectedPortal
+          ? collaboratorPortalMismatch(
+              res.access_type || res.portal,
+              expectedPortal,
+            )
+          : null;
+        if (mismatch) {
+          throw new Error(mismatch);
+        }
         await enterMfa(res);
         setFailedAttempts(0);
         return;
@@ -363,7 +390,7 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] lg:items-center lg:justify-center lg:p-12">
         <div className="mx-auto flex w-full max-w-[min(100%,28.75rem)] flex-1 flex-col lg:flex-none">
-          <div className="rounded-[18px] border border-[#e4e6e1] bg-white p-5 lg:p-[34px]">
+          <div className="rounded-[16px] border border-[#E4EAF0] bg-white p-5 lg:p-[34px]">
             <div className="flex items-center gap-[11px]">
               {mfaStep ? (
                 <ShieldCheck className="h-5 w-5 shrink-0 text-[#213D59]" />
@@ -415,7 +442,7 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
                         className={`rounded-xl px-3 py-2 text-xs font-medium ${
                           mfaMethod === method
                             ? 'bg-[#213D59] text-white'
-                            : 'bg-[#f5f8fc] text-[#213D59]'
+                            : 'bg-[#F6F8FA] text-[#213D59]'
                         }`}
                       >
                         {method === 'email' ? 'Email' : 'Authenticator'}
@@ -528,7 +555,7 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
                 </label>
 
                 {captchaSlot ? (
-                  <div className="mt-4 rounded-[14px] border border-[#f2f1ec] bg-[#f5f8fc] p-2.5 lg:mt-4 lg:p-2.5">
+                  <div className="mt-4 rounded-[14px] border border-[#f2f1ec] bg-[#F6F8FA] p-2.5 lg:mt-4 lg:p-2.5">
                     <div className="flex min-h-[62px] items-center justify-center overflow-x-auto rounded-[10px] border border-[#e4e6e1] bg-white px-3.5 py-2 lg:min-h-[65px]">
                       {captchaSlot}
                     </div>
