@@ -43,8 +43,36 @@ export function getReadableAiDocumentType(mimeType?: string) {
   return mimeType;
 }
 
+export function resolveAiDocumentMime(file: File): string {
+  const raw = String(file.type || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
+  if (raw === 'image/jpg' || raw === 'image/pjpeg') return 'image/jpeg';
+  if (
+    raw &&
+    (AI_DOCUMENT_ALLOWED_TYPES as readonly string[]).includes(raw)
+  ) {
+    return raw;
+  }
+  const name = String(file.name || '').toLowerCase();
+  if (name.endsWith('.pdf')) return 'application/pdf';
+  if (name.endsWith('.png')) return 'image/png';
+  if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
+  if (name.endsWith('.webp')) return 'image/webp';
+  if (name.endsWith('.txt')) return 'text/plain';
+  return raw;
+}
+
 export function validateAiDocumentFile(file: File) {
-  if (!AI_DOCUMENT_ALLOWED_TYPES.includes(file.type as (typeof AI_DOCUMENT_ALLOWED_TYPES)[number])) {
+  const mime = resolveAiDocumentMime(file);
+  if (
+    !(AI_DOCUMENT_ALLOWED_TYPES as readonly string[]).includes(mime) ||
+    /\.(heic|heif)$/i.test(file.name || '')
+  ) {
+    if (/\.(heic|heif)$/i.test(file.name || '') || mime.includes('heic')) {
+      return 'iPhone HEIC photos are not supported. Save or export as JPG or PDF, then upload again.';
+    }
     return AI_DOCUMENT_TYPE_ERROR;
   }
 

@@ -25,7 +25,9 @@ describe('AI user-facing copy', () => {
     for (const word of FORBIDDEN) {
       expect(blob).not.toContain(word);
     }
-    expect(AI_WAITING_USER_MESSAGE.toLowerCase()).toContain('please wait');
+    expect(AI_WAITING_USER_MESSAGE.toLowerCase()).toContain('working on');
+    expect(AI_WAITING_USER_MESSAGE.toLowerCase()).not.toContain('please wait');
+    expect(AI_WAITING_USER_MESSAGE.toLowerCase()).not.toContain('busy');
   });
 
   it('maps 429 / busy / provider errors to waiting copy', () => {

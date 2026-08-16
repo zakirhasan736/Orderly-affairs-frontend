@@ -130,7 +130,7 @@ function statusFootnote(
   if (status === 'done') return 'Complete';
   if (status === 'attention') return 'Needs attention';
   if (status === 'queued') return 'Waiting for the next document';
-  return 'Still processing your document. Please wait...';
+  return 'Working on this document…';
 }
 
 function mergeHistoryWithJobs(

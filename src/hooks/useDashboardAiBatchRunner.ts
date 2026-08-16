@@ -45,7 +45,6 @@ import {
 } from '@/utils/aiUploadHistory';
 import {
   AI_GENERIC_FAIL_USER_MESSAGE,
-  AI_WAITING_USER_MESSAGE,
   isAiBusyMessage,
   toAiUserFacingMessage,
 } from '@/utils/aiUserFacingError';
@@ -370,7 +369,7 @@ async function fillPartnerSectionsFast(args: {
           },
           {
             onWaiting: () =>
-              patchJob(jobId, { message: AI_WAITING_USER_MESSAGE }),
+              patchJob(jobId, { message: 'Mapping to your vault…' }),
           },
         ),
         PARTNER_FILL_TIMEOUT_MS,
@@ -544,6 +543,8 @@ export type DashboardAiJob = {
   /** How the file bytes were read before field matching. */
   readSource?: 'system' | 'gemini' | 'cache';
   extractMethod?: string;
+  terraInvoked?: boolean;
+  pipelinePath?: string;
   /** Section currently being filled (primary or partner). */
   activeFillSectionId?: string;
   /** When the file was queued / uploaded. */
@@ -583,13 +584,13 @@ function statusLabel(status: DashboardAiJobStatus) {
     case 'starting':
       return 'Preparing secure upload…';
     case 'uploading':
-      return 'Uploading securely…';
+      return 'Scanning document…';
     case 'reading':
-      return 'Reading your document…';
+      return 'Reading with OCR…';
     case 'almost':
-      return AI_WAITING_USER_MESSAGE;
+      return 'Filling in missing text…';
     case 'routing':
-      return 'Analyzing document information…';
+      return 'Mapping to your vault…';
     case 'filling':
       return 'Matching information…';
     case 'needs_section_choice':
@@ -599,7 +600,7 @@ function statusLabel(status: DashboardAiJobStatus) {
     case 'error':
       return 'Needs attention';
     default:
-      return AI_WAITING_USER_MESSAGE;
+      return 'Mapping to your vault…';
   }
 }
 
@@ -904,7 +905,7 @@ export function useDashboardAiBatchRunner() {
             },
             {
               onWaiting: () =>
-                patchJob(jobId, { message: AI_WAITING_USER_MESSAGE }),
+                patchJob(jobId, { message: 'Matching information…' }),
             },
           ),
           FILL_TIMEOUT_MS,
@@ -1032,37 +1033,38 @@ export function useDashboardAiBatchRunner() {
         source: 'overview',
       });
 
-      const reuseMessage =
-        uploaded.unchanged || uploaded.extract_reuse
-          ? 'Reusing a prior read of this file…'
-          : uploaded.needs_vision === false
-            ? 'Our system is reading the text…'
-            : 'Virtual Assistant is reading the document…';
+      const terraInvoked = Boolean(uploaded.terra_invoked);
+      const reuseMessage = uploaded.unchanged || uploaded.extract_reuse
+        ? 'Reusing a prior read of this file…'
+        : terraInvoked
+          ? 'Filling in missing text…'
+          : 'Reading with OCR…';
 
       const uploadReadSource: DashboardAiJob['readSource'] =
         uploaded.unchanged || uploaded.extract_reuse
           ? 'cache'
-          : uploaded.needs_vision === false
-            ? 'system'
-            : uploaded.needs_vision === true
-              ? 'gemini'
+          : terraInvoked
+            ? 'gemini'
+            : uploaded.needs_vision === false
+              ? 'system'
               : undefined;
 
       patchJob(job.id, {
-        status: 'reading',
-        progress: 45,
+        status: terraInvoked ? 'almost' : 'reading',
+        progress: terraInvoked ? 72 : 45,
         message: reuseMessage,
         file_id: uploaded.file_id,
         mime_type: uploaded.mime_type,
         readSource: uploadReadSource,
         extractMethod: uploaded.extract_method,
+        terraInvoked,
+        pipelinePath: uploaded.pipeline_path,
       });
 
       almostTimersRef.current[job.id] = window.setTimeout(() => {
         setJobs(prev =>
           prev.map(item =>
-            item.id === job.id &&
-            (item.status === 'reading' || item.status === 'routing')
+            item.id === job.id && item.status === 'reading' && !item.terraInvoked
               ? {
                   ...item,
                   status: 'almost',
@@ -1072,7 +1074,7 @@ export function useDashboardAiBatchRunner() {
               : item,
           ),
         );
-      }, 700);
+      }, 4000);
 
       // Hard safety: never leave a job spinning forever in the UI.
       watchdog = window.setTimeout(() => {
@@ -1110,7 +1112,7 @@ export function useDashboardAiBatchRunner() {
             },
             {
               onWaiting: () =>
-                patchJob(job.id, { message: AI_WAITING_USER_MESSAGE }),
+                patchJob(job.id, { message: 'Mapping to your vault…' }),
             },
           ),
           CLASSIFY_TIMEOUT_MS,

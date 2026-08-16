@@ -3,8 +3,7 @@
  * Never show technical busy / quota / 429 / model names to normal users.
  */
 
-export const AI_WAITING_USER_MESSAGE =
-  'Still processing your document. Please wait...';
+export const AI_WAITING_USER_MESSAGE = 'Working on this document…';
 
 /** @deprecated Use AI_WAITING_USER_MESSAGE — kept so older imports keep working. */
 export const AI_BUSY_USER_MESSAGE = AI_WAITING_USER_MESSAGE;
@@ -20,7 +19,8 @@ export function isAiBusyMessage(raw?: string | null): boolean {
   if (!msg) return false;
   return (
     TRANSIENT_CAPACITY.test(msg) ||
-    msg.toLowerCase().includes(AI_WAITING_USER_MESSAGE.toLowerCase())
+    msg.toLowerCase().includes(AI_WAITING_USER_MESSAGE.toLowerCase()) ||
+    msg.toLowerCase().includes('please wait')
   );
 }
 

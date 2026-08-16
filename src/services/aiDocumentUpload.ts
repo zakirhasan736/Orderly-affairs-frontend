@@ -5,16 +5,10 @@ import { resolveApiBaseUrl } from '@/libs/apiBase';
 import { store } from '@/store/store';
 import { aiDocumentsApi } from '@/services/aiDocumentsApi';
 import { invalidateAiDocumentPreviewCache } from '@/utils/aiDocumentPreviewCache';
-
-const ALLOWED_TYPES = [
-  'application/pdf',
-  'text/plain',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-];
-
-const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
+import {
+  resolveAiDocumentMime,
+  validateAiDocumentFile,
+} from '@/utils/aiDocumentUploadUi';
 
 export type AIDocumentUploadResponse = {
   success: boolean;
@@ -34,6 +28,9 @@ export type AIDocumentUploadResponse = {
   content_hash?: string;
   reused_from_file_id?: string | null;
   needs_vision?: boolean;
+  terra_invoked?: boolean;
+  terra_pages?: number[];
+  pipeline_path?: string;
   extract_method?: string;
   extract_quality?: number;
   scan_status?: string;
@@ -70,16 +67,19 @@ export async function uploadAIDocument(
     throw new Error('Please select a file.');
   }
 
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    throw new Error('Upload PDF, TXT, PNG, JPG, JPEG, or WEBP only.');
+  const typeError = validateAiDocumentFile(file);
+  if (typeError) {
+    throw new Error(typeError);
   }
 
-  if (file.size > MAX_UPLOAD_SIZE) {
-    throw new Error('File too large. Max 15MB.');
-  }
+  const mime = resolveAiDocumentMime(file);
+  const uploadFile =
+    mime && mime !== file.type
+      ? new File([file], file.name, { type: mime, lastModified: file.lastModified })
+      : file;
 
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', uploadFile);
   const section =
     options?.section != null && String(options.section).trim()
       ? String(options.section).trim()
@@ -107,7 +107,16 @@ export async function uploadAIDocument(
       throw new Error('Login expired or token invalid. Please log in again.');
     }
 
-    throw new Error(json?.detail || 'Document upload failed');
+    const detail = json?.detail;
+    const message =
+      typeof detail === 'string'
+        ? detail
+        : typeof detail?.message === 'string'
+          ? detail.message
+          : typeof json?.message === 'string'
+            ? json.message
+            : 'Document upload failed';
+    throw new Error(message);
   }
 
   if (Array.isArray(json?.replaced_file_ids)) {
