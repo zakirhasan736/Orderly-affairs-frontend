@@ -274,7 +274,7 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
     setError('');
     try {
       const res = (await onLoginSuccess({
-        email: emailOrPhone,
+        email: emailOrPhone.trim(),
         password,
       })) as LoginResponse | void;
 

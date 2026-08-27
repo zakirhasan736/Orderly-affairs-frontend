@@ -77,7 +77,7 @@ export default function FamilyLoginPage() {
 
     try {
       return await nextkinLogin({
-        email,
+        email: email.trim(),
         master_password: password,
         captcha_token: captchaToken,
         otp_session_id: getOtpSessionId(),
