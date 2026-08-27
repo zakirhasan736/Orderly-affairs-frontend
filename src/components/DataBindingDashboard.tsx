@@ -45,6 +45,7 @@ import {
 } from '@/utils/aiDashboardPatchCache';
 import { getAiSectionLabel, AI_SECTION_BY_KEY } from '@/utils/aiSectionRegistry';
 import { listAiUploadHistory, toVaultSectionId } from '@/utils/aiUploadHistory';
+import type { SectionProgress } from '@/utils/sectionCompletion';
 import {
   approveOverviewAiDocuments,
   detectOverviewPersonPrompt,
@@ -88,14 +89,15 @@ interface DataBindingDashboardProps {
   completedSectionIds?: string[];
   sectionProgressById?: Record<
     string,
-    {
-      percent: number;
-      complete: boolean;
-      started?: boolean;
-      itemCount?: number;
-      completeItemCount?: number;
-      status?: string;
-    }
+    Pick<
+      SectionProgress,
+      | 'percent'
+      | 'complete'
+      | 'started'
+      | 'itemCount'
+      | 'completeItemCount'
+      | 'status'
+    >
   >;
   lastUpdatedBySection?: Record<string, string>;
   afterHero?: React.ReactNode;

@@ -1,18 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { BrandLogo } from '@/components/BrandLogo';
 import { fetchSession } from '@/libs/secureFetch';
 import { FAMILY_PORTAL_ROLE_LABELS } from '@/utils/familyDashboardAccess';
+import { getOtpSessionId } from '@/utils/otpSession';
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import {
   useCollaboratorChangePasswordMutation,
   useGenerateMfaMutation,
+  useGetDiditStatusQuery,
   useGetMeQuery,
   useLinkAuthenticatorMutation,
+  useStartDiditSessionMutation,
   useStartEmailMfaMutation,
   useVerifyEmailCodeMutation,
 } from '@/services/authApi';
@@ -20,9 +23,11 @@ import {
 type SetupState = {
   mustChangePassword: boolean;
   mustEnrollMfa: boolean;
+  mustVerifyIdentity: boolean;
   email: string;
   fullName?: string;
   portalRoleLabel?: string;
+  diditStatus?: string | null;
 };
 
 export function CollaboratorFirstLoginGate({
@@ -49,17 +54,21 @@ export function CollaboratorFirstLoginGate({
     if (
       session.authenticated &&
       session.role === 'nextkin' &&
-      (session.must_change_password || session.must_enroll_mfa)
+      (session.must_change_password ||
+        session.must_enroll_mfa ||
+        session.must_verify_identity)
     ) {
       setSetup({
         mustChangePassword: Boolean(session.must_change_password),
         mustEnrollMfa: Boolean(session.must_enroll_mfa),
+        mustVerifyIdentity: Boolean(session.must_verify_identity),
         email: session.email || '',
         fullName: session.full_name,
         portalRoleLabel:
           session.portal_role_label ||
           FAMILY_PORTAL_ROLE_LABELS[session.portal_role || ''] ||
           undefined,
+        diditStatus: session.didit_status,
       });
     } else {
       setSetup(null);
@@ -106,7 +115,11 @@ function FirstLoginWizard({
   onComplete: () => void;
   onRefresh: () => Promise<void>;
 }) {
-  const step = setup.mustChangePassword ? 'password' : 'mfa';
+  const step = setup.mustChangePassword
+    ? 'password'
+    : setup.mustEnrollMfa
+      ? 'mfa'
+      : 'kyc';
   const greeting = setup.fullName
     ? `Welcome, ${setup.fullName.split(' ')[0]}`
     : 'Secure your access';
@@ -133,7 +146,7 @@ function FirstLoginWizard({
           </div>
         </div>
 
-        <div className="mb-4 flex gap-2 text-[12px] font-semibold">
+        <div className="mb-4 flex flex-wrap gap-2 text-[12px] font-semibold">
           <span
             className={
               step === 'password'
@@ -147,10 +160,21 @@ function FirstLoginWizard({
             className={
               step === 'mfa'
                 ? 'rounded-full bg-[#213D59] px-3 py-1 text-white'
-                : 'rounded-full bg-white px-3 py-1 text-[#7A8794] ring-1 ring-[#E4EAF0]'
+                : setup.mustChangePassword
+                  ? 'rounded-full bg-white px-3 py-1 text-[#7A8794] ring-1 ring-[#E4EAF0]'
+                  : 'rounded-full bg-[#E8F6F0] px-3 py-1 text-[#1F9D6B]'
             }
           >
             2. Two-factor authentication
+          </span>
+          <span
+            className={
+              step === 'kyc'
+                ? 'rounded-full bg-[#213D59] px-3 py-1 text-white'
+                : 'rounded-full bg-white px-3 py-1 text-[#7A8794] ring-1 ring-[#E4EAF0]'
+            }
+          >
+            3. Identity check
           </span>
         </div>
 
@@ -160,9 +184,16 @@ function FirstLoginWizard({
               await onRefresh();
             }}
           />
-        ) : (
+        ) : step === 'mfa' ? (
           <MfaStep
             email={setup.email}
+            onDone={async () => {
+              await onRefresh();
+            }}
+          />
+        ) : (
+          <KycStep
+            status={setup.diditStatus}
             onDone={async () => {
               await onRefresh();
               onComplete();
@@ -170,6 +201,87 @@ function FirstLoginWizard({
           />
         )}
       </div>
+    </div>
+  );
+}
+
+function KycStep({
+  status,
+  onDone,
+}: {
+  status?: string | null;
+  onDone: () => Promise<void>;
+}) {
+  const [startDidit, { isLoading }] = useStartDiditSessionMutation();
+  const { data, refetch } = useGetDiditStatusQuery(undefined, {
+    pollingInterval: 8000,
+  });
+  const liveStatus = data?.status || status || 'Not Started';
+  const approved = Boolean(data?.approved);
+  const finished = useRef(false);
+
+  useEffect(() => {
+    if (!approved || finished.current) return;
+    finished.current = true;
+    void onDone();
+  }, [approved, onDone]);
+
+  const start = async () => {
+    try {
+      const session = await startDidit().unwrap();
+      if (session.approved) {
+        toast.success('Identity already verified');
+        await onDone();
+        return;
+      }
+      if (session.session_url) {
+        window.location.assign(session.session_url);
+        return;
+      }
+      toast.error('Could not open the identity check');
+      await refetch();
+    } catch (err: unknown) {
+      toast.error(getSafeErrorMessage(err, 'Could not start identity verification'));
+    }
+  };
+
+  const review =
+    liveStatus === 'Declined' ||
+    liveStatus === 'Abandoned' ||
+    liveStatus === 'In Review' ||
+    liveStatus === 'Error';
+
+  return (
+    <div className="rounded-[20px] border border-[#E4EAF0] bg-white p-6 shadow-sm">
+      <div className="mb-3 flex items-center gap-2 text-[#213D59]">
+        <ShieldCheck className="h-5 w-5" />
+        <p className="text-[15px] font-bold">Verify your identity</p>
+      </div>
+      <p className="text-[13.5px] leading-relaxed text-[#7A8794]">
+        Upload a government ID and take a live selfie. This confirms you are the
+        person named as next of kin. You cannot open the portal until this check
+        is Approved.
+      </p>
+      <p className="mt-3 text-[12.5px] text-[#7A8794]">Status: {liveStatus}</p>
+      {review ? (
+        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] leading-5 text-amber-950">
+          This check is with a person on our team. Stay on this screen. When it
+          is Approved, the portal opens automatically.
+        </p>
+      ) : null}
+      <button
+        type="button"
+        disabled={isLoading || approved || review}
+        onClick={() => void start()}
+        className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#213D59] text-[14px] font-semibold text-white disabled:opacity-60"
+      >
+        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+        {review
+          ? 'Waiting for review'
+          : liveStatus === 'Not Started'
+            ? 'Start ID and selfie check'
+            : 'Continue identity check'}
+      </button>
     </div>
   );
 }

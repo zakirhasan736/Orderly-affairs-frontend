@@ -134,6 +134,8 @@ export async function fetchSession(): Promise<{
   lock_message?: string | null;
   must_change_password?: boolean;
   must_enroll_mfa?: boolean;
+  must_verify_identity?: boolean;
+  didit_status?: string | null;
   security_setup_required?: boolean;
   vault_push?: {
     state?: 'active' | 'paused' | 'off' | string;

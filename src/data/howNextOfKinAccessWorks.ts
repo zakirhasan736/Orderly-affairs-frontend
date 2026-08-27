@@ -47,7 +47,20 @@ export const NOK_ACCESS_OWNER_GUIDE = {
     "Reach us at support@orderly-affairs.com. If you want to change who's named as your next of kin, adjust your check-in cadence, or revisit your authorization, you can do all of that from Access Management at any time while you're living.",
 } as const;
 
-export const NOK_ACCESS_PUBLIC_COPY = {
+export type NokAccessPublicSection = {
+  id: string;
+  title: string;
+  intro?: string;
+  paragraphs?: readonly string[];
+  bullets?: readonly { title: string; body: string }[];
+};
+
+export const NOK_ACCESS_PUBLIC_COPY: {
+  title: string;
+  subtitle: string;
+  lastUpdated: string;
+  sections: readonly NokAccessPublicSection[];
+} = {
   title: 'How Next-of-Kin Access Works',
   subtitle: 'Your Vault, protected on both ends',
   lastUpdated: 'August 27, 2026',
@@ -118,4 +131,4 @@ export const NOK_ACCESS_PUBLIC_COPY = {
       ],
     },
   ],
-} as const;
+};

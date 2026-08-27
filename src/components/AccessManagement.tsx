@@ -76,6 +76,7 @@ import {
   type WizardStepId,
 } from '@/utils/accessManagementValidation';
 import { DeathCertificateAuthorizationPanel } from '@/components/legal/DeathCertificateAuthorizationPanel';
+import { DEATH_CERT_AUTH_PERSON_CONFIRM_LABEL } from '@/data/deathCertificateAuthorization';
 import { goToNokLetter } from '@/vault-prototype/navigate';
 import { NokLetterStatusButton } from '@/components/NokLetterStatusButton';
 

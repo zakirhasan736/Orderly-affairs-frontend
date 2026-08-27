@@ -302,6 +302,7 @@ export interface LoginResponse {
   requires_billing?: boolean;
   must_change_password?: boolean;
   must_enroll_mfa?: boolean;
+  must_verify_identity?: boolean;
   security_setup_required?: boolean;
 }
 
@@ -324,6 +325,7 @@ export interface OwnerMeResponse {
   mfa_methods: Partial<MFAMethods>;
   must_change_password?: boolean;
   must_enroll_mfa?: boolean;
+  must_verify_identity?: boolean;
   security_setup_required?: boolean;
   death_certificate_authorization?: {
     agreed: boolean;
@@ -955,6 +957,7 @@ export const authApi = createApi({
         message: string;
         must_change_password?: boolean;
         must_enroll_mfa?: boolean;
+        must_verify_identity?: boolean;
         security_setup_required?: boolean;
       },
       { current_password: string; new_password: string }

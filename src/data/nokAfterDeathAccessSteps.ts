@@ -5,16 +5,16 @@ export const NOK_AFTER_DEATH_ACCESS_STEPS = [
     body: 'They use the Next of Kin sign-in page from the invite email — not the owner dashboard. Upon-death access stays closed while you are living.',
   },
   {
+    title: 'Verify their identity',
+    body: 'At first sign-in they set a password, turn on two-factor authentication, then complete a government ID and live selfie (Didit) before the portal opens.',
+  },
+  {
     title: 'Report a passing',
-    body: 'Named next of kin can report first. Attorneys, executors, and trustees must finish ID and selfie verification before they can report or upload.',
+    body: 'After identity is Approved they can report that you have passed. This does not unlock the vault.',
   },
   {
     title: 'Upload a death certificate',
-    body: 'A certified copy often takes one to three weeks. The 7-day owner hold starts when that file is stored, not when the report is filed.',
-  },
-  {
-    title: 'Verify their identity',
-    body: 'Government ID plus a live selfie (Didit). This confirms they are the person you named, not anyone who found an email.',
+    body: 'A certified copy often takes one to three weeks. The 7-day owner hold, owner emails, and independent death-record check start when that file is stored.',
   },
   {
     title: 'Wait the 7-day hold',

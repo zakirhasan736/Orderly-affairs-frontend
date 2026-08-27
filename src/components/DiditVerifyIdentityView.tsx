@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, ShieldCheck } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { resolveApiBaseUrl } from '@/libs/apiBase';
@@ -12,6 +12,7 @@ function isApprovedStatus(value: string) {
 }
 
 export default function DiditVerifyIdentityView() {
+  const router = useRouter();
   const params = useSearchParams();
   const sessionId =
     params.get('verificationSessionId') ||
@@ -46,11 +47,19 @@ export default function DiditVerifyIdentityView() {
       });
   }, [hint, sessionId]);
 
+  useEffect(() => {
+    if (!approved) return;
+    const timer = window.setTimeout(() => {
+      router.replace('/next-kin/dashboard');
+    }, 1600);
+    return () => window.clearTimeout(timer);
+  }, [approved, router]);
+
   const copy = useMemo(() => {
     if (approved) {
       return {
         title: 'Identity verified',
-        body: 'Your ID and selfie check cleared. The vault stays sealed until Orderly Affairs releases access. After that you will get a one-time email link to set your own password.',
+        body: 'Your ID and selfie check cleared. Opening the next-of-kin portal…',
       };
     }
     if (status === 'Declined' || status === 'Abandoned') {

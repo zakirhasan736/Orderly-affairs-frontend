@@ -56,7 +56,6 @@ import {
   useGetMyNextKinAccessQuery,
   useGetAfterDeathCaseQuery,
   useReportOwnerDeceasedMutation,
-  useStartDiditSessionMutation,
   useUploadDeathCertificateMutation,
 } from '@/services/authApi';
 import { NokMfaSettingsSheet } from '@/components/NokMfaSettingsSheet';
@@ -218,6 +217,7 @@ export function EnhancedNOKDashboard({
   const [mfaSettingsOpen, setMfaSettingsOpen] = useState(false);
   const [reportPassword, setReportPassword] = useState('');
   const [reportConfirmed, setReportConfirmed] = useState(false);
+  const [certDragOver, setCertDragOver] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const isPreview = !!previewAccess;
@@ -230,8 +230,6 @@ export function EnhancedNOKDashboard({
   } = useGetMyNextKinAccessQuery(undefined, { skip: isPreview });
   const [reportOwnerDeceased, { isLoading: reportingDeceased }] =
     useReportOwnerDeceasedMutation();
-  const [startDiditSession, { isLoading: startingDidit }] =
-    useStartDiditSessionMutation();
   const [uploadDeathCertificate, { isLoading: uploadingCert }] =
     useUploadDeathCertificateMutation();
   const { data: afterDeath } = useGetAfterDeathCaseQuery(undefined, {
@@ -371,47 +369,13 @@ export function EnhancedNOKDashboard({
   const deathReportPending = Boolean(
     effectiveAccess?.owner?.death_report_pending,
   );
-  const diditApproved = Boolean(effectiveAccess?.didit?.approved);
-  const isAttorney = Boolean(
-    effectiveAccess?.didit?.is_attorney_or_executor ||
-      effectiveAccess?.didit?.didit_before_report,
-  );
-  const needsDidit =
-    !isPreview &&
-    !diditApproved &&
-    (deathReportPending || ownerIsDeceased || isAttorney);
   const canUploadCertificate =
-    !isPreview &&
-    (deathReportPending ||
-      ownerIsDeceased ||
-      (isAttorney && (diditApproved || !effectiveAccess?.didit?.configured)));
+    !isPreview && (deathReportPending || ownerIsDeceased);
   const certOnFile = Boolean(
     effectiveAccess?.death_verification?.certificate_uploaded,
   );
 
-  const openDidit = async () => {
-    try {
-      const session = await startDiditSession().unwrap();
-      const url = session.session_url;
-      if (!url) {
-        toast.success('Identity already verified.');
-        await refetchAccess();
-        return;
-      }
-      window.location.assign(url);
-    } catch (err: unknown) {
-      toast.error(
-        getSafeErrorMessage(err, 'Could not start identity verification.'),
-      );
-    }
-  };
-
-  const handleCertificateFile = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
+  const uploadCertificate = async (file: File) => {
     const form = new FormData();
     form.append('file', file);
     try {
@@ -427,6 +391,24 @@ export function EnhancedNOKDashboard({
       );
     }
   };
+
+  const handleCertificateFile = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) await uploadCertificate(file);
+  };
+
+  const handleCertificateDrop = async (
+    event: React.DragEvent<HTMLDivElement>,
+  ) => {
+    event.preventDefault();
+    setCertDragOver(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) await uploadCertificate(file);
+  };
+
   const displayName =
     effectiveAccess?.nextkin?.full_name?.trim() ||
     effectiveAccess?.nextkin?.email ||
@@ -501,7 +483,7 @@ export function EnhancedNOKDashboard({
       await refetchAccess();
       toast.success(
         result.message ||
-          'Passing reported. Verify your identity next. The vault stays sealed until that clears and our team releases access.',
+          'Passing reported. Upload the death certificate next. The vault stays sealed.',
       );
     } catch (err: unknown) {
       toast.error(
@@ -1080,13 +1062,11 @@ export function EnhancedNOKDashboard({
                         </div>
                       </dl>
                       <p className="mt-3 text-[12px] leading-5 text-[#5c6b66]">
-                        The owner’s 7-day (168-hour) hold starts when the death
-                        certificate is stored. After that, identity must be
-                        Approved (Didit ID and selfie), the hold must finish,
-                        and an Orderly Affairs admin must manually release
-                        access. Named next of kin may report a passing before
-                        identity is Approved; attorneys, executors, and trustees
-                        must be Approved first. Nothing is automatic.
+                        Identity is completed at first sign-in. Report a passing,
+                        then upload the death certificate. The owner’s 7-day
+                        (168-hour) hold and death-record check start when that
+                        file is stored. An Orderly Affairs admin still has to
+                        release access by hand. Nothing is automatic.
                       </p>
                     </div>
                   ) : null}
@@ -1106,66 +1086,51 @@ export function EnhancedNOKDashboard({
                     </div>
                   )}
 
-                  {needsDidit && (
-                    <div className="flex flex-col gap-3 rounded-[20px] border border-[#213D59]/20 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <Shield className="mt-0.5 h-5 w-5 shrink-0 text-[#213D59]" />
-                        <div>
-                          <p className="text-sm font-semibold text-[#213D59]">
-                            Verify your identity
-                          </p>
-                          <p className="mt-1 text-[13px] leading-5 text-[#5c6b66]">
-                            {isAttorney && !deathReportPending && !ownerIsDeceased
-                              ? 'As attorney or executor, complete a government ID and live selfie before you report a passing or upload a certificate. The vault stays locked.'
-                              : `Government ID and a live selfie. The vault stays locked until this clears${
-                                  effectiveAccess?.didit?.status
-                                    ? ` (status: ${effectiveAccess.didit.status})`
-                                    : ''
-                                }.`}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        onClick={() => void openDidit()}
-                        disabled={startingDidit}
-                        className="h-10 w-auto shrink-0 rounded-xl px-4"
-                      >
-                        {startingDidit ? 'Starting…' : 'Start ID verification'}
-                      </Button>
-                    </div>
-                  )}
-
                   {canUploadCertificate && (
-                    <div className="flex flex-col gap-3 rounded-[20px] border border-[#213D59]/20 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <Upload className="mt-0.5 h-5 w-5 shrink-0 text-[#213D59]" />
-                        <div>
-                          <p className="text-sm font-semibold text-[#213D59]">
-                            {certOnFile
-                              ? 'Death certificate on file'
-                              : 'Upload a death certificate'}
-                          </p>
-                          <p className="mt-1 text-[13px] leading-5 text-[#5c6b66]">
-                            {certOnFile
-                              ? `We received the certificate. Owner death record check: ${afterDeathCase?.death_record_label || 'Pending'}. Our team still has to release access.`
-                              : 'PDF or photo. After we store it privately, the server checks independent U.S. death records for the vault owner, not for you. That still does not unlock the kit.'}
-                          </p>
+                    <div
+                      className={`rounded-[20px] border p-4 ${
+                        certDragOver
+                          ? 'border-[#3EB1E5] bg-[#EAF6FC]'
+                          : 'border-[#213D59]/20 bg-white'
+                      }`}
+                      onDragOver={event => {
+                        event.preventDefault();
+                        setCertDragOver(true);
+                      }}
+                      onDragLeave={() => setCertDragOver(false)}
+                      onDrop={event => void handleCertificateDrop(event)}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <Upload className="mt-0.5 h-5 w-5 shrink-0 text-[#213D59]" />
+                          <div>
+                            <p className="text-sm font-semibold text-[#213D59]">
+                              {certOnFile
+                                ? 'Death certificate on file'
+                                : 'Upload a death certificate'}
+                            </p>
+                            <p className="mt-1 text-[13px] leading-5 text-[#5c6b66]">
+                              {certOnFile
+                                ? `We received the certificate. Owner death record check: ${afterDeathCase?.death_record_label || 'Pending'}. The owner was notified and a 7-day hold is running. Our team still has to release access.`
+                                : 'Drag and drop a PDF or photo here, or choose a file. After we store it privately, independent U.S. death records are checked for the vault owner, and the owner is emailed on a 7-day schedule. That still does not unlock the kit.'}
+                            </p>
+                          </div>
                         </div>
+                        <label className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-[#213D59] px-4 text-sm font-medium text-white">
+                          {uploadingCert
+                            ? 'Uploading…'
+                            : certOnFile
+                              ? 'Replace file'
+                              : 'Choose file'}
+                          <input
+                            type="file"
+                            accept="application/pdf,image/jpeg,image/png,image/webp"
+                            className="sr-only"
+                            disabled={uploadingCert}
+                            onChange={event => void handleCertificateFile(event)}
+                          />
+                        </label>
                       </div>
-                      <label className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-[#213D59] px-4 text-sm font-medium text-white">
-                        {uploadingCert
-                          ? 'Uploading…'
-                          : certOnFile
-                            ? 'Replace file'
-                            : 'Choose file'}
-                        <input
-                          type="file"
-                          accept="application/pdf,image/jpeg,image/png,image/webp"
-                          className="sr-only"
-                          disabled={uploadingCert}
-                          onChange={event => void handleCertificateFile(event)}
-                        />
-                      </label>
                     </div>
                   )}
 
@@ -1181,26 +1146,18 @@ export function EnhancedNOKDashboard({
                               Report a passing
                             </p>
                             <p className="mt-1 text-[13px] leading-5 text-rose-900/75">
-                            {isAttorney && !diditApproved
-                              ? `Verify your identity first. Then you can report that ${ownerName} has passed and upload the death certificate.`
-                              : `After ${ownerName} has passed, report it here. The vault stays sealed until identity verification and a human release.`}
+                              After {ownerName} has passed, report it here. You
+                              will then upload the death certificate. The vault
+                              stays sealed until our team releases access.
                             </p>
                           </div>
                         </div>
                         <Button
                           variant="destructive"
-                          onClick={() => {
-                            if (isAttorney && !diditApproved) {
-                              void openDidit();
-                              return;
-                            }
-                            setShowReportModal(true);
-                          }}
+                          onClick={() => setShowReportModal(true)}
                           className="h-10 w-auto shrink-0 rounded-xl px-4"
                         >
-                          {isAttorney && !diditApproved
-                            ? 'Verify identity first'
-                            : 'Report passing'}
+                          Report passing
                           <ChevronRight className="ml-1 h-4 w-4" />
                         </Button>
                       </div>
