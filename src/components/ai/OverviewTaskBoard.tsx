@@ -17,19 +17,30 @@ import {
 import type { DashboardAiJob } from '@/hooks/useDashboardAiBatchRunner';
 import { useOptionalAiDocumentRouting } from '@/contexts/AiDocumentRoutingContext';
 import { formatSectionLastUpdated } from '@/utils/sectionLastUpdated';
+import type { SectionProgress } from '@/utils/sectionCompletion';
+
+type ProgressSlice = Pick<
+  SectionProgress,
+  | 'percent'
+  | 'complete'
+  | 'started'
+  | 'itemCount'
+  | 'completeItemCount'
+  | 'status'
+>;
 
 type CardVisualState =
-  | { kind: 'waiting'; label: string; progress: number; isNew?: boolean }
-  | { kind: 'active'; label: string; progress: number; isNew?: boolean }
-  | { kind: 'done'; label: string; progress: number; isNew?: boolean }
-  | { kind: 'start'; label: string; progress: number; isNew?: boolean }
-  | { kind: 'partial'; label: string; progress: number; isNew?: boolean };
+  | { kind: 'waiting'; label: string; progress: number; isNew?: boolean; itemCount?: number }
+  | { kind: 'active'; label: string; progress: number; isNew?: boolean; itemCount?: number }
+  | { kind: 'done'; label: string; progress: number; isNew?: boolean; itemCount?: number }
+  | { kind: 'start'; label: string; progress: number; isNew?: boolean; itemCount?: number }
+  | { kind: 'partial'; label: string; progress: number; isNew?: boolean; itemCount?: number };
 
 type OverviewTaskBoardProps = {
   jobs: DashboardAiJob[];
   completedSectionIds?: string[];
-  /** Live field-fill % by section id — drives Start / % / Done on cards. */
-  sectionProgressById?: Record<string, { percent: number; complete: boolean }>;
+  /** Started / incomplete / complete by section — labels are Empty / Incomplete / Complete + item counts. */
+  sectionProgressById?: Record<string, ProgressSlice>;
   lastUpdatedBySection?: Record<string, string>;
   onNavigateToSection: (sectionId: string) => void;
   /** Family ACL: only show task cards for granted vault sections. */
@@ -61,27 +72,35 @@ function pickJobForSection(jobs: DashboardAiJob[], sectionId: string) {
   })[0];
 }
 
-function fillStateFromPercent(
-  percent: number,
+function fillStateFromProgress(
+  fill: ProgressSlice | undefined,
   opts?: { isNew?: boolean },
 ): CardVisualState {
-  const clamped = Math.max(0, Math.min(100, Math.round(percent || 0)));
-  if (clamped >= 100) {
+  const complete = Boolean(fill?.complete || fill?.status === 'complete');
+  const started =
+    Boolean(fill?.started) ||
+    fill?.status === 'incomplete' ||
+    (fill?.itemCount ?? 0) > 0;
+  const itemCount = fill?.itemCount ?? 0;
+
+  if (complete) {
     return {
       kind: 'done',
-      label: opts?.isNew ? 'Filled' : 'Done',
+      label: itemCount > 0 ? String(itemCount) : 'Done',
       progress: 100,
       isNew: opts?.isNew,
+      itemCount,
     };
   }
-  if (clamped <= 0) {
-    return { kind: 'start', label: 'Start', progress: 0 };
+  if (!started) {
+    return { kind: 'start', label: '', progress: 0, itemCount: 0 };
   }
   return {
     kind: 'partial',
-    label: `${clamped}%`,
-    progress: clamped,
+    label: 'Incomplete',
+    progress: 40,
     isNew: opts?.isNew,
+    itemCount,
   };
 }
 
@@ -89,14 +108,15 @@ function resolveCardState(
   card: OverviewTaskCard,
   jobs: DashboardAiJob[],
   pendingReady: Set<string>,
-  sectionProgressById: Record<string, { percent: number; complete: boolean }>,
+  sectionProgressById: Record<string, ProgressSlice>,
 ): CardVisualState {
   const fill = sectionProgressById[card.sectionId];
   const fillPercent = fill?.percent ?? 0;
   const job = pickJobForSection(jobs, card.sectionId);
   const isNew =
     pendingReady.has(card.sectionId) ||
-    (Boolean(job?.status === 'done') && fillPercent > 0);
+    (Boolean(job?.status === 'done') &&
+      (Boolean(fill?.started) || fillPercent > 0));
 
   if (job) {
     const isActivelyFillingThis =
@@ -133,8 +153,8 @@ function resolveCardState(
 
     // Finished AI job: still reflect real section fill (empty → Start, not Done)
     if (job.status === 'done') {
-      return fillStateFromPercent(fillPercent, {
-        isNew: fillPercent > 0,
+      return fillStateFromProgress(fill, {
+        isNew: Boolean(fill?.started) || fillPercent > 0,
       });
     }
 
@@ -143,8 +163,8 @@ function resolveCardState(
       job.activeFillSectionId &&
       job.activeFillSectionId !== card.sectionId
     ) {
-      return fillStateFromPercent(fillPercent, {
-        isNew: fillPercent > 0,
+      return fillStateFromProgress(fill, {
+        isNew: Boolean(fill?.started) || fillPercent > 0,
       });
     }
 
@@ -155,11 +175,11 @@ function resolveCardState(
     };
   }
 
-  if (pendingReady.has(card.sectionId) && fillPercent > 0) {
-    return fillStateFromPercent(fillPercent, { isNew: true });
+  if (pendingReady.has(card.sectionId) && (Boolean(fill?.started) || fillPercent > 0)) {
+    return fillStateFromProgress(fill, { isNew: true });
   }
 
-  return fillStateFromPercent(fillPercent, { isNew });
+  return fillStateFromProgress(fill, { isNew });
 }
 
 function TagIcon({ tag }: { tag: OverviewTaskTag }) {
@@ -171,41 +191,57 @@ function TagIcon({ tag }: { tag: OverviewTaskTag }) {
 }
 
 function ProgressLine({ state }: { state: CardVisualState }) {
-  const barClass =
-    state.kind === 'done'
-      ? 'bg-[#2B5A8C]'
-      : state.kind === 'active' || state.kind === 'partial'
-        ? 'bg-[#2B5A8C]'
-        : state.kind === 'waiting'
-          ? 'bg-[#b98a3e]'
-          : 'bg-[rgba(33, 61, 89,0.12)]';
-
-  return (
-    <div className="mt-auto flex items-center gap-2.5 pt-4">
-      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[rgba(33, 61, 89,0.06)]">
-        <div
+  if (state.kind === 'active' || state.kind === 'waiting') {
+    const barClass =
+      state.kind === 'active' ? 'bg-[#2B5A8C]' : 'bg-[#b98a3e]';
+    return (
+      <div className="mt-auto flex items-center gap-2.5 pt-4">
+        <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[rgba(33, 61, 89,0.06)]">
+          <div
+            className={cn(
+              'h-full rounded-full transition-all duration-500',
+              barClass,
+              state.kind === 'active' && 'animate-pulse',
+            )}
+            style={{ width: `${Math.max(0, Math.min(100, state.progress))}%` }}
+          />
+        </div>
+        <span
           className={cn(
-            'h-full rounded-full transition-all duration-500',
-            barClass,
-            state.kind === 'active' && 'animate-pulse',
+            'shrink-0 text-[11px] font-semibold tabular-nums',
+            state.kind === 'waiting' ? 'text-[#b98a3e]' : 'text-[#2E7FAD]',
           )}
-          style={{ width: `${Math.max(0, Math.min(100, state.progress))}%` }}
-        />
+        >
+          {state.label}
+        </span>
       </div>
+    );
+  }
+
+  const count = state.itemCount ?? 0;
+  return (
+    <div className="mt-auto flex items-center justify-between gap-2 pt-4">
       <span
         className={cn(
-          'shrink-0 text-[11px] font-semibold tabular-nums',
-          state.kind === 'done' || state.isNew
-            ? 'text-[#2E7FAD]'
-            : state.kind === 'active' || state.kind === 'partial'
-              ? 'text-[#2E7FAD]'
-              : state.kind === 'waiting'
-                ? 'text-[#b98a3e]'
-                : 'text-[rgba(33, 61, 89,0.45)]',
+          'text-[13px] font-bold tabular-nums',
+          count > 0 ? 'text-[#213D59]' : 'text-[rgba(33, 61, 89,0.35)]',
         )}
       >
-        {state.label}
+        {count > 0 ? count : '—'}
       </span>
+      {state.kind === 'partial' ? (
+        <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#C23A3A]">
+          Incomplete
+        </span>
+      ) : state.kind === 'done' ? (
+        <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#1F9D6B]">
+          Complete
+        </span>
+      ) : (
+        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[rgba(33, 61, 89,0.4)]">
+          Empty
+        </span>
+      )}
     </div>
   );
 }
@@ -239,11 +275,13 @@ function SliderTaskCard({
           ? 'border-[rgba(43, 90, 140,0.35)] ring-1 ring-[rgba(43, 90, 140,0.12)]'
           : state.kind === 'waiting'
             ? 'border-[rgba(185,138,62,0.45)] ring-1 ring-[rgba(185,138,62,0.12)]'
-            : state.isNew
-              ? 'border-[rgba(43, 90, 140,0.4)]'
-              : state.kind === 'done'
-                ? 'border-[rgba(43, 90, 140,0.2)]'
-                : 'border-[rgba(33, 61, 89,0.1)]',
+            : state.kind === 'partial'
+              ? 'border-[rgba(194,58,58,0.35)]'
+              : state.isNew
+                ? 'border-[rgba(43, 90, 140,0.4)]'
+                : state.kind === 'done'
+                  ? 'border-[rgba(43, 90, 140,0.2)]'
+                  : 'border-[rgba(33, 61, 89,0.1)]',
       )}
       data-overview-task={card.sectionId}
       data-overview-task-state={state.kind}
@@ -300,11 +338,13 @@ function GridTaskCard({
           ? 'border-[rgba(43, 90, 140,0.35)] ring-1 ring-[rgba(43, 90, 140,0.12)]'
           : state.kind === 'waiting'
             ? 'border-[rgba(185,138,62,0.45)] ring-1 ring-[rgba(185,138,62,0.12)]'
-            : state.isNew
-              ? 'border-[rgba(43, 90, 140,0.4)] ring-1 ring-[rgba(43, 90, 140,0.12)]'
-              : state.kind === 'done'
-                ? 'border-[rgba(43, 90, 140,0.2)]'
-                : 'border-[rgba(33, 61, 89,0.1)]',
+            : state.kind === 'partial'
+              ? 'border-[rgba(194,58,58,0.35)]'
+              : state.isNew
+                ? 'border-[rgba(43, 90, 140,0.4)] ring-1 ring-[rgba(43, 90, 140,0.12)]'
+                : state.kind === 'done'
+                  ? 'border-[rgba(43, 90, 140,0.2)]'
+                  : 'border-[rgba(33, 61, 89,0.1)]',
       )}
       data-overview-task={card.sectionId}
       data-overview-task-state={state.kind}
@@ -326,7 +366,14 @@ function GridTaskCard({
       <h3 className="mt-3 text-base font-semibold text-[#213D59]">
         {card.title}
       </h3>
-      <p className="mt-1 line-clamp-2 text-sm leading-5 text-[rgba(33, 61, 89,0.58)]">
+      <p
+        className={cn(
+          'mt-1 line-clamp-2 text-sm leading-5',
+          state.kind === 'partial'
+            ? 'font-medium text-[#C23A3A]'
+            : 'text-[rgba(33, 61, 89,0.58)]',
+        )}
+      >
         {state.kind === 'active'
           ? 'Reading your document and filling this section…'
           : state.kind === 'waiting'
@@ -334,9 +381,9 @@ function GridTaskCard({
             : state.isNew
               ? 'Filled automatically — tap only if you want to review.'
               : state.kind === 'partial'
-                ? `${state.progress}% complete — tap to continue.`
+                ? 'Incomplete — tap to continue.'
                 : state.kind === 'done'
-                  ? 'All fields filled for this section.'
+                  ? 'This section is complete.'
                   : card.description}
       </p>
       {lastUpdatedLabel ? (

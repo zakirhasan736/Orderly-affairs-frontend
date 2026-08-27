@@ -590,14 +590,8 @@ export function NextOfKinLetterField({
 
   const loginCredentialsText =
     localData.login_credentials_text ||
-    `I have registered your email address (${
-      localData.nok_email || 'will auto-populate from Access Management'
-    }) and your phone number (${
-      localData.nok_phone || 'will auto-populate from Access Management'
-    }), which you can use as your login credentials. The password to gain access to the Vault is printed on a password card located ${
-      localData.password_card_location ||
-      'will auto-populate from Access Management'
-    }.`;
+    applyNokLetterTemplateDefaults(localData).login_credentials_text ||
+    '';
 
   const generateLetterContent = () =>
     buildNokLetterPreviewText(localData, selectedPerson, ownerName);
@@ -956,32 +950,18 @@ export function NextOfKinLetterField({
               'Access Details',
               'Login info and sections your next of kin can access.',
             )}
-            <div className="grid gap-4 md:grid-cols-2">
-              <FieldBlock
-                label="Access URL"
-                icon={<ShieldCheck className="h-4 w-4" />}
-              >
-                <Input readOnly={isReadOnly}
-                  value={localData.access_url || DEFAULTS.access_url}
-                  onChange={e =>
-                    handleFieldChange('access_url', e.target.value as any)
-                  }
-                  className="h-12 rounded-2xl"
-                />
-              </FieldBlock>
-              <FieldBlock
-                label="Password Card Location"
-                description="Auto-filled from Access Management."
-                icon={<KeyRound className="h-4 w-4" />}
-              >
-                <Input
-                  value={localData.password_card_location || ''}
-                  readOnly
-                  placeholder="Will auto-populate"
-                  className="h-12 rounded-2xl bg-muted/60"
-                />
-              </FieldBlock>
-            </div>
+            <FieldBlock
+              label="Access URL"
+              icon={<ShieldCheck className="h-4 w-4" />}
+            >
+              <Input readOnly={isReadOnly}
+                value={localData.access_url || DEFAULTS.access_url}
+                onChange={e =>
+                  handleFieldChange('access_url', e.target.value as any)
+                }
+                className="h-12 rounded-2xl"
+              />
+            </FieldBlock>
             <FieldBlock label="Login Credentials Information">
               <Textarea readOnly={isReadOnly}
                 value={loginCredentialsText}

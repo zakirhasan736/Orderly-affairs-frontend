@@ -220,6 +220,24 @@ export type FamilyPortalRoleId =
   | 'super_admin'
   | string;
 
+export const FAMILY_PORTAL_ROLE_LABELS: Record<string, string> = {
+  viewer: 'Viewer',
+  editor: 'Editor',
+  portal_manager: 'Portal Manager',
+  admin: 'Admin',
+  super_admin: 'Super Admin',
+};
+
+export function familyPortalRoleDisplayLabel(
+  session: FamilyDashboardSession,
+): string {
+  if (!session.isFamily) return '';
+  const fromApi = String(session.portalRoleLabel || '').trim();
+  if (fromApi) return fromApi;
+  const id = familyPortalRoleId(session);
+  return FAMILY_PORTAL_ROLE_LABELS[id] || 'Viewer';
+}
+
 export function familyPortalRoleId(
   session: FamilyDashboardSession,
 ): FamilyPortalRoleId {

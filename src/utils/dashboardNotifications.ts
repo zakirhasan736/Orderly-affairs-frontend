@@ -243,6 +243,27 @@ export function buildMessageNotices(
   ];
 }
 
+export function buildDeathClaimNotices(alert?: {
+  title?: string;
+  body?: string;
+  ends_at?: string;
+  elapsed?: boolean;
+  remaining_days?: number;
+} | null): DashboardNotice[] {
+  if (!alert?.title) return [];
+  return [
+    {
+      id: 'event-death-certificate-wait',
+      category: 'event',
+      title: alert.title,
+      body: alert.body || 'A death certificate is under review. Sign in keeps this request cancelled only if you are the owner responding now.',
+      tone: 'critical',
+      sectionId: '2',
+      at: Date.now(),
+    },
+  ];
+}
+
 export function buildEventNotices(opts: {
   pendingNokName?: string | null;
   supportUnread?: number;

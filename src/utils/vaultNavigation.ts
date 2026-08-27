@@ -42,12 +42,18 @@ export const VAULT_NAVIGATION: VaultSection[] = [
       { id: '17E', title: 'Important Relationships' },
       { id: '17F', title: ' Memorabilia & Sentimental Items' },
       { id: '17G', title: 'Pet Care & Records' },
+      { id: '17H', title: 'Personal / Family Notes' },
     ],
   },
   {
     id: '2',
     title: 'Access Management',
-    subsections: [{ id: '2A', title: 'Access Control' }],
+    subsections: [
+      { id: '2A', title: 'Access Control' },
+      { id: '2B', title: 'Death certificate authorization' },
+      { id: '2C', title: 'How next-of-kin access works' },
+      { id: '2D', title: 'Instructions for your next of kin' },
+    ],
   },
   {
     id: '3',

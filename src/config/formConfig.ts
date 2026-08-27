@@ -523,6 +523,46 @@ export const formConfig: FormConfig = {
                 },
               ],
             },
+            {
+              id: '2B',
+              title: 'Death certificate authorization',
+              fields: [
+                {
+                  key: 'death_certificate_authorization',
+                  label:
+                    'Authorization to Collect, Verify, and Use Death Certificate and Vital Information',
+                  type: 'Instructions',
+                  content:
+                    'You must agree to this Authorization before naming a next of kin, executor, attorney, or anyone else who can access the Vault after you die. A signed copy is stored in this Vault.',
+                },
+              ],
+            },
+            {
+              id: '2C',
+              title: 'How next-of-kin access works',
+              fields: [
+                {
+                  key: 'how_next_of_kin_access_works',
+                  label: 'How Next-of-Kin Access Works',
+                  type: 'Instructions',
+                  content:
+                    'Owner guide: verification before unlock, one-time claim link, and what to set up now.',
+                },
+              ],
+            },
+            {
+              id: '2D',
+              title: 'Instructions for your next of kin',
+              fields: [
+                {
+                  key: 'instructions_for_next_of_kin',
+                  label: 'Instructions for Your Next of Kin',
+                  type: 'Instructions',
+                  content:
+                    'What your next of kin is told: what to do now, how unlock works, and that they set their own password.',
+                },
+              ],
+            },
           ],
         },
         {
@@ -3278,6 +3318,96 @@ export const formConfig: FormConfig = {
                   type: 'TextInputWithUpload',
                   helperText:
                     'Upload vaccination records, medical records, or photos of your pet',
+                },
+              ],
+            },
+            {
+              id: '17H',
+              title: 'Personal / Family Notes',
+              repeatable: true,
+              itemLabel: 'Note',
+              fields: [
+                {
+                  key: 'title',
+                  label: 'Title',
+                  type: 'TextInput',
+                  helperText: 'A short name so the family can find this note',
+                },
+                {
+                  key: 'body',
+                  label: 'Note',
+                  type: 'TextArea',
+                  helperText: 'Free-form text. Write it the way you talk.',
+                },
+                {
+                  key: 'document_type',
+                  label: 'Document Type',
+                  type: 'Dropdown',
+                  options: [
+                    'Note',
+                    'Letter',
+                    'Story',
+                    'List',
+                    'Reminder',
+                    'Other',
+                  ],
+                },
+                {
+                  key: 'created_date',
+                  label: 'Created Date',
+                  type: 'DatePicker',
+                },
+                {
+                  key: 'creators',
+                  label: 'Creators',
+                  type: 'TextInput',
+                  helperText: 'Who wrote or contributed to this note',
+                },
+                {
+                  key: 'recipients',
+                  label: 'Recipients',
+                  type: 'TextInput',
+                  helperText: 'Who this is for',
+                },
+                {
+                  key: 'connections',
+                  label: 'Connections',
+                  type: 'TextInput',
+                  helperText: 'People, accounts, or vault sections this relates to',
+                },
+                {
+                  key: 'files',
+                  label: 'Files',
+                  type: 'TextInputWithUpload',
+                  helperText: 'Attach photos or documents to this note',
+                },
+                {
+                  key: 'reminder_on',
+                  label: 'Set a reminder',
+                  type: 'Checkbox',
+                },
+                {
+                  key: 'reminder_date',
+                  label: 'Reminder date',
+                  type: 'DatePicker',
+                },
+                {
+                  key: 'reminder_cadence',
+                  label: 'How often',
+                  type: 'Dropdown',
+                  options: [
+                    'Once',
+                    'Weekly',
+                    'Monthly',
+                    'Every 3 months',
+                    'Every 6 months',
+                    'Yearly',
+                  ],
+                },
+                {
+                  key: 'reminder_note',
+                  label: 'Reminder note',
+                  type: 'TextInput',
                 },
               ],
             },

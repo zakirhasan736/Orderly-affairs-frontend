@@ -55,8 +55,18 @@ function requestMethod(args: string | FetchArgs): string {
 export function createSecureBaseQuery(
   pathPrefix: string,
 ): BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> {
-  const prepareHeaders = (headers: Headers) => {
-    if (!headers.has('Content-Type')) {
+  const prepareHeaders = (
+    headers: Headers,
+    api?: { arg?: string | FetchArgs },
+  ) => {
+    const arg = api?.arg;
+    const isFormData =
+      typeof arg === 'object' &&
+      arg !== null &&
+      'body' in arg &&
+      typeof FormData !== 'undefined' &&
+      arg.body instanceof FormData;
+    if (!headers.has('Content-Type') && !isFormData) {
       headers.set('Content-Type', 'application/json');
     }
     const token = getCsrfToken();

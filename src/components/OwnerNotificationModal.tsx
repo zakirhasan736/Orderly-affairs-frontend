@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@common/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@common/ui/card';
 import { Badge } from '@common/ui/badge';
-import { Check, X, Clock, User, Shield, AlertCircle } from 'lucide-react';
+import { Check, X, User, Shield, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { VAULT_NAVIGATION } from '@/utils/vaultNavigation';
 
@@ -15,23 +15,11 @@ interface OwnerNotificationModalProps {
 
 export const OwnerNotificationModal: React.FC<OwnerNotificationModalProps> = ({
   nokData,
-  onApprove,
+  onApprove: _onApprove,
   onRevoke,
   onClose
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  
-  // Auto-approve access when modal opens
-  React.useEffect(() => {
-    const autoApprove = async () => {
-      // Wait a moment for the user to see the notification, then auto-approve
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      toast.success(`Access granted to ${nokData.person_name}`);
-      onApprove();
-    };
-    
-    autoApprove();
-  }, [nokData.person_name, onApprove]);
 
   const handleRevoke = async () => {
     setIsProcessing(true);
@@ -120,10 +108,11 @@ export const OwnerNotificationModal: React.FC<OwnerNotificationModalProps> = ({
             <div className="flex items-start gap-2">
               <Check className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5" />
               <div className="text-sm">
-                <p className="font-medium text-green-800 dark:text-green-200">Access Granted</p>
+                <p className="font-medium text-green-800 dark:text-green-200">Living access is not automatic</p>
                 <p className="text-green-700 dark:text-green-300">
-                  {nokData.person_name} has been automatically granted access to your Orderly Affairs Vault. 
-                  You can revoke this access immediately if needed.
+                  Release access from Access Management: confirm, then re-enter your
+                  password. They receive login details immediately. If that was not
+                  what you intended, revoke their access from the email.
                 </p>
               </div>
             </div>

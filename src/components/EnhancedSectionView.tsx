@@ -54,6 +54,7 @@ interface EnhancedSectionViewProps {
       }>;
     }>;
     checklists?: Record<string, Record<string, boolean>>;
+    checklist_notes?: Record<string, string>;
   };
   onBack: () => void;
   onLogout: () => void;
@@ -86,6 +87,9 @@ export function EnhancedSectionView({
   const savedChecklist = kit?.checklists?.[sectionId] ?? {};
   const [checklistState, setChecklistState] =
     useState<Record<string, boolean>>(savedChecklist);
+  const [sectionNotes, setSectionNotes] = useState(
+    kit?.checklist_notes?.[sectionId] || '',
+  );
   const [showEmptySections, setShowEmptySections] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -361,12 +365,16 @@ const getSubsectionData = (subsectionId: string) => {
   const completedItems = checklist.filter(item => checklistState[item.id]).length;
   const checklistProgress = checklist.length > 0 ? (completedItems / checklist.length) * 100 : 0;
 
-const saveChecklist = async (items: Record<string, boolean>) => {
+const saveChecklist = async (
+  items: Record<string, boolean>,
+  notes?: string,
+) => {
   const response = await secureFetch('/kit/checklist', {
     method: 'POST',
     body: JSON.stringify({
       section_id: sectionId,
       items,
+      notes: notes ?? sectionNotes,
     }),
   });
 
@@ -746,6 +754,29 @@ const sectionHasData = useMemo(() => {
                 />
               )}
 
+            <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/80">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">
+                Read-only vault
+              </p>
+              <p className="mt-1 text-[13px] leading-5 text-slate-600">
+                You can view and download documents. You cannot delete files.
+                Use the checklist to mark work complete and add notes, or
+                deliver private messages from the dashboard.
+              </p>
+              <textarea
+                value={sectionNotes}
+                onChange={e => setSectionNotes(e.target.value)}
+                onBlur={() => {
+                  void saveChecklist(checklistState, sectionNotes).catch(() =>
+                    toast.error('Could not save notes'),
+                  );
+                }}
+                rows={3}
+                className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#213D59]"
+                placeholder="Add notes for this section"
+              />
+            </div>
+
             {visibleSubsections.length > 0 ? (
               (showEmptySections
                 ? section.subsections
@@ -938,6 +969,27 @@ const sectionHasData = useMemo(() => {
                   </span>
                 </label>
               ))}
+            </div>
+
+            <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/80">
+              <h3 className="text-[15px] font-semibold text-[#213D59]">
+                Section notes
+              </h3>
+              <p className="mt-0.5 text-[12px] text-slate-500">
+                Add notes for this section. Vault files stay read-only.
+              </p>
+              <textarea
+                value={sectionNotes}
+                onChange={e => setSectionNotes(e.target.value)}
+                onBlur={() => {
+                  void saveChecklist(checklistState, sectionNotes).catch(() =>
+                    toast.error('Could not save notes'),
+                  );
+                }}
+                rows={4}
+                className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#213D59]"
+                placeholder="Notes for this section"
+              />
             </div>
 
             {checklistProgress === 100 && (

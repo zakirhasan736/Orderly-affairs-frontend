@@ -131,14 +131,7 @@ export default function FamilyLoginPage() {
     } catch {
       /* ignore */
     }
-    const { isE2eeUnlocked } = await import('@/libs/e2ee/unlock');
-    if (!isE2eeUnlocked()) {
-      toast.warning(
-        `${welcome}. Vault encryption is locked. Ask the owner to re-save your family access password if sections will not open.`,
-      );
-    } else {
-      toast.success(welcome);
-    }
+    toast.success(welcome);
     router.replace('/dashboard');
   };
 

@@ -102,7 +102,11 @@ export default function AdminLegacyPage() {
     setBusy(true);
     try {
       await adminApproveLegacy(row.id, note);
-      toast.success('Approval recorded');
+      toast.success(
+        row.status === 'awaiting_2nd'
+          ? 'Access released — claim emails sent to after-death next of kin'
+          : 'Approval recorded',
+      );
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Approve failed');
@@ -140,9 +144,11 @@ export default function AdminLegacyPage() {
           color: 'var(--oa-ink)',
         }}
       >
-        Legacy access hands a designated person entry to a deceased user’s vault:
-        certified death certificate, ID match against the designated contacts, and
-        two admin approvals.
+        Legacy access is a human review queue. Vault unlock for after-death next
+        of kin is released only after an admin clicks Release access (Users) or
+        completes the second Review here. Family collaborators already sign in
+        at the family portal while the owner is living — they do not receive the
+        next-of-kin claim link.
       </div>
 
       {error && <div className="oa-admin-err">{error}</div>}
@@ -294,7 +300,7 @@ export default function AdminLegacyPage() {
                             disabled={busy}
                             onClick={() => void approve(row)}
                           >
-                            Review
+                            {row.status === 'awaiting_2nd' ? 'Release access' : 'Review'}
                           </button>
                           <button
                             type="button"

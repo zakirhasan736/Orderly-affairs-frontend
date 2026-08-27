@@ -1,4 +1,4 @@
-/** Shared brand mark — used on auth, headers, sidebars, and emails. */
+/** Shared brand mark — `public/images/brand-logo.png` (absolute from site root). */
 export const BRAND_LOGO = '/images/brand-logo.png';
 
 /** Light mark for navy / ink surfaces when PNG is unavailable. */

@@ -3,7 +3,11 @@
 import React from 'react';
 import { AccessManagement, type AccessManagementHandle } from '@/components/AccessManagement';
 import { FamilyAccessManagement } from '@/components/vault/FamilyAccessManagement';
+import { SectionFootprintsPanel } from '@/components/vault/SectionFootprintsPanel';
 import { FamilyRoleAreaDefaultsDialog } from '@/components/vault/FamilyRoleAreaDefaultsDialog';
+import { DeathCertificateAuthorizationPanel } from '@/components/legal/DeathCertificateAuthorizationPanel';
+import { HowNextOfKinAccessWorksOwnerGuide } from '@/components/legal/HowNextOfKinAccessWorksOwnerGuide';
+import { InstructionsForNextOfKinOwnerPanel } from '@/components/legal/InstructionsForNextOfKinView';
 import {
   Bell,
   CheckCircle2,
@@ -37,12 +41,12 @@ const GUIDE_STEPS = [
   },
   {
     title: 'Set access & timing',
-    text: 'For next of kin, choose immediate login (email with password) or upon-death access (password card). Family collaborators use their own family login.',
+    text: 'For next of kin, choose immediate login (after you click Release Access) or upon-death access. After death is verified they get a 72-hour one-time access link.',
     icon: ShieldCheck,
   },
   {
     title: 'Password card',
-    text: 'Print each next-of-kin card and store it securely. Tell people where it is, not the password itself.',
+    text: 'Upon-death next of kin do not get a password now. After death is verified they receive a one-time access link and set their own password.',
     icon: FileKey2,
   },
   {
@@ -53,8 +57,7 @@ const GUIDE_STEPS = [
 ];
 
 const SECURITY_RULES = [
-  'Do not give anyone their Master Access Password directly.',
-  'Only tell them where their printed Password Card is stored.',
+  'Upon-death next of kin do not receive a password until death is verified. Then they get a one-time link, set a password, and can view/download files (not delete). They can mark tasks complete, add notes, and deliver private messages. The same rules apply to an executor or attorney.',
   'Add at least 1 trusted next of kin to enable emergency access.',
   'Maximum 5 next-of-kin accounts and 5 family/other collaborators.',
   'Family & others (below) can view or edit the vault. Next of kin is view-only.',
@@ -65,6 +68,7 @@ interface Props {
   data?: any;
   onChange?: (data: any) => void;
   isActive?: boolean;
+  activeSubsection?: string | null;
 }
 
 function GuideAccordion({ className }: { className?: string }) {
@@ -94,8 +98,13 @@ function GuideAccordion({ className }: { className?: string }) {
 
       <div className="rounded-2xl border bg-card p-3.5 shadow-sm sm:rounded-3xl sm:p-4">
         <h4 className="text-sm font-semibold">How it works</h4>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Tap a step for details.
+        <p className="text-xs text-muted-foreground">Tap a step for details.</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Full owner guide:{' '}
+          <span className="font-medium text-foreground">
+            How next-of-kin access works
+          </span>
+          , below.
         </p>
         <ol className="mt-3 space-y-1">
           {GUIDE_STEPS.map((step, index) => {
@@ -132,7 +141,7 @@ function GuideAccordion({ className }: { className?: string }) {
 
         <p className="mt-3 rounded-xl border border-dashed border-slate-200 bg-muted/20 px-3 py-2 text-center text-[11px] leading-4 text-muted-foreground sm:text-xs sm:leading-5">
           <KeyRound className="mr-1 inline h-3 w-3 align-text-bottom" />
-          Immediate = email login · Upon death = printed password card
+          Immediate = email login · Upon death = one-time access link after verification
         </p>
       </div>
     </div>
@@ -161,7 +170,10 @@ function MobileGuide() {
   );
 }
 
-export default function Section2AccessManagement({ isActive = false }: Props) {
+export default function Section2AccessManagement({
+  isActive = false,
+  activeSubsection = null,
+}: Props) {
   const accessRef = React.useRef<AccessManagementHandle>(null);
   const [familyRoleAreasOpen, setFamilyRoleAreasOpen] = React.useState(false);
   const [filter, setFilter] = React.useState<
@@ -172,26 +184,16 @@ export default function Section2AccessManagement({ isActive = false }: Props) {
   const showContributors = filter === 'all' || filter === 'contributors';
   const showActivity = filter === 'activity';
 
+  const showAccess = !activeSubsection || activeSubsection === '2A';
+  const showAuth = !activeSubsection || activeSubsection === '2B';
+  const showGuide = !activeSubsection || activeSubsection === '2C';
+  const showNokInstructions = !activeSubsection || activeSubsection === '2D';
+
   return (
+    <div className="space-y-5">
+    {showAccess ? (
     <div id="subsection-2A" className={cn('space-y-5', isActive && 'ring-0')}>
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-[16px] border border-[#E4EAF0] border-t-[3px] border-t-[#213D59] bg-white p-[18px] max-md:rounded-[14px]">
-          <div className="mb-3 flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#213D59] text-white">
-              <Users className="h-[18px] w-[18px]" />
-            </span>
-            <div>
-              <p className="text-[16px] font-bold text-[#213D59]">Next of kin</p>
-              <p className="text-[12.5px] text-[#7A8794]">Access after you pass</p>
-            </div>
-          </div>
-          <ul className="list-disc space-y-1.5 pl-5 text-[13.5px] text-[#414A55]">
-            <li>Sees nothing at all while you are living</li>
-            <li>Reaches the next of kin portal once your Vault unlocks</li>
-            <li>Gets their own sealed letter from you</li>
-            <li>Read only, they settle your affairs, they do not edit your Vault</li>
-          </ul>
-        </div>
         <div className="rounded-[16px] border border-[#E4EAF0] border-t-[3px] border-t-[#1F9D6B] bg-white p-[18px] max-md:rounded-[14px]">
           <div className="mb-3 flex items-center gap-3">
             <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#E8F6F0] text-[#1F9D6B]">
@@ -209,13 +211,38 @@ export default function Section2AccessManagement({ isActive = false }: Props) {
             <li>Every change is logged with their name and the time</li>
           </ul>
         </div>
+        <div className="rounded-[16px] border border-[#E4EAF0] border-t-[3px] border-t-[#213D59] bg-white p-[18px] max-md:rounded-[14px]">
+          <div className="mb-3 flex items-center gap-3">
+            <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#213D59] text-white">
+              <Users className="h-[18px] w-[18px]" />
+            </span>
+            <div>
+              <p className="text-[16px] font-bold text-[#213D59]">Next of kin</p>
+              <p className="text-[12.5px] text-[#7A8794]">Access after you pass</p>
+            </div>
+          </div>
+          <ul className="list-disc space-y-1.5 pl-5 text-[13.5px] text-[#414A55]">
+            <li>Sees nothing while you are living unless you invite them in</li>
+            <li>
+              After you pass, access waits on verification — not a shared password
+            </li>
+            <li>They get a one-time link and set their own password</li>
+            <li>
+              View and download only. They can complete checklists, add notes, and
+              deliver private messages
+            </li>
+          </ul>
+        </div>
       </div>
 
       <div className="flex gap-3 rounded-[16px] border border-[#CFE6F5] bg-[#EAF6FD] px-4 py-3.5 text-[13.5px] text-[#213D59] max-md:rounded-[14px]">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
         <p>
           The two roles are independent. A spouse is usually both: a contributor today
-          and a next of kin later. An attorney is often next of kin only.
+          and a next of kin later. Name an executor or attorney as next of kin if they
+          should receive Vault access after you die. You must sign the death
+          certificate authorization first. After unlock they have the same read-only
+          file rules as next of kin.
         </p>
       </div>
 
@@ -224,8 +251,8 @@ export default function Section2AccessManagement({ isActive = false }: Props) {
           {(
             [
               ['all', 'Everyone'],
-              ['kin', 'Next of kin'],
               ['contributors', 'Contributors'],
+              ['kin', 'Next of kin'],
               ['activity', 'Activity log'],
             ] as const
           ).map(([id, label]) => (
@@ -263,32 +290,7 @@ export default function Section2AccessManagement({ isActive = false }: Props) {
       </div>
 
       <div className={cn(showActivity && 'hidden')}>
-        <div className={cn(!showKin && 'hidden', 'space-y-5')}>
-          <div className="flex items-center gap-3">
-            <span className="grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-[#213D59] text-white">
-              <Users className="h-4 w-4" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-[17px] font-bold tracking-[-0.02em] text-[#213D59]">
-                Next of kin
-              </h3>
-              <p className="text-[12.5px] text-[#7A8794]">
-                Nothing visible until your Vault unlocks. Read only after that.
-              </p>
-            </div>
-          </div>
-
-          <div
-            id="access-management-panel"
-            className="scroll-mt-6 overflow-hidden rounded-[16px] border border-[#E4EAF0] bg-white max-md:rounded-[14px]"
-          >
-            <div className="p-3 sm:p-5">
-              <AccessManagement ref={accessRef} embedded />
-            </div>
-          </div>
-        </div>
-
-        <div className={cn(!showContributors && 'hidden', 'mt-5 space-y-5')}>
+        <div className={cn(!showContributors && 'hidden', 'space-y-5')}>
           <div className="flex items-center gap-3">
             <span className="grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-[#E8F6F0] text-[#1F9D6B]">
               <Users className="h-4 w-4" />
@@ -320,23 +322,43 @@ export default function Section2AccessManagement({ isActive = false }: Props) {
             </div>
           </div>
         </div>
+
+        <div className={cn(!showKin && 'hidden', 'mt-5 space-y-5')}>
+          <div className="flex items-center gap-3">
+            <span className="grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-[#213D59] text-white">
+              <Users className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-[17px] font-bold tracking-[-0.02em] text-[#213D59]">
+                Next of kin
+              </h3>
+              <p className="text-[12.5px] text-[#7A8794]">
+                Nothing visible until your Vault unlocks. Read only after that.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => accessRef.current?.openAddWizard()}
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-[#213D59] px-[18px] text-[14px] font-semibold text-white"
+            >
+              <UserPlus className="h-4 w-4" />
+              Invite a person
+            </button>
+          </div>
+
+          <div
+            id="access-management-panel"
+            className="scroll-mt-6 overflow-hidden rounded-[16px] border border-[#E4EAF0] bg-white max-md:rounded-[14px]"
+          >
+            <div className="p-3 sm:p-5">
+              <AccessManagement ref={accessRef} embedded />
+            </div>
+          </div>
+        </div>
       </div>
 
       {showActivity ? (
-        <div className="rounded-[16px] border border-[#E4EAF0] bg-white p-5 max-md:rounded-[14px]">
-          <p className="text-[15px] font-bold text-[#213D59]">Activity log</p>
-          <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#7A8794]">
-            Every contributor change is stored with their name and the time. Open
-            a contributor card to review the areas they can view or edit.
-          </p>
-          <button
-            type="button"
-            onClick={() => setFilter('contributors')}
-            className="mt-4 inline-flex h-10 items-center rounded-full border border-[#E4EAF0] bg-white px-4 text-[13px] font-semibold text-[#213D59]"
-          >
-            View contributors
-          </button>
-        </div>
+        <SectionFootprintsPanel />
       ) : null}
 
       <MobileGuide />
@@ -345,6 +367,12 @@ export default function Section2AccessManagement({ isActive = false }: Props) {
         open={familyRoleAreasOpen}
         onOpenChange={setFamilyRoleAreasOpen}
       />
+    </div>
+    ) : null}
+
+    {showAuth ? <DeathCertificateAuthorizationPanel /> : null}
+    {showGuide ? <HowNextOfKinAccessWorksOwnerGuide /> : null}
+    {showNokInstructions ? <InstructionsForNextOfKinOwnerPanel /> : null}
     </div>
   );
 }

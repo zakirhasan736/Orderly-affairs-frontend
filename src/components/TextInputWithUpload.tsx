@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Button } from '@common/ui/button';
 import { Input } from '@common/ui/input';
 import { Label } from '@common/ui/label';
-import { Eye, EyeOff, FileText, Upload, X } from 'lucide-react';
+import { Download, Eye, EyeOff, FileText, Upload, X } from 'lucide-react';
 import { getSignedUploadUrl, uploadFile } from '@/libs/api/upload';
 import { VaultFieldUploadThumb } from '@/components/vault/VaultFieldUploadThumb';
 import { cn } from '@common/ui/utils';
@@ -185,8 +185,31 @@ export function TextInputWithUpload({
       toast.error('Could not open secure file link. Try again.');
       return;
     }
-    // Legacy rows without public_id: do not open raw URLs (may be long-lived public).
     toast.error('This file needs re-upload for secure viewing.');
+  }
+
+  async function downloadFile(file: UploadFileEntry) {
+    if (!file.public_id) {
+      toast.error('This file needs re-upload for secure download.');
+      return;
+    }
+    try {
+      const signed = await getSignedUploadUrl(file.public_id);
+      if (!signed.url) throw new Error('missing url');
+      const res = await fetch(signed.url);
+      if (!res.ok) throw new Error('download failed');
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = fileDisplayName(file, 0);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(href);
+    } catch {
+      toast.error('Could not download this file. Try View instead.');
+    }
   }
 
   return (
@@ -326,6 +349,17 @@ export function TextInputWithUpload({
                       >
                         <Eye className="mr-1.5 h-3.5 w-3.5" />
                         View
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        data-oa-view-ok
+                        onClick={() => void downloadFile(f)}
+                        className="h-8 rounded-lg"
+                      >
+                        <Download className="mr-1.5 h-3.5 w-3.5" />
+                        Download
                       </Button>
                       {!disabled && (
                         <Button

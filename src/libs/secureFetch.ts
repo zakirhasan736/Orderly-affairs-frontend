@@ -132,10 +132,21 @@ export async function fetchSession(): Promise<{
   auto_renew?: boolean;
   trial_mode?: string | null;
   lock_message?: string | null;
+  must_change_password?: boolean;
+  must_enroll_mfa?: boolean;
+  security_setup_required?: boolean;
   vault_push?: {
     state?: 'active' | 'paused' | 'off' | string;
     collaborators_enabled?: boolean;
   };
+  death_claim_alert?: {
+    kind?: string;
+    title?: string;
+    body?: string;
+    ends_at?: string;
+    elapsed?: boolean;
+    remaining_days?: number;
+  } | null;
 }> {
   if (!resolveApiBaseUrl()) return { authenticated: false };
 

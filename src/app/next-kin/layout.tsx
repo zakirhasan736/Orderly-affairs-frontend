@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { fetchSession } from '@/libs/secureFetch';
 import { SessionExpiredListener } from '@/components/SessionExpiredListener';
+import { CollaboratorFirstLoginGate } from '@/components/auth/CollaboratorFirstLoginGate';
 import {
   SessionTimeoutGuard,
   nokIdleTiming,
@@ -12,7 +13,13 @@ import {
 const PORTAL_KIND_KEY = 'oa_portal_kind';
 
 function isNokLoginPath(pathname: string) {
-  return pathname === '/next-kin' || pathname === '/next-kin/';
+  return (
+    pathname === '/next-kin' ||
+    pathname === '/next-kin/' ||
+    pathname.startsWith('/next-kin/claim') ||
+    pathname.startsWith('/next-kin/verify-identity') ||
+    pathname.startsWith('/next-kin/instructions')
+  );
 }
 
 /**
@@ -105,7 +112,7 @@ export default function NextKinPortalLayout({
         idleMs={idle.idleMs}
         warnSeconds={idle.warnSeconds}
       />
-      {children}
+      <CollaboratorFirstLoginGate>{children}</CollaboratorFirstLoginGate>
     </>
   );
 }

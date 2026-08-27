@@ -12,10 +12,14 @@ import { toast } from 'sonner';
 import { statusTagClass } from '@/components/admin/adminNav';
 import {
   adminDeleteUser,
+  adminDeathCertificateUrl,
   adminForceLogoutUser,
   adminGrantComp,
   adminListUsers,
   adminPatchUser,
+  adminReleaseNokAccess,
+  type AdminAuthorizedPerson,
+  type AdminDeathVerification,
   type AdminUser,
 } from '@/libs/api/adminApi';
 import {
@@ -65,6 +69,134 @@ function initials(u: AdminUser) {
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
   return n.slice(0, 2).toUpperCase();
+}
+
+function AuthorizedPeopleList({ people }: { people: AdminAuthorizedPerson[] }) {
+  if (!people.length) {
+    return (
+      <p style={{ margin: 0, color: 'var(--oa-muted)', fontSize: 13 }}>
+        No next of kin or family collaborators named.
+      </p>
+    );
+  }
+  return (
+    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 10 }}>
+      {people.map(p => (
+        <li key={p.id} style={{ fontSize: 13.5, lineHeight: 1.45 }}>
+          <strong>{p.full_name || p.email || '—'}</strong>
+          <span style={{ color: 'var(--oa-muted)' }}> · {p.kind}</span>
+          {p.relationship ? (
+            <span style={{ color: 'var(--oa-muted)' }}> · {p.relationship}</span>
+          ) : null}
+          <div style={{ color: 'var(--oa-muted)', fontSize: 12.5 }}>
+            {[p.email, p.phone_number].filter(Boolean).join(' · ') || 'No contact on file'}
+            {p.kind?.includes('After death') ||
+            p.kind?.includes('Attorney') ||
+            p.access_timing === 'upon_death' ? (
+              <span>
+                {' · ID: '}
+                {p.didit_status || 'not started'}
+              </span>
+            ) : null}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DeathVerificationPanel({
+  selected,
+  busy,
+}: {
+  selected: AdminUser;
+  busy: boolean;
+}) {
+  const dv: AdminDeathVerification | undefined = selected.death_verification;
+  const ada = selected.after_death_case;
+  const gates = ada?.gates;
+  return (
+    <div
+      style={{
+        marginBottom: 16,
+        padding: 12,
+        borderRadius: 12,
+        border: '1px solid var(--oa-line, #E4EAF0)',
+        fontSize: 13,
+        lineHeight: 1.45,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          color: 'var(--oa-muted)',
+          fontWeight: 700,
+          marginBottom: 8,
+        }}
+      >
+        After-death access
+      </div>
+      {ada ? (
+        <p style={{ margin: '0 0 8px', color: 'var(--oa-muted)' }}>
+          Case {ada.reference} · {ada.status}
+          <br />
+          Death record (Didit USA SSDMF): {ada.owner_death_record?.status || 'PENDING'}
+          {ada.owner_death_record?.override ? ' · override on file' : ''}
+          <br />
+          Protection: {ada.protection?.completed
+            ? '168 hours complete'
+            : ada.protection?.started
+              ? `${ada.protection?.remaining_seconds ?? 0}s remaining`
+              : 'Not started — begins when the death certificate is stored'}
+          <br />
+          Notices: D0 {ada.notifications?.day0 ? 'sent' : '—'} · D2 {ada.notifications?.day2 ? 'sent' : '—'} · D4 {ada.notifications?.day4 ? 'sent' : '—'} · D6 {ada.notifications?.day6 ? 'sent' : '—'}
+          <br />
+          Owner: {ada.owner_response?.disputed ? 'disputed' : ada.owner_response?.fresh_login_at ? 'fresh login (not auto-stopped)' : 'no dispute'}
+        </p>
+      ) : (
+        <p style={{ margin: '0 0 8px', color: 'var(--oa-muted)' }}>
+          No open after-death case. Living Release Access is a separate action.
+        </p>
+      )}
+      {gates ? (
+        <ul style={{ margin: '0 0 8px', paddingLeft: 18, color: 'var(--oa-ink)' }}>
+          <li>Certificate on file: {gates.certificate_on_file ? 'yes' : 'no'}</li>
+          <li>Claimant identity approved: {gates.claimant_kyc_approved ? 'yes' : 'no'}</li>
+          <li>Death record MATCH or override: {gates.ssdmf_match_or_override ? 'yes' : 'no'}</li>
+          <li>168-hour protection complete: {gates.protection_complete ? 'yes' : 'no'}</li>
+          <li>No owner dispute: {gates.no_owner_dispute ? 'yes' : 'no'}</li>
+        </ul>
+      ) : null}
+      <p style={{ margin: '0 0 8px', color: 'var(--oa-muted)' }}>
+        Certificate:{' '}
+        {dv?.certificate_uploaded
+          ? dv.certificate_filename || 'uploaded'
+          : 'not uploaded'}
+        {ada?.certificate?.version ? ` · v${ada.certificate.version}` : ''}
+      </p>
+      {dv?.certificate_uploaded ? (
+        <button
+          type="button"
+          className="oa-admin-btn ghost"
+          disabled={busy}
+          style={{ marginTop: 8 }}
+          onClick={() => {
+            void adminDeathCertificateUrl(selected.id)
+              .then(data => {
+                if (data.url) window.open(data.url, '_blank', 'noopener');
+              })
+              .catch(err => {
+                window.alert(err instanceof Error ? err.message : String(err));
+              });
+          }}
+        >
+          View certificate
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 function UserDetail({
@@ -171,6 +303,97 @@ function UserDetail({
           <strong>{fmt(selected.last_login)}</strong>
         </div>
       </div>
+
+      <div
+        style={{
+          fontSize: 11,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          color: 'var(--oa-muted)',
+          fontWeight: 700,
+          marginBottom: 8,
+        }}
+      >
+        Authorized people
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <AuthorizedPeopleList people={selected.authorized_people || []} />
+      </div>
+      <DeathVerificationPanel selected={selected} busy={busy} />
+      {selected.death_report_pending && selected.owner_status !== 'deceased' ? (
+        <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--oa-muted)' }}>
+          A next of kin reported a passing. Confirm identity (ID: status on
+          each after-death person). Release access only sends claim emails to
+          people whose Didit check is Approved.
+        </p>
+      ) : null}
+      {selected.owner_status === 'deceased' ? (
+        <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--oa-muted)' }}>
+          Passing already recorded. Release again to re-send unused claim links.
+        </p>
+      ) : null}
+      <button
+        type="button"
+        className="oa-admin-btn primary"
+        style={{ width: '100%', marginBottom: 16 }}
+        disabled={
+          busy ||
+          !selected.after_death_case?.gates?.certificate_on_file ||
+          !selected.after_death_case?.gates?.protection_complete ||
+          !selected.after_death_case?.gates?.claimant_kyc_approved ||
+          selected.after_death_case?.gates?.no_owner_dispute === false
+        }
+        onClick={() => {
+          const gates = selected.after_death_case?.gates;
+          if (
+            !gates?.certificate_on_file ||
+            !gates?.protection_complete ||
+            !gates?.claimant_kyc_approved ||
+            gates.no_owner_dispute === false
+          ) {
+            window.alert(
+              (gates?.reasons || []).join(' ') ||
+                'Release gates are not met. Certificate, 168-hour protection, claimant identity, and no owner dispute are required. Death-record MATCH or a documented override is also required.',
+            );
+            return;
+          }
+          const needsSsdmfOverride = !gates.ssdmf_match_or_override;
+          let ssdmf_override = false;
+          let death_check_override_reason: string | undefined;
+          if (needsSsdmfOverride) {
+            death_check_override_reason =
+              window.prompt(
+                'Owner death-record check is not MATCH. Enter override reason (required). This is logged. NO_MATCH is not proof the owner is alive.',
+              ) || undefined;
+            if (!death_check_override_reason?.trim()) {
+              window.alert('Override reason is required.');
+              return;
+            }
+            ssdmf_override = true;
+          }
+          const note =
+            window.prompt(
+              `Release vault access for ${selected.email}?\n\nThis emails a 72-hour claim link only to claimants whose Didit status is Approved. Nothing else auto-unlocks.\n\nSupporting notes${ssdmf_override ? ' (required for override)' : ''}:`,
+            ) ?? undefined;
+          if (note === undefined) return;
+          if (ssdmf_override && !note.trim()) {
+            window.alert('Add supporting notes when overriding a death-record check.');
+            return;
+          }
+          onRun(
+            () =>
+              adminReleaseNokAccess(selected.id, {
+                confirm: true,
+                note: note.trim() || undefined,
+                ssdmf_override,
+                death_check_override_reason,
+              }),
+            'Vault access released',
+          );
+        }}
+      >
+        Release access
+      </button>
 
       <div
         style={{
@@ -446,9 +669,10 @@ function AdminUsersInner() {
                     {users.map(u => {
                       const st = displayStatus(u);
                       const isSel = selected?.id === u.id;
+                      const people = u.authorized_people || [];
                       return (
+                        <React.Fragment key={u.id}>
                         <tr
-                          key={u.id}
                           className={isSel ? 'selected' : undefined}
                           style={{ cursor: 'pointer' }}
                           onClick={() => setSelected(u)}
@@ -500,9 +724,48 @@ function AdminUsersInner() {
                             >
                               {st}
                             </span>
+                            {u.owner_status === 'deceased' ? (
+                              <span className="oa-admin-tag warn" style={{ marginLeft: 6 }}>
+                                deceased
+                              </span>
+                            ) : u.death_report_pending ? (
+                              <span className="oa-admin-tag warn" style={{ marginLeft: 6 }}>
+                                death report
+                              </span>
+                            ) : null}
+                            {u.death_verification?.ssdmf_status === 'MATCH' ? (
+                              <span className="oa-admin-tag" style={{ marginLeft: 6 }}>
+                                SSDMF match
+                              </span>
+                            ) : null}
                           </td>
                           <td>{fmt(u.trial_end)}</td>
                         </tr>
+                        <tr>
+                          <td
+                            colSpan={4}
+                            style={{
+                              background: 'var(--oa-paper, #f7f6f2)',
+                              padding: '10px 16px 14px',
+                              borderTop: 'none',
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 11,
+                                letterSpacing: '0.08em',
+                                textTransform: 'uppercase',
+                                color: 'var(--oa-muted)',
+                                fontWeight: 700,
+                                marginBottom: 8,
+                              }}
+                            >
+                              Authorized people
+                            </div>
+                            <AuthorizedPeopleList people={people} />
+                          </td>
+                        </tr>
+                        </React.Fragment>
                       );
                     })}
                     {!users.length && (

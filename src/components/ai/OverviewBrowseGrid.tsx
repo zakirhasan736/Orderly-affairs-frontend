@@ -27,6 +27,7 @@ import {
   sectionHasUnseenFills,
 } from '@/utils/newFillMarkers';
 import { sectionHasSidebarNewAiData } from '@/utils/aiSidebarNewData';
+import type { SectionProgress } from '@/utils/sectionCompletion';
 
 const ICONS: Record<
   OverviewBrowseCategory['icon'],
@@ -47,6 +48,7 @@ const ICONS: Record<
 type OverviewBrowseGridProps = {
   onNavigateToSection: (sectionId: string) => void;
   completedSectionIds?: string[];
+  sectionProgressById?: Record<string, Pick<SectionProgress, 'percent' | 'complete' | 'started' | 'itemCount' | 'status'>>;
   className?: string;
   /** Family ACL: hide vault sections the collaborator cannot open. */
   allowedSectionIds?: 'all' | Set<string>;
@@ -61,6 +63,7 @@ type OverviewBrowseGridProps = {
 export function OverviewBrowseGrid({
   onNavigateToSection,
   completedSectionIds = [],
+  sectionProgressById = {},
   className,
   allowedSectionIds = 'all',
   variant = 'default',
@@ -142,6 +145,49 @@ export function OverviewBrowseGrid({
   const attentionCount = (category: OverviewBrowseCategory) =>
     category.sectionIds.filter(id => pendingBySection.has(id)).length;
 
+  const categoryProgress = (category: OverviewBrowseCategory) => {
+    let itemCount = 0;
+    let completeSections = 0;
+    let incompleteSections = 0;
+    for (const sectionId of category.sectionIds) {
+      const progress = sectionProgressById[sectionId];
+      itemCount += progress?.itemCount ?? 0;
+      const isDone = Boolean(progress?.complete) || completedSet.has(sectionId);
+      if (isDone) {
+        completeSections += 1;
+        continue;
+      }
+      const started =
+        Boolean(progress?.started) ||
+        (progress?.itemCount ?? 0) > 0 ||
+        progress?.status === 'incomplete';
+      if (started) incompleteSections += 1;
+    }
+    return {
+      itemCount,
+      complete:
+        category.sectionIds.length > 0 &&
+        completeSections === category.sectionIds.length,
+      incomplete: incompleteSections > 0,
+    };
+  };
+
+  const sectionStatus = (
+    sectionId: string,
+    hasPending: boolean,
+  ): 'notStarted' | 'inProgress' | 'complete' => {
+    const progress = sectionProgressById[sectionId];
+    const isDone = Boolean(progress?.complete) || completedSet.has(sectionId);
+    if (isDone) return 'complete';
+    const started =
+      hasPending ||
+      Boolean(progress?.started) ||
+      progress?.status === 'incomplete' ||
+      (progress?.itemCount ?? 0) > 0;
+    if (started) return 'inProgress';
+    return 'notStarted';
+  };
+
   const openCategory = (category: OverviewBrowseCategory) => {
     if (category.sectionIds.length === 1) {
       onNavigateToSection(category.sectionIds[0]);
@@ -180,13 +226,13 @@ export function OverviewBrowseGrid({
       {active.sectionIds.map(sectionId => {
         const title = sectionTitle.get(sectionId) || `Section ${sectionId}`;
         const hasPending = pendingBySection.has(sectionId);
-        const isDone = completedSet.has(sectionId);
 
         return (
           <li key={sectionId}>
             <SectionTile
               title={title}
-              status={hasPending ? 'inProgress' : isDone ? 'complete' : 'notStarted'}
+              status={sectionStatus(sectionId, hasPending)}
+              itemCount={sectionProgressById[sectionId]?.itemCount}
               onClick={() => onNavigateToSection(sectionId)}
             />
           </li>
@@ -206,6 +252,7 @@ export function OverviewBrowseGrid({
         const Icon = ICONS[category.icon];
         const badge = attentionCount(category);
         const selected = activeId === category.id;
+        const { itemCount, complete, incomplete } = categoryProgress(category);
         const newLabel =
           badge === 1
             ? '1 section with new data'
@@ -222,11 +269,20 @@ export function OverviewBrowseGrid({
             }
             hasNew={badge > 0}
             selected={selected}
+            itemCount={itemCount}
+            complete={complete}
+            incomplete={incomplete}
             onClick={() => openCategory(category)}
             aria-label={
-              badge > 0
-                ? `${category.label}. ${newLabel}. Tap to open.`
-                : `${category.label}. Tap to open.`
+              [
+                category.label,
+                itemCount > 0 ? `${itemCount} records` : 'Empty',
+                complete ? 'Complete' : incomplete ? 'Incomplete' : null,
+                badge > 0 ? newLabel : null,
+                'Tap to open',
+              ]
+                .filter(Boolean)
+                .join('. ') + '.'
             }
             icon={
               <Icon
@@ -265,7 +321,9 @@ export function OverviewBrowseGrid({
           </h2>
           <p className="mt-1 text-[13.5px] leading-snug text-[#5a6b80]">
             Amber tiles say <span className="font-semibold text-amber-800">new</span>{' '}
-            when documents were just filled. Tap one to open those sections.
+            when documents were just filled. Numbers are records started, not a
+            percent. A checkmark is complete; Incomplete means required fields
+            are still open.
           </p>
         </div>
 
@@ -330,7 +388,9 @@ export function OverviewBrowseGrid({
           Your Vault by category
         </h2>
         <p className="mt-1 text-[13.5px] text-[#7A8794]">
-          Amber tiles have documents waiting for your review.
+          Amber tiles have documents waiting for your review. The number is
+          how many records you have started — not a percent. A checkmark means
+          complete; Incomplete means required fields are still open.
         </p>
       </div>
 

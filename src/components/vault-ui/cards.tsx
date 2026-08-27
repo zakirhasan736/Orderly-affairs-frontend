@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Plus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import { VaultButton } from './chrome';
 import { EMPTY_FILTERED, EMPTY_NEVER_STARTED } from './copy';
@@ -76,12 +76,71 @@ export function StatCard({
   );
 }
 
+function CompletionMark({
+  complete,
+  incomplete,
+  selected = false,
+  size = 'md',
+  showEmpty = false,
+}: {
+  complete?: boolean;
+  incomplete?: boolean;
+  selected?: boolean;
+  size?: 'sm' | 'md';
+  showEmpty?: boolean;
+}) {
+  const box = size === 'sm' ? 'h-[18px] w-[18px]' : 'h-5 w-5';
+  if (complete) {
+    return (
+      <span
+        className={cn(
+          'grid place-items-center rounded-[5px]',
+          box,
+          selected ? 'bg-white text-[#213D59]' : 'bg-[#1F9D6B] text-white',
+        )}
+        aria-label="Complete"
+        title="Complete"
+      >
+        <Check className={size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'} strokeWidth={3} />
+      </span>
+    );
+  }
+  if (incomplete) {
+    return (
+      <span
+        className={cn(
+          'rounded-[5px] border-2 bg-transparent',
+          box,
+          selected ? 'border-white/80' : 'border-[#C23A3A]',
+        )}
+        aria-label="Incomplete"
+        title="Incomplete"
+      />
+    );
+  }
+  if (!showEmpty) return null;
+  return (
+    <span
+      className={cn(
+        'rounded-[5px] border-2 bg-transparent',
+        box,
+        selected ? 'border-white/35' : 'border-[#C5CED8]',
+      )}
+      aria-label="Empty"
+      title="Empty"
+    />
+  );
+}
+
 export function CategoryTile({
   title,
   subtitle,
   icon,
   hasNew = false,
   selected = false,
+  itemCount,
+  complete = false,
+  incomplete = false,
   className,
   ...props
 }: React.ComponentProps<'button'> & {
@@ -90,6 +149,9 @@ export function CategoryTile({
   icon?: React.ReactNode;
   hasNew?: boolean;
   selected?: boolean;
+  itemCount?: number;
+  complete?: boolean;
+  incomplete?: boolean;
 }) {
   return (
     <button
@@ -101,23 +163,54 @@ export function CategoryTile({
           ? 'border-[#213D59] bg-[#213D59] text-white'
           : hasNew
             ? 'border-[#B4761A]/40 bg-[#FDF4E4] text-[#213D59]'
-            : 'border-[#E4EAF0] bg-[#F6F8FA] text-[#213D59] hover:bg-white',
+            : incomplete
+              ? 'border-[#C23A3A]/35 bg-[#FDF4F4] text-[#213D59]'
+              : 'border-[#E4EAF0] bg-[#F6F8FA] text-[#213D59] hover:bg-white',
         className,
       )}
       {...props}
     >
       <div className="flex items-start justify-between gap-2">
         {icon}
-        {hasNew ? (
-          <span
-            className={cn(
-              'rounded-full px-2 py-1 text-[10.5px] font-bold uppercase tracking-[0.1em]',
-              selected ? 'bg-[#FDF4E4] text-[#B4761A]' : 'bg-[#B4761A] text-white',
-            )}
-          >
-            New data
+        <span className="flex max-w-[70%] shrink-0 flex-col items-end gap-1">
+          <span className="flex items-center gap-1.5">
+            {typeof itemCount === 'number' && itemCount > 0 ? (
+              <span
+                className={cn(
+                  'min-w-5 text-right text-[15px] font-bold tabular-nums leading-none',
+                  selected ? 'text-white/90' : 'text-[#213D59]/70',
+                )}
+              >
+                {itemCount}
+              </span>
+            ) : null}
+            <CompletionMark
+              complete={complete}
+              incomplete={false}
+              selected={selected}
+            />
           </span>
-        ) : null}
+          {incomplete && !complete ? (
+            <span
+              className={cn(
+                'rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em]',
+                selected ? 'bg-white/15 text-white' : 'bg-[#C23A3A] text-white',
+              )}
+            >
+              Incomplete
+            </span>
+          ) : null}
+          {hasNew ? (
+            <span
+              className={cn(
+                'rounded-full px-2 py-1 text-[10.5px] font-bold uppercase tracking-[0.1em]',
+                selected ? 'bg-[#FDF4E4] text-[#B4761A]' : 'bg-[#B4761A] text-white',
+              )}
+            >
+              New data
+            </span>
+          ) : null}
+        </span>
       </div>
       <div className="mt-3">
         <span className="block truncate text-[15.5px] font-bold">{title}</span>
@@ -139,18 +232,20 @@ export function CategoryTile({
 export function SectionTile({
   title,
   status,
+  itemCount,
   className,
   ...props
 }: React.ComponentProps<'button'> & {
   title: string;
   status: 'notStarted' | 'inProgress' | 'complete';
+  itemCount?: number;
 }) {
   const meta =
     status === 'complete'
-      ? { label: 'Complete', ring: 'border-[#1F9D6B] bg-[#E8F6F0]', dot: 'bg-[#1F9D6B]' }
+      ? { label: 'Complete', ring: 'border-[#1F9D6B] bg-[#E8F6F0]', labelClass: 'text-[#1F9D6B]' }
       : status === 'inProgress'
-        ? { label: 'In progress', ring: 'border-[#B4761A]/30 bg-[#FDF4E4]', dot: 'bg-[#B4761A]' }
-        : { label: 'Not started', ring: 'border-[#E4EAF0] bg-white', dot: 'bg-[#6A7481]' };
+        ? { label: 'Incomplete', ring: 'border-[#C23A3A]/30 bg-[#FDF4F4]', labelClass: 'text-[#C23A3A]' }
+        : { label: 'Empty', ring: 'border-[#E4EAF0] bg-white', labelClass: 'text-[#7A8794]' };
 
   return (
     <button
@@ -164,13 +259,23 @@ export function SectionTile({
       )}
       {...props}
     >
-      <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', meta.dot)} />
+      <CompletionMark
+        size="sm"
+        showEmpty
+        complete={status === 'complete'}
+        incomplete={status === 'inProgress'}
+      />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[15.5px] font-bold text-[#213D59]">
           {title}
         </span>
-        <span className="text-[13px] text-[#7A8794]">{meta.label}</span>
+        <span className={cn('text-[13px] font-semibold', meta.labelClass)}>{meta.label}</span>
       </span>
+      {typeof itemCount === 'number' && itemCount > 0 ? (
+        <span className="shrink-0 text-[15px] font-bold tabular-nums text-[#213D59]/70">
+          {itemCount}
+        </span>
+      ) : null}
     </button>
   );
 }

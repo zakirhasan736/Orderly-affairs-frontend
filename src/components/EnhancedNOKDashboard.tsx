@@ -20,6 +20,7 @@ import {
   FileText,
   Flower2,
   GraduationCap,
+  BookOpen,
   Heart,
   HeartHandshake,
   Home,
@@ -37,6 +38,7 @@ import {
   Sparkles,
   Users,
   X,
+  Upload,
   type LucideIcon,
 } from 'lucide-react';
 import { formConfig } from '../config/formConfig';
@@ -52,7 +54,10 @@ import {
 import {
   type NextKinOwnerSummary,
   useGetMyNextKinAccessQuery,
+  useGetAfterDeathCaseQuery,
   useReportOwnerDeceasedMutation,
+  useStartDiditSessionMutation,
+  useUploadDeathCertificateMutation,
 } from '@/services/authApi';
 import { NokMfaSettingsSheet } from '@/components/NokMfaSettingsSheet';
 import { toast } from 'sonner';
@@ -88,6 +93,19 @@ type DashboardAccess = {
   nextkin: { full_name?: string; email?: string };
   immediate_access?: boolean;
   owner?: NextKinOwnerSummary;
+  didit?: {
+    configured?: boolean;
+    status?: string;
+    approved?: boolean;
+    session_url?: string | null;
+    is_attorney_or_executor?: boolean;
+    didit_before_report?: boolean;
+  };
+  death_verification?: {
+    certificate_uploaded?: boolean;
+    certificate_filename?: string | null;
+    ssdmf_status?: string | null;
+  };
 };
 
 interface PreviewAccess {
@@ -212,6 +230,14 @@ export function EnhancedNOKDashboard({
   } = useGetMyNextKinAccessQuery(undefined, { skip: isPreview });
   const [reportOwnerDeceased, { isLoading: reportingDeceased }] =
     useReportOwnerDeceasedMutation();
+  const [startDiditSession, { isLoading: startingDidit }] =
+    useStartDiditSessionMutation();
+  const [uploadDeathCertificate, { isLoading: uploadingCert }] =
+    useUploadDeathCertificateMutation();
+  const { data: afterDeath } = useGetAfterDeathCaseQuery(undefined, {
+    skip: isPreview,
+  });
+  const afterDeathCase = afterDeath?.case;
 
   const effectiveAccess: DashboardAccess | undefined = isPreview
     ? {
@@ -228,6 +254,8 @@ export function EnhancedNOKDashboard({
           nextkin: access.nextkin,
           immediate_access: access.immediate_access,
           owner: access.owner,
+          didit: access.didit,
+          death_verification: access.death_verification || undefined,
         }
       : undefined;
 
@@ -340,6 +368,65 @@ export function EnhancedNOKDashboard({
     effectiveAccess?.owner?.email ||
     'the Vault owner';
   const ownerIsDeceased = ownerStatus === 'deceased';
+  const deathReportPending = Boolean(
+    effectiveAccess?.owner?.death_report_pending,
+  );
+  const diditApproved = Boolean(effectiveAccess?.didit?.approved);
+  const isAttorney = Boolean(
+    effectiveAccess?.didit?.is_attorney_or_executor ||
+      effectiveAccess?.didit?.didit_before_report,
+  );
+  const needsDidit =
+    !isPreview &&
+    !diditApproved &&
+    (deathReportPending || ownerIsDeceased || isAttorney);
+  const canUploadCertificate =
+    !isPreview &&
+    (deathReportPending ||
+      ownerIsDeceased ||
+      (isAttorney && (diditApproved || !effectiveAccess?.didit?.configured)));
+  const certOnFile = Boolean(
+    effectiveAccess?.death_verification?.certificate_uploaded,
+  );
+
+  const openDidit = async () => {
+    try {
+      const session = await startDiditSession().unwrap();
+      const url = session.session_url;
+      if (!url) {
+        toast.success('Identity already verified.');
+        await refetchAccess();
+        return;
+      }
+      window.location.assign(url);
+    } catch (err: unknown) {
+      toast.error(
+        getSafeErrorMessage(err, 'Could not start identity verification.'),
+      );
+    }
+  };
+
+  const handleCertificateFile = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const result = await uploadDeathCertificate(form).unwrap();
+      await refetchAccess();
+      toast.success(
+        result.message ||
+          'Certificate received. Independent death records were checked for the vault owner. Access stays sealed until our team releases it.',
+      );
+    } catch (err: unknown) {
+      toast.error(
+        getSafeErrorMessage(err, 'Could not upload the death certificate.'),
+      );
+    }
+  };
   const displayName =
     effectiveAccess?.nextkin?.full_name?.trim() ||
     effectiveAccess?.nextkin?.email ||
@@ -414,7 +501,7 @@ export function EnhancedNOKDashboard({
       await refetchAccess();
       toast.success(
         result.message ||
-          'Passing recorded. Letters and upon-death access are being processed.',
+          'Passing reported. Verify your identity next. The vault stays sealed until that clears and our team releases access.',
       );
     } catch (err: unknown) {
       toast.error(
@@ -700,7 +787,14 @@ export function EnhancedNOKDashboard({
           Confirm passing report
         </h3>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          This cannot be undone. Re-enter your password to confirm.
+          This starts Orderly Affairs&apos; verification. Vault access and
+          sealed letters stay closed until our team releases them.
+        </p>
+        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] leading-5 text-amber-950">
+          You do not need a second person to approve this report. If the owner
+          is still living, they are emailed so they can tell us this was a
+          mistake. After-death next of kin receive a claim link only after an
+          admin releases access.
         </p>
         <div className="mt-4 space-y-2">
           <Label htmlFor="report-password">Master password</Label>
@@ -721,8 +815,8 @@ export function EnhancedNOKDashboard({
             className="mt-1"
           />
           <span>
-            I confirm that {ownerName} has passed and I understand this will
-            release upon-death content and access.
+            I confirm that {ownerName} has passed. I understand this reports
+            a passing for verification and does not instantly unlock the vault.
           </span>
         </label>
         <div className="mt-5 flex flex-wrap gap-2.5 pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -942,6 +1036,61 @@ export function EnhancedNOKDashboard({
                     </div>
                   </div>
 
+                  {afterDeathCase ? (
+                    <div className="rounded-[20px] border border-[#213D59]/15 bg-white p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5c6b66]">
+                        After-Death Access Request
+                      </p>
+                      <dl className="mt-3 grid gap-2 text-[13px] text-[#213D59]">
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-[#5c6b66]">Owner</dt>
+                          <dd>{afterDeathCase.owner_display_name}</dd>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-[#5c6b66]">Case</dt>
+                          <dd>{afterDeathCase.case_reference}</dd>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-[#5c6b66]">Your relationship</dt>
+                          <dd>{afterDeathCase.relationship || '—'}</dd>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-[#5c6b66]">Your identity</dt>
+                          <dd>{afterDeathCase.identity_label}</dd>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-[#5c6b66]">Death certificate</dt>
+                          <dd>{afterDeathCase.certificate_label}</dd>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-[#5c6b66]">Owner death record check</dt>
+                          <dd>{afterDeathCase.death_record_label}</dd>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-[#5c6b66]">Owner protection period</dt>
+                          <dd>{afterDeathCase.protection_label}</dd>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-[#5c6b66]">Admin review</dt>
+                          <dd>{afterDeathCase.admin_label}</dd>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-[#5c6b66]">Access</dt>
+                          <dd>{afterDeathCase.access_label}</dd>
+                        </div>
+                      </dl>
+                      <p className="mt-3 text-[12px] leading-5 text-[#5c6b66]">
+                        The owner’s 7-day (168-hour) hold starts when the death
+                        certificate is stored. After that, identity must be
+                        Approved (Didit ID and selfie), the hold must finish,
+                        and an Orderly Affairs admin must manually release
+                        access. Named next of kin may report a passing before
+                        identity is Approved; attorneys, executors, and trustees
+                        must be Approved first. Nothing is automatic.
+                      </p>
+                    </div>
+                  ) : null}
+
                   {ownerIsDeceased && !isPreview && (
                     <div className="flex gap-3 rounded-[20px] border border-amber-200 bg-amber-50 p-4">
                       <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
@@ -950,13 +1099,78 @@ export function EnhancedNOKDashboard({
                           Passing recorded for {ownerName}
                         </p>
                         <p className="mt-1 text-[13px] text-amber-900/80">
-                          Letters and upon-death access have been processed.
+                          After-death claim links go out only after identity
+                          verification and a human release.
                         </p>
                       </div>
                     </div>
                   )}
 
+                  {needsDidit && (
+                    <div className="flex flex-col gap-3 rounded-[20px] border border-[#213D59]/20 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <Shield className="mt-0.5 h-5 w-5 shrink-0 text-[#213D59]" />
+                        <div>
+                          <p className="text-sm font-semibold text-[#213D59]">
+                            Verify your identity
+                          </p>
+                          <p className="mt-1 text-[13px] leading-5 text-[#5c6b66]">
+                            {isAttorney && !deathReportPending && !ownerIsDeceased
+                              ? 'As attorney or executor, complete a government ID and live selfie before you report a passing or upload a certificate. The vault stays locked.'
+                              : `Government ID and a live selfie. The vault stays locked until this clears${
+                                  effectiveAccess?.didit?.status
+                                    ? ` (status: ${effectiveAccess.didit.status})`
+                                    : ''
+                                }.`}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => void openDidit()}
+                        disabled={startingDidit}
+                        className="h-10 w-auto shrink-0 rounded-xl px-4"
+                      >
+                        {startingDidit ? 'Starting…' : 'Start ID verification'}
+                      </Button>
+                    </div>
+                  )}
+
+                  {canUploadCertificate && (
+                    <div className="flex flex-col gap-3 rounded-[20px] border border-[#213D59]/20 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <Upload className="mt-0.5 h-5 w-5 shrink-0 text-[#213D59]" />
+                        <div>
+                          <p className="text-sm font-semibold text-[#213D59]">
+                            {certOnFile
+                              ? 'Death certificate on file'
+                              : 'Upload a death certificate'}
+                          </p>
+                          <p className="mt-1 text-[13px] leading-5 text-[#5c6b66]">
+                            {certOnFile
+                              ? `We received the certificate. Owner death record check: ${afterDeathCase?.death_record_label || 'Pending'}. Our team still has to release access.`
+                              : 'PDF or photo. After we store it privately, the server checks independent U.S. death records for the vault owner, not for you. That still does not unlock the kit.'}
+                          </p>
+                        </div>
+                      </div>
+                      <label className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-[#213D59] px-4 text-sm font-medium text-white">
+                        {uploadingCert
+                          ? 'Uploading…'
+                          : certOnFile
+                            ? 'Replace file'
+                            : 'Choose file'}
+                        <input
+                          type="file"
+                          accept="application/pdf,image/jpeg,image/png,image/webp"
+                          className="sr-only"
+                          disabled={uploadingCert}
+                          onChange={event => void handleCertificateFile(event)}
+                        />
+                      </label>
+                    </div>
+                  )}
+
                   {!ownerIsDeceased &&
+                    !deathReportPending &&
                     !isPreview &&
                     effectiveAccess.immediate_access && (
                       <div className="flex flex-col gap-3 rounded-[20px] border border-rose-200 bg-rose-50 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -967,17 +1181,26 @@ export function EnhancedNOKDashboard({
                               Report a passing
                             </p>
                             <p className="mt-1 text-[13px] leading-5 text-rose-900/75">
-                              Only use this after {ownerName} has passed. This
-                              releases upon-death letters, messages, and access.
+                            {isAttorney && !diditApproved
+                              ? `Verify your identity first. Then you can report that ${ownerName} has passed and upload the death certificate.`
+                              : `After ${ownerName} has passed, report it here. The vault stays sealed until identity verification and a human release.`}
                             </p>
                           </div>
                         </div>
                         <Button
                           variant="destructive"
-                          onClick={() => setShowReportModal(true)}
+                          onClick={() => {
+                            if (isAttorney && !diditApproved) {
+                              void openDidit();
+                              return;
+                            }
+                            setShowReportModal(true);
+                          }}
                           className="h-10 w-auto shrink-0 rounded-xl px-4"
                         >
-                          Report passing
+                          {isAttorney && !diditApproved
+                            ? 'Verify identity first'
+                            : 'Report passing'}
                           <ChevronRight className="ml-1 h-4 w-4" />
                         </Button>
                       </div>
@@ -1009,6 +1232,25 @@ export function EnhancedNOKDashboard({
                           <ChevronRight className="h-4 w-4" />
                         </span>
                       </button>
+                      <a
+                        href="/instructions-for-next-of-kin"
+                        className="flex items-center gap-3 rounded-[16px] border border-[#E4EAF0] bg-white p-4 text-left transition hover:border-[#3EB1E5]/40 active:scale-[0.99]"
+                      >
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-[#EAF6FC] text-[#3EB1E5]">
+                          <BookOpen className="h-5 w-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[14px] font-semibold text-[#213D59]">
+                            Instructions for next of kin
+                          </span>
+                          <span className="mt-0.5 block text-[12px] text-[#7A8794]">
+                            What to do now, and how access is released
+                          </span>
+                        </span>
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F6F8FA] text-[#7A8794]">
+                          <ChevronRight className="h-4 w-4" />
+                        </span>
+                      </a>
                       <button
                         type="button"
                         onClick={onDeliverMessages}

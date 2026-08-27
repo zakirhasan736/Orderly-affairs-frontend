@@ -85,6 +85,27 @@ export function parseDateOnly(value: string | Date | null | undefined): Date | u
   );
 }
 
+/** If the string is a calendar date, show MM/DD/YYYY; otherwise leave it. */
+export function formatDateOnlyDisplayValue(
+  value: string | Date | null | undefined,
+): string {
+  if (value == null || value === '') return '';
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? '' : formatDateOnlyDisplay(value);
+  }
+  const trimmed = String(value).trim();
+  if (!trimmed) return '';
+  if (
+    !DATE_ONLY_RE.test(trimmed) &&
+    !ISO_PREFIX_RE.test(trimmed) &&
+    !SLASH_RE.test(trimmed)
+  ) {
+    return trimmed;
+  }
+  const parsed = parseDateOnly(trimmed);
+  return parsed ? formatDateOnlyDisplay(parsed) : trimmed;
+}
+
 /** Normalize any date-ish value to YYYY-MM-DD for storage / AI apply. */
 export function toDateOnlyString(
   value: string | Date | null | undefined,

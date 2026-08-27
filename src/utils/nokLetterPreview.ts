@@ -10,6 +10,8 @@ export const NOK_LETTER_DEFAULTS = {
     "I'm writing you this note as someone I trust deeply.\n\nAs my next of kin, the executor of my will, a close friend, my attorney, or someone who cares—I want you to know that I've prepared something to help guide you through what comes next.",
   kit_description:
     "I've subscribed to an Orderly Affairs Vault. Inside, you'll find everything you may need to manage my affairs if I'm no longer able to, or when I'm gone. It includes not only documents, but also instructions—gentle step-by-step guides to make this process less overwhelming.",
+  keep_email_notice:
+    'SAVE THIS EMAIL. DO NOT DELETE IT. Keep it with this letter. You will need the portal link later.',
   accessible_sections:
     "Once you log in, you'll be able to manage the sections below on my behalf:\n\n(Autofill sections based on selection in the access management section)",
   key_bag_info:
@@ -27,6 +29,23 @@ export const NOK_LETTER_DEFAULTS = {
 const LEGACY_DOCUMENTS_BAG_INFO =
   '• The Documents Bag: Please keep this safe. It contains original documents and space to store items such as death certificates. You may need to refer to it even after everything has been settled. It is located';
 
+function defaultLoginCredentialsText(data: NokLetterData): string {
+  const email =
+    data.nok_email || 'will auto-populate from Access Management';
+  const phone =
+    data.nok_phone || 'will auto-populate from Access Management';
+  const portal =
+    data.access_url || NOK_LETTER_DEFAULTS.access_url;
+  return `${NOK_LETTER_DEFAULTS.keep_email_notice}
+
+I have registered your email address (${email}) and your phone number (${phone}). Bookmark the next-of-kin portal: ${portal}
+
+Nobody is handed my Vault password. After I pass and access is released, you will receive a one-time claim link at this email. You will set your own password and sign in at that portal.`;
+}
+
+const LEGACY_LOGIN_CREDENTIALS_MARKER =
+  'The password to gain access to the Vault is printed on a password card';
+
 function normalizeDocumentsBagInfo(value?: string | null): string | undefined {
   if (value == null) return undefined;
   const trimmed = String(value).trim();
@@ -34,6 +53,19 @@ function normalizeDocumentsBagInfo(value?: string | null): string | undefined {
     return NOK_LETTER_DEFAULTS.documents_bag_info;
   }
   return trimmed;
+}
+
+function normalizeLoginCredentialsText(
+  value?: string | null,
+  data?: NokLetterData,
+): string | undefined {
+  if (value == null || !String(value).trim()) {
+    return data ? defaultLoginCredentialsText(data) : undefined;
+  }
+  if (String(value).includes(LEGACY_LOGIN_CREDENTIALS_MARKER)) {
+    return defaultLoginCredentialsText(data || {});
+  }
+  return value;
 }
 
 /**
@@ -46,6 +78,10 @@ export function applyNokLetterTemplateDefaults(
   return {
     ...letter,
     documents_bag_info: normalizeDocumentsBagInfo(letter.documents_bag_info),
+    login_credentials_text: normalizeLoginCredentialsText(
+      letter.login_credentials_text,
+      letter,
+    ),
   };
 }
 
@@ -157,15 +193,7 @@ export function buildNokLetterPreviewText(
     mergeNokLetterAutofill(localData, person),
   );
   const loginCredentialsText =
-    data.login_credentials_text ||
-    `I have registered your email address (${
-      data.nok_email || 'will auto-populate from Access Management'
-    }) and your phone number (${
-      data.nok_phone || 'will auto-populate from Access Management'
-    }), which you can use as your login credentials. The password to gain access to the Vault is printed on a password card located ${
-      data.password_card_location ||
-      'will auto-populate from Access Management'
-    }.`;
+    data.login_credentials_text || defaultLoginCredentialsText(data);
 
   const date = data.letter_date
     ? new Date(data.letter_date).toLocaleDateString('en-US', {
@@ -218,4 +246,14 @@ export function isNokLetterDelivered(
   letter?: NokLetterData | null,
 ): boolean {
   return letter?.delivery_status === 'sent';
+}
+
+export type NokLetterUiStatus = 'needs_write' | 'saved' | 'sent';
+
+export function resolveNokLetterUiStatus(
+  letter?: NokLetterData | null,
+): NokLetterUiStatus {
+  if (letter?.delivery_status === 'sent') return 'sent';
+  if (letter?.id) return 'saved';
+  return 'needs_write';
 }

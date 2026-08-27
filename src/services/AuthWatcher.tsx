@@ -9,6 +9,7 @@ import {
   markPortalSession,
 } from '@/libs/secureFetch';
 import { SessionExpiredListener } from '@/components/SessionExpiredListener';
+import { CollaboratorFirstLoginGate } from '@/components/auth/CollaboratorFirstLoginGate';
 
 const PORTAL_KIND_KEY = 'oa_portal_kind';
 
@@ -120,7 +121,7 @@ export default function AuthWatcher({
   return (
     <>
       <SessionExpiredListener />
-      {children}
+      <CollaboratorFirstLoginGate>{children}</CollaboratorFirstLoginGate>
     </>
   );
 }

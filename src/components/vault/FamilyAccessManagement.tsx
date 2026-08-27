@@ -2,7 +2,6 @@
 
 import React, { useMemo, useState } from 'react';
 import {
-  Check,
   LayoutGrid,
   Loader2,
   Plus,
@@ -10,7 +9,6 @@ import {
   UserRound,
   Pencil,
   RefreshCw,
-  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@common/ui/button';
@@ -35,7 +33,6 @@ import {
   useUpdateFamilyMemberMutation,
   type FamilyMemberResponse,
 } from '@/services/authApi';
-import { SectionFootprintsPanel } from '@/components/vault/SectionFootprintsPanel';
 import {
   getFamilyAccessAreaRows,
   type FamilyAccessLevel,
@@ -817,32 +814,14 @@ export function FamilyAccessManagement({
                           {group}
                         </td>
                         <td className="rounded-r-xl px-3 py-2.5 text-right align-middle">
-                          <button
-                            type="button"
+                          <input
+                            type="checkbox"
+                            checked={marked}
                             disabled={areaMode === 'Full Dashboard Access'}
-                            onClick={() => toggleAreaMark(row.id)}
-                            className={cn(
-                              'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
-                              marked
-                                ? 'bg-emerald-600 text-white'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
-                              areaMode === 'Full Dashboard Access' &&
-                                'cursor-default opacity-90',
-                            )}
-                            aria-pressed={marked}
-                          >
-                            {marked ? (
-                              <>
-                                <Check className="h-3.5 w-3.5" />
-                                Marked
-                              </>
-                            ) : (
-                              <>
-                                <X className="h-3.5 w-3.5" />
-                                Unmarked
-                              </>
-                            )}
-                          </button>
+                            onChange={() => toggleAreaMark(row.id)}
+                            aria-label={`Access to ${row.title}`}
+                            className="h-5 w-5 cursor-pointer rounded border border-[#C5D4E0] accent-[#213D59] disabled:cursor-default disabled:opacity-80"
+                          />
                         </td>
                       </tr>
                     );
@@ -871,8 +850,6 @@ export function FamilyAccessManagement({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <SectionFootprintsPanel />
     </div>
   );
 }

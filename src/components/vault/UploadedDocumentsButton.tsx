@@ -12,6 +12,8 @@ type UploadedDocumentsButtonProps = {
   className?: string;
   /** Smaller chip for headers and dense bars. */
   dense?: boolean;
+  /** Header/toolbar: thumbnail + count only, no filename. */
+  iconOnly?: boolean;
   /** Hide when there are no files yet. */
   hideWhenEmpty?: boolean;
 };
@@ -24,6 +26,7 @@ export function UploadedDocumentsButton({
   sectionId = null,
   className,
   dense = false,
+  iconOnly = false,
   hideWhenEmpty = false,
 }: UploadedDocumentsButtonProps) {
   const { count, processingCount, previewItems, isLoading } =
@@ -35,7 +38,9 @@ export function UploadedDocumentsButton({
     count === 0
       ? 'Documents'
       : count === 1
-        ? previewItems[0]?.fileName || '1 document'
+        ? iconOnly || dense
+          ? '1 document'
+          : previewItems[0]?.fileName || '1 document'
         : `${count > 99 ? '99+' : count} documents`;
   const subtitleText =
     isLoading && count === 0
@@ -45,16 +50,18 @@ export function UploadedDocumentsButton({
         : processingCount > 0
           ? `${processingCount} processing · tap to open`
           : 'Tap to open & preview';
+  const hoverTitle =
+    count === 0
+      ? 'No documents yet — upload a file first'
+      : count === 1
+        ? previewItems[0]?.fileName || 'Open uploaded document'
+        : `Open uploaded documents (${count})`;
 
   return (
     <button
       type="button"
       data-oa-view-ok
-      title={
-        count > 0
-          ? 'Open uploaded documents'
-          : 'No documents yet — upload a file first'
-      }
+      title={hoverTitle}
       aria-label={
         count > 0
           ? `View uploaded documents, ${count} file${count === 1 ? '' : 's'}`
@@ -66,9 +73,11 @@ export function UploadedDocumentsButton({
       }}
       className={cn(
         'inline-flex items-center text-left shadow-md transition',
-        dense
-          ? 'max-w-[min(100%,14rem)] gap-1.5 rounded-lg border px-2 py-1'
-          : 'max-w-[min(100%,18rem)] gap-2.5 rounded-2xl border px-2.5 py-2',
+        iconOnly
+          ? 'relative h-[38px] w-[38px] shrink-0 justify-center rounded-full border p-0'
+          : dense
+            ? 'max-w-[9.5rem] gap-1.5 rounded-lg border px-2 py-1'
+            : 'max-w-[12.5rem] gap-2 rounded-2xl border px-2 py-1.5',
         count > 0
           ? 'border-[#213D59]/30 bg-white text-[#213D59] ring-1 ring-[#213D59]/10 hover:border-[#213D59]/50 hover:bg-[#f4f7fb]'
           : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
@@ -79,27 +88,39 @@ export function UploadedDocumentsButton({
         <span
           className={cn(
             'relative flex shrink-0 items-center',
-            dense ? 'h-7 w-8' : 'h-10 w-[3.25rem]',
+            iconOnly
+              ? 'h-7 w-7'
+              : dense
+                ? 'h-7 w-8'
+                : 'h-9 w-[2.75rem]',
           )}
         >
-          {previewItems.map((item, index) => (
+          {previewItems.slice(0, iconOnly ? 1 : 3).map((item, index) => (
             <span
               key={item.id}
               className={cn(
-                'absolute top-0 overflow-hidden border-2 border-white bg-slate-100 shadow-sm',
-                dense ? 'h-7 w-7 rounded-md' : 'h-10 w-10 rounded-lg',
+                'overflow-hidden border-2 border-white bg-slate-100 shadow-sm',
+                iconOnly
+                  ? 'h-7 w-7 rounded-full'
+                  : dense
+                    ? 'absolute top-0 h-7 w-7 rounded-md'
+                    : 'absolute top-0 h-9 w-9 rounded-lg',
               )}
-              style={{
-                left: `${index * (dense ? 7 : 10)}px`,
-                zIndex: previewItems.length - index,
-              }}
+              style={
+                iconOnly
+                  ? undefined
+                  : {
+                      left: `${index * (dense ? 7 : 9)}px`,
+                      zIndex: previewItems.length - index,
+                    }
+              }
             >
               <AiUploadHistoryThumb
-                fileId={item.fileId}
-                fileName={item.fileName}
-                mimeType={item.mimeType}
-                className="h-full w-full rounded-none border-0"
-              />
+                  fileId={item.fileId}
+                  fileName={item.fileName}
+                  mimeType={item.mimeType}
+                  className="h-full w-full rounded-none border-0"
+                />
             </span>
           ))}
         </span>
@@ -107,34 +128,45 @@ export function UploadedDocumentsButton({
         <span
           className={cn(
             'flex shrink-0 items-center justify-center bg-slate-100 text-[#213D59]',
-            dense ? 'h-7 w-7 rounded-md' : 'h-10 w-10 rounded-xl',
+            iconOnly
+              ? 'h-7 w-7 rounded-full'
+              : dense
+                ? 'h-7 w-7 rounded-md'
+                : 'h-9 w-9 rounded-xl',
           )}
         >
-          <Files className={dense ? 'h-3.5 w-3.5' : 'h-4 w-4'} aria-hidden />
+          <Files
+            className={iconOnly || dense ? 'h-3.5 w-3.5' : 'h-4 w-4'}
+            aria-hidden
+          />
         </span>
       )}
-      <span className="min-w-0 pr-0.5">
-        <span
-          className={cn(
-            'block truncate font-semibold leading-tight text-[#213D59]',
-            dense ? 'text-[11px]' : 'text-[12px]',
-          )}
-        >
-          {titleText}
-        </span>
-        {!dense ? (
-          <span className="block truncate text-[10px] font-medium leading-tight text-slate-500">
-            {subtitleText}
+      {iconOnly ? null : (
+        <span className="min-w-0 pr-0.5">
+          <span
+            className={cn(
+              'block truncate font-semibold leading-tight text-[#213D59]',
+              dense ? 'text-[11px]' : 'text-[12px]',
+            )}
+          >
+            {titleText}
           </span>
-        ) : null}
-      </span>
+          {!dense ? (
+            <span className="block truncate text-[10px] font-medium leading-tight text-slate-500">
+              {subtitleText}
+            </span>
+          ) : null}
+        </span>
+      )}
       {count > 0 ? (
         <span
           className={cn(
-            'ml-auto inline-flex shrink-0 items-center justify-center rounded-full bg-[#213D59] font-bold text-white',
-            dense
-              ? 'h-5 min-w-5 px-1 text-[10px]'
-              : 'h-7 min-w-7 px-1.5 text-[11px]',
+            'inline-flex shrink-0 items-center justify-center rounded-full bg-[#213D59] font-bold text-white',
+            iconOnly
+              ? 'absolute -right-1 -top-1 h-4 min-w-4 px-0.5 text-[9px]'
+              : dense
+                ? 'ml-auto h-5 min-w-5 px-1 text-[10px]'
+                : 'ml-auto h-6 min-w-6 px-1.5 text-[11px]',
           )}
         >
           {count > 99 ? '99+' : count}

@@ -193,4 +193,82 @@ describe('sectionCompletion', () => {
     expect(progress.complete).toBe(true);
     expect(progress.percent).toBe(100);
   });
+
+  it('treats one half-filled dependent as incomplete itemCount 1, not done via percent', () => {
+    const progress = getSectionProgress('17', {
+      formData: {
+        '17': {
+          '17C': [{ relationship: 'Son' }],
+        },
+      },
+    });
+    expect(progress.status).toBe('incomplete');
+    expect(progress.complete).toBe(false);
+    expect(progress.itemCount).toBe(1);
+    expect(progress.started).toBe(true);
+    expect(progress.percent === 100 && progress.complete).toBe(false);
+  });
+
+  it('marks a fully filled dependent row complete without requiring a target family size', () => {
+    const progress = getSectionProgress('17', {
+      formData: {
+        '17': {
+          '17C': [{ name: 'Tomas Alvarez' }],
+        },
+      },
+    });
+    expect(progress.complete).toBe(true);
+    expect(progress.status).toBe('complete');
+    expect(progress.itemCount).toBe(1);
+    expect(progress.completeItemCount).toBe(1);
+  });
+
+  it('treats an empty family section as not started with no count', () => {
+    const progress = getSectionProgress('17', { formData: { '17': {} } });
+    expect(progress.status).toBe('not_started');
+    expect(progress.itemCount).toBe(0);
+    expect(progress.complete).toBe(false);
+  });
+
+  it('counts a document-only section as started and incomplete', () => {
+    const progress = getSectionProgress('17', {
+      formData: { '17': {} },
+      sectionAiDocumentCounts: { '17': 1 },
+    });
+    expect(progress.status).toBe('incomplete');
+    expect(progress.complete).toBe(false);
+    expect(progress.itemCount).toBe(1);
+    expect(progress.started).toBe(true);
+  });
+
+  it('does not mark insurance incomplete when optional coverage amount is blank', () => {
+    const progress = getSectionProgress('7', {
+      formData: {
+        '7': {
+          '7A': [{ carrier: 'Geico', policy_type: 'Vehicle' }],
+        },
+      },
+    });
+    expect(progress.complete).toBe(true);
+    expect(progress.status).toBe('complete');
+    expect(progress.itemCount).toBe(1);
+  });
+
+  it('marks insurance incomplete when a started policy is missing the carrier', () => {
+    const progress = getSectionProgress('7', {
+      formData: {
+        '7': {
+          '7A': [
+            {
+              coverage_amount: '450000',
+              policy_type: 'Homeowner/Renter',
+            },
+          ],
+        },
+      },
+    });
+    expect(progress.status).toBe('incomplete');
+    expect(progress.complete).toBe(false);
+    expect(progress.itemCount).toBe(1);
+  });
 });

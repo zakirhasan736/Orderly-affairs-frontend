@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import { LegalDisclaimer } from '@/components/vault-ui';
+import { DeathCertificateAuthorizationPanel } from '@/components/legal/DeathCertificateAuthorizationPanel';
 
 import { releaseDeferredAiRoutingDialog, runAiSectionAutofill } from '@/services/aiSectionAutofill';
 import {
@@ -1429,6 +1430,9 @@ export default function Section21EstatePlanningFinalWishes({
         </div>
       )}
 
+      {(!activeSubsection || activeSubsection === '21A') && (
+        <DeathCertificateAuthorizationPanel variant="compact" />
+      )}
       {renderSection('21A')}
       {renderSection('21B')}
       {renderSection('21C')}

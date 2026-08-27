@@ -13,6 +13,11 @@ export type AccessPersonDraft = {
   authorized_sections?: string[] | null;
   master_password?: string | null;
   immediate_access?: boolean | null;
+  death_certificate_auth_agreed?: boolean | null;
+};
+
+export type AccessWizardValidateOptions = {
+  requireDeathCertificateAuthorization?: boolean;
 };
 
 export type WizardStepId = 'person' | 'access' | 'credentials' | 'review';
@@ -86,7 +91,7 @@ export function validateAccessSectionsStep(
   return { ok: true };
 }
 
-/** Step 3 — master/login password required. */
+/** Step 3 — login password required only for immediate access. */
 export function validateAccessCredentialsStep(
   draft: AccessPersonDraft | null | undefined,
 ): AccessValidationResult {
@@ -94,12 +99,28 @@ export function validateAccessCredentialsStep(
     return { ok: false, message: 'Credentials are required' };
   }
 
-  if (isBlank(draft.master_password)) {
+  if (draft.immediate_access && isBlank(draft.master_password)) {
     return {
       ok: false,
-      message: draft.immediate_access
-        ? 'Generate or enter a login password'
-        : 'Generate or enter a master password',
+      message: 'Generate or enter a login password',
+    };
+  }
+
+  return { ok: true };
+}
+
+export function validateAccessReviewStep(
+  draft: AccessPersonDraft | null | undefined,
+  options?: AccessWizardValidateOptions,
+): AccessValidationResult {
+  if (
+    options?.requireDeathCertificateAuthorization &&
+    !draft?.death_certificate_auth_agreed
+  ) {
+    return {
+      ok: false,
+      message:
+        'Agree to the death certificate authorization to name this person for after-death access',
     };
   }
 
@@ -109,6 +130,7 @@ export function validateAccessCredentialsStep(
 export function validateAccessWizardStep(
   stepId: WizardStepId | undefined,
   draft: AccessPersonDraft | null | undefined,
+  options?: AccessWizardValidateOptions,
 ): AccessValidationResult {
   if (!stepId) return { ok: false, message: 'Unknown wizard step' };
 
@@ -120,7 +142,7 @@ export function validateAccessWizardStep(
     case 'credentials':
       return validateAccessCredentialsStep(draft);
     case 'review':
-      return { ok: true };
+      return validateAccessReviewStep(draft, options);
     default:
       return { ok: false, message: 'Unknown wizard step' };
   }
@@ -129,9 +151,15 @@ export function validateAccessWizardStep(
 /** Full save gate — all steps must pass. */
 export function validateAccessPersonForSave(
   draft: AccessPersonDraft | null | undefined,
+  options?: AccessWizardValidateOptions,
 ): AccessValidationResult {
-  for (const step of ['person', 'access', 'credentials'] as WizardStepId[]) {
-    const result = validateAccessWizardStep(step, draft);
+  for (const step of [
+    'person',
+    'access',
+    'credentials',
+    'review',
+  ] as WizardStepId[]) {
+    const result = validateAccessWizardStep(step, draft, options);
     if (!result.ok) return result;
   }
   return { ok: true };

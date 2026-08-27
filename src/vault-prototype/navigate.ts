@@ -18,6 +18,29 @@ export function goToVaultSection(sectionId: string) {
   );
 }
 
+const WRITE_NOK_LETTER_KEY = 'oa_write_nok_letter_id';
+
+export function goToNokLetter(nokId: string) {
+  if (typeof window === 'undefined' || !nokId) return;
+  try {
+    sessionStorage.setItem(WRITE_NOK_LETTER_KEY, nokId);
+  } catch {
+    /* ignore */
+  }
+  goToVaultSection('3');
+}
+
+export function consumeWriteNokLetterId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const id = sessionStorage.getItem(WRITE_NOK_LETTER_KEY);
+    if (id) sessionStorage.removeItem(WRITE_NOK_LETTER_KEY);
+    return id;
+  } catch {
+    return null;
+  }
+}
+
 export function openVaultSubsection(sectionId: string, subId: string) {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(

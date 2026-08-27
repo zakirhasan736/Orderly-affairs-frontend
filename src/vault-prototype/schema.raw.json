@@ -60,7 +60,7 @@
       },
       {
         "id": "dove-legend",
-        "name": "What the Dove Marks",
+        "name": "What the Dove Icons Mean",
         "kind": "form",
         "desc": "The dove appears next to anything that helps your family write your obituary.",
         "fields": [
@@ -105,11 +105,9 @@
             "k": "How often should we remind you to review?",
             "t": "choice",
             "opts": [
-              "Every month",
               "Every 3 months",
               "Every 6 months",
-              "Once a year",
-              "Never, I will handle it"
+              "Once a year"
             ],
             "req": 1,
             "w": "half"
@@ -118,34 +116,17 @@
             "k": "Best day for the reminder",
             "t": "choice",
             "opts": [
+              "My birthday",
+              "New Year",
               "Monday",
               "Friday",
               "Saturday",
-              "Sunday",
-              "My birthday",
-              "New Year"
+              "Sunday"
             ],
             "w": "half"
           },
           {
-            "k": "Where should reminders go?",
-            "t": "email",
-            "ph": "you@gmail.com",
-            "w": "half"
-          },
-          {
-            "k": "Also text me",
-            "t": "tel",
-            "ph": "(555) 214-8890",
-            "w": "half"
-          },
-          {
-            "k": "Last full review",
-            "t": "date",
-            "w": "half"
-          },
-          {
-            "k": "Send a nudge when a password or policy passes its expiry date",
+            "k": "Send a nudge when a password or policy is about to expire",
             "t": "toggle"
           }
         ]
@@ -2359,7 +2340,7 @@
     "subs": [
       {
         "id": "brokerage-taxable",
-        "name": "Brokerage & Taxable",
+        "name": "Brokerage",
         "kind": "entries",
         "entry": "brokerage account",
         "desc": "Regular investment accounts, no retirement rules attached.",
@@ -3870,6 +3851,108 @@
             "k": "The story behind it",
             "t": "long",
             "ph": "He bought it the week he became a citizen and wore it to every wedding after that"
+          }
+        ]
+      },
+      {
+        "id": "family-notes",
+        "name": "Personal / Family Notes",
+        "kind": "entries",
+        "entry": "note",
+        "desc": "Free-form notes the owner or a contributor can leave for the family, with files and reminders.",
+        "fields": [
+          {
+            "k": "Title",
+            "t": "text",
+            "req": 1,
+            "store": "title",
+            "ph": "What this note is about"
+          },
+          {
+            "k": "Note",
+            "t": "long",
+            "req": 1,
+            "store": "body",
+            "ph": "Click here to start writing"
+          },
+          {
+            "k": "Document type",
+            "t": "choice",
+            "store": "document_type",
+            "ui": "select",
+            "opts": [
+              "Note",
+              "Letter",
+              "Story",
+              "List",
+              "Reminder",
+              "Other"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Created date",
+            "t": "date",
+            "store": "created_date",
+            "w": "half"
+          },
+          {
+            "k": "Creators",
+            "t": "text",
+            "store": "creators",
+            "ph": "Who wrote this",
+            "w": "half"
+          },
+          {
+            "k": "Recipients",
+            "t": "text",
+            "store": "recipients",
+            "ph": "Who should see this",
+            "w": "half"
+          },
+          {
+            "k": "Connections",
+            "t": "text",
+            "store": "connections",
+            "ph": "People, accounts, or sections this relates to"
+          },
+          {
+            "k": "Files",
+            "t": "doc",
+            "store": "files",
+            "hint": "Photos, scans, or anything that belongs with this note."
+          },
+          {
+            "k": "Set a reminder",
+            "t": "toggle",
+            "store": "reminder_on"
+          },
+          {
+            "k": "Reminder date",
+            "t": "date",
+            "store": "reminder_date",
+            "w": "half"
+          },
+          {
+            "k": "How often",
+            "t": "choice",
+            "store": "reminder_cadence",
+            "ui": "select",
+            "opts": [
+              "Once",
+              "Weekly",
+              "Monthly",
+              "Every 3 months",
+              "Every 6 months",
+              "Yearly"
+            ],
+            "w": "half"
+          },
+          {
+            "k": "Reminder note",
+            "t": "text",
+            "store": "reminder_note",
+            "ph": "What to check or update"
           }
         ]
       }

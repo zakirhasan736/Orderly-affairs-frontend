@@ -86,7 +86,17 @@ interface DataBindingDashboardProps {
   completedCount?: number;
   totalCount?: number;
   completedSectionIds?: string[];
-  sectionProgressById?: Record<string, { percent: number; complete: boolean }>;
+  sectionProgressById?: Record<
+    string,
+    {
+      percent: number;
+      complete: boolean;
+      started?: boolean;
+      itemCount?: number;
+      completeItemCount?: number;
+      status?: string;
+    }
+  >;
   lastUpdatedBySection?: Record<string, string>;
   afterHero?: React.ReactNode;
   ownerEmail?: string | null;
@@ -787,11 +797,11 @@ export function DataBindingDashboard({
               <div className="mx-auto text-center md:ml-auto md:mr-0">
                 <ProgressRing value={vaultPct} size="hero" surface="navy">
                   <span className="flex flex-col items-center leading-none">
-                    <span className="text-[26px] font-bold tracking-[-0.02em] text-white">
-                      {vaultPct}%
+                    <span className="text-[22px] font-bold tracking-[-0.02em] text-white tabular-nums">
+                      {completedCount}/{totalCount || 22}
                     </span>
                     <span className="mt-1 text-[12px] font-medium text-white/70">
-                      complete
+                      sections
                     </span>
                   </span>
                 </ProgressRing>
@@ -809,12 +819,12 @@ export function DataBindingDashboard({
             <OverviewStatCard
               icon={<CheckCircle2 className="h-4 w-4" />}
               accent="blue"
-              value={`${vaultPct}%`}
-              label="Vault complete"
+              value={`${completedCount} of ${totalCount}`}
+              label="Sections completed"
               detail={
-                totalCount > 0
-                  ? `${completedCount} of ${totalCount} sections`
-                  : 'Track your progress'
+                nextTask?.title
+                  ? `Next: ${nextTask.title}`
+                  : 'Keep filling your vault'
               }
               action="Continue"
               onClick={() => {
@@ -869,11 +879,7 @@ export function DataBindingDashboard({
               icon={<Users className="h-4 w-4" />}
               accent="green"
               value={String(nextKinList?.length || 0)}
-              label={
-                (nextKinList?.length || 0) === 1
-                  ? 'Person with access'
-                  : 'People with access'
-              }
+              label="People with access"
               detail={
                 nextKinList?.[0]?.full_name
                   ? String(nextKinList[0].full_name)
@@ -934,6 +940,7 @@ export function DataBindingDashboard({
             className="hidden md:block"
             onNavigateToSection={onNavigateToSection}
             completedSectionIds={completedSectionIds}
+            sectionProgressById={sectionProgressById}
             allowedSectionIds={allowedSectionIds}
           />
 

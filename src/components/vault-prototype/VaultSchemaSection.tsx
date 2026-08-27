@@ -18,6 +18,11 @@ import { SectionActivityStrip } from '@/components/vault/SectionActivityStrip';
 import { UploadedDocumentsButton } from '@/components/vault/UploadedDocumentsButton';
 import { SectionUpdateRecipientsPicker } from '@/components/vault/SectionUpdateRecipientsPicker';
 import { SectionFileDropZone } from '@/components/vault-prototype/SectionFileDropZone';
+import {
+  VaultFilledDocumentViewDialog,
+  VaultViewDocumentButton,
+} from '@/components/vault-prototype/VaultFilledDocumentViewDialog';
+import { findAttachedVaultDocument } from '@/utils/vaultAttachedDocument';
 import { useOptionalDashboardAiBatch } from '@/contexts/DashboardAiBatchContext';
 import { fromSchemaView, toSchemaView } from '@/vault-prototype/schemaDataBridge';
 import { OPEN_VAULT_SUBSECTION } from '@/vault-prototype/navigate';
@@ -26,6 +31,12 @@ import {
   entryCardTitle,
   entryDrawerTitle,
 } from '@/vault-prototype/entryDisplayTitle';
+import { formatDateOnly } from '@/utils/dateOnly';
+import { FamilyNotesEditor } from '@/components/vault-prototype/FamilyNotesEditor';
+import {
+  INSTRUCTION_PAGE_BANNER,
+  instructionCopyForSub,
+} from '@/vault-prototype/instructionCopy';
 
 type Props = {
   apiSectionId: string;
@@ -185,9 +196,11 @@ export function VaultSchemaSection({
     }));
   }, [section, view]);
 
+  const isInstructions = apiSectionId === '0';
+
   useEffect(() => {
     autoOpenedFor.current = null;
-    setOpenId(null);
+    setOpenId(apiSectionId === '0' ? '__all__' : null);
   }, [apiSectionId]);
 
   useEffect(() => {
@@ -209,13 +222,14 @@ export function VaultSchemaSection({
   }, [apiSectionId]);
 
   useEffect(() => {
+    if (isInstructions) return;
     if (autoOpenedFor.current === apiSectionId) return;
     const firstFilled = states.find(item => item.count > 0);
     if (firstFilled) {
       setOpenId(firstFilled.sub.id);
       autoOpenedFor.current = apiSectionId;
     }
-  }, [apiSectionId, states]);
+  }, [apiSectionId, isInstructions, states]);
 
   if (!section) return null;
 
@@ -265,6 +279,7 @@ export function VaultSchemaSection({
             </h1>
             <p className="mt-1.5 max-w-[620px] text-[14.5px] text-[#7A8794]">{section.desc}</p>
           </div>
+          {isInstructions ? null : (
           <div className="min-w-[180px]">
             <div className="mb-1.5 flex justify-between text-[12px] font-semibold text-[#7A8794]">
               <span>Section progress</span>
@@ -277,25 +292,32 @@ export function VaultSchemaSection({
                 : `All ${section.subs.length} subsections started`}
             </p>
           </div>
+          )}
         </div>
       </div>
 
       <div className="flex items-start gap-3 rounded-[16px] border border-[#E4EAF0] bg-white px-4 py-3 text-[14px] text-[#414A55] max-md:rounded-[14px]">
         <Plus className="mt-0.5 h-4 w-4 shrink-0 text-[#619FCE]" />
         <p>
-          <strong className="text-[#213D59]">Every subsection can be filled by hand.</strong>{' '}
-          {section.subs.length} subsections,{' '}
-          {section.subs.reduce((sum, sub) => sum + sub.fields.length, 0)} fields. Uploading a
-          document is a shortcut that fills the same fields, never a requirement.
+          {isInstructions ? (
+            INSTRUCTION_PAGE_BANNER
+          ) : (
+            <>
+              <strong className="text-[#213D59]">Every subsection can be filled by hand.</strong>{' '}
+              {section.subs.length} subsections,{' '}
+              {section.subs.reduce((sum, sub) => sum + sub.fields.length, 0)} fields. Uploading a
+              document is a shortcut that fills the same fields, never a requirement.
+            </>
+          )}
         </p>
       </div>
 
-      {apiSectionId === '0' ? <LegalDisclaimer variant="callout" /> : null}
       {apiSectionId === '20' || apiSectionId === '21' ? (
         <LegalDisclaimer variant="footer" />
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2.5">
+        {isInstructions ? null : (
         <div className="flex gap-1.5 rounded-full border border-[#E4EAF0] bg-white p-1">
           {(
             [
@@ -317,6 +339,7 @@ export function VaultSchemaSection({
             </button>
           ))}
         </div>
+        )}
         <div className="ml-auto flex flex-wrap gap-2">
           <button
             type="button"
@@ -343,7 +366,7 @@ export function VaultSchemaSection({
               {pendingReviewCount === 1 ? 'document' : 'documents'}
             </button>
           ) : null}
-          {onUpload ? (
+          {!isInstructions && onUpload ? (
             <button
               type="button"
               onClick={onUpload}
@@ -353,17 +376,21 @@ export function VaultSchemaSection({
               Upload a document
             </button>
           ) : null}
+          {isInstructions ? null : (
           <UploadedDocumentsButton
             sectionId={apiSectionId}
             dense
           />
+          )}
         </div>
       </div>
 
+      {isInstructions ? null : (
       <SectionUpdateRecipientsPicker
         sectionId={apiSectionId}
         className="mb-3"
       />
+      )}
 
       <div>
         {visible.map(({ sub, count, total, filled }) => {
@@ -402,6 +429,7 @@ export function VaultSchemaSection({
                       : sub.desc}
                   </span>
                 </span>
+                {isInstructions ? null : (
                 <span
                   className={cn(
                     'rounded-full px-2.5 py-0.5 text-[11.5px] font-bold',
@@ -414,10 +442,12 @@ export function VaultSchemaSection({
                 >
                   {filled} of {total}
                 </span>
+                )}
                 <ChevronDown
                   className={cn('h-4 w-4 shrink-0 text-[#7A8794] transition', open && 'rotate-180')}
                 />
               </button>
+              {isInstructions ? null : (
               <FillEmptyButton
                 emptyCount={
                   sub.kind === 'entries' && count === 0
@@ -427,10 +457,11 @@ export function VaultSchemaSection({
                 disabled={readOnly}
                 onClick={() => openFillEmpty(sub, bucket)}
               />
+              )}
             </div>
               {open ? (
                 <div className="border-t border-[#EFF3F7] px-4 pb-4 pt-4">
-                  {onOpenReview && pendingReviewCount > 0 && openId === sub.id ? (
+                  {!isInstructions && onOpenReview && pendingReviewCount > 0 && openId === sub.id ? (
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-[#EBD9B4] bg-[#FDF4E4] px-3 py-2">
                       <p className="text-[12.5px] font-semibold text-[#213D59]">
                         Document fill waiting for review
@@ -444,11 +475,13 @@ export function VaultSchemaSection({
                       </button>
                     </div>
                   ) : null}
+                  {isInstructions ? null : (
                   <SectionActivityStrip
                     sectionId={apiSectionId}
                     subsectionId={sub.id}
                     showRecipients={false}
                   />
+                  )}
                   <SubBody
                     sub={sub}
                     bucket={bucket}
@@ -457,6 +490,7 @@ export function VaultSchemaSection({
                     iconName={section.icon}
                     sectionId={apiSectionId}
                     onFillEmpty={opts => openFillEmpty(sub, bucket, opts)}
+                    staticCopy={isInstructions}
                   />
                 </div>
               ) : null}
@@ -526,6 +560,7 @@ function SubBody({
   iconName,
   sectionId,
   onFillEmpty,
+  staticCopy,
 }: {
   sub: SchemaSub;
   bucket: unknown;
@@ -534,6 +569,7 @@ function SubBody({
   iconName: string;
   sectionId: string;
   onFillEmpty?: (opts?: { rowIndex?: number; title?: string }) => void;
+  staticCopy?: boolean;
 }) {
   const record = (
     bucket && typeof bucket === 'object' && !Array.isArray(bucket) ? bucket : {}
@@ -543,6 +579,18 @@ function SubBody({
   const [mode, setMode] = useState<
     { kind: 'new' } | { kind: 'edit'; index: number } | { kind: 'form' } | null
   >(null);
+  const [historyTick, setHistoryTick] = useState(0);
+  const [viewing, setViewing] = useState<{
+    title: string;
+    values: Record<string, unknown>;
+    edit: () => void;
+  } | null>(null);
+
+  useEffect(() => {
+    const bump = () => setHistoryTick(value => value + 1);
+    window.addEventListener('orderly-ai-upload-history', bump);
+    return () => window.removeEventListener('orderly-ai-upload-history', bump);
+  }, []);
 
   const closeDraft = () => {
     setMode(null);
@@ -568,13 +616,74 @@ function SubBody({
     closeDraft();
   };
 
+  if (staticCopy) {
+    const paragraphs = instructionCopyForSub(sub.id);
+    return (
+      <div className="space-y-3">
+        {paragraphs.map(paragraph => (
+          <p
+            key={paragraph.slice(0, 48)}
+            className="text-[14.5px] leading-relaxed text-[#414A55]"
+          >
+            {paragraph}
+          </p>
+        ))}
+        {sub.id === 'keeping-current' ? (
+          <div className="rounded-[12px] border border-[#E4EAF0] bg-[#F6F8FA] p-3">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7A8794]">
+              Review reminder
+            </p>
+            <FieldGrid
+              sub={sub}
+              values={record}
+              setValues={next => onChange(next)}
+              disabled={disabled}
+              sectionId={sectionId}
+            />
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  const viewDialog = (
+    <VaultFilledDocumentViewDialog
+      open={Boolean(viewing)}
+      onOpenChange={open => {
+        if (!open) setViewing(null);
+      }}
+      title={viewing?.title || sub.name}
+      fields={sub.fields}
+      values={viewing?.values || {}}
+      document={
+        viewing
+          ? findAttachedVaultDocument({
+              sectionId,
+              sub,
+              record: viewing.values,
+            })
+          : null
+      }
+      onEdit={
+        viewing
+          ? () => {
+              const edit = viewing.edit;
+              setViewing(null);
+              edit();
+            }
+          : undefined
+      }
+    />
+  );
+
   if (sub.kind === 'entries') {
     return (
       <div>
         {rows.length === 0 ? (
           <div className="mb-3 rounded-[11px] border border-[#EBD9B4] bg-[#FDF4E4] px-4 py-4 text-[13.5px] leading-relaxed text-[#8A5A10]">
-            No {plural(sub.entry || 'item', 2)} yet. Add the first one below, or upload a document
-            and it fills these fields for you.
+            {sub.id === 'family-notes'
+              ? 'No notes yet. Add a free-form note for yourself or the family, with details, files, and reminders if you want them.'
+              : `No ${plural(sub.entry || 'item', 2)} yet. Add the first one below, or upload a document and it fills these fields for you.`}
           </div>
         ) : (
           rows.map((row, index) => {
@@ -583,6 +692,7 @@ function SubBody({
             const filled = sub.fields.filter(field =>
               schemaValueIsFilled(row[fieldViewKey(field)]),
             ).length;
+            void historyTick;
             return (
               <div
                 key={`${sub.id}-${index}`}
@@ -618,6 +728,19 @@ function SubBody({
                     })
                   }
                 />
+                <VaultViewDocumentButton
+                  visible={filled > 0}
+                  onClick={() =>
+                    setViewing({
+                      title,
+                      values: row,
+                      edit: () => {
+                        setDraft({ ...row });
+                        setMode({ kind: 'edit', index });
+                      },
+                    })
+                  }
+                />
                 <button
                   type="button"
                   className="inline-flex min-h-11 items-center rounded-full border border-[#E4EAF0] px-3.5 text-[13px] font-semibold text-[#213D59] md:h-[34px] md:min-h-[34px]"
@@ -638,7 +761,11 @@ function SubBody({
           type="button"
           disabled={disabled}
           onClick={() => {
-            setDraft({});
+            setDraft(
+              sub.id === 'family-notes'
+                ? { created_date: formatDateOnly(new Date()) }
+                : {},
+            );
             setMode({ kind: 'new' });
           }}
           className="mt-2 inline-flex min-h-11 w-full flex-col items-center justify-center rounded-[16px] border-2 border-dashed border-[#E4EAF0] bg-white px-4 py-6 text-[#7A8794] hover:border-[#3EB1E5] hover:bg-[#EAF6FD] hover:text-[#619FCE] max-md:rounded-[14px] md:w-auto md:min-h-[42px] md:flex-row md:gap-1.5 md:rounded-full md:border md:border-solid md:bg-[#213D59] md:py-0 md:text-white md:hover:bg-[#2C4B6B] md:hover:text-white"
@@ -646,7 +773,9 @@ function SubBody({
           <Plus className="h-4 w-4" />
           <span className="text-[14px] font-semibold">Add {sub.entry || 'item'}</span>
         </button>
+        {sub.id === 'family-notes' ? null : (
         <SectionFileDropZone sectionId={sectionId} disabled={disabled} />
+        )}
 
         <VaultDetailDrawer
           open={Boolean(mode)}
@@ -694,6 +823,15 @@ function SubBody({
             </>
           }
         >
+          {sub.id === 'family-notes' ? (
+            <FamilyNotesEditor
+              sub={sub}
+              values={draft}
+              setValues={setDraft}
+              disabled={disabled}
+              sectionId={sectionId}
+            />
+          ) : (
           <FieldGrid
             sub={sub}
             values={draft}
@@ -702,7 +840,9 @@ function SubBody({
             sectionId={sectionId}
             compact
           />
+          )}
         </VaultDetailDrawer>
+        {viewDialog}
       </div>
     );
   }
@@ -714,6 +854,7 @@ function SubBody({
         const filled = sub.fields.filter(field =>
           schemaValueIsFilled(record[fieldViewKey(field)]),
         ).length;
+        void historyTick;
         return (
           <div className="mb-2 flex items-center gap-3 rounded-[11px] border border-[#E4EAF0] bg-white px-3.5 py-3">
             <div className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[9px] bg-[#EAF6FD] text-[#213D59]">
@@ -733,6 +874,19 @@ function SubBody({
               disabled={disabled}
               onClick={() =>
                 onFillEmpty?.({ title: `Fill empty · ${sub.name}` })
+              }
+            />
+            <VaultViewDocumentButton
+              visible={filled > 0}
+              onClick={() =>
+                setViewing({
+                  title: sub.name,
+                  values: record,
+                  edit: () => {
+                    setDraft({ ...record });
+                    setMode({ kind: 'form' });
+                  },
+                })
               }
             />
             <button
@@ -793,6 +947,7 @@ function SubBody({
           compact
         />
       </VaultDetailDrawer>
+      {viewDialog}
     </div>
   );
 }

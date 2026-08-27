@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import { fieldShouldMask } from '@/utils/sensitiveFields';
+import { formatDateOnlyDisplayValue } from '@/utils/dateOnly';
 
 export type AiReviewDetailField = {
   id: string;
@@ -135,6 +136,7 @@ export function AiReviewDetailFields({
 
   const renderValue = (field: AiReviewDetailField) => {
     const empty = !String(field.value || '').trim();
+    const displayValue = formatDateOnlyDisplayValue(field.value);
     const showInput =
       (!empty && Boolean(editing[field.id])) ||
       (empty && Boolean(addingEmpty[field.id]));
@@ -167,7 +169,7 @@ export function AiReviewDetailFields({
               setEditing(prev => ({ ...prev, [field.id]: true }))
             }
           >
-            {showPlain ? field.value : '••••••••'}
+            {showPlain ? displayValue : '••••••••'}
           </button>
           {sensitive ? (
             <button
@@ -192,7 +194,7 @@ export function AiReviewDetailFields({
             type="button"
             className="rounded-md p-1 text-[#7A8794] hover:text-[#213D59]"
             onClick={() => {
-              void navigator.clipboard?.writeText(field.value);
+              void navigator.clipboard?.writeText(displayValue);
               setCopiedId(field.id);
               window.setTimeout(() => setCopiedId(null), 1200);
             }}
@@ -223,7 +225,7 @@ export function AiReviewDetailFields({
       <div className="relative w-full max-w-[18rem] sm:max-w-none">
         <input
           type={showPlain ? 'text' : 'password'}
-          value={field.value}
+          value={showPlain ? displayValue : field.value}
           autoFocus
           onChange={event => field.onChange(event.target.value)}
           onBlur={() => {

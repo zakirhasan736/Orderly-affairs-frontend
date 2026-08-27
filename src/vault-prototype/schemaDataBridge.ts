@@ -105,6 +105,7 @@ const HTML_SUB_STORE: Record<string, string> = {
   'important-relationships': '17E',
   memorabilia: '17F',
   pets: '17G',
+  'family-notes': '17H',
   'current-employment': '18A',
   'business-ownership': '18B',
   'employment-history': '18C',

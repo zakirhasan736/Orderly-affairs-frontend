@@ -28,6 +28,9 @@ import {
 import { cn } from '@common/ui/utils';
 import { DynamicFormField } from '@/components/DynamicFormField';
 import { Alert, AlertDescription } from '@/components/common/ui/alert';
+import { DeathCertificateAuthorizationPanel } from '@/components/legal/DeathCertificateAuthorizationPanel';
+import { useGetDeathCertificateAuthorizationQuery } from '@/services/authApi';
+import { toast } from 'sonner';
 import {
   getTopicCardProps,
   useScrollToVaultTopic,
@@ -689,6 +692,7 @@ export default function Section1VitalInformation({
   // selectedDocumentUrl: selectedDocumentUrlFromParent = null,
   // selectedDocumentMimeType: selectedDocumentMimeTypeFromParent = null,
 }: Props) {
+  const { data: deathCertAuth } = useGetDeathCertificateAuthorizationQuery();
   const [aiNotice, setAiNotice] = useState('');
   const [aiError, setAiError] = useState('');
 
@@ -1391,6 +1395,7 @@ export default function Section1VitalInformation({
           </CardHeader>
 
           <CardContent className="space-y-8">
+            <DeathCertificateAuthorizationPanel variant="compact" />
             {contactGroupsToRender.map((group: any) => {
               const items = getGroupArray(group.key);
               const groupKey = group.key as ContactSubsection;
@@ -1412,7 +1417,18 @@ export default function Section1VitalInformation({
                       type="button"
                       size="sm"
                       data-ai-autofill-trigger
-                      onClick={() => addGroupItem(group.key, group.fields)}
+                      onClick={() => {
+                        if (
+                          group.key === 'executor_trustee' &&
+                          !deathCertAuth?.agreed
+                        ) {
+                          toast.error(
+                            'Sign the death certificate authorization before naming an executor or trustee',
+                          );
+                          return;
+                        }
+                        addGroupItem(group.key, group.fields);
+                      }}
                       className="rounded-xl"
                     >
                       <Plus className="mr-1 h-4 w-4" />

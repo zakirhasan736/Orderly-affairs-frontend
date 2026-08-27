@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
-import Image from 'next/image';
+import React, { useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, Lock, Mail, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { InlineNotice } from '@/components/common/ui/inline-notice';
 import { SessionExpiredNotice } from '@/components/SessionExpiredNotice';
-import { BRAND_LOGO } from '@/constants/brand';
+import { BrandLogo } from '@/components/BrandLogo';
 import {
   useStartEmailMfaMutation,
   useVerifyEmailCodeMutation,
@@ -85,31 +84,22 @@ function BrandAside({
         Owner sign-in
       </button>
 
-      <div className="mt-auto flex items-start gap-[18px]">
+      <div className="flex flex-1 flex-col items-center justify-center text-center">
         <div className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-[18px] bg-white">
-          <Image
-            src={BRAND_LOGO}
-            alt="Orderly Affairs"
-            width={42}
-            height={42}
-            className="h-[70%] w-[70%] object-contain"
-            priority
-          />
+          <BrandLogo size={42} className="h-[70%] w-[70%]" />
         </div>
-        <div className="min-w-0">
-          <p className="nok-mono m-0 text-[11px] font-medium tracking-[0.14em] uppercase text-white/55">
-            Orderly Affairs
-          </p>
-          <h1 className="nok-serif mt-2.5 mb-0 text-[40px] leading-[1.1] font-normal text-white">
-            {title}
-          </h1>
-          <p className="mt-3.5 mb-0 max-w-[40ch] text-[16px] leading-[1.7] text-white/72">
-            {subtitle}
-          </p>
-        </div>
+        <p className="nok-mono mt-4 mb-0 text-[11px] font-medium tracking-[0.14em] uppercase text-white/55">
+          Orderly Affairs
+        </p>
+        <h1 className="nok-serif mt-2.5 mb-0 max-w-[18ch] text-[40px] leading-[1.1] font-normal text-white">
+          {title}
+        </h1>
+        <p className="mt-3.5 mb-0 max-w-[40ch] text-[16px] leading-[1.7] text-white/72">
+          {subtitle}
+        </p>
       </div>
 
-      <p className="mt-10 mb-0 border-t border-white/14 pt-[22px] text-[13.5px] leading-[1.7] text-white/60">
+      <p className="mt-0 mb-0 border-t border-white/14 pt-[22px] text-center text-[13.5px] leading-[1.7] text-white/60">
         You&apos;ll receive an email or SMS notification for every sign-in.
         Access is logged with time and IP address.
       </p>
@@ -138,28 +128,19 @@ function MobileBrandHeader({
         Owner sign-in
       </button>
 
-      <div className="mt-[22px] flex items-start gap-3.5">
+      <div className="mt-[22px] flex flex-col items-center text-center">
         <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl bg-white">
-          <Image
-            src={BRAND_LOGO}
-            alt="Orderly Affairs"
-            width={36}
-            height={36}
-            className="h-[70%] w-[70%] object-contain"
-            priority
-          />
+          <BrandLogo size={36} className="h-[70%] w-[70%]" />
         </div>
-        <div className="min-w-0">
-          <p className="nok-mono m-0 text-[9.5px] font-medium tracking-[0.14em] uppercase text-white/55">
-            Orderly Affairs
-          </p>
-          <h1 className="nok-serif mt-1.5 mb-0 text-[28px] leading-[1.1] font-normal text-white">
-            {title}
-          </h1>
-          <p className="mt-2 mb-0 text-sm leading-[1.55] text-white/70">
-            {subtitle}
-          </p>
-        </div>
+        <p className="nok-mono mt-3 mb-0 text-[9.5px] font-medium tracking-[0.14em] uppercase text-white/55">
+          Orderly Affairs
+        </p>
+        <h1 className="nok-serif mt-1.5 mb-0 text-[28px] leading-[1.1] font-normal text-white">
+          {title}
+        </h1>
+        <p className="mt-2 mb-0 max-w-[40ch] text-sm leading-[1.55] text-white/70">
+          {subtitle}
+        </p>
       </div>
     </div>
   );
@@ -191,10 +172,21 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
   const [mfaMethods, setMfaMethods] = useState<MFAMethod[]>([]);
   const [mfaChallengeToken, setMfaChallengeToken] = useState('');
   const [mfaCode, setMfaCode] = useState('');
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
 
   const [verifyTotp] = useVerifyTotpMutation();
   const [verifyEmailCode] = useVerifyEmailCodeMutation();
   const [startEmailMfa] = useStartEmailMfaMutation();
+
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const timer = window.setTimeout(
+      () => setOtpCooldown(seconds => Math.max(0, seconds - 1)),
+      1000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [otpCooldown]);
 
   const maxAttempts = 3;
   const attemptsLeft = Math.max(0, maxAttempts - failedAttempts);
@@ -242,14 +234,22 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
     setMfaMethod(method);
     setMfaCode('');
     setMfaStep(true);
+    setOtpCooldown(
+      typeof res.cooldown_seconds === 'number' && res.cooldown_seconds > 0
+        ? res.cooldown_seconds
+        : res.otp_sent
+          ? 45
+          : 0,
+    );
 
     if (method === 'email' && res.mfa_challenge_token && !res.otp_sent) {
       try {
-        await startEmailMfa({
+        const sent = await startEmailMfa({
           email: (res.email || emailOrPhone).toLowerCase().trim(),
           mfa_challenge_token: res.mfa_challenge_token,
           otp_session_id: getOtpSessionId(),
         }).unwrap();
+        setOtpCooldown(sent.cooldown_seconds ?? 45);
       } catch {
         /* login may already have sent OTP */
       }
@@ -350,14 +350,33 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
     setError('');
     if (method === 'email' && mfaChallengeToken) {
       try {
-        await startEmailMfa({
+        const sent = await startEmailMfa({
           email: emailOrPhone.toLowerCase().trim(),
           mfa_challenge_token: mfaChallengeToken,
           otp_session_id: getOtpSessionId(),
         }).unwrap();
+        setOtpCooldown(sent.cooldown_seconds ?? 45);
       } catch (err: unknown) {
         setError(getSafeErrorMessage(err, 'Could not send email code'));
       }
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (otpCooldown > 0 || resending || mfaMethod !== 'email') return;
+    setResending(true);
+    setError('');
+    try {
+      const sent = await startEmailMfa({
+        email: emailOrPhone.toLowerCase().trim(),
+        mfa_challenge_token: mfaChallengeToken,
+        otp_session_id: getOtpSessionId(),
+      }).unwrap();
+      setOtpCooldown(sent.cooldown_seconds ?? 45);
+    } catch (err: unknown) {
+      setError(getSafeErrorMessage(err, 'Could not resend the code'));
+    } finally {
+      setResending(false);
     }
   };
 
@@ -470,6 +489,21 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
                   />
                 </label>
 
+                {mfaMethod === 'email' ? (
+                  <button
+                    type="button"
+                    className="mt-2.5 text-left text-[13px] font-medium text-[#2E7FAD] disabled:opacity-50"
+                    disabled={otpCooldown > 0 || resending || isLoading}
+                    onClick={() => void handleResendCode()}
+                  >
+                    {otpCooldown > 0
+                      ? `Resend in ${otpCooldown}s`
+                      : resending
+                        ? 'Sending…'
+                        : 'Resend code'}
+                  </button>
+                ) : null}
+
                 <button
                   type="button"
                   className="nok-submit"
@@ -486,6 +520,7 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
                     setMfaStep(false);
                     setMfaCode('');
                     setError('');
+                    setOtpCooldown(0);
                   }}
                   disabled={isLoading}
                 >
@@ -579,7 +614,14 @@ export const NextOfKinLoginPage: React.FC<NextOfKinLoginPageProps> = ({
           </div>
 
           <p className="mt-auto pt-[18px] text-center text-xs text-[#8b9995] lg:mt-[18px] lg:pt-0 lg:text-[12.5px]">
-            Protected access for authorized next of kin only
+            Protected access for family members and next of kin
+            <br />
+            <a
+              href="/next-kin/instructions"
+              className="mt-1.5 inline-block font-medium text-[#2E7FAD]"
+            >
+              Instructions for next of kin
+            </a>
           </p>
         </div>
       </div>

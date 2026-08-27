@@ -68,7 +68,7 @@ describe('accessManagementValidation', () => {
     ).toBe(true);
   });
 
-  it('requires master password on credentials step', () => {
+  it('requires login password only for immediate access', () => {
     expect(
       validateAccessCredentialsStep({
         immediate_access: true,
@@ -79,12 +79,13 @@ describe('accessManagementValidation', () => {
     expect(
       validateAccessCredentialsStep({
         immediate_access: false,
-        master_password: '   ',
-      }).message,
-    ).toMatch(/master password/i);
+        master_password: '',
+      }).ok,
+    ).toBe(true);
 
     expect(
       validateAccessCredentialsStep({
+        immediate_access: true,
         master_password: 'SecurePass1!',
       }).ok,
     ).toBe(true);
@@ -114,6 +115,20 @@ describe('accessManagementValidation', () => {
     ).toBe(true);
   });
 
+  it('allows upon-death save without a master password', () => {
+    expect(
+      validateAccessPersonForSave({
+        full_name: 'Alex',
+        email: 'alex@example.com',
+        relationship: 'Friend',
+        access_level: 'Full Kit Access',
+        authorized_sections: [],
+        immediate_access: false,
+        master_password: '',
+      }).ok,
+    ).toBe(true);
+  });
+
   it('detects duplicate emails case-insensitively', () => {
     const people = [{ email: 'A@Example.com' }, { email: 'b@example.com' }];
     expect(isDuplicateAccessEmail('a@example.com', people)).toBe(true);
@@ -125,6 +140,24 @@ describe('accessManagementValidation', () => {
   it('routes wizard steps correctly', () => {
     expect(validateAccessWizardStep('review', {}).ok).toBe(true);
     expect(validateAccessWizardStep(undefined, {}).ok).toBe(false);
+  });
+
+  it('requires death-certificate authorization for after-death access', () => {
+    const missing = validateAccessWizardStep(
+      'review',
+      { death_certificate_auth_agreed: false },
+      { requireDeathCertificateAuthorization: true },
+    );
+    expect(missing.ok).toBe(false);
+    expect(missing.message).toMatch(/authorization/i);
+
+    expect(
+      validateAccessWizardStep(
+        'review',
+        { death_certificate_auth_agreed: true },
+        { requireDeathCertificateAuthorization: true },
+      ).ok,
+    ).toBe(true);
   });
 });
 

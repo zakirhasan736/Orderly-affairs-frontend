@@ -54,6 +54,10 @@ describe('nokLetterPreview (Next of Kin letter)', () => {
     expect(text).not.toContain('Dear Alex Casey,');
     expect(text).toContain('alex@example.com');
     expect(text).toContain(NOK_LETTER_DEFAULTS.access_url);
+    expect(text).toContain('SAVE THIS EMAIL');
+    expect(text).not.toContain(
+      'The password to gain access to the Vault is printed on a password card',
+    );
     expect(text).toContain('Hall closet');
   });
 

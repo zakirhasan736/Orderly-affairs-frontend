@@ -143,26 +143,28 @@ function BrandAside({
 function LoginBrandPanel() {
   return (
     <BrandAside contentMaxWidth="600px">
-      <BrandMark />
+      <div className="flex h-full min-h-0 flex-col items-center">
+        <BrandMark className="justify-center" />
 
-      <div className="mt-auto max-w-[34ch] pb-1">
-        <h2 className="m-0 font-[family-name:var(--font-family-display)] text-[clamp(1.85rem,4.6vh,2.75rem)] font-normal leading-[1.15] text-white">
-          A single, trusted place for your life's essentials
-        </h2>
-        <p
-          className="mt-4 mb-0 text-[clamp(14px,1.7vh,16.5px)] leading-[1.65] text-pretty"
-          style={{ color: 'rgba(255,255,255,.72)' }}
-        >
-          Your accounts, documents, wishes and letters — private while you&apos;re
-          here, and handed to the right people when you&apos;re not.
-        </p>
+        <div className="flex flex-1 flex-col items-center justify-center px-1 text-center">
+          <h2 className="m-0 max-w-[16ch] font-[family-name:var(--font-family-display)] text-[clamp(1.85rem,4.6vh,2.75rem)] font-normal leading-[1.15] text-white">
+            A single, trusted place for your life's essentials
+          </h2>
+          <p
+            className="mt-4 mb-0 max-w-[36ch] text-[clamp(14px,1.7vh,16.5px)] leading-[1.65] text-pretty"
+            style={{ color: 'rgba(255,255,255,.72)' }}
+          >
+            Your accounts, documents, wishes and letters — private while
+            you&apos;re here, and handed to the right people when you&apos;re
+            not.
+          </p>
+        </div>
+
+        <ul className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2 pb-[max(0px,env(safe-area-inset-bottom))] text-center text-[12px] tracking-[-0.01em] text-white/40">
+          <li>Encrypted at rest</li>
+          <li>You choose who opens it</li>
+        </ul>
       </div>
-
-      <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-2 pb-[max(0px,env(safe-area-inset-bottom))] text-[12px] tracking-[-0.01em] text-white/40">
-        <li>Encrypted at rest</li>
-        <li>SOC 2 hosting</li>
-        <li>You choose who opens it</li>
-      </ul>
     </BrandAside>
   );
 }

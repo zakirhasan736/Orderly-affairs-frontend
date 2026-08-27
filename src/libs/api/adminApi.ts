@@ -39,8 +39,19 @@ async function adminFetch(path: string, options: RequestInit = {}) {
         ? detail
         : Array.isArray(detail)
           ? detail.map(d => (d as { msg?: string }).msg || String(d)).join(', ')
-          : `Request failed (${res.status})`;
-    throw new Error(msg);
+          : detail &&
+              typeof detail === 'object' &&
+              'message' in detail &&
+              typeof (detail as { message?: unknown }).message === 'string'
+            ? (detail as { message: string }).message
+            : `Request failed (${res.status})`;
+    const err = new Error(msg) as Error & {
+      status?: number;
+      payload?: unknown;
+    };
+    err.status = res.status;
+    err.payload = detail ?? data;
+    throw err;
   }
   return data;
 }
@@ -63,6 +74,93 @@ export type AdminSession = {
   full_name?: string | null;
 };
 
+export type AdminAuthorizedPerson = {
+  id: string;
+  full_name?: string | null;
+  email?: string | null;
+  phone_number?: string | null;
+  relationship?: string | null;
+  kind: string;
+  access_type?: string | null;
+  access_timing?: string | null;
+  immediate_access?: boolean;
+  portal_role?: string | null;
+  didit_status?: string | null;
+  is_attorney_or_executor?: boolean;
+};
+
+export type AdminDeathVerification = {
+  certificate_uploaded?: boolean;
+  certificate_filename?: string | null;
+  certificate_uploaded_at?: string | null;
+  certificate_uploaded_by?: string | null;
+  ssdmf_status?: string | null;
+  ssdmf_full_match?: boolean | null;
+  ssdmf_checked_at?: string | null;
+  ssdmf_fields_used?: string[];
+  ssdmf_admin_override?: boolean;
+  certificate_admin_override?: boolean;
+  ssdmf_error?: string | null;
+  owner_identity_ready?: boolean;
+  owner_wait?: {
+    title?: string;
+    body?: string;
+    ends_at?: string;
+    elapsed?: boolean;
+    remaining_days?: number;
+    wait_days?: number;
+    reminder_every_days?: number;
+  } | null;
+};
+
+export type AdminAfterDeathCase = {
+  id?: string;
+  reference?: string;
+  status?: string;
+  gates?: {
+    certificate_on_file?: boolean;
+    claimant_kyc_approved?: boolean;
+    ssdmf_match_or_override?: boolean;
+    protection_complete?: boolean;
+    protection_started?: boolean;
+    no_owner_dispute?: boolean;
+    eligible_for_admin_release?: boolean;
+    reasons?: string[];
+  };
+  protection?: {
+    started_at?: string;
+    expires_at?: string;
+    remaining_seconds?: number;
+    started?: boolean;
+    completed?: boolean;
+  };
+  notifications?: {
+    day0?: boolean;
+    day2?: boolean;
+    day4?: boolean;
+    day6?: boolean;
+  };
+  owner_response?: {
+    disputed?: boolean;
+    disputed_at?: string;
+    fresh_login_at?: string;
+  };
+  owner_death_record?: {
+    provider?: string;
+    service?: string;
+    status?: string;
+    checked_at?: string | null;
+    override?: boolean;
+  };
+  certificate?: {
+    on_file?: boolean;
+    version?: number;
+    uploaded_at?: string;
+    uploaded_by?: string;
+  };
+  admin_release?: boolean;
+};
+
 export type AdminUser = {
   id: string;
   email: string;
@@ -79,6 +177,11 @@ export type AdminUser = {
   is_admin?: boolean;
   admin_role?: string | null;
   created_at?: string | null;
+  owner_status?: string | null;
+  death_report_pending?: boolean;
+  authorized_people?: AdminAuthorizedPerson[];
+  death_verification?: AdminDeathVerification;
+  after_death_case?: AdminAfterDeathCase;
 };
 
 export type AdminCoupon = {
@@ -222,6 +325,37 @@ export async function adminForceLogoutUser(id: string, reason: string) {
     method: 'POST',
     body: JSON.stringify({ reason: reason.trim() }),
   });
+}
+
+export async function adminReleaseNokAccess(
+  id: string,
+  body: {
+    confirm: boolean;
+    note?: string;
+    ssdmf_override?: boolean;
+    certificate_override?: boolean;
+    wait_override?: boolean;
+    death_check_override_reason?: string;
+  },
+) {
+  return adminFetch(`/admin/users/${id}/release-nok-access`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }) as Promise<{
+    success: boolean;
+    message: string;
+    upon_death_granted?: number;
+    already_deceased?: boolean;
+  }>;
+}
+
+export async function adminDeathCertificateUrl(id: string) {
+  return adminFetch(`/admin/users/${id}/death-certificate`) as Promise<{
+    filename?: string;
+    url?: string | null;
+    uploaded_at?: string;
+    uploaded_by?: string;
+  }>;
 }
 
 export async function adminGrantComp(

@@ -24,6 +24,31 @@ function factLookupKey(fact: DetectedAiFact) {
   return norm(fact.field_key || fact.label);
 }
 
+/** License-specific keys win over generic identity-card aliases (issue date twice). */
+const ALIAS_OF_PREFERRED: Record<string, string[]> = {
+  issue_date: ['drivers_license_issue_date', 'passport_issue_date'],
+  expiration_date: [
+    'drivers_license_expiration_date',
+    'passport_expiration_date',
+  ],
+  full_legal_name_on_id: ['full_legal_name'],
+  document_number: ['drivers_license_number', 'passport_number'],
+};
+
+export function collapseDuplicateIdentityFacts<T extends DetectedAiFact>(
+  facts: T[],
+): T[] {
+  const keys = new Set(
+    facts.map(fact => norm(fact.field_key || '')).filter(Boolean),
+  );
+  return facts.filter(fact => {
+    const key = norm(fact.field_key || '');
+    const preferred = ALIAS_OF_PREFERRED[key];
+    if (!preferred) return true;
+    return !preferred.some(item => keys.has(norm(item)));
+  });
+}
+
 /**
  * Merge AI-extracted facts with the vault section field list so empty
  * rows still appear as Add in Review & fill.
@@ -51,6 +76,14 @@ export function mergeFactsWithSectionCatalog(args: {
     hit: DetectedAiFact | undefined,
     sectionId: string,
   ) => {
+    const aliases = ALIAS_OF_PREFERRED[norm(fieldKey)];
+    if (
+      aliases?.some(preferred =>
+        seen.has(`${norm(sectionId)}::${norm(preferred)}`),
+      )
+    ) {
+      return;
+    }
     const sectionKey =
       hit?.section_key || AI_SECTION_BY_ID[sectionId]?.key || sectionId;
     const key = `${norm(sectionId)}::${norm(fieldKey)}`;
@@ -89,7 +122,7 @@ export function mergeFactsWithSectionCatalog(args: {
     });
   });
 
-  return merged;
+  return collapseDuplicateIdentityFacts(merged);
 }
 
 export function uniqueEditableFacts<T extends DetectedAiFact>(
@@ -97,7 +130,7 @@ export function uniqueEditableFacts<T extends DetectedAiFact>(
 ): Array<T & { editId: string }> {
   const seen = new Set<string>();
   const list: Array<T & { editId: string }> = [];
-  facts.forEach((fact, index) => {
+  collapseDuplicateIdentityFacts(facts).forEach((fact, index) => {
     const sectionId = resolveAiSectionId(fact.section_key);
     const key = `${norm(sectionId)}::${factLookupKey(fact) || `row-${index}`}`;
     if (seen.has(key)) return;

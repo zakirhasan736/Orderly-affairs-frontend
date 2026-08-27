@@ -64,4 +64,46 @@ describe('mergeFactsWithSectionCatalog', () => {
       ),
     ).toBe(true);
   });
+
+  it('does not list generic issue date twice when license issue date is present', () => {
+    const merged = mergeFactsWithSectionCatalog({
+      facts: [
+        fact({
+          field_key: 'drivers_license_issue_date',
+          label: 'Issue Date',
+          value: '2020-11-10',
+          section_key: 'vital_information',
+        }),
+        fact({
+          field_key: 'issue_date',
+          label: 'Issue date',
+          value: '2020-11-10',
+          section_key: 'vital_information',
+        }),
+        fact({
+          field_key: 'full_legal_name',
+          label: 'Full Legal Name (First, Middle, Last)',
+          value: 'Sebastian Shahvandi',
+          section_key: 'vital_information',
+        }),
+        fact({
+          field_key: 'full_legal_name_on_id',
+          label: 'Full legal name (on ID)',
+          value: 'Sebastian Shahvandi',
+          section_key: 'vital_information',
+        }),
+      ],
+      sectionIds: ['1'],
+    });
+    const issueRows = merged.filter(
+      item =>
+        /issue/i.test(item.label) &&
+        String(item.value || '').includes('2020'),
+    );
+    expect(issueRows).toHaveLength(1);
+    expect(issueRows[0].field_key).toBe('drivers_license_issue_date');
+    expect(
+      merged.some(item => item.field_key === 'full_legal_name_on_id'),
+    ).toBe(false);
+  });
 });

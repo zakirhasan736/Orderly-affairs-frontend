@@ -33,7 +33,7 @@ import { VaultCollectionSidebar } from '@/components/vault-prototype/VaultCollec
 import { VaultSchemaSection } from '@/components/vault-prototype/VaultSchemaSection';
 import { DedicatedSectionChrome } from '@/components/vault-prototype/DedicatedSectionChrome';
 import { VaultUploadDrawer, openVaultUploadDrawer } from '@/components/vault-prototype/VaultUploadDrawer';
-import { schemaFillProgress, schemaByApiId } from '@/vault-prototype';
+import { schemaByApiId } from '@/vault-prototype';
 import { ActiveSubsectionFillBar } from '@/components/vault/ActiveSubsectionFillBar';
 import {
   getSectionProgress as computeSectionProgress,
@@ -111,6 +111,7 @@ import {
 } from '@/components/dashboard/DashboardTopBar';
 import {
   buildBillingNotices,
+  buildDeathClaimNotices,
   buildEventNotices,
   buildExpiryNotices,
   buildMessageNotices,
@@ -140,6 +141,7 @@ import {
   familyCanUseOverviewUploads,
   familyCanViewVaultSettings,
   familyCanWrite,
+  familyPortalRoleDisplayLabel,
   familyRoleBannerText,
   firstAllowedFamilySectionId,
   parseFamilyDashboardSession,
@@ -186,9 +188,9 @@ import { hasDoveTag } from '@/config/nokConfig';
 import {
   useNextkinLoginMutation,
   useGetMyNextKinQuery,
-  useApproveNextKinAccessMutation,
   useOwnerLogoutMutation,
   useNextkinLogoutMutation,
+  useStopAfterDeathRequestMutation,
 } from '@/services/authApi';
 import Section2AccessManagement from '@/components/sections/Section2AccessManagement';
 import Section3NextKinLetter from '@/components/sections/Section3NextKinLetter';
@@ -225,6 +227,15 @@ import {
   useGetTourStatusQuery,
   useUpdateTourStatusMutation,
 } from '@/services/onboardingApi';
+
+function formatProtectionRemaining(seconds?: number) {
+  const total = Math.max(0, Math.floor(seconds ?? 0));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  return `${days} days ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
 
 type AppMode =
   | 'owner_login'
@@ -265,6 +276,15 @@ export default function DashboardPage() {
     useState(false);
   const [sessionOwnerId, setSessionOwnerId] = useState<string | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
+  const [deathClaimAlert, setDeathClaimAlert] = useState<{
+    title?: string;
+    body?: string;
+    remaining_days?: number;
+    remaining_seconds?: number;
+    elapsed?: boolean;
+    can_dispute?: boolean;
+  } | null>(null);
+  const [stopDeathBusy, setStopDeathBusy] = useState(false);
   const [vaultPrefetchKey, setVaultPrefetchKey] = useState(0);
   const [familyVaultGate, setFamilyVaultGate] = useState<
     'checking' | 'ready' | 'needs_unlock' | 'needs_owner_wrap'
@@ -345,8 +365,8 @@ export default function DashboardPage() {
     '21': saveSection21,
   };
 
-  const [approveNextKinAccess] = useApproveNextKinAccessMutation();
   const [ownerLogout] = useOwnerLogoutMutation();
+  const [stopAfterDeathRequest] = useStopAfterDeathRequestMutation();
   const [nextkinLogout] = useNextkinLogoutMutation();
   // Existing owner app state
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -1143,6 +1163,7 @@ export default function DashboardPage() {
         // yank the owner off the section they are editing.
         setAppMode('owner');
         setSessionReady(true);
+        setDeathClaimAlert(session.death_claim_alert || null);
         return;
       }
 
@@ -1199,6 +1220,7 @@ export default function DashboardPage() {
         if (
           prev.accessLevel === acl.accessLevel &&
           prev.portalRole === acl.portalRole &&
+          prev.portalRoleLabel === acl.portalRoleLabel &&
           JSON.stringify(prev.authorizedSections) ===
             JSON.stringify(acl.authorizedSections) &&
           JSON.stringify(prev.permissions) === JSON.stringify(acl.permissions)
@@ -1624,22 +1646,12 @@ export default function DashboardPage() {
     [router, refreshNokCaptcha],
   );
   const handleOwnerApproval = useCallback(async () => {
-    try {
-      if (!pendingNOK) return;
-
-      await approveNextKinAccess(pendingNOK.id).unwrap();
-
-      toast.success('Next of Kin access approved.');
-
-      setShowOwnerNotification(false);
-      setPendingNOK(null);
-
-      refetchNextKin(); // refresh owner NOK list
-    } catch (error) {
-      console.error('Approval failed:', error);
-      toast.error('Failed to approve access.');
-    }
-  }, [pendingNOK, approveNextKinAccess, refetchNextKin]);
+    toast.error(
+      'Release living access from Access Management. Confirm, then re-enter your password.',
+    );
+    setShowOwnerNotification(false);
+    setPendingNOK(null);
+  }, []);
 
   // NOK LOGOUT — clear ONLY nok_auth_token
   const handleNokLogout = useCallback(async () => {
@@ -1802,26 +1814,11 @@ export default function DashboardPage() {
   // (fill and delete both flow through sectionProgressCtx → formData).
   const sectionProgressMap = useMemo(() => {
     const map: Record<string, SectionProgress> = {};
-    const dedicated = new Set(['0', '2', '3', '4']);
     for (const section of allSections) {
-      const legacy = computeSectionProgress(section.id, sectionProgressCtx);
-      if (dedicated.has(section.id)) {
-        map[section.id] = legacy;
-        continue;
-      }
-      const schema = schemaFillProgress(
-        section.id,
-        (formData[section.id] as Record<string, unknown>) || {},
-      );
-      map[section.id] = {
-        percent: schema.percent,
-        complete: schema.complete,
-        filled: schema.filled,
-        total: schema.total,
-      };
+      map[section.id] = computeSectionProgress(section.id, sectionProgressCtx);
     }
     return map;
-  }, [allSections, sectionProgressCtx, formData]);
+  }, [allSections, sectionProgressCtx]);
 
   const getSectionProgress = useCallback(
     (sectionId: string): SectionProgress =>
@@ -2117,6 +2114,7 @@ export default function DashboardPage() {
             <Section2AccessManagement
               data={formData['2'] || {}}
               onChange={data => updateSectionData('2', data)}
+              activeSubsection={activeSubsection}
             />
           ) : (
             <div className="space-y-4">
@@ -2345,7 +2343,7 @@ export default function DashboardPage() {
       case '0':
         return 'Welcome to your Orderly Affairs Vault — how to use the sections, keep them current, and make sure someone you trust can access them.';
       case '2':
-        return 'Manage who can access your Orderly Affairs Vault after your passing. Add your Primary Next of Kin, assign access levels, and keep secure credentials organized.';
+        return 'Name who can open your Vault after you pass. Access is released only after verification — they are never handed your password.';
       case '3':
         return 'Create an important introductory letter for your designated next of kin that explains how to access and use your Orderly Affairs Vault.';
       case '4':
@@ -2375,7 +2373,7 @@ export default function DashboardPage() {
       case '16':
         return 'Document credit cards, loans, debts, balances, payment methods, autopay details, and creditor contact information.';
       case '17':
-        return 'Preserve family relationships, close friends, important people, sentimental items, pets, stories, and treasured connections.';
+        return 'Preserve family relationships, close friends, important people, sentimental items, pets, personal and family notes, stories, and treasured connections.';
       case '18':
         return 'Document employment history, business ownership, income sources, benefits, business contacts, and succession details.';
       case '19':
@@ -2577,6 +2575,7 @@ export default function DashboardPage() {
   const ownerNotices = useMemo(() => {
     if (appMode !== 'owner') return [] as DashboardNotice[];
     return mergeDashboardNotices([
+      buildDeathClaimNotices(deathClaimAlert),
       buildExpiryNotices(formData),
       buildBillingNotices(billingStatus),
       buildMessageNotices(pendingMessageCount),
@@ -2596,6 +2595,7 @@ export default function DashboardPage() {
     showOwnerNotification,
     pendingNOK,
     supportUnread,
+    deathClaimAlert,
   ]);
 
   const headerNotices = useMemo(() => {
@@ -2819,6 +2819,47 @@ export default function DashboardPage() {
         }
       >
       <div className="min-h-screen bg-[#F6F8FA] text-slate-950 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+        {appMode === 'owner' && deathClaimAlert?.title ? (
+          <div className="border-b border-rose-200 bg-rose-50 px-4 py-3 text-rose-950">
+            <p className="text-sm font-semibold">{deathClaimAlert.title}</p>
+            <p className="mt-1 text-[13px] font-medium text-rose-900">
+              {deathClaimAlert.elapsed
+                ? 'Protection period complete. Vault still sealed.'
+                : `Protection period active · ${formatProtectionRemaining(deathClaimAlert.remaining_seconds)} remaining`}
+            </p>
+            <p className="mt-1 text-[13px] leading-5 text-rose-900/80">
+              {deathClaimAlert.body}
+            </p>
+            {deathClaimAlert.can_dispute !== false ? (
+              <button
+                type="button"
+                className="mt-3 rounded-full bg-rose-900 px-4 py-2 text-[13px] font-semibold text-white"
+                disabled={stopDeathBusy}
+                onClick={() => {
+                  const password = window.prompt(
+                    'Confirm your password to stop this after-death request (I Am Alive).',
+                  );
+                  if (!password) return;
+                  setStopDeathBusy(true);
+                  void stopAfterDeathRequest({ password })
+                    .unwrap()
+                    .then(() => {
+                      toast.success('Request stopped. Your Vault stays sealed.');
+                      setDeathClaimAlert(null);
+                    })
+                    .catch(err => {
+                      toast.error(
+                        err instanceof Error ? err.message : 'Could not stop the request.',
+                      );
+                    })
+                    .finally(() => setStopDeathBusy(false));
+                }}
+              >
+                I Am Alive — Stop Request
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <MobileTopBar
           title={
             activeSection === 'dashboard' ? 'Dashboard' : currentSectionLabel
@@ -2892,6 +2933,12 @@ export default function DashboardPage() {
               }}
               exportPayload={exportPayload}
               currentUserEmail={currentUser?.email}
+              currentUserName={currentUser?.full_name || null}
+              accountRoleLabel={
+                familyAcl.isFamily
+                  ? familyPortalRoleDisplayLabel(familyAcl)
+                  : 'Premium Member'
+              }
               onAccountInfo={() => {
                 if (
                   familyAcl.isFamily &&
@@ -3540,9 +3587,21 @@ export default function DashboardPage() {
                   Account
                 </p>
                 {currentUser && (
-                  <p className="mt-1 truncate text-sm font-semibold text-[#213D59]">
-                    {currentUser.email}
-                  </p>
+                  <>
+                    <p className="mt-1 truncate text-sm font-semibold text-[#213D59]">
+                      {currentUser.full_name || currentUser.email}
+                    </p>
+                    {currentUser.full_name && currentUser.email ? (
+                      <p className="truncate text-xs text-slate-500">
+                        {currentUser.email}
+                      </p>
+                    ) : null}
+                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      {familyAcl.isFamily
+                        ? familyPortalRoleDisplayLabel(familyAcl)
+                        : 'Premium Member'}
+                    </p>
+                  </>
                 )}
               </div>
 
@@ -3742,6 +3801,7 @@ export default function DashboardPage() {
                   goToSection(sectionId);
                 }}
                 completedSectionIds={completedSectionIds}
+                sectionProgressById={sectionProgressMap}
                 allowedSectionIds={
                   familyAcl.isFamily
                     ? familyAllowedVaultSectionIds(familyAcl)

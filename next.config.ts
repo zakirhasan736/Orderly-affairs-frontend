@@ -51,6 +51,20 @@ const nextConfig: NextConfig = {
     // Large personal-message recordings proxy through /oa-api rewrites.
     proxyClientMaxBodySize: '5gb',
   },
+  async redirects() {
+    return [
+      {
+        source: '/instructions-for-your-next-of-kin',
+        destination: '/instructions-for-next-of-kin',
+        permanent: true,
+      },
+      {
+        source: '/next-kin/verify-identity',
+        destination: '/verify-identity',
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     const dest = apiProxyDestination();
     return [
@@ -63,10 +77,27 @@ const nextConfig: NextConfig = {
     ];
   },
   async headers() {
+    const pageHeaders = securityHeaders.filter(
+      h => h.key !== 'Cache-Control' && h.key !== 'Pragma',
+    );
     return [
       {
-        source: '/:path*',
-        headers: securityHeaders,
+        // Public brand marks must be cacheable — email clients fetch these URLs.
+        source: '/images/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+      {
+        source: '/((?!images/).*)',
+        headers: pageHeaders.concat([
+          { key: 'Cache-Control', value: 'no-store, private' },
+          { key: 'Pragma', value: 'no-cache' },
+        ]),
       },
     ];
   },

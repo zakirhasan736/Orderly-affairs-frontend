@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { Button } from '@common/ui/button';
 import { Badge } from '@common/ui/badge';
 import {
-  AlertTriangle,
   Download,
   Eye,
   EyeOff,
@@ -291,6 +290,33 @@ export function PasswordCard({
       line-height: 1.55;
     }
 
+    .steps {
+      margin-top: 18px;
+      padding: 18px 20px;
+      border-radius: 16px;
+      background: #fff;
+      border: 1px solid #e4eaf0;
+    }
+
+    .steps h2 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      font-weight: 800;
+      color: #213D59;
+    }
+
+    .steps ol {
+      margin: 0;
+      padding-left: 1.2rem;
+      color: #3c4a46;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .steps li + li {
+      margin-top: 6px;
+    }
+
     @media print {
       body { background: white; }
       .card { box-shadow: none; }
@@ -367,6 +393,22 @@ export function PasswordCard({
           Keep this card in a safe place. Do not share the password directly with others.
         </div>
       </div>
+    </section>
+
+    <section class="steps">
+      <h2>After the kit owner passes away</h2>
+      <ol>
+        <li>Get this Password Card from where it is stored${
+          card_storage_location
+            ? ` (${escapeHtml(card_storage_location)})`
+            : ''
+        }.</li>
+        <li>Wait for an Orderly Affairs email that kit access is available.</li>
+        <li>Open the Next of Kin sign-in page (not the owner dashboard).</li>
+        <li>Sign in with the email on this card and the master password printed above.</li>
+        <li>Enter the verification code sent to their email or phone.</li>
+        <li>Open the vault and follow any Letter to Next of Kin.</li>
+      </ol>
     </section>
   </div>
 </body>
@@ -561,15 +603,41 @@ export function PasswordCard({
         </div>
       </div>
 
-      {/* Small security note */}
-      <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-950">
-        <div className="flex gap-2">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-          <p className="text-xs leading-5">
-            Tell the trusted person where this card is stored, not the password
-            itself.
-          </p>
-        </div>
+      {/* After-death access steps */}
+      <div className="mt-3 rounded-2xl border border-[#E4EAF0] bg-[#F6F8FA] px-3.5 py-3 text-[#213D59]">
+        <p className="text-xs font-semibold tracking-tight">
+          After you pass away, next of kin should:
+        </p>
+        <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-xs leading-5 text-[#3c4a46]">
+          <li>
+            Get this Password Card from where it is stored
+            {card_storage_location ? (
+              <>
+                {' '}
+                (<span className="font-medium text-[#213D59]">{card_storage_location}</span>)
+              </>
+            ) : (
+              ' (the location on the card)'
+            )}
+            .
+          </li>
+          <li>
+            Wait for an Orderly Affairs email that kit access is available.
+          </li>
+          <li>
+            Open the Next of Kin sign-in page — not the owner dashboard.
+          </li>
+          <li>
+            Sign in with their email and the master password printed on this
+            card.
+          </li>
+          <li>
+            Enter the verification code sent to their email or phone.
+          </li>
+          <li>
+            Open the vault and follow any Letter to Next of Kin.
+          </li>
+        </ol>
       </div>
 
       {/* Actions */}

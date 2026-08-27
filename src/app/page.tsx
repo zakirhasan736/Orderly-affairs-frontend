@@ -103,6 +103,24 @@ type AuthLoadingAction =
   | 'verify_email'
   | 'verify_sms';
 
+type PasswordResetAccount = {
+  full_name?: string | null;
+  email?: string;
+  portal_role?: string;
+  portal_role_label?: string;
+  access_type?: string;
+};
+
+function passwordResetRoleLabel(account: PasswordResetAccount | null): string | null {
+  if (!account) return null;
+  const fromApi = String(account.portal_role_label || '').trim();
+  if (fromApi) return fromApi;
+  if (account.access_type === 'family' && account.portal_role) {
+    return FAMILY_PORTAL_ROLE_LABELS[account.portal_role] || null;
+  }
+  return null;
+}
+
 // ------------------------------
 // Validation helpers
 // ------------------------------
@@ -122,6 +140,7 @@ const verifyTOTPCode = (code: string) => /^\d{6}$/.test(code);
 
 import { getSafeErrorMessage } from '@/utils/safeErrorMessage';
 import { buildWelcomeMessage } from '@/utils/welcomeMessage';
+import { FAMILY_PORTAL_ROLE_LABELS } from '@/utils/familyDashboardAccess';
 
 const getApiErrorMessage = (err: unknown, fallback: string) =>
   getSafeErrorMessage(err, fallback);
@@ -390,6 +409,9 @@ export default function LoginPage() {
   const [resetEmail, setResetEmail] = useState('');
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [resetOtp, setResetOtp] = useState('');
+  const [resetAccount, setResetAccount] = useState<PasswordResetAccount | null>(
+    null,
+  );
   const [newPassword, setNewPassword] = useState('');
 
   const [step, setStep] = useState<OnboardingStep>('credentials');
@@ -612,12 +634,19 @@ const handleSendEmailCode = async () => {
      startAuthLoading('forgot_password');
 
      try {
-       await requestPasswordReset({
+       const resetInfo = await requestPasswordReset({
          email,
          captcha_token: captchaToken,
          otp_session_id: getOtpSessionId(),
        }).unwrap();
        setResetEmail(email);
+       setResetAccount({
+         full_name: resetInfo.full_name,
+         email: resetInfo.email || email,
+         portal_role: resetInfo.portal_role,
+         portal_role_label: resetInfo.portal_role_label,
+         access_type: resetInfo.access_type,
+       });
        refreshCaptcha();
        setResetOtp('');
        setRateLimitSeconds(0);
@@ -632,6 +661,7 @@ const handleSendEmailCode = async () => {
      }
    } else {
      setResetEmail(email);
+     setResetAccount(null);
      setStep('forgot_password');
    }
  };
@@ -647,11 +677,18 @@ const handleSendEmailCode = async () => {
    startAuthLoading('request_reset');
 
    try {
-     await requestPasswordReset({
+     const resetInfo = await requestPasswordReset({
        email: resetEmail,
        captcha_token: captchaToken,
        otp_session_id: getOtpSessionId(),
      }).unwrap();
+     setResetAccount({
+       full_name: resetInfo.full_name,
+       email: resetInfo.email || resetEmail,
+       portal_role: resetInfo.portal_role,
+       portal_role_label: resetInfo.portal_role_label,
+       access_type: resetInfo.access_type,
+     });
      setResetEmailSent(true);
      refreshCaptcha();
      setResetOtp('');
@@ -2178,8 +2215,18 @@ const backButtonLabel =
                           </a>
                           <label htmlFor="signup-agree-terms">
                             {' '}
-                            and understand this Vault is not legal advice.
+                            and understand this Vault is not legal advice.{' '}
+                            See{' '}
                           </label>
+                          <a
+                            href="/how-next-of-kin-access-works"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="auth-link"
+                          >
+                            how next-of-kin access works
+                          </a>
+                          <label htmlFor="signup-agree-terms">.</label>
                         </p>
                       </div>
                     )}
@@ -2759,6 +2806,7 @@ const backButtonLabel =
                         onChange={e => {
                           setResetEmail(e.target.value);
                           setResetEmailSent(false);
+                          setResetAccount(null);
                         }}
                         placeholder="you@email.com"
                         className="auth-field"
@@ -2847,6 +2895,21 @@ const backButtonLabel =
                           Set a new password
                         </span>
                       </h2>
+                      {(resetAccount?.full_name ||
+                        passwordResetRoleLabel(resetAccount)) && (
+                        <div className="mt-3">
+                          <p className="truncate text-[15px] font-semibold text-[#213D59]">
+                            {resetAccount?.full_name ||
+                              resetEmail ||
+                              email}
+                          </p>
+                          {passwordResetRoleLabel(resetAccount) ? (
+                            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                              {passwordResetRoleLabel(resetAccount)}
+                            </p>
+                          ) : null}
+                        </div>
+                      )}
                       <p className="mt-1.5 mb-3.5 text-[12.5px] text-[#8b9995] lg:mb-5 lg:mt-2 lg:text-[14px] lg:text-[#6e7c77]">
                         {(resetEmail || email) && (
                           <>
@@ -2962,8 +3025,10 @@ const backButtonLabel =
                       </Button>
 
                       <p className="mb-0 mt-3.5 hidden text-center text-[12.5px] text-[#8b9995] lg:block">
-                        Everyone you&apos;ve invited keeps their access — only
-                        your own sign-in changes.
+                        {resetAccount?.access_type === 'family' ||
+                        resetAccount?.access_type === 'nextkin'
+                          ? 'Your vault access stays the same — only your sign-in password changes.'
+                          : "Everyone you've invited keeps their access — only your own sign-in changes."}
                       </p>
 
                       <button

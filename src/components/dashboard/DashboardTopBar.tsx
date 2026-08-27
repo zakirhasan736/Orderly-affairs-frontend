@@ -96,6 +96,9 @@ type DashboardTopBarProps = {
   onUpload?: () => void;
   exportPayload: VaultExportPayload;
   currentUserEmail?: string | null;
+  currentUserName?: string | null;
+  /** Shown under the name/email, e.g. Super Admin for contributors. */
+  accountRoleLabel?: string | null;
   onAccountInfo: () => void;
   onLogout: () => void;
   notices?: DashboardNotice[];
@@ -115,6 +118,8 @@ export function DashboardTopBar({
   onUpload,
   exportPayload,
   currentUserEmail,
+  currentUserName,
+  accountRoleLabel,
   onAccountInfo,
   onLogout,
   notices = [],
@@ -164,7 +169,7 @@ export function DashboardTopBar({
           ) : null}
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center justify-end gap-2.5">
+        <div className="ml-auto flex min-w-0 items-center justify-end gap-2">
           <HeaderProgressRing
             completed={completedSectionsCount}
             total={totalSectionsCount}
@@ -172,7 +177,7 @@ export function DashboardTopBar({
           />
 
           {uploadedCount > 0 ? (
-            <UploadedDocumentsButton className="shadow-sm" />
+            <UploadedDocumentsButton iconOnly className="shadow-sm" />
           ) : (
             <button
               type="button"
@@ -204,13 +209,24 @@ export function DashboardTopBar({
             <div className="invisible absolute right-0 top-full z-[60] mt-3 translate-y-2 opacity-0 transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
               <div className="min-w-[230px] rounded-3xl border border-slate-100 bg-white p-2 shadow-2xl">
                 <div className="mb-1 border-b border-slate-100 px-4 py-3">
-                  {currentUserEmail ? (
+                  {currentUserName ? (
                     <p className="truncate text-[12px] font-semibold text-[#213D59]">
+                      {currentUserName}
+                    </p>
+                  ) : null}
+                  {currentUserEmail && currentUserEmail !== currentUserName ? (
+                    <p
+                      className={
+                        currentUserName
+                          ? 'mt-0.5 truncate text-[11px] text-slate-500'
+                          : 'truncate text-[12px] font-semibold text-[#213D59]'
+                      }
+                    >
                       {currentUserEmail}
                     </p>
                   ) : null}
                   <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                    Premium Member
+                    {accountRoleLabel || 'Premium Member'}
                   </p>
                 </div>
 
@@ -287,7 +303,7 @@ export function MobileTopBar({
   subtitle,
   completedCount = 0,
   totalCount = 0,
-  progressPercent,
+  progressPercent: _progressPercent,
   onMenuClick,
   onLogoClick,
   onAccountClick,
@@ -298,12 +314,6 @@ export function MobileTopBar({
   onOpenNotificationSettings,
   onNavigateToSection,
 }: MobileTopBarProps) {
-  const pct =
-    typeof progressPercent === 'number' && Number.isFinite(progressPercent)
-      ? Math.min(100, Math.max(0, Math.round(progressPercent)))
-      : totalCount > 0
-        ? Math.min(100, Math.round((completedCount / totalCount) * 100))
-        : 0;
   const { count: uploadedCount } = useUploadedDocuments();
 
   return (
@@ -341,7 +351,7 @@ export function MobileTopBar({
 
         <div className="flex shrink-0 items-center gap-0.5">
           {uploadedCount > 0 ? (
-            <UploadedDocumentsButton dense className="mr-1 shadow-sm" />
+            <UploadedDocumentsButton iconOnly className="mr-1 shadow-sm" />
           ) : null}
           <NotificationBell
             notices={notices}
@@ -392,9 +402,6 @@ export function MobileTopBar({
               {subtitle ? ` · ${subtitle}` : ''}
             </p>
           </div>
-          <span className="inline-flex shrink-0 items-center rounded-full bg-white px-2.5 py-1 text-[12px] font-bold text-[#213D59] ring-1 ring-slate-200 shadow-sm">
-            {pct}%
-          </span>
         </div>
       ) : null}
     </header>

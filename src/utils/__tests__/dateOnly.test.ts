@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatDateOnly,
   formatDateOnlyDisplay,
+  formatDateOnlyDisplayValue,
   parseDateOnly,
   toDateOnlyString,
 } from '@/utils/dateOnly';
@@ -23,6 +24,12 @@ describe('dateOnly', () => {
   it('normalizes slash dates to YYYY-MM-DD', () => {
     expect(toDateOnlyString('09/15/1978')).toBe('1978-09-15');
     expect(toDateOnlyString('9/15/78')).toBe('1978-09-15');
+  });
+
+  it('displays stored ISO dates as US MM/DD/YYYY', () => {
+    expect(formatDateOnlyDisplayValue('1983-09-15')).toBe('09/15/1983');
+    expect(formatDateOnlyDisplayValue('2020-11-10')).toBe('11/10/2020');
+    expect(formatDateOnlyDisplayValue('Sebastian')).toBe('Sebastian');
   });
 });
 

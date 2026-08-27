@@ -60,6 +60,7 @@ import {
   useApproveNextKinAccessMutation,
   useCreateNextKinMutation,
   useDeleteNextKinMutation,
+  useGetDeathCertificateAuthorizationQuery,
   useGetMyNextKinQuery,
   useRevealNextKinPasswordMutation,
   useRevokeAllNextKinAccessMutation,
@@ -74,8 +75,11 @@ import {
   MAX_NOK_AUTHORIZED_SECTIONS,
   type WizardStepId,
 } from '@/utils/accessManagementValidation';
+import { DeathCertificateAuthorizationPanel } from '@/components/legal/DeathCertificateAuthorizationPanel';
+import { goToNokLetter } from '@/vault-prototype/navigate';
+import { NokLetterStatusButton } from '@/components/NokLetterStatusButton';
 
-import { PasswordCard } from './PasswordCard';
+import { NokAfterDeathAccessSteps } from '@/components/NokAfterDeathAccessSteps';
 import {
   MOBILE_SHEET_FOOTER_CLASS,
   MOBILE_SHEET_SCROLL_CLASS,
@@ -105,6 +109,9 @@ interface AuthorizedPerson {
   access_level: 'Full Kit Access' | 'Section-Specific Access';
   authorized_sections: string[];
   immediate_access: boolean;
+  immediate_access_pending?: boolean;
+  living_access_state?: string;
+  access_timing?: 'immediate' | 'upon_death' | string;
   nok_letter_received: boolean;
   master_password: string;
   has_master_password?: boolean;
@@ -113,10 +120,44 @@ interface AuthorizedPerson {
   key_bag_location?: string;
   documents_bag_location?: string;
   special_instructions?: string;
+  death_certificate_auth_agreed?: boolean;
+  death_certificate_auth_signature?: string;
 }
 
 type PersonAction = 'saving' | 'deleting' | 'approving' | 'revoking';
 type WizardMode = 'add' | 'edit';
+
+function hasLiveImmediateAccess(person: Pick<AuthorizedPerson, '_id' | 'immediate_access'>) {
+  return Boolean(person._id && person.immediate_access);
+}
+
+function hasPendingImmediateGrant(
+  person: Pick<
+    AuthorizedPerson,
+    '_id' | 'immediate_access' | 'immediate_access_pending'
+  >,
+) {
+  return Boolean(
+    person._id && person.immediate_access_pending && !person.immediate_access,
+  );
+}
+
+function canRevokeImmediateGrant(person: AuthorizedPerson) {
+  return hasLiveImmediateAccess(person) || hasPendingImmediateGrant(person);
+}
+
+function nokTimingLabel(person: AuthorizedPerson) {
+  if (person.living_access_state === 'expired') {
+    return 'Login unused — release again';
+  }
+  if (hasLiveImmediateAccess(person)) {
+    if (person.living_access_state === 'notified') return 'Waiting for first login';
+    return 'Immediate';
+  }
+  if (hasPendingImmediateGrant(person)) return 'Sending login email';
+  if (person.access_timing === 'immediate') return 'Living — not released';
+  return 'Upon Death access';
+}
 
 const WIZARD_STEPS: { id: WizardStepId; label: string }[] = [
   { id: 'person', label: 'Person' },
@@ -249,6 +290,8 @@ function createEmptyPerson(): AuthorizedPerson {
     key_bag_location: '',
     documents_bag_location: '',
     special_instructions: '',
+    death_certificate_auth_agreed: false,
+    death_certificate_auth_signature: '',
   };
 }
 
@@ -275,6 +318,8 @@ type NextKinApiPersonExtras = {
   id?: string;
   master_password?: string | null;
   has_master_password?: boolean;
+  living_access_state?: string;
+  access_timing?: string;
 };
 
 function toNextKinApiBody(
@@ -285,12 +330,14 @@ function toNextKinApiBody(
     __clientId: _clientId,
     _id,
     master_password,
-    card_storage_location,
+    card_storage_location: _cardStorage,
     key_bag_location,
     documents_bag_location,
     special_instructions,
-    password_card_generated,
+    password_card_generated: _passwordCardGenerated,
     phone_number,
+    death_certificate_auth_agreed,
+    death_certificate_auth_signature,
     ...shared
   } = person;
 
@@ -307,11 +354,11 @@ function toNextKinApiBody(
         : '';
 
   const credentialExtras = {
-    card_storage_location,
+    card_storage_location: '',
     key_bag_location,
     documents_bag_location,
     special_instructions,
-    password_card_generated,
+    password_card_generated: false,
   };
 
   const withPhone = {
@@ -320,10 +367,32 @@ function toNextKinApiBody(
   };
 
   if (options?.isCreate) {
+    const deathAuth =
+      person.immediate_access
+        ? {}
+        : {
+            death_certificate_authorization_agreed: Boolean(
+              death_certificate_auth_agreed,
+            ),
+            ...(death_certificate_auth_signature?.trim()
+              ? {
+                  death_certificate_authorization_signature:
+                    death_certificate_auth_signature.trim(),
+                }
+              : {}),
+          };
+    if (person.immediate_access) {
+      return {
+        ...withPhone,
+        master_password,
+        ...credentialExtras,
+      };
+    }
     return {
       ...withPhone,
-      master_password,
       ...credentialExtras,
+      password_card_generated: false,
+      ...deathAuth,
     };
   }
 
@@ -336,8 +405,8 @@ function toNextKinApiBody(
 
   return {
     ...withPhone,
-    ...(master_password?.trim() ? { master_password } : {}),
     ...credentialExtras,
+    password_card_generated: false,
   };
 }
 
@@ -804,7 +873,8 @@ function getPersonInitials(name: string) {
 }
 
 function TrustedPersonStatusPill({ person }: { person: AuthorizedPerson }) {
-  const isActiveAccess = Boolean(person._id && person.immediate_access);
+  const pending = hasPendingImmediateGrant(person);
+  const isActiveAccess = hasLiveImmediateAccess(person);
   if (!person._id) return null;
 
   return (
@@ -813,16 +883,22 @@ function TrustedPersonStatusPill({ person }: { person: AuthorizedPerson }) {
         'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium sm:px-2.5 sm:py-1 sm:text-xs',
         isActiveAccess
           ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
-          : 'bg-muted text-muted-foreground',
+          : pending
+            ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-200'
+            : 'bg-muted text-muted-foreground',
       )}
     >
       <span
         className={cn(
           'h-1.5 w-1.5 rounded-full',
-          isActiveAccess ? 'bg-emerald-500' : 'bg-muted-foreground/50',
+          isActiveAccess
+            ? 'bg-emerald-500'
+            : pending
+              ? 'bg-amber-500'
+              : 'bg-muted-foreground/50',
         )}
       />
-      {isActiveAccess ? 'Active' : 'Inactive'}
+      {isActiveAccess ? 'Active' : pending ? 'Pending' : 'Inactive'}
     </span>
   );
 }
@@ -843,36 +919,49 @@ function TrustedPersonMobileListItem({
   const displayName = person.full_name || `Person ${index + 1}`;
   const sectionCount = person.authorized_sections.length;
   const accessLabel = isFullAccess ? 'Full Kit' : `${sectionCount} Sections`;
-  const timingLabel = person.immediate_access ? 'Immediate' : 'Upon Death access';
+  const timingLabel = nokTimingLabel(person);
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
+    <div
       className={cn(
-        'flex w-full items-center gap-3 rounded-2xl border bg-card p-3 text-left shadow-sm transition active:scale-[0.99] active:bg-muted/30',
+        'flex w-full items-center gap-2 rounded-2xl border bg-card p-3 shadow-sm',
         hasNokLetter && 'border-emerald-200',
         !person._id && 'border-amber-200 bg-amber-50/40',
       )}
     >
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/75 text-sm font-bold text-primary-foreground">
-        {initials}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="min-w-0 truncate text-base font-semibold">
-            {displayName}
-          </span>
-          <TrustedPersonStatusPill person={person} />
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left transition active:scale-[0.99] active:bg-muted/30"
+      >
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/75 text-sm font-bold text-primary-foreground">
+          {initials}
         </div>
-        <p className="mt-0.5 truncate text-sm text-muted-foreground">
-          {person.relationship
-            ? `${person.relationship} · ${accessLabel} · ${timingLabel}`
-            : `${accessLabel} · ${timingLabel}`}
-        </p>
-      </div>
-      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-    </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 truncate text-base font-semibold">
+              {displayName}
+            </span>
+            <TrustedPersonStatusPill person={person} />
+          </div>
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">
+            {person.relationship
+              ? `${person.relationship} · ${accessLabel} · ${timingLabel}`
+              : `${accessLabel} · ${timingLabel}`}
+          </p>
+        </div>
+      </button>
+      {person._id ? (
+        <NokLetterStatusButton
+          nokId={person._id}
+          enabled
+          compact
+          className="h-8 max-w-[9.5rem] shrink-0 rounded-full px-2.5"
+        />
+      ) : (
+        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+      )}
+    </div>
   );
 }
 
@@ -905,13 +994,11 @@ function TrustedPersonMobileActionBar({
     <div
       className={cn(
         'grid gap-1',
-        person._id
-          ? person.immediate_access
+        person._id && !canRevokeImmediateGrant(person)
+          ? 'grid-cols-2'
+          : person._id
             ? 'grid-cols-3'
-            : 'grid-cols-4'
-          : person.immediate_access
-            ? 'grid-cols-2'
-            : 'grid-cols-3',
+            : 'grid-cols-2',
       )}
     >
       <MobileIconAction
@@ -920,17 +1007,16 @@ function TrustedPersonMobileActionBar({
         onClick={onEdit}
         disabled={isBusy}
       />
-      {!person.immediate_access && (
+      {person._id && !canRevokeImmediateGrant(person) ? (
         <MobileIconAction
-          label="Card"
-          icon={Eye}
-          onClick={onViewCard}
+          label="Letter"
+          icon={FileText}
+          onClick={() => goToNokLetter(person._id || '')}
           disabled={isBusy}
-          tone="primary"
         />
-      )}
+      ) : null}
       {person._id &&
-        (person.immediate_access ? (
+        (canRevokeImmediateGrant(person) ? (
           <MobileIconAction
             label="Revoke"
             icon={Lock}
@@ -1034,12 +1120,12 @@ function TrustedPersonMobileDetails({
             Timing
           </p>
           <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold">
-            {person.immediate_access ? (
+            {hasLiveImmediateAccess(person) ? (
               <Zap className="h-3.5 w-3.5 text-emerald-600" />
             ) : (
               <Clock className="h-3.5 w-3.5 text-amber-600" />
             )}
-            {person.immediate_access ? 'Immediate' : 'Upon Death access'}
+            {nokTimingLabel(person)}
           </p>
         </div>
       </div>
@@ -1051,7 +1137,7 @@ function TrustedPersonMobileDetails({
         </div>
       )}
 
-      {person._id && (
+      {person._id && person.immediate_access && (
         <TrustedPersonLoginPassword
           password={person.master_password}
           passwordOnFile={person.has_master_password}
@@ -1147,11 +1233,12 @@ function TrustedPersonCard({
 }) {
   const initials = getPersonInitials(person.full_name);
   const isFullAccess = person.access_level === 'Full Kit Access';
-  const isActiveAccess = Boolean(person._id && person.immediate_access);
+  const isActiveAccess = hasLiveImmediateAccess(person);
+  const grantPending = hasPendingImmediateGrant(person);
   const displayName = person.full_name || `Person ${index + 1}`;
   const sectionCount = person.authorized_sections.length;
   const accessLabel = isFullAccess ? 'Full kit' : `${sectionCount} sections`;
-  const timingLabel = person.immediate_access ? 'Immediate' : 'Upon death';
+  const timingLabel = nokTimingLabel(person);
 
   return (
     <article
@@ -1180,9 +1267,19 @@ function TrustedPersonCard({
                 <span
                   className={cn(
                     'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-card',
-                    isActiveAccess ? 'bg-emerald-500' : 'bg-slate-300',
+                    isActiveAccess
+                      ? 'bg-emerald-500'
+                      : grantPending
+                        ? 'bg-amber-500'
+                        : 'bg-slate-300',
                   )}
-                  title={isActiveAccess ? 'Active' : 'Inactive'}
+                  title={
+                    isActiveAccess
+                      ? 'Active'
+                      : grantPending
+                        ? 'Pending'
+                        : 'Inactive'
+                  }
                 />
               )}
             </div>
@@ -1200,29 +1297,28 @@ function TrustedPersonCard({
                 <span
                   className={cn(
                     'rounded-full px-2.5 py-0.5 text-[11px] font-semibold',
-                    person.immediate_access
+                    canRevokeImmediateGrant(person)
                       ? 'bg-[#E8F6F0] text-[#1F9D6B]'
                       : 'bg-[#FDF4E4] text-[#B4761A]',
                   )}
                 >
-                  {person.immediate_access
+                  {hasLiveImmediateAccess(person)
                     ? 'Immediate login'
-                    : 'Unlocks upon death'}
+                    : hasPendingImmediateGrant(person)
+                      ? 'Sending login email'
+                      : 'Unlocks upon death'}
                 </span>
                 {!person._id ? (
                   <span className="rounded-full bg-[#F0F2F4] px-2.5 py-0.5 text-[11px] font-semibold text-[#6A7481]">
                     Invite not saved
                   </span>
                 ) : null}
-                {hasNokLetter ? (
-                  <span className="rounded-full bg-[#E8F6F0] px-2.5 py-0.5 text-[11px] font-semibold text-[#1F9D6B]">
-                    Letter ready
-                  </span>
-                ) : (
-                  <span className="rounded-full bg-[#FDF4E4] px-2.5 py-0.5 text-[11px] font-semibold text-[#B4761A]">
-                    Letter unwritten
-                  </span>
-                )}
+                <NokLetterStatusButton
+                  nokId={person._id}
+                  enabled={Boolean(person._id)}
+                  compact
+                  className="h-7 w-auto flex-none rounded-full px-2.5"
+                />
               </div>
               {person.relationship && (
                 <p className="mt-0.5 text-[12.5px] capitalize text-[#7A8794]">
@@ -1256,7 +1352,7 @@ function TrustedPersonCard({
                   )}
                 </div>
               )}
-              {person._id && (
+              {person._id && person.immediate_access && (
                 <TrustedPersonLoginPassword
                   password={person.master_password}
                   passwordOnFile={person.has_master_password}
@@ -1274,7 +1370,7 @@ function TrustedPersonCard({
           )}
         </div>
 
-        <div className="flex shrink-0 flex-row flex-wrap gap-1.5 border-t border-border/60 bg-muted/20 p-2.5 sm:w-[7.75rem] sm:flex-col sm:border-l sm:border-t-0 sm:p-3">
+        <div className="flex shrink-0 flex-row flex-wrap gap-1.5 border-t border-border/60 bg-muted/20 p-2.5 sm:w-[8.25rem] sm:flex-col sm:border-l sm:border-t-0 sm:p-3">
           <Button
             variant="outline"
             size="sm"
@@ -1285,20 +1381,8 @@ function TrustedPersonCard({
             <Pencil className="mr-1.5 h-3.5 w-3.5 shrink-0" />
             Edit
           </Button>
-          {!person.immediate_access && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 flex-1 justify-start rounded-xl text-xs font-medium sm:w-full sm:flex-none"
-              onClick={onViewCard}
-              disabled={isBusy}
-            >
-              <Eye className="mr-1.5 h-3.5 w-3.5 shrink-0" />
-              Card
-            </Button>
-          )}
           {person._id &&
-            (person.immediate_access ? (
+            (canRevokeImmediateGrant(person) ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -1394,6 +1478,7 @@ export function AccessManagement({
 }: AccessManagementProps) {
   const isMobile = useIsMobile();
   const { data, isLoading, refetch } = useGetMyNextKinQuery(undefined);
+  const { data: deathCertAuth } = useGetDeathCertificateAuthorizationQuery();
 
   const [authorizedPeople, setAuthorizedPeople] = useState<AuthorizedPerson[]>(
     [],
@@ -1408,7 +1493,6 @@ export function AccessManagement({
   const [wizardMode, setWizardMode] = useState<WizardMode>('add');
   const [wizardIndex, setWizardIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<AuthorizedPerson | null>(null);
-  const [showWizardCardPreview, setShowWizardCardPreview] = useState(true);
   const [sectionPickerOpen, setSectionPickerOpen] = useState(false);
 
   const [cardPreviewIndex, setCardPreviewIndex] = useState<number | null>(null);
@@ -1426,6 +1510,13 @@ export function AccessManagement({
     null,
   );
   const [inviteSuccessImmediate, setInviteSuccessImmediate] = useState(false);
+  const [inviteSuccessNokId, setInviteSuccessNokId] = useState<string | null>(
+    null,
+  );
+  const [approveTarget, setApproveTarget] = useState<number | null>(null);
+  const [approveConfirmed, setApproveConfirmed] = useState(false);
+  const [approvePassword, setApprovePassword] = useState('');
+  const [approvePasswordError, setApprovePasswordError] = useState('');
 
   const [createNextKin] = useCreateNextKinMutation();
   const [updateNextKin] = useUpdateNextKinMutation();
@@ -1538,6 +1629,9 @@ export function AccessManagement({
             ? nk.authorized_sections
             : [],
           immediate_access: !!nk.immediate_access,
+          immediate_access_pending: !!nk.immediate_access_pending,
+          living_access_state: nk.living_access_state,
+          access_timing: nk.access_timing,
           nok_letter_received: !!nk.nok_letter_received,
           // Keep session-local password after create/reveal; list APIs omit it.
           master_password:
@@ -1641,7 +1735,6 @@ export function AccessManagement({
     setWizardIndex(null);
     setWizardStep(0);
     setSectionPickerOpen(false);
-    setShowWizardCardPreview(!isMobile);
     setWizardOpen(true);
   }, [authorizedPeople.length, isMobile]);
 
@@ -1657,7 +1750,6 @@ export function AccessManagement({
     setSectionPickerOpen(
       authorizedPeople[index].authorized_sections.length > 0,
     );
-    setShowWizardCardPreview(!isMobile);
     setWizardOpen(true);
   };
 
@@ -1786,7 +1878,11 @@ export function AccessManagement({
   };
 
   const validateWizardStep = (stepId: WizardStepId | undefined): boolean => {
-    const result = validateAccessWizardStep(stepId, draft);
+    const requireDeathCertificateAuthorization =
+      wizardMode === 'add' && !draft?.immediate_access;
+    const result = validateAccessWizardStep(stepId, draft, {
+      requireDeathCertificateAuthorization,
+    });
     if (!result.ok && result.message) {
       toast.error(result.message);
     }
@@ -1813,6 +1909,18 @@ export function AccessManagement({
 
     for (const step of wizardSteps) {
       if (!validateWizardStep(step.id)) return;
+    }
+
+    if (
+      wizardMode === 'add' &&
+      !draft.immediate_access &&
+      !deathCertAuth?.agreed &&
+      !draft.death_certificate_auth_signature?.trim()
+    ) {
+      toast.error(
+        'Sign the death certificate authorization before naming this person for after-death access',
+      );
+      return;
     }
 
     if (
@@ -1892,10 +2000,13 @@ export function AccessManagement({
           master_password:
             (res.master_password || '').trim() || draft.master_password || '',
           has_master_password: true,
+          immediate_access: false,
+          immediate_access_pending: false,
         };
         setAuthorizedPeople(prev => [...prev, saved]);
         setInviteSuccessImmediate(Boolean(draft.immediate_access));
         setInviteSuccessName(draft.full_name || 'them');
+        setInviteSuccessNokId(saved._id || null);
         const nokId = saved._id;
         const nokPw = (saved.master_password || '').trim();
         if (nokId && nokPw) {
@@ -1959,30 +2070,59 @@ export function AccessManagement({
     }
   };
 
+  const requestApprove = (index: number) => {
+    const person = authorizedPeople[index];
+    if (!person?._id) {
+      toast.error('Please save this person first');
+      return;
+    }
+    setApproveTarget(index);
+    setApproveConfirmed(false);
+    setApprovePassword('');
+    setApprovePasswordError('');
+  };
+
   const approveOne = async (index: number) => {
     const person = authorizedPeople[index];
     if (!person._id) {
       toast.error('Please save this person first');
       return;
     }
+    if (!approvePassword.trim()) {
+      setApprovePasswordError('Enter your Orderly Affairs sign-in password.');
+      return;
+    }
     const personKey = getPersonKey(person, index);
     setPersonAction(personKey, 'approving');
     try {
-      await approveNextKinAccess(person._id).unwrap();
+      await approveNextKinAccess({
+        id: person._id,
+        password: approvePassword.trim(),
+      }).unwrap();
       setAuthorizedPeople(prev => {
         const copy = [...prev];
         copy[index] = {
           ...copy[index],
           immediate_access: true,
+          immediate_access_pending: false,
           nok_letter_received: false,
         };
         return copy;
       });
-      toast.success('Access approved');
+      toast.success(
+        'Access released. They will receive login details now. Check your email if you need to revoke.',
+      );
       refetch();
+      setApproveTarget(null);
+      setApproveConfirmed(false);
+      setApprovePassword('');
+      setApprovePasswordError('');
     } catch (error) {
       console.error(error);
-      toast.error('Approve failed');
+      toast.error(getSafeErrorMessage(error, 'Approve failed'));
+      setApprovePasswordError(
+        getSafeErrorMessage(error, 'Could not confirm your password'),
+      );
     } finally {
       setPersonAction(personKey);
     }
@@ -1993,7 +2133,11 @@ export function AccessManagement({
     if (!person._id) {
       setAuthorizedPeople(prev => {
         const copy = [...prev];
-        copy[index] = { ...copy[index], immediate_access: false };
+        copy[index] = {
+          ...copy[index],
+          immediate_access: false,
+          immediate_access_pending: false,
+        };
         return copy;
       });
       return;
@@ -2004,7 +2148,11 @@ export function AccessManagement({
       await revokeNextKinAccess(person._id).unwrap();
       setAuthorizedPeople(prev => {
         const copy = [...prev];
-        copy[index] = { ...copy[index], immediate_access: false };
+        copy[index] = {
+          ...copy[index],
+          immediate_access: false,
+          immediate_access_pending: false,
+        };
         return copy;
       });
       toast.success('Access revoked');
@@ -2022,7 +2170,11 @@ export function AccessManagement({
     try {
       await revokeAllNextKinAccess().unwrap();
       setAuthorizedPeople(prev =>
-        prev.map(person => ({ ...person, immediate_access: false })),
+        prev.map(person => ({
+          ...person,
+          immediate_access: false,
+          immediate_access_pending: false,
+        })),
       );
       toast.success('All access revoked');
       refetch();
@@ -2045,7 +2197,9 @@ export function AccessManagement({
     return WIZARD_STEPS.map(step =>
       step.id === 'credentials' && draft?.immediate_access
         ? { ...step, label: 'Login Password' }
-        : step,
+        : step.id === 'credentials'
+          ? { ...step, label: 'Storage' }
+          : step,
     );
   }, [draft?.immediate_access]);
 
@@ -2151,9 +2305,14 @@ export function AccessManagement({
                             onChange={e =>
                               patchDraft({ relationship: e.target.value })
                             }
-                            placeholder="e.g. Spouse, Brother, Friend"
+                            placeholder="e.g. Spouse, Sibling, Executor, Attorney"
                             className={cn('rounded-2xl', MIN_TOUCH)}
                           />
+                          <p className="text-[12px] leading-5 text-[#7A8794]">
+                            Name an estate attorney or executor here if they
+                            should verify identity (ID + selfie) before they
+                            can start a passing report.
+                          </p>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="wizard-email">Email</Label>
@@ -2200,25 +2359,30 @@ export function AccessManagement({
                               })
                             }
                             title="Immediate Access"
-                            description="They can access right away after approval."
+                            description="After they accept the invite, you click Release Access and re-enter your password. They get a login email immediately."
                             icon={Zap}
                             iconClassName="bg-emerald-100 text-emerald-700"
                           />
                           <SelectableOptionCard
                             selected={!draft.immediate_access}
                             onSelect={() =>
-                              patchDraft({ immediate_access: false })
+                              patchDraft({
+                                immediate_access: false,
+                                nok_letter_received: true,
+                              })
                             }
                             title="Upon Death access"
-                            description="No login email now. Password stays on the card until access is granted."
+                            description="No login password is stored now. After death is verified they get a one-time access link and set their own password."
                             icon={Clock}
                             iconClassName="bg-blue-100 text-blue-700"
                           />
                         </div>
                         {!draft.immediate_access && (
                           <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-5 text-slate-700">
-                            Upon Death people are not emailed a password. Keep
-                            the password card safe for when access is needed.
+                            Upon Death people are not emailed a password now.
+                            After death is verified, they receive a one-time
+                            access link, set their own password, and can view
+                            or download files (not delete them).
                           </p>
                         )}
                         {!draft.immediate_access && (
@@ -2252,9 +2416,9 @@ export function AccessManagement({
                         </p>
                         {draft.immediate_access && (
                           <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm leading-5 text-emerald-900">
-                            Immediate access — they will receive login details by
-                            email (sections, email &amp; password). No password
-                            card is required.
+                            Immediate access — they enroll first. Login details are
+                            emailed only after you click Release Access (10-minute
+                            revoke window). No password card is required.
                           </p>
                         )}
                       </div>
@@ -2452,12 +2616,12 @@ export function AccessManagement({
                         <h4 className="font-semibold">
                           {draft.immediate_access
                             ? 'Login Password'
-                            : 'Create Credentials'}
+                            : 'After-death access'}
                         </h4>
                         <p className="mt-1 text-sm leading-6 text-muted-foreground">
                           {draft.immediate_access
-                            ? 'Generate a login password. It will be emailed to this person when you save.'
-                            : 'Add storage details, then generate the password card.'}
+                            ? 'Generate a login password to store now. They receive a login email when you click Release Access.'
+                            : 'No printed password card. After you pass, they follow these steps to open the vault.'}
                         </p>
                       </div>
 
@@ -2510,21 +2674,8 @@ export function AccessManagement({
                         </div>
                       ) : (
                         <>
+                      <NokAfterDeathAccessSteps />
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="wizard-card-loc">Card Location</Label>
-                          <Input
-                            id="wizard-card-loc"
-                            value={draft.card_storage_location || ''}
-                            onChange={e =>
-                              patchDraft({
-                                card_storage_location: e.target.value,
-                              })
-                            }
-                            placeholder="Where the password card is kept"
-                            className={cn('rounded-2xl', MIN_TOUCH)}
-                          />
-                        </div>
                         <div className="space-y-2">
                           <Label htmlFor="wizard-key-loc">Key Bag Location</Label>
                           <Input
@@ -2537,7 +2688,7 @@ export function AccessManagement({
                             className={cn('rounded-2xl', MIN_TOUCH)}
                           />
                         </div>
-                        <div className="space-y-2 sm:col-span-2">
+                        <div className="space-y-2">
                           <Label htmlFor="wizard-doc-loc">
                             Document Bag Location
                           </Label>
@@ -2568,83 +2719,6 @@ export function AccessManagement({
                           }
                           className="min-h-[100px] rounded-2xl"
                         />
-                      </div>
-                      <div>
-                        <div className="mb-3 flex items-center justify-between">
-                          <h4 className="font-semibold">Password Card Preview</h4>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className={MIN_TOUCH}
-                            onClick={() =>
-                              setShowWizardCardPreview(v => !v)
-                            }
-                          >
-                            <Eye className="mr-1.5 h-4 w-4" />
-                            {showWizardCardPreview ? 'Hide' : 'Preview'}
-                          </Button>
-                        </div>
-                        {showWizardCardPreview && (
-                          <div className="space-y-4">
-                            <div className="space-y-2 rounded-2xl border bg-muted/20 p-4">
-                              <Label htmlFor="wizard-password">
-                                Master Password
-                              </Label>
-                              {wizardMode === 'edit' &&
-                                !draft.master_password?.trim() && (
-                                  <p className="text-xs leading-5 text-amber-800">
-                                    This person&apos;s password was created before
-                                    passwords were saved for editing. Click{' '}
-                                    <strong>Generate</strong> to create a new one
-                                    for the card and login.
-                                  </p>
-                                )}
-                              <div className="flex flex-col gap-2 sm:flex-row">
-                                <Input
-                                  id="wizard-password"
-                                  value={draft.master_password}
-                                  onChange={e =>
-                                    patchDraft({
-                                      master_password: e.target.value,
-                                    })
-                                  }
-                                  className={cn(
-                                    'rounded-2xl bg-background font-mono tracking-wider',
-                                    MIN_TOUCH,
-                                  )}
-                                />
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className={cn('shrink-0 rounded-2xl', MIN_TOUCH)}
-                                  onClick={() =>
-                                    patchDraft({
-                                      master_password: generatePassword(),
-                                    })
-                                  }
-                                >
-                                  Generate
-                                </Button>
-                              </div>
-                            </div>
-                            <PasswordCard
-                              personName={
-                                draft.full_name || 'Trusted Person'
-                              }
-                              masterPassword={draft.master_password}
-                              email={draft.email}
-                              phone={draft.phone_number}
-                              relationship={draft.relationship}
-                              accessLevel={draft.access_level}
-                              authorizedSections={draftSectionLabels}
-                              immediateAccess={draft.immediate_access}
-                              card_storage_location={
-                                draft.card_storage_location
-                              }
-                            />
-                          </div>
-                        )}
                       </div>
                         </>
                       )}
@@ -2689,16 +2763,16 @@ export function AccessManagement({
                               ]
                             : [
                                 [
-                                  'Card location',
-                                  draft.card_storage_location || '—',
-                                ],
-                                [
                                   'Key bag location',
                                   draft.key_bag_location || '—',
                                 ],
                                 [
                                   'Document bag location',
                                   draft.documents_bag_location || '—',
+                                ],
+                                [
+                                  'Login after death',
+                                  'Email sent when death is verified — one-time access link, no password stored',
                                 ],
                               ]),
                         ].map(([label, value]) => (
@@ -2711,25 +2785,59 @@ export function AccessManagement({
                           </div>
                         ))}
                       </dl>
-                      {!draft.immediate_access && (
-                        <PasswordCard
-                          personName={draft.full_name || 'Trusted Person'}
-                          masterPassword={draft.master_password}
-                          email={draft.email}
-                          phone={draft.phone_number}
-                          relationship={draft.relationship}
-                          accessLevel={draft.access_level}
-                          authorizedSections={draftSectionLabels}
-                          immediateAccess={draft.immediate_access}
-                          card_storage_location={draft.card_storage_location}
-                        />
-                      )}
                       {draft.immediate_access && (
                         <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
                           Login credentials will be emailed to{' '}
                           <strong>{draft.email}</strong> when you save. No
                           password card is required.
                         </p>
+                      )}
+                      {wizardMode === 'add' && !draft.immediate_access && (
+                        <div className="space-y-3">
+                          <DeathCertificateAuthorizationPanel
+                            variant="compact"
+                            hideSignForm
+                          />
+                          <label className="flex cursor-pointer items-start gap-3 rounded-2xl border bg-background px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(
+                                draft.death_certificate_auth_agreed,
+                              )}
+                              onChange={e =>
+                                patchDraft({
+                                  death_certificate_auth_agreed:
+                                    e.target.checked,
+                                })
+                              }
+                              className="mt-1 h-4 w-4"
+                            />
+                            <span className="text-sm leading-6">
+                              {DEATH_CERT_AUTH_PERSON_CONFIRM_LABEL}
+                            </span>
+                          </label>
+                          {!deathCertAuth?.agreed && (
+                            <div className="space-y-1.5">
+                              <Label htmlFor="nok-death-cert-signature">
+                                Electronic signature (full legal name)
+                              </Label>
+                              <Input
+                                id="nok-death-cert-signature"
+                                value={
+                                  draft.death_certificate_auth_signature || ''
+                                }
+                                onChange={e =>
+                                  patchDraft({
+                                    death_certificate_auth_signature:
+                                      e.target.value,
+                                  })
+                                }
+                                placeholder="Type your full legal name"
+                                className="rounded-xl"
+                              />
+                            </div>
+                          )}
+                        </div>
                       )}
                     </>
                   )}
@@ -3022,7 +3130,9 @@ export function AccessManagement({
                     const isDeleting = action === 'deleting';
                     const isApproving = action === 'approving';
                     const isRevoking = action === 'revoking';
-                    const hasNokLetter = !person.immediate_access && person.nok_letter_received;
+                    const hasNokLetter =
+                      !canRevokeImmediateGrant(person) &&
+                      person.nok_letter_received;
                     return (
                       <motion.li key={key} layout className="w-full" initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', damping: 26, stiffness: 320 }}>
                         {isMobile ? (
@@ -3044,7 +3154,7 @@ export function AccessManagement({
                             revokeDisabled={isRevokingOne}
                             onEdit={() => openEditWizard(index)}
                             onViewCard={() => requestCardPreview(index)}
-                            onApprove={() => approveOne(index)}
+                            onApprove={() => requestApprove(index)}
                             onRevoke={() => revokeOne(index)}
                             onDelete={() => setDeleteTarget(index)}
                           />
@@ -3150,7 +3260,7 @@ export function AccessManagement({
                 const isApproving = action === 'approving';
                 const isRevoking = action === 'revoking';
                 const hasNokLetter =
-                  !person.immediate_access && person.nok_letter_received;
+                  !canRevokeImmediateGrant(person) && person.nok_letter_received;
 
                 const actionHandlers = {
                   onEdit: () => {
@@ -3161,7 +3271,7 @@ export function AccessManagement({
                     setDetailViewIndex(null);
                     requestCardPreview(detailViewIndex);
                   },
-                  onApprove: () => approveOne(detailViewIndex),
+                  onApprove: () => requestApprove(detailViewIndex),
                   onRevoke: () => revokeOne(detailViewIndex),
                   onDelete: () => {
                     setDetailViewIndex(null);
@@ -3286,7 +3396,7 @@ export function AccessManagement({
       <VaultDetailDrawer
         open={cardPreviewIndex !== null}
         onClose={() => setCardPreviewIndex(null)}
-        title="Password Card"
+        title="How they get access"
         subtitle={
           cardPreviewIndex !== null
             ? authorizedPeople[cardPreviewIndex]?.full_name
@@ -3294,27 +3404,7 @@ export function AccessManagement({
         }
         icon={<KeyRound className="h-5 w-5" />}
       >
-        {cardPreviewIndex !== null ? (
-          <PasswordCard
-            personName={
-              authorizedPeople[cardPreviewIndex].full_name || 'Trusted Person'
-            }
-            masterPassword={authorizedPeople[cardPreviewIndex].master_password}
-            email={authorizedPeople[cardPreviewIndex].email}
-            phone={authorizedPeople[cardPreviewIndex].phone_number}
-            relationship={authorizedPeople[cardPreviewIndex].relationship}
-            accessLevel={authorizedPeople[cardPreviewIndex].access_level}
-            authorizedSections={authorizedPeople[
-              cardPreviewIndex
-            ].authorized_sections.map(id => sectionLabelMap[id] || id)}
-            immediateAccess={
-              authorizedPeople[cardPreviewIndex].immediate_access
-            }
-            card_storage_location={
-              authorizedPeople[cardPreviewIndex].card_storage_location
-            }
-          />
-        ) : null}
+        {cardPreviewIndex !== null ? <NokAfterDeathAccessSteps /> : null}
       </VaultDetailDrawer>
 
       {/* Delete confirmation */}
@@ -3361,6 +3451,45 @@ export function AccessManagement({
         }
       />
 
+      {/* Grant immediate NOK access */}
+      <BrandDangerConfirm
+        open={approveTarget !== null}
+        title="Release access?"
+        description={
+          approveTarget !== null
+            ? 'You are granting your next of kin immediate access to the next of kin part of this vault. Do you want to continue?'
+            : ''
+        }
+        cancelLabel="No"
+        confirmLabel="Continue"
+        checkboxLabel="I want to continue."
+        checkboxChecked={approveConfirmed}
+        onCheckboxChange={setApproveConfirmed}
+        passwordLabel="Your Orderly Affairs sign-in password"
+        passwordValue={approvePassword}
+        onPasswordChange={value => {
+          setApprovePassword(value);
+          if (approvePasswordError) setApprovePasswordError('');
+        }}
+        passwordError={approvePasswordError}
+        onCancel={() => {
+          setApproveTarget(null);
+          setApproveConfirmed(false);
+          setApprovePassword('');
+          setApprovePasswordError('');
+        }}
+        onConfirm={() => {
+          if (approveTarget === null) return;
+          void approveOne(approveTarget);
+        }}
+        busy={
+          approveTarget !== null &&
+          personActions[
+            getPersonKey(authorizedPeople[approveTarget], approveTarget)
+          ] === 'approving'
+        }
+      />
+
       {/* Revoke all confirmation */}
       <BrandDangerConfirm
         open={revokeAllOpen}
@@ -3392,26 +3521,48 @@ export function AccessManagement({
         open={Boolean(inviteSuccessName)}
         variant="confirm"
         title={
-          inviteSuccessImmediate
-            ? `Invitation sent to ${inviteSuccessName}`
-            : `${inviteSuccessName} saved`
+          inviteSuccessNokId
+            ? `Write a letter for ${inviteSuccessName}?`
+            : inviteSuccessImmediate
+              ? `Invitation sent to ${inviteSuccessName}`
+              : `${inviteSuccessName} saved`
         }
         description={
-          inviteSuccessImmediate
-            ? "They'll get a temporary password by email so they can sign in."
-            : 'Upon Death notice sent — no password in the email. They will use the master password on the Password Card when access opens.'
+          inviteSuccessNokId
+            ? inviteSuccessImmediate
+              ? 'Invitation sent. Write their next-of-kin letter now so it is ready when they need the vault. You can also open it later from the button on their card.'
+              : 'They are saved as next of kin. Write their letter now so it is ready when the vault unlocks. You can also open it later from the button on their card.'
+            : inviteSuccessImmediate
+              ? 'Invitation sent. After they accept, click Release Access. You will get an email with a Revoke Access button. They receive a login email immediately. Ask them to SAVE THAT EMAIL and not delete it.'
+              : 'Upon Death notice sent. Ask them to SAVE THAT EMAIL and DO NOT DELETE it — they will need the portal link later. They will not get a password now. After death is verified, they receive a one-time access link.'
+        }
+        primaryAction={
+          inviteSuccessNokId
+            ? {
+                label: 'Write their letter now',
+                onClick: () => {
+                  const nokId = inviteSuccessNokId;
+                  setInviteSuccessName(null);
+                  setInviteSuccessImmediate(false);
+                  setInviteSuccessNokId(null);
+                  if (nokId) goToNokLetter(nokId);
+                },
+              }
+            : undefined
         }
         secondaryAction={{
-          label: 'Back to People & roles',
+          label: inviteSuccessNokId ? 'Later' : 'Back to People & roles',
           onClick: () => {
             setInviteSuccessName(null);
             setInviteSuccessImmediate(false);
+            setInviteSuccessNokId(null);
           },
           variant: 'outline',
         }}
         onClose={() => {
           setInviteSuccessName(null);
           setInviteSuccessImmediate(false);
+          setInviteSuccessNokId(null);
         }}
       />
     </div>

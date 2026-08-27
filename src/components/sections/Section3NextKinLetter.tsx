@@ -15,7 +15,7 @@ import {
 import { NextOfKinLetterField } from '@/components/NextOfKinLetterField';
 import { NokLetterPreviewDialog } from '@/components/NokLetterPreviewDialog';
 import { VaultDetailDrawer } from '@/components/vault-prototype/VaultDetailDrawer';
-import { goToVaultSection } from '@/vault-prototype/navigate';
+import { goToVaultSection, consumeWriteNokLetterId } from '@/vault-prototype/navigate';
 import {
   type NextKinAccessResponse,
   useGetMyNextKinQuery,
@@ -304,8 +304,7 @@ export default function Section3NextOfKinLetter({
 
   const letterReadyPeople = useMemo(() => {
     return nextKinPeople.filter(
-      (person: NextKinAccessResponse) =>
-        !person.immediate_access && person.nok_letter_received,
+      (person: NextKinAccessResponse) => !person.immediate_access,
     );
   }, [nextKinPeople]);
 
@@ -374,6 +373,14 @@ export default function Section3NextOfKinLetter({
     setLetterSheetOpen(true);
   };
 
+  useEffect(() => {
+    const pending = consumeWriteNokLetterId();
+    if (!pending) return;
+    if (letterReadyPeople.some(person => person.id === pending)) {
+      openLetterForRecipient(pending);
+    }
+  }, [letterReadyPeople]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const openPreviewForRecipient = (nokId: string) => {
     handleRecipientChange(nokId);
     setPreviewNokId(nokId);
@@ -395,7 +402,17 @@ export default function Section3NextOfKinLetter({
         <p>
           Letters stay sealed while you are living. Nobody, including the person
           it is addressed to, can read a letter before your Vault unlocks. Edit
-          yours as often as you like.
+          yours as often as you like. Product instructions they can read now
+          live in Access Management as{' '}
+          <a
+            href="/instructions-for-next-of-kin"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold underline"
+          >
+            Instructions for Your Next of Kin
+          </a>
+          .
         </p>
       </div>
 

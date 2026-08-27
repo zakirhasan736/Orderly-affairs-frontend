@@ -8,6 +8,7 @@ import {
   familyCanViewVaultSettings,
   familyCanWrite,
   familyIsReadOnly,
+  familyPortalRoleDisplayLabel,
   parseFamilyDashboardSession,
   type FamilyDashboardSession,
 } from '@/utils/familyDashboardAccess';
@@ -100,5 +101,22 @@ describe('family portal role matrix', () => {
       'admin',
       'super_admin',
     ]);
+  });
+
+  it('displays Super Admin / Admin labels for the account menu', () => {
+    expect(familyPortalRoleDisplayLabel(familySession('super_admin'))).toBe(
+      'Super Admin',
+    );
+    expect(familyPortalRoleDisplayLabel(familySession('admin'))).toBe('Admin');
+    expect(
+      familyPortalRoleDisplayLabel(
+        parseFamilyDashboardSession({
+          role: 'nextkin',
+          access_type: 'family',
+          portal_role: 'viewer',
+          portal_role_label: 'Viewer',
+        }),
+      ),
+    ).toBe('Viewer');
   });
 });

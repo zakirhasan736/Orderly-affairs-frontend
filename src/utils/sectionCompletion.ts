@@ -1,6 +1,6 @@
 /**
  * Per-section fill progress for vault sidebar checkmarks.
- * Complete (checkmark) only when percent === 100.
+ * Complete (checkmark) when status === 'complete' — not when a field % looks high.
  */
 
 import { formConfig } from '@/config/formConfig';
@@ -8,12 +8,19 @@ import type { FieldDefinition, Subsection } from '@/types/formTypes';
 import { NOK_LETTER_DEFAULTS } from '@/utils/nokLetterPreview';
 import { countSectionFieldUploads } from '@/utils/sectionFieldUploads';
 import { listAiUploadHistory } from '@/utils/aiUploadHistory';
+import { buildSectionProgress, getVaultSectionProgress } from '@/utils/vaultProgressModel';
+
+export type SectionStatus = 'not_started' | 'incomplete' | 'complete';
 
 export type SectionProgress = {
   percent: number;
   complete: boolean;
   filled: number;
   total: number;
+  status: SectionStatus;
+  started: boolean;
+  itemCount: number;
+  completeItemCount: number;
 };
 
 /** Shape used for Access Management progress (NOK people list). */
@@ -48,6 +55,10 @@ const EMPTY: SectionProgress = {
   complete: false,
   filled: 0,
   total: 0,
+  status: 'not_started',
+  started: false,
+  itemCount: 0,
+  completeItemCount: 0,
 };
 
 /** Fields that come from Access Management autofill — count toward progress. */
@@ -96,30 +107,22 @@ function result(filled: number, total: number): SectionProgress {
   if (total <= 0) {
     return { ...EMPTY };
   }
-  const percent = Math.round((filled / total) * 100);
-  return {
+  const complete = filled >= total;
+  const started = filled > 0 || complete;
+  return buildSectionProgress({
     filled,
     total,
-    percent,
-    complete: filled >= total,
-  };
+    complete,
+    started,
+    itemCount: started ? 1 : 0,
+    completeItemCount: complete ? 1 : 0,
+  });
 }
 
 /**
  * When related documents exist but field fill is still 0%, credit one "started"
  * slot so the sidebar shows a partial ring instead of an empty circle.
  */
-function withDocumentStartedBoost(
-  progress: SectionProgress,
-  documentCount: number,
-): SectionProgress {
-  if (documentCount <= 0 || progress.complete || progress.percent > 0) {
-    return progress;
-  }
-  const total = Math.max(progress.total, 1);
-  return result(1, total);
-}
-
 function countDocumentsForSection(
   sectionId: string,
   sectionData: Record<string, unknown> | undefined,
@@ -285,9 +288,23 @@ export function getNokLetterSectionProgress(
   dashboardNokLetter?: Record<string, unknown> | null,
 ): SectionProgress {
   if (hasAtLeastOneNokLetter(section3, dashboardNokLetter)) {
-    return { percent: 100, complete: true, filled: 1, total: 1 };
+    return buildSectionProgress({
+      filled: 1,
+      total: 1,
+      complete: true,
+      started: true,
+      itemCount: 1,
+      completeItemCount: 1,
+    });
   }
-  return { percent: 0, complete: false, filled: 0, total: 1 };
+  return buildSectionProgress({
+    filled: 0,
+    total: 1,
+    complete: false,
+    started: false,
+    itemCount: 0,
+    completeItemCount: 0,
+  });
 }
 
 /**
@@ -303,10 +320,25 @@ export function hasAtLeastOneAccessPerson(
 export function getAccessManagementSectionProgress(
   people: AccessPersonLike[] | null | undefined,
 ): SectionProgress {
-  if (hasAtLeastOneAccessPerson(people)) {
-    return { percent: 100, complete: true, filled: 1, total: 1 };
+  const n = Array.isArray(people) ? people.length : 0;
+  if (n > 0) {
+    return buildSectionProgress({
+      filled: 1,
+      total: 1,
+      complete: true,
+      started: true,
+      itemCount: n,
+      completeItemCount: n,
+    });
   }
-  return { percent: 0, complete: false, filled: 0, total: 1 };
+  return buildSectionProgress({
+    filled: 0,
+    total: 1,
+    complete: false,
+    started: false,
+    itemCount: 0,
+    completeItemCount: 0,
+  });
 }
 
 /**
@@ -357,10 +389,26 @@ export function hasAtLeastOnePersonalMessage(
 export function getPersonalMessagesSectionProgress(
   section4: Record<string, unknown> | undefined,
 ): SectionProgress {
-  if (hasAtLeastOnePersonalMessage(section4)) {
-    return { percent: 100, complete: true, filled: 1, total: 1 };
+  const n = listPersonalMessages(section4).filter(isPresentPersonalMessage)
+    .length;
+  if (n > 0) {
+    return buildSectionProgress({
+      filled: 1,
+      total: 1,
+      complete: true,
+      started: true,
+      itemCount: n,
+      completeItemCount: n,
+    });
   }
-  return { percent: 0, complete: false, filled: 0, total: 1 };
+  return buildSectionProgress({
+    filled: 0,
+    total: 1,
+    complete: false,
+    started: false,
+    itemCount: 0,
+    completeItemCount: 0,
+  });
 }
 
 function getPersonalMessagesProgress(
@@ -583,13 +631,34 @@ export function getSectionProgress(
   ctx: SectionProgressContext,
 ): SectionProgress {
   if (ctx.disabledSections?.[sectionId]) {
-    return { percent: 100, complete: true, filled: 1, total: 1 };
+    return buildSectionProgress({
+      filled: 1,
+      total: 1,
+      complete: true,
+      started: true,
+      itemCount: 1,
+      completeItemCount: 1,
+    });
   }
 
   if (sectionId === '0') {
     return ctx.instructionRead
-      ? { percent: 100, complete: true, filled: 1, total: 1 }
-      : { percent: 0, complete: false, filled: 0, total: 1 };
+      ? buildSectionProgress({
+          filled: 1,
+          total: 1,
+          complete: true,
+          started: true,
+          itemCount: 1,
+          completeItemCount: 1,
+        })
+      : buildSectionProgress({
+          filled: 0,
+          total: 1,
+          complete: false,
+          started: false,
+          itemCount: 0,
+          completeItemCount: 0,
+        });
   }
 
   const formData =
@@ -611,11 +680,9 @@ export function getSectionProgress(
   }
 
   const sectionData = formData[sectionId] as Record<string, unknown> | undefined;
-  const progress = getFormConfigSectionProgress(sectionId, sectionData);
-  return withDocumentStartedBoost(
-    progress,
-    countDocumentsForSection(sectionId, sectionData, ctx),
-  );
+  return getVaultSectionProgress(sectionId, sectionData, {
+    documentCount: countDocumentsForSection(sectionId, sectionData, ctx),
+  });
 }
 
 export function isSectionComplete(

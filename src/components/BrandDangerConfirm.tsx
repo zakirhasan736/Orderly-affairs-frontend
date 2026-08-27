@@ -14,6 +14,10 @@ type BrandDangerConfirmProps = {
   onConfirm: () => void;
   onCancel: () => void;
   busy?: boolean;
+  passwordLabel?: string;
+  passwordValue?: string;
+  onPasswordChange?: (value: string) => void;
+  passwordError?: string;
 };
 
 function WarningGlyph({ className }: { className?: string }) {
@@ -56,6 +60,10 @@ export function BrandDangerConfirm({
   onConfirm,
   onCancel,
   busy = false,
+  passwordLabel,
+  passwordValue = '',
+  onPasswordChange,
+  passwordError,
 }: BrandDangerConfirmProps) {
   if (!open) return null;
 
@@ -97,6 +105,24 @@ export function BrandDangerConfirm({
           </label>
         ) : null}
 
+        {passwordLabel ? (
+          <div className="mt-4 space-y-1.5">
+            <label className="text-[13px] font-medium text-[#3c4a46]">
+              {passwordLabel}
+            </label>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={passwordValue}
+              onChange={e => onPasswordChange?.(e.target.value)}
+              className="h-10 w-full rounded-xl border border-[#e4e6e1] px-3 text-[13.5px] text-[#213D59] outline-none focus:border-[#213D59]"
+            />
+            {passwordError ? (
+              <p className="text-[12px] text-[#b4483f]">{passwordError}</p>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
           <button
             type="button"
@@ -108,7 +134,11 @@ export function BrandDangerConfirm({
           </button>
           <button
             type="button"
-            disabled={busy}
+            disabled={
+              busy ||
+              Boolean(checkboxLabel && !checkboxChecked) ||
+              Boolean(passwordLabel && !passwordValue.trim())
+            }
             onClick={onConfirm}
             className="h-[42px] flex-1 rounded-[21px] border-0 bg-[#b4483f] text-[13px] font-medium text-white transition hover:bg-[#9a3c35] disabled:opacity-50"
           >

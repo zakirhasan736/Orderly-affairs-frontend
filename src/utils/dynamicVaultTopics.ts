@@ -150,6 +150,7 @@ export const SUBSECTION_TOPIC_CONFIG: Record<
     ]),
     '17F': topicConfig('17F', 'Memorabilia', ['item_name', 'item_type']),
     '17G': topicConfig('17G', 'Pet', ['pet_name', 'pet_type']),
+    '17H': topicConfig('17H', 'Note', ['title', 'document_type']),
   },
   '18': {
     '18B': topicConfig('18B', 'Business', ['business_name', 'business_type']),

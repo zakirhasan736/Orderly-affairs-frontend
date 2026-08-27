@@ -17,6 +17,8 @@ export interface NextKinCreatePayload {
   key_bag_location?: string | null;
   documents_bag_location?: string | null;
   special_instructions?: string | null;
+  death_certificate_authorization_agreed?: boolean;
+  death_certificate_authorization_signature?: string | null;
 }
 
 export interface FamilyMemberPayload {
@@ -74,6 +76,29 @@ export interface NextKinOwnerSummary {
   email?: string;
   full_name?: string;
   status: 'alive' | 'deceased' | string;
+  death_report_pending?: boolean;
+}
+
+export interface DiditSessionPayload {
+  configured: boolean;
+  status?: string;
+  approved?: boolean;
+  session_url?: string | null;
+  verified_at?: string | null;
+  required?: boolean;
+  is_attorney_or_executor?: boolean;
+  didit_before_report?: boolean;
+  claimant_kind?: string;
+}
+
+export interface DeathVerificationPayload {
+  certificate_uploaded?: boolean;
+  certificate_filename?: string | null;
+  certificate_uploaded_at?: string | null;
+  ssdmf_status?: string | null;
+  ssdmf_full_match?: boolean | null;
+  ssdmf_checked_at?: string | null;
+  ssdmf_error?: string | null;
 }
 
 export interface NextKinAccessResponse {
@@ -88,9 +113,14 @@ export interface NextKinAccessResponse {
   portal_role?: string;
   immediate_access: boolean;
   access_timing?: 'immediate' | 'upon_death' | string;
+  immediate_access_pending?: boolean;
+  living_access_state?: string;
+  immediate_access_email_at?: string | null;
   nok_letter_received?: boolean;
   owner_id: string;
   owner?: NextKinOwnerSummary;
+  didit?: DiditSessionPayload;
+  death_verification?: DeathVerificationPayload | null;
   vault_push?: {
     state: 'active' | 'paused' | 'off';
     collaborators_enabled: boolean;
@@ -201,10 +231,12 @@ export interface AccessActionResponse {
 }
 
 export interface ReportOwnerDeceasedResponse {
-  status: 'deceased';
+  status: 'deceased' | 'pending_review' | string;
   already_reported: boolean;
+  pending_review?: boolean;
   message: string;
   upon_death_granted?: number;
+  identity_verification_required?: boolean;
 }
 // SMS OTP
 export interface SendSmsOtpRequest {
@@ -268,6 +300,9 @@ export interface LoginResponse {
   returning_user?: boolean;
   billing_status?: string;
   requires_billing?: boolean;
+  must_change_password?: boolean;
+  must_enroll_mfa?: boolean;
+  security_setup_required?: boolean;
 }
 
 export interface VerifyEmailCodeRequest {
@@ -287,6 +322,41 @@ export interface OwnerMeResponse {
   mfa_enabled: boolean;
   primary_mfa?: MFAMethod | null;
   mfa_methods: Partial<MFAMethods>;
+  must_change_password?: boolean;
+  must_enroll_mfa?: boolean;
+  security_setup_required?: boolean;
+  death_certificate_authorization?: {
+    agreed: boolean;
+    agreed_at?: string | null;
+    signature_name?: string | null;
+    version?: string | null;
+  };
+  death_claim_alert?: {
+    kind?: string;
+    title?: string;
+    body?: string;
+    ends_at?: string;
+    elapsed?: boolean;
+    remaining_days?: number;
+    remaining_seconds?: number;
+    can_dispute?: boolean;
+  } | null;
+}
+
+export interface DeathCertificateAuthorizationResponse {
+  title: string;
+  last_updated: string;
+  version: string;
+  company: string;
+  support_email: string;
+  address_lines: string[];
+  intro: string[];
+  sections: Array<{ number: string; title: string; body: string }>;
+  checkbox_label: string;
+  agreed: boolean;
+  agreed_at?: string | null;
+  signature_name?: string | null;
+  can_sign: boolean;
 }
 const authBaseQuery = createSecureBaseQuery('/auth');
 
@@ -308,7 +378,13 @@ export const authApi = createApi({
       extraOptions,
     );
   },
-  tagTypes: ['NextKin', 'NextKinAccess', 'Family', 'NotificationPrefs'],
+  tagTypes: [
+    'NextKin',
+    'NextKinAccess',
+    'Family',
+    'NotificationPrefs',
+    'DeathCertAuth',
+  ],
   endpoints: builder => ({
     // Owner auth
     signup: builder.mutation({
@@ -329,7 +405,14 @@ export const authApi = createApi({
     }),
     // Password reset
     requestPasswordReset: builder.mutation<
-      { message: string },
+      {
+        message: string;
+        full_name?: string | null;
+        email?: string;
+        portal_role?: string;
+        portal_role_label?: string;
+        access_type?: string;
+      },
       { email: string; captcha_token?: string; otp_session_id?: string }
     >({
       query: body => ({
@@ -424,6 +507,23 @@ export const authApi = createApi({
     }),
     nextkinLogout: builder.mutation({
       query: () => ({ url: '/nextkin-logout', method: 'POST' }),
+      invalidatesTags: ['NextKinAccess'],
+    }),
+    startNextKinClaim: builder.mutation<
+      { email: string; full_name?: string | null; relationship?: string | null },
+      { token: string }
+    >({
+      query: body => ({ url: '/claim-nextkin/start', method: 'POST', body }),
+    }),
+    completeNextKinClaim: builder.mutation<
+      LoginResponse,
+      { token: string; password: string; confirm_password: string }
+    >({
+      query: body => ({
+        url: '/claim-nextkin/complete',
+        method: 'POST',
+        body,
+      }),
       invalidatesTags: ['NextKinAccess'],
     }),
     revealNextKinPassword: builder.mutation<
@@ -534,10 +634,14 @@ export const authApi = createApi({
         invalidatesTags: ['Family'],
       },
     ),
-    approveNextKinAccess: builder.mutation<AccessActionResponse, string>({
-      query: id => ({
+    approveNextKinAccess: builder.mutation<
+      AccessActionResponse,
+      { id: string; password?: string }
+    >({
+      query: ({ id, password }) => ({
         url: `/approve-nextkin-access/${id}`,
         method: 'POST',
+        body: password ? { password } : {},
       }),
       invalidatesTags: ['NextKin', 'NextKinAccess'],
     }),
@@ -651,6 +755,27 @@ export const authApi = createApi({
     }),
     getMe: builder.query<OwnerMeResponse, void>({
       query: () => ({ url: '/me', method: 'GET' }),
+    }),
+    getDeathCertificateAuthorization: builder.query<
+      DeathCertificateAuthorizationResponse,
+      void
+    >({
+      query: () => ({
+        url: '/death-certificate-authorization',
+        method: 'GET',
+      }),
+      providesTags: ['DeathCertAuth'],
+    }),
+    agreeDeathCertificateAuthorization: builder.mutation<
+      DeathCertificateAuthorizationResponse,
+      { agreed: boolean; signature_name: string }
+    >({
+      query: body => ({
+        url: '/death-certificate-authorization',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['DeathCertAuth'],
     }),
 
     // NOK self access
@@ -770,6 +895,76 @@ export const authApi = createApi({
       }),
       invalidatesTags: ['NextKinAccess'],
     }),
+    startDiditSession: builder.mutation<DiditSessionPayload, void>({
+      query: () => ({
+        url: '/nextkin/didit/session',
+        method: 'POST',
+      }),
+      invalidatesTags: ['NextKinAccess'],
+    }),
+    getDiditStatus: builder.query<DiditSessionPayload, void>({
+      query: () => ({ url: '/nextkin/didit/status', method: 'GET' }),
+      providesTags: ['NextKinAccess'],
+    }),
+    getAfterDeathCase: builder.query<
+      {
+        case: {
+          case_reference?: string;
+          owner_display_name?: string;
+          relationship?: string;
+          identity_label?: string;
+          certificate_label?: string;
+          death_record_label?: string;
+          protection_label?: string;
+          admin_label?: string;
+          access_label?: string;
+        } | null;
+      },
+      void
+    >({
+      query: () => ({ url: '/nextkin/after-death-case', method: 'GET' }),
+      providesTags: ['NextKinAccess'],
+    }),
+    stopAfterDeathRequest: builder.mutation<
+      { ok: boolean; status?: string; already_stopped?: boolean },
+      { password: string }
+    >({
+      query: body => ({
+        url: '/stop-after-death-request',
+        method: 'POST',
+        body,
+      }),
+    }),
+    uploadDeathCertificate: builder.mutation<
+      {
+        ok: boolean;
+        message?: string;
+        death_verification?: DeathVerificationPayload;
+      },
+      FormData
+    >({
+      query: body => ({
+        url: '/nextkin/death-certificate',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['NextKinAccess'],
+    }),
+    collaboratorChangePassword: builder.mutation<
+      {
+        message: string;
+        must_change_password?: boolean;
+        must_enroll_mfa?: boolean;
+        security_setup_required?: boolean;
+      },
+      { current_password: string; new_password: string }
+    >({
+      query: body => ({
+        url: '/collaborator-change-password',
+        method: 'POST',
+        body,
+      }),
+    }),
   }),
 });
 
@@ -779,6 +974,8 @@ export const {
   useOwnerLogoutMutation,
   useNextkinLoginMutation,
   useNextkinLogoutMutation,
+  useStartNextKinClaimMutation,
+  useCompleteNextKinClaimMutation,
   useRevealNextKinPasswordMutation,
   useCreateNextKinMutation,
   useGetMyNextKinQuery,
@@ -801,6 +998,8 @@ export const {
   useGetSessionQuery,
   useRefreshTokenMutation,
   useGetMeQuery,
+  useGetDeathCertificateAuthorizationQuery,
+  useAgreeDeathCertificateAuthorizationMutation,
   useRevokeNextKinAccessMutation,
   useRevokeAllNextKinAccessMutation,
   useApproveAllNextKinAccessMutation,
@@ -811,6 +1010,12 @@ export const {
   usePushSubscribeMutation,
   usePushUnsubscribeMutation,
   useReportOwnerDeceasedMutation,
+  useStartDiditSessionMutation,
+  useGetDiditStatusQuery,
+  useGetAfterDeathCaseQuery,
+  useStopAfterDeathRequestMutation,
+  useUploadDeathCertificateMutation,
+  useCollaboratorChangePasswordMutation,
   useRequestPasswordResetMutation,
   useResetPasswordMutation,
   useSendSmsOtpMutation,

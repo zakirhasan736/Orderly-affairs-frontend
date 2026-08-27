@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { HIGHLIGHT_VAULT_SECTIONS } from '@/vault-prototype/navigate';
 import Image from 'next/image';
-import { ChevronDown, HelpCircle, X } from 'lucide-react';
+import { ChevronDown, HelpCircle, X, Check } from 'lucide-react';
 import { cn } from '@common/ui/utils';
 import { BRAND_LOGO } from '@/constants/brand';
 import { VAULT_SCHEMA } from '@/vault-prototype';
@@ -33,14 +33,14 @@ function SidebarNavRow({
   item,
   active,
   hasNew,
-  percent,
+  started,
   complete,
   onClick,
 }: {
   item: { apiId: string; name: string; icon: string; dove: number };
   active: boolean;
   hasNew: boolean;
-  percent: number;
+  started?: boolean;
   complete?: boolean;
   onClick: () => void;
 }) {
@@ -84,11 +84,25 @@ function SidebarNavRow({
           New data
         </span>
       ) : item.apiId === 'dashboard' ? null : complete ? (
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#1F9D6B]" />
-      ) : percent > 0 ? (
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#3EB1E5]" />
+        <span
+          className={cn(
+            'grid h-4 w-4 shrink-0 place-items-center rounded-full',
+            active ? 'bg-white/20 text-white' : 'bg-[#E8F6F0] text-[#1F9D6B]',
+          )}
+          aria-label="Complete"
+        >
+          <Check className="h-2.5 w-2.5" strokeWidth={3} />
+        </span>
+      ) : started ? (
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#C23A3A]"
+          aria-label="Incomplete"
+        />
       ) : (
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#D5DDE5]" />
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#D5DDE5]"
+          aria-label="Not started"
+        />
       )}
     </button>
   );
@@ -99,7 +113,10 @@ type Props = {
   progress: number;
   completedCount: number;
   totalCount: number;
-  sectionProgressById?: Record<string, { percent: number; complete: boolean }>;
+  sectionProgressById?: Record<
+    string,
+    { percent: number; complete: boolean; started?: boolean; itemCount?: number }
+  >;
   sidebarOpen: boolean;
   onCloseSidebar: () => void;
   goToDashboard: () => void;
@@ -249,7 +266,10 @@ export function VaultCollectionSidebar({
                   item={item}
                   active={activeSection === item.apiId}
                   hasNew
-                  percent={sectionProgressById?.[item.apiId]?.percent ?? 0}
+                  started={
+                    sectionProgressById?.[item.apiId]?.started ||
+                    (sectionProgressById?.[item.apiId]?.itemCount ?? 0) > 0
+                  }
                   complete={sectionProgressById?.[item.apiId]?.complete}
                   onClick={() => {
                     goToSection(item.apiId);
@@ -291,7 +311,10 @@ export function VaultCollectionSidebar({
                         : activeSection === item.apiId
                     }
                     hasNew={false}
-                    percent={sectionProgressById?.[item.apiId]?.percent ?? 0}
+                    started={
+                      sectionProgressById?.[item.apiId]?.started ||
+                      (sectionProgressById?.[item.apiId]?.itemCount ?? 0) > 0
+                    }
                     complete={sectionProgressById?.[item.apiId]?.complete}
                     onClick={() => {
                       if (item.apiId === 'dashboard') goToDashboard();
