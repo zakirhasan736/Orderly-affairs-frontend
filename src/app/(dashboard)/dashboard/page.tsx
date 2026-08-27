@@ -2820,7 +2820,7 @@ export default function DashboardPage() {
       >
       <div className="min-h-screen bg-[#F6F8FA] text-slate-950 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
         {appMode === 'owner' && deathClaimAlert?.title ? (
-          <div className="border-b border-rose-200 bg-rose-50 px-4 py-3 text-rose-950">
+          <div className="border-b border-rose-200 bg-rose-50 z-99 px-4 py-3 text-rose-950">
             <p className="text-sm font-semibold">{deathClaimAlert.title}</p>
             <p className="mt-1 text-[13px] font-medium text-rose-900">
               {deathClaimAlert.elapsed
