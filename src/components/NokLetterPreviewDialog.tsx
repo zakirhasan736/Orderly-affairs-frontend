@@ -11,8 +11,9 @@ import {
 import { Loader2 } from 'lucide-react';
 import {
   MobileBottomSheet,
+  MOBILE_NESTED_SHEET_Z,
   MOBILE_SHEET_SCROLL_PADDING,
-  useIsMobile,
+  useFrozenIsMobile,
 } from '@/components/MobileBottomSheet';
 import { useGetNokLetterQuery } from '@/services/nokLetterApi';
 import type { NextKinAccessResponse } from '@/services/authApi';
@@ -66,7 +67,7 @@ export function NokLetterPreviewDialog({
   /** Kit owner's display name for the printed signature line. */
   ownerName?: string | null;
 }) {
-  const isMobile = useIsMobile();
+  const isMobile = useFrozenIsMobile(open);
   const { data: serverData, isFetching } = useGetNokLetterQuery(
     { nokId },
     { skip: !open || !nokId },
@@ -99,6 +100,7 @@ export function NokLetterPreviewDialog({
         onClose={onClose}
         className="h-[92dvh]"
         labelledBy="nok-preview-title"
+        zClassName={MOBILE_NESTED_SHEET_Z}
       >
         <div className="flex h-full min-h-0 flex-col">
           <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
@@ -127,7 +129,16 @@ export function NokLetterPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={value => !value && onClose()}>
-      <DialogContent className="max-h-[90vh] w-[calc(100vw-1.5rem)] max-w-[67.2rem] sm:max-w-[67.2rem] overflow-hidden p-0">
+      <DialogContent
+        className="z-[140] max-h-[90vh] w-[calc(100vw-1.5rem)] max-w-[67.2rem] sm:max-w-[67.2rem] overflow-hidden p-0"
+        onOpenAutoFocus={event => event.preventDefault()}
+        onFocusOutside={event => event.preventDefault()}
+        onPointerDownOutside={event => {
+          const target = event.target as HTMLElement | null;
+          if (target?.closest('[data-slot="dialog-overlay"]')) return;
+          event.preventDefault();
+        }}
+      >
         <DialogHeader className="border-b px-6 py-4">
           <DialogTitle>Letter Preview</DialogTitle>
         </DialogHeader>

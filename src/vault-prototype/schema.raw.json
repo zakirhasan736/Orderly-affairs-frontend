@@ -5592,69 +5592,6 @@
         ]
       },
       {
-        "id": "notifications",
-        "name": "Notifications",
-        "kind": "entries",
-        "entry": "notification",
-        "desc": "Everyone who has to be told, and what each of them will ask for.",
-        "fields": [
-          {
-            "k": "Who or what must be told",
-            "t": "text",
-            "req": 1,
-            "ph": "Social Security Administration, Methodist Hospital HR, Guardian Life"
-          },
-          {
-            "k": "Category",
-            "t": "choice",
-            "req": 1,
-            "opts": [
-              "Employer",
-              "Government",
-              "Bank",
-              "Insurance",
-              "Utility",
-              "Subscription",
-              "Other"
-            ],
-            "w": "half"
-          },
-          {
-            "k": "Contact",
-            "t": "text",
-            "ph": "(800) 555-0119 or benefits@methodist.org",
-            "w": "half"
-          },
-          {
-            "k": "Account or reference number",
-            "t": "text",
-            "ph": "Policy 4471-QB",
-            "w": "half"
-          },
-          {
-            "k": "What they need from you",
-            "t": "text",
-            "ph": "Certified death certificate plus the claim form they post out",
-            "hint": "This is the list that saves a next of kin weeks. Note how many death certificates each one wants."
-          },
-          {
-            "k": "How soon",
-            "t": "choice",
-            "opts": [
-              "First week",
-              "First month",
-              "When there is time"
-            ],
-            "w": "half"
-          },
-          {
-            "k": "Notes",
-            "t": "long",
-            "ph": "The pension office is slow. Call rather than email, and ask for the survivor benefits desk."
-          }
-        ]
-      },
-      {
         "id": "final-instructions",
         "name": "Final Instructions",
         "kind": "form",

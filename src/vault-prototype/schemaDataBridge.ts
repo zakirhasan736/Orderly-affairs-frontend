@@ -133,7 +133,6 @@ const HTML_SUB_STORE: Record<string, string> = {
   guardianship: '21C',
   'guardian-instructions': '21C',
   'digital-after-death': '21B',
-  notifications: '21B',
   'final-instructions': '21B',
 };
 

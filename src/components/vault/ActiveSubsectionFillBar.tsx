@@ -210,7 +210,7 @@ export function ActiveSubsectionFillBar({
         data-tour="tour-fill-empty-bar"
         data-stuck={stuck ? 'true' : 'false'}
         className={cn(
-          'sticky top-14 z-30 mb-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-xl border border-[#213D59]/15 bg-white/95 shadow-sm backdrop-blur-md md:top-[72px]',
+          'sticky top-14 z-30 mb-3 flex flex-col gap-2 rounded-xl border border-[#213D59]/15 bg-white/95 shadow-sm backdrop-blur-md max-md:gap-2.5 md:top-[72px] md:flex-row md:flex-wrap md:items-center md:justify-between',
           stuck ? 'mb-2 px-3 py-1' : 'px-3 py-1.5',
           'transition-[padding,box-shadow] duration-150 ease-in-out',
           meta.emptyCount > 0 || justFilled
@@ -219,8 +219,8 @@ export function ActiveSubsectionFillBar({
           className,
         )}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="min-w-0">
+        <div className="flex min-w-0 w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 md:flex-1">
+          <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-semibold leading-tight text-[#213D59]">
               {stuck
                 ? `${meta.title} · ${meta.progress.percent}%`
@@ -233,7 +233,7 @@ export function ActiveSubsectionFillBar({
             )}
           </div>
           <VaultPrivacySaveToggle
-            className="max-w-[220px] shrink-0"
+            className="w-full max-w-none shrink-0 sm:max-w-[220px]"
             compact
             sectionId={sectionId}
             subsectionId={subsectionId}
@@ -241,7 +241,7 @@ export function ActiveSubsectionFillBar({
         </div>
 
         {fillGaps ? (
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex w-full shrink-0 flex-wrap items-center gap-1.5 sm:w-auto sm:justify-end">
             <button
               type="button"
               data-tour="tour-review-fields-action"

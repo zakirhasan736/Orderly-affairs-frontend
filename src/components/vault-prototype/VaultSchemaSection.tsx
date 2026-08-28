@@ -52,10 +52,12 @@ function FillEmptyButton({
   emptyCount,
   onClick,
   disabled,
+  className,
 }: {
   emptyCount: number;
   onClick: () => void;
   disabled?: boolean;
+  className?: string;
 }) {
   if (emptyCount <= 0 || disabled) return null;
   return (
@@ -65,12 +67,26 @@ function FillEmptyButton({
         event.stopPropagation();
         onClick();
       }}
-      className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full bg-[#EAF6FD] px-3 text-[12.5px] font-semibold text-[#213D59] ring-1 ring-[#3EB1E5]/55 hover:bg-[#D8F0FB] md:h-[34px] md:min-h-[34px]"
+      className={cn(
+        'inline-flex min-h-11 shrink-0 items-center justify-center gap-1 rounded-full bg-[#EAF6FD] px-3 text-[12.5px] font-semibold text-[#213D59] ring-1 ring-[#3EB1E5]/55 hover:bg-[#D8F0FB] md:h-[34px] md:min-h-[34px]',
+        className,
+      )}
     >
-      <Sparkles className="h-3.5 w-3.5 text-[#3EB1E5]" />
-      Fill empty fields
+      <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#3EB1E5]" />
+      <span className="hidden sm:inline">Fill empty fields</span>
+      <span className="sm:hidden">Fill empty</span>
     </button>
   );
+}
+
+/** Schema subs hidden from the section UI (data may still exist in storage). */
+const HIDDEN_SCHEMA_SUBS: Record<string, string[]> = {
+  '21': ['notifications'],
+};
+
+function visibleSectionSubs(section: NonNullable<ReturnType<typeof schemaByApiId>>, apiSectionId: string) {
+  const hidden = HIDDEN_SCHEMA_SUBS[apiSectionId] || [];
+  return section.subs.filter(sub => !hidden.includes(sub.id));
 }
 
 function subProgress(sub: SchemaSub, bucket: unknown) {
@@ -190,11 +206,11 @@ export function VaultSchemaSection({
 
   const states = useMemo(() => {
     if (!section) return [];
-    return section.subs.map(sub => ({
+    return visibleSectionSubs(section, apiSectionId).map(sub => ({
       sub,
       ...subProgress(sub, view?.[sub.id]),
     }));
-  }, [section, view]);
+  }, [section, view, apiSectionId]);
 
   const isInstructions = apiSectionId === '0';
 
@@ -237,7 +253,12 @@ export function VaultSchemaSection({
   const totalFields = states.reduce((sum, item) => sum + item.total, 0);
   const pct = totalFields ? Math.round((filledFields / totalFields) * 100) : 0;
   const emptyCount = states.filter(item => item.pct === 0).length;
-  const doveCount = section.subs.filter(sub => sub.dove).length;
+  const doveCount = visibleSectionSubs(section, apiSectionId).filter(sub => sub.dove).length;
+  const visibleSubCount = visibleSectionSubs(section, apiSectionId).length;
+  const visibleFieldCount = visibleSectionSubs(section, apiSectionId).reduce(
+    (sum, sub) => sum + sub.fields.length,
+    0,
+  );
 
   const visible = states.filter(item => {
     if (filter === 'empty') return item.pct === 0;
@@ -261,26 +282,30 @@ export function VaultSchemaSection({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-[22px] border border-[#E4EAF0] bg-white px-7 py-6 max-md:rounded-[14px] max-md:px-4">
+    <div className="space-y-4 overflow-x-hidden">
+      <div className="relative overflow-hidden rounded-[22px] border border-[#E4EAF0] bg-white px-7 py-6 max-md:rounded-[14px] max-md:px-4 max-md:py-5">
         <div className="pointer-events-none absolute -right-10 -top-14 h-48 w-48 rounded-full bg-[#EAF6FD]" />
-        <div className="relative z-[1] flex flex-wrap items-start gap-5">
-          <div className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[14px] bg-[#213D59] text-white">
-            <SchemaIcon name={section.icon} className="h-6 w-6" />
-          </div>
-          <div className="min-w-[220px] flex-1">
-            <h1 className="text-[27px] font-bold tracking-[-0.028em] text-[#213D59] max-md:text-[23px]">
-              {section.name}
-              {section.dove ? (
-                <span className="ml-2 inline-flex items-center rounded-full bg-[#EFEAFB] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-[#6B4EA8]">
-                  🕊️ Obituary source
-                </span>
-              ) : null}
-            </h1>
-            <p className="mt-1.5 max-w-[620px] text-[14.5px] text-[#7A8794]">{section.desc}</p>
+        <div className="relative z-[1] flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start md:gap-5">
+          <div className="flex min-w-0 items-start gap-4 md:min-w-0 md:flex-1">
+            <div className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[14px] bg-[#213D59] text-white">
+              <SchemaIcon name={section.icon} className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-[27px] font-bold tracking-[-0.028em] text-[#213D59] max-md:text-[22px] max-md:leading-tight">
+                {section.name}
+                {section.dove ? (
+                  <span className="ml-2 inline-flex items-center rounded-full bg-[#EFEAFB] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-[#6B4EA8]">
+                    🕊️ Obituary source
+                  </span>
+                ) : null}
+              </h1>
+              <p className="mt-1.5 max-w-[620px] text-[14.5px] leading-relaxed text-[#7A8794] max-md:text-[14px]">
+                {section.desc}
+              </p>
+            </div>
           </div>
           {isInstructions ? null : (
-          <div className="min-w-[180px]">
+          <div className="w-full min-w-0 md:w-auto md:min-w-[180px]">
             <div className="mb-1.5 flex justify-between text-[12px] font-semibold text-[#7A8794]">
               <span>Section progress</span>
               <span className="tabular-nums">{pct}%</span>
@@ -288,24 +313,24 @@ export function VaultSchemaSection({
             <ProgressBar value={pct} size="hero" className="bg-[#E4EAF0]" />
             <p className="mt-2 text-[12px] text-[#7A8794]">
               {emptyCount
-                ? `${emptyCount} of ${section.subs.length} subsections empty`
-                : `All ${section.subs.length} subsections started`}
+                ? `${emptyCount} of ${visibleSubCount} subsections empty`
+                : `All ${visibleSubCount} subsections started`}
             </p>
           </div>
           )}
         </div>
       </div>
 
-      <div className="flex items-start gap-3 rounded-[16px] border border-[#E4EAF0] bg-white px-4 py-3 text-[14px] text-[#414A55] max-md:rounded-[14px]">
+      <div className="flex min-w-0 items-start gap-3 rounded-[16px] border border-[#E4EAF0] bg-white px-4 py-3 text-[14px] leading-relaxed text-[#414A55] max-md:rounded-[14px]">
         <Plus className="mt-0.5 h-4 w-4 shrink-0 text-[#619FCE]" />
-        <p>
+        <p className="min-w-0 flex-1 break-words">
           {isInstructions ? (
             INSTRUCTION_PAGE_BANNER
           ) : (
             <>
               <strong className="text-[#213D59]">Every subsection can be filled by hand.</strong>{' '}
-              {section.subs.length} subsections,{' '}
-              {section.subs.reduce((sum, sub) => sum + sub.fields.length, 0)} fields. Uploading a
+              {visibleSubCount} subsections,{' '}
+              {visibleFieldCount} fields. Uploading a
               document is a shortcut that fills the same fields, never a requirement.
             </>
           )}
@@ -316,12 +341,12 @@ export function VaultSchemaSection({
         <LegalDisclaimer variant="footer" />
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2.5">
+      <div className="flex flex-col gap-2.5 max-md:gap-3 md:flex-row md:flex-wrap md:items-center">
         {isInstructions ? null : (
-        <div className="flex gap-1.5 rounded-full border border-[#E4EAF0] bg-white p-1">
+        <div className="flex w-full gap-1.5 overflow-x-auto rounded-full border border-[#E4EAF0] bg-white p-1 md:w-auto">
           {(
             [
-              ['all', `All (${section.subs.length})`],
+              ['all', `All (${visibleSubCount})`],
               ['empty', `Empty (${emptyCount})`],
               ...(doveCount ? [['dove', `🕊️ Obituary (${doveCount})`] as const] : []),
             ] as Array<[typeof filter, string]>
@@ -340,7 +365,7 @@ export function VaultSchemaSection({
           ))}
         </div>
         )}
-        <div className="ml-auto flex flex-wrap gap-2">
+        <div className="flex w-full flex-wrap gap-2 md:ml-auto md:w-auto">
           <button
             type="button"
             className="inline-flex min-h-11 items-center rounded-full border border-[#E4EAF0] bg-white px-3.5 text-[13px] font-semibold text-[#213D59] md:h-[34px] md:min-h-[34px]"
@@ -400,51 +425,53 @@ export function VaultSchemaSection({
             <div
               key={sub.id}
               className={cn(
-                'mb-3 rounded-[16px] border bg-white max-md:rounded-[14px]',
+                'mb-3 max-w-full rounded-[16px] border bg-white max-md:rounded-[14px]',
                 open
                   ? 'overflow-visible border-[#619FCE] shadow-[0_2px_8px_rgba(33,61,89,.07)]'
                   : 'overflow-hidden border-[#E4EAF0]',
               )}
             >
-            <div className="flex items-center gap-2 px-2 py-2">
+            <div className="flex flex-col gap-2 px-2 py-2 md:flex-row md:items-start">
               <button
                 type="button"
                 ref={node => {
                   headerRefs.current[sub.id] = node;
                 }}
                 onClick={() => toggleOpen(sub.id, open)}
-                className="flex min-w-0 flex-1 items-center gap-3 rounded-[12px] px-2 py-2 text-left hover:bg-[#F6F8FA]"
+                className="flex min-w-0 flex-1 items-start gap-3 rounded-[12px] px-2 py-2 text-left hover:bg-[#F6F8FA]"
               >
                 <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[10px] bg-[#EAF6FD] text-[#213D59]">
                   <SchemaIcon name={section.icon} className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2 text-[15.5px] font-bold text-[#213D59]">
-                    {sub.name}
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-[15.5px] font-bold leading-snug text-[#213D59] max-md:text-[15px]">
+                      {sub.name}
+                    </span>
                     {sub.dove ? <span title="Obituary source">🕊️</span> : null}
+                    {isInstructions ? null : (
+                    <span
+                      className={cn(
+                        'rounded-full px-2.5 py-0.5 text-[11.5px] font-bold',
+                        filled
+                          ? filled >= total
+                            ? 'bg-[#E8F6F0] text-[#1F9D6B]'
+                            : 'bg-[#EAF6FD] text-[#213D59]'
+                          : 'bg-[#FDF4E4] text-[#B4761A]',
+                      )}
+                    >
+                      {filled} of {total}
+                    </span>
+                    )}
                   </span>
-                  <span className="mt-0.5 block text-[12.5px] text-[#7A8794]">
+                  <span className="mt-0.5 block break-words text-[12.5px] leading-relaxed text-[#7A8794]">
                     {sub.kind === 'entries' && count > 0
                       ? `${count} ${plural(sub.entry || 'item', count)} · ${filled} of ${total} filled`
                       : sub.desc}
                   </span>
                 </span>
-                {isInstructions ? null : (
-                <span
-                  className={cn(
-                    'rounded-full px-2.5 py-0.5 text-[11.5px] font-bold',
-                    filled
-                      ? filled >= total
-                        ? 'bg-[#E8F6F0] text-[#1F9D6B]'
-                        : 'bg-[#EAF6FD] text-[#213D59]'
-                      : 'bg-[#FDF4E4] text-[#B4761A]',
-                  )}
-                >
-                  {filled} of {total}
-                </span>
-                )}
                 <ChevronDown
-                  className={cn('h-4 w-4 shrink-0 text-[#7A8794] transition', open && 'rotate-180')}
+                  className={cn('mt-0.5 h-4 w-4 shrink-0 text-[#7A8794] transition', open && 'rotate-180')}
                 />
               </button>
               {isInstructions ? null : (
@@ -456,6 +483,7 @@ export function VaultSchemaSection({
                 }
                 disabled={readOnly}
                 onClick={() => openFillEmpty(sub, bucket)}
+                className="max-md:w-full md:mt-1"
               />
               )}
             </div>
@@ -696,28 +724,34 @@ function SubBody({
             return (
               <div
                 key={`${sub.id}-${index}`}
-                className="mb-2 flex items-center gap-3 rounded-[11px] border border-[#E4EAF0] bg-white px-3.5 py-3"
+                className="mb-2 flex flex-col gap-3 rounded-[11px] border border-[#E4EAF0] bg-white px-3.5 py-3 max-md:gap-2.5 md:flex-row md:items-center"
               >
-                <div className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[9px] bg-[#EAF6FD] text-[#213D59]">
-                  <SchemaIcon name={iconName} className="h-4 w-4" />
+                <div className="flex min-w-0 flex-1 items-start gap-3 md:items-center">
+                  <div className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[9px] bg-[#EAF6FD] text-[#213D59]">
+                    <SchemaIcon name={iconName} className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <p className="min-w-0 text-[14px] font-semibold leading-snug text-[#213D59]">
+                        {title}
+                      </p>
+                      <span
+                        className={cn(
+                          'shrink-0 rounded-full px-2.5 py-0.5 text-[11.5px] font-bold',
+                          filled >= total
+                            ? 'bg-[#E8F6F0] text-[#1F9D6B]'
+                            : filled
+                              ? 'bg-[#EAF6FD] text-[#213D59]'
+                              : 'bg-[#FDF4E4] text-[#B4761A]',
+                        )}
+                      >
+                        {filled} of {total}
+                      </span>
+                    </div>
+                    <p className="text-[12px] text-[#7A8794]">Item {index + 1}</p>
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-semibold text-[#213D59]">{title}</p>
-                  <p className="text-[12px] text-[#7A8794]">Item {index + 1}</p>
-                </div>
-                <span
-                  className={cn(
-                    'shrink-0 rounded-full px-2.5 py-0.5 text-[11.5px] font-bold',
-                    filled >= total
-                      ? 'bg-[#E8F6F0] text-[#1F9D6B]'
-                      : filled
-                        ? 'bg-[#EAF6FD] text-[#213D59]'
-                        : 'bg-[#FDF4E4] text-[#B4761A]',
-                  )}
-                >
-                  {filled} of {total}
-                </span>
-                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                <div className="flex flex-wrap items-center justify-end gap-1.5 max-md:w-full max-md:justify-between">
                 <FillEmptyButton
                   emptyCount={total - filled}
                   disabled={disabled}
@@ -856,19 +890,28 @@ function SubBody({
         ).length;
         void historyTick;
         return (
-          <div className="mb-2 flex items-center gap-3 rounded-[11px] border border-[#E4EAF0] bg-white px-3.5 py-3">
-            <div className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[9px] bg-[#EAF6FD] text-[#213D59]">
-              <SchemaIcon name={iconName} className="h-4 w-4" />
+          <div className="mb-2 flex flex-col gap-3 rounded-[11px] border border-[#E4EAF0] bg-white px-3.5 py-3 max-md:gap-2.5 md:flex-row md:items-center">
+            <div className="flex min-w-0 flex-1 items-start gap-3 md:items-center">
+              <div className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[9px] bg-[#EAF6FD] text-[#213D59]">
+                <SchemaIcon name={iconName} className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <p className="min-w-0 text-[14px] font-semibold leading-snug text-[#213D59]">
+                    {sub.name}
+                  </p>
+                  {filled ? (
+                    <span className="shrink-0 rounded-full bg-[#EAF6FD] px-2.5 py-0.5 text-[11.5px] font-bold text-[#213D59]">
+                      {filled} of {total}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="text-[12px] text-[#7A8794]">
+                  {filled ? `${filled} of ${total} filled` : 'No details yet'}
+                </p>
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[14px] font-semibold text-[#213D59]">
-                {sub.name}
-              </p>
-              <p className="text-[12px] text-[#7A8794]">
-                {filled ? `${filled} of ${total} filled` : 'No details yet'}
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            <div className="flex flex-wrap items-center justify-end gap-1.5 max-md:w-full max-md:justify-between">
             <FillEmptyButton
               emptyCount={total - filled}
               disabled={disabled}

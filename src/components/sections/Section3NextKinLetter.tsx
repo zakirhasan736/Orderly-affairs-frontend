@@ -525,12 +525,16 @@ export default function Section3NextOfKinLetter({
         ) : null}
       </VaultDetailDrawer>
 
-      {previewNokId && previewPerson ? (
+      {previewNokId ? (
         <NokLetterPreviewDialog
-          open={!!previewNokId}
+          open
           onClose={() => setPreviewNokId(null)}
           nokId={previewNokId}
-          person={previewPerson}
+          person={
+            previewPerson ||
+            letterReadyPeople.find(p => p.id === previewNokId) ||
+            null
+          }
           ownerName={ownerName}
           fallbackData={
             (data.next_of_kin_letters_by_nok?.[previewNokId] ||

@@ -53,18 +53,29 @@ export function unlockBodyForSheet() {
   }
 }
 
-export function useIsMobile(breakpoint = 768) {
-  const query = `(max-width: ${breakpoint - 1}px)`;
+function subscribeViewport(onStoreChange: () => void) {
+  window.addEventListener('resize', onStoreChange);
+  return () => window.removeEventListener('resize', onStoreChange);
+}
 
+/**
+ * Layout width only (`clientWidth`). Hiding the scrollbar when a modal opens
+ * must not flip mobile/desktop — that remounts sheets vs dialogs in a loop.
+ */
+export function useIsMobile(breakpoint = 768) {
   return useSyncExternalStore(
-    onStoreChange => {
-      const mq = window.matchMedia(query);
-      mq.addEventListener('change', onStoreChange);
-      return () => mq.removeEventListener('change', onStoreChange);
-    },
-    () => window.matchMedia(query).matches,
+    subscribeViewport,
+    () => document.documentElement.clientWidth < breakpoint,
     () => false,
   );
+}
+
+/** Keep the first layout while `frozen` so an open overlay cannot swap implementations. */
+export function useFrozenIsMobile(frozen: boolean, breakpoint = 768) {
+  const live = useIsMobile(breakpoint);
+  const heldRef = React.useRef(live);
+  if (!frozen) heldRef.current = live;
+  return frozen ? heldRef.current : live;
 }
 
 export function MobileSheetHandle() {

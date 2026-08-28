@@ -2960,8 +2960,8 @@ export default function DashboardPage() {
             />
 
           {/* Main content */}
-          <main className="min-w-0 flex-1">
-            <div className="mx-auto w-full max-w-[1480px] px-4 py-4 sm:px-5 md:px-6 md:py-6 lg:px-8 xl:px-10">
+          <main className="min-w-0 flex-1 overflow-x-hidden">
+            <div className="mx-auto w-full max-w-[1480px] overflow-x-hidden px-4 py-4 sm:px-5 md:px-6 md:py-6 lg:px-8 xl:px-10">
               {activeSection === 'dashboard' ? (
                 <div className="owner-dashboard-overview-area space-y-5 md:space-y-6">
                   {familyAcl.isFamily && (
@@ -3154,7 +3154,7 @@ export default function DashboardPage() {
                   <VaultSettings />
                 </div>
               ) : currentSection ? (
-                <div className="space-y-5 md:space-y-6">
+                <div className="min-w-0 space-y-5 overflow-x-hidden md:space-y-6">
                   {familyAcl.isFamily && familyRoleBannerText(familyAcl) && (
                     <div className="rounded-2xl border border-teal-200/80 bg-teal-50/90 px-4 py-3 text-sm text-teal-950">
                       <span className="font-semibold">

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@common/ui/button';
+import { Checkbox } from '@common/ui/checkbox';
 import { Input } from '@common/ui/input';
 import { Label } from '@common/ui/label';
 import { cn } from '@common/ui/utils';
@@ -814,14 +815,15 @@ export function FamilyAccessManagement({
                           {group}
                         </td>
                         <td className="rounded-r-xl px-3 py-2.5 text-right align-middle">
-                          <input
-                            type="checkbox"
-                            checked={marked}
-                            disabled={areaMode === 'Full Dashboard Access'}
-                            onChange={() => toggleAreaMark(row.id)}
-                            aria-label={`Access to ${row.title}`}
-                            className="h-5 w-5 cursor-pointer rounded border border-[#C5D4E0] accent-[#213D59] disabled:cursor-default disabled:opacity-80"
-                          />
+                          <div className="flex justify-end">
+                            <Checkbox
+                              checked={marked}
+                              disabled={areaMode === 'Full Dashboard Access'}
+                              onCheckedChange={() => toggleAreaMark(row.id)}
+                              aria-label={`Access to ${row.title}`}
+                              className="h-5 w-5 border-[#C5D4E0] data-[state=checked]:border-[#213D59] data-[state=checked]:bg-[#213D59]"
+                            />
+                          </div>
                         </td>
                       </tr>
                     );

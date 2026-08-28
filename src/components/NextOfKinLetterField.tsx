@@ -11,7 +11,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@common/ui/dialog';
 import { Input } from '@common/ui/input';
 import { Label } from '@common/ui/label';
@@ -47,11 +46,13 @@ import {
 } from '@/utils/nokLetterPreview';
 
 import {
+  MOBILE_NESTED_SHEET_Z,
   MOBILE_SHEET_SCROLL_CLASS,
   MOBILE_SHEET_SCROLL_PADDING,
   MOBILE_SHEET_FOOTER_CLASS,
   MobileBottomSheet,
   MobileSheetHandle,
+  useFrozenIsMobile,
   useIsMobile,
 } from '@/components/MobileBottomSheet';
 
@@ -425,6 +426,15 @@ export function NextOfKinLetterField({
   const isMobile = useIsMobile();
   const [wizardStep, setWizardStep] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const previewAsMobile = useFrozenIsMobile(previewOpen);
+
+  const openPreview = (event?: React.MouseEvent) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    setPreviewOpen(true);
+  };
+
+  const closePreview = () => setPreviewOpen(false);
 
   const {
     data: serverData,
@@ -1323,7 +1333,7 @@ export function NextOfKinLetterField({
           type="button"
           data-oa-view-ok
           variant="outline"
-          onClick={() => setPreviewOpen(true)}
+          onClick={openPreview}
           className={cn(
             'rounded-2xl',
             MIN_TOUCH,
@@ -1383,31 +1393,15 @@ export function NextOfKinLetterField({
 
       <div className="flex flex-wrap justify-end gap-2">
         {!isMobile && (
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="rounded-2xl">
-                <Eye className="mr-2 h-4 w-4" />
-                Preview
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[92svh] w-[calc(100vw-1rem)] max-w-[67.2rem] sm:max-w-[67.2rem] gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl">
-              <DialogHeader className="border-b bg-muted/30 px-5 py-5 pr-14 sm:px-6">
-                <DialogTitle>Letter Preview</DialogTitle>
-                <DialogDescription>
-                  Review before printing, exporting, or emailing.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="max-h-[calc(92svh-170px)] overflow-y-auto bg-muted/30 px-4 py-5 sm:px-8">
-                <LetterPreviewBody
-                  letterPreview={letterPreview}
-                  nokEmail={localData.nok_email}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2 border-t bg-background px-4 py-3 sm:flex sm:justify-end">
-                {previewActions}
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-2xl"
+            onClick={openPreview}
+          >
+            <Eye className="mr-2 h-4 w-4" />
+            Preview
+          </Button>
         )}
 
         {!isLastStep ? (
@@ -1425,7 +1419,7 @@ export function NextOfKinLetterField({
             type="button"
             data-oa-view-ok
             variant="outline"
-            onClick={() => setPreviewOpen(true)}
+            onClick={openPreview}
             className={cn('rounded-2xl', MIN_TOUCH, 'w-full sm:w-auto')}
           >
             <Eye className="mr-2 h-4 w-4" />
@@ -1520,52 +1514,15 @@ export function NextOfKinLetterField({
               </Button>
             )}
 
-            {!isMobile ? (
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="rounded-2xl">
-                    <Eye className="mr-2 h-4 w-4" />
-                    Preview
-                  </Button>
-                </DialogTrigger>
-
-                <DialogContent className="max-h-[92svh] w-[calc(100vw-1rem)] max-w-[67.2rem] sm:max-w-[67.2rem] gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl">
-                  <DialogHeader className="border-b bg-muted/30 px-5 py-5 pr-14 sm:px-6">
-                    <DialogTitle className="flex items-center gap-3 text-xl">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                        <FileText className="h-5 w-5" />
-                      </span>
-                      Letter Preview
-                    </DialogTitle>
-
-                    <DialogDescription>
-                      Review the final letter before printing, exporting, or
-                      emailing.
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <div className="max-h-[calc(92svh-170px)] overflow-y-auto bg-muted/30 px-4 py-5 sm:px-8">
-                    <LetterPreviewBody
-                      letterPreview={letterPreview}
-                      nokEmail={localData.nok_email}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 border-t bg-background px-4 py-3 sm:flex sm:justify-end">
-                    {previewActions}
-                  </div>
-                </DialogContent>
-              </Dialog>
-            ) : (
-              <Button
-                variant="outline"
-                className="rounded-2xl"
-                onClick={() => setPreviewOpen(true)}
-              >
-                <Eye className="mr-2 h-4 w-4" />
-                Preview
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-2xl"
+              onClick={openPreview}
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              Preview
+            </Button>
           </div>
         </div>
       </div>
@@ -1644,7 +1601,7 @@ export function NextOfKinLetterField({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setPreviewOpen(true)}
+                  onClick={openPreview}
                   className="h-9 shrink-0 rounded-xl px-2.5 text-xs font-medium"
                   aria-label="Preview letter"
                 >
@@ -1730,13 +1687,13 @@ export function NextOfKinLetterField({
       </div>
     </div>
 
-    {isMobile ? (
+    {previewAsMobile ? (
       <MobileBottomSheet
         open={previewOpen}
-        onClose={() => setPreviewOpen(false)}
+        onClose={closePreview}
         className="max-h-[92dvh]"
         labelledBy="nok-letter-preview-title"
-        zClassName="z-[80]"
+        zClassName={MOBILE_NESTED_SHEET_Z}
       >
         <div className="flex h-full min-h-0 flex-col">
           <MobileSheetHandle />
@@ -1753,7 +1710,7 @@ export function NextOfKinLetterField({
               type="button"
               variant="ghost"
               size="icon"
-              onClick={() => setPreviewOpen(false)}
+              onClick={closePreview}
               className="h-10 w-10 shrink-0 rounded-full"
               aria-label="Close preview"
             >
@@ -1780,8 +1737,17 @@ export function NextOfKinLetterField({
         </div>
       </MobileBottomSheet>
     ) : (
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-h-[92svh] w-[calc(100vw-2rem)] max-w-[67.2rem] sm:max-w-[67.2rem] gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl">
+      <Dialog open={previewOpen} onOpenChange={open => !open && closePreview()}>
+        <DialogContent
+          className="z-[140] max-h-[92svh] w-[calc(100vw-2rem)] max-w-[67.2rem] sm:max-w-[67.2rem] gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl"
+          onOpenAutoFocus={event => event.preventDefault()}
+          onFocusOutside={event => event.preventDefault()}
+          onPointerDownOutside={event => {
+            const target = event.target as HTMLElement | null;
+            if (target?.closest('[data-slot="dialog-overlay"]')) return;
+            event.preventDefault();
+          }}
+        >
           <DialogHeader className="border-b bg-muted/30 px-5 py-5 pr-14 sm:px-6">
             <DialogTitle className="flex items-center gap-3 text-xl">
               <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">

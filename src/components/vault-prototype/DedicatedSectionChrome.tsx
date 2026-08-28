@@ -31,20 +31,21 @@ export function DedicatedSectionChrome({
   if (!section) return <>{children}</>;
 
   return (
-    <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-[22px] border border-[#E4EAF0] bg-white px-7 py-6 max-md:rounded-[14px] max-md:px-4">
+    <div className="space-y-4 overflow-x-hidden">
+      <div className="relative overflow-hidden rounded-[22px] border border-[#E4EAF0] bg-white px-7 py-6 max-md:rounded-[14px] max-md:px-4 max-md:py-5">
         <div className="pointer-events-none absolute -right-10 -top-14 h-48 w-48 rounded-full bg-[#EAF6FD]" />
-        <div className="relative z-[1] flex flex-wrap items-start gap-5">
-          <div className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[14px] bg-[#213D59] text-white">
-            <SchemaIcon name={section.icon} className="h-6 w-6" />
-          </div>
-          <div className="min-w-[280px] flex-1">
-            <h1 className="text-[27px] font-bold tracking-[-0.028em] text-[#213D59] max-md:text-[23px]">
-              {section.name}
-            </h1>
-            <p className="mt-1.5 max-w-[620px] text-[14.5px] text-[#7A8794]">
-              {section.desc}
-            </p>
+        <div className="relative z-[1] flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start md:gap-5">
+          <div className="flex min-w-0 items-start gap-4 md:min-w-0 md:flex-1">
+            <div className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[14px] bg-[#213D59] text-white">
+              <SchemaIcon name={section.icon} className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-[27px] font-bold tracking-[-0.028em] text-[#213D59] max-md:text-[22px] max-md:leading-tight">
+                {section.name}
+              </h1>
+              <p className="mt-1.5 max-w-[620px] text-[14.5px] leading-relaxed text-[#7A8794] max-md:text-[14px]">
+                {section.desc}
+              </p>
             {onOpenReview || onUpload ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 {onOpenReview && pendingReviewCount > 0 ? (
@@ -81,9 +82,10 @@ export function DedicatedSectionChrome({
                 />
               </div>
             )}
+            </div>
           </div>
           {typeof progressValue === 'number' ? (
-            <div className="min-w-[180px]">
+            <div className="w-full min-w-0 md:w-auto md:min-w-[180px]">
               <div className="mb-1.5 flex justify-between text-[12px] font-semibold text-[#7A8794]">
                 <span>{progressLabel || 'Progress'}</span>
                 <span className="tabular-nums">{Math.round(progressValue)}%</span>
